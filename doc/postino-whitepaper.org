@@ -64,11 +64,6 @@ targeted for GNU/Linux/BSD desktop usage.
 
 *** Configure to filter mail
 
-#+BEGIN_EXAMPLE
-unset POSTRULE
-POSTRULE+="from: list@kernel.org save: ml.kernel %%"
-POSTRULE+="to: jaromil@nimk.nl save: job.nimk %%"
-#+END_EXAMPLE
 
 
 
@@ -92,15 +87,23 @@ REMOTE_FILTER=/var/mail/...
 **** send.conf
 
 #+BEGIN_EXAMPLE
-# name    host             port   login
-gmail     smtp.gmail.com   25     jaromil.rojo@gmail.com
-dyne      assata.dyne.org  25     username@dyne.im
+# name    host             login
+gmail     smtp.gmail.com   jaromil.rojo@gmail.com
+dyne      assata.dyne.org  username@dyne.im
 #+END_EXAMPLE
 
 **** receive.conf
+
 #+BEGIN_EXAMPLE
-# name    host             port   login
-gmail     imap.gmail.com   443    jaromil.rojo@gmail.com
+# name    host             login
+gmail     imap.gmail.com   jaromil.rojo@gmail.com
+#+END_EXAMPLE
+
+**** filters.conf
+
+#+BEGIN_EXAMPLE
+from list@kernel.org save ml.kernel
+from dynebolic.lists.dyne save ml.dynebolic
 #+END_EXAMPLE
 
 
