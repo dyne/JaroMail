@@ -1,0 +1,596 @@
+
+making a backup of my gmail account with fetchmail and procmail
+
+Gentle introduction to email terminology
+
+   In this post I’ll be talking about procmail, fetchmail and mutt.
+   Three programs to read and backup emails … Wait, three programs just to
+   read emails !? None sens !
+   Well, actually it makes perfect sens: to read an email on your computer
+   with your favorite email client, you need to follow these steps:
+    1. grab the email from your email provider (connect and download)
+    2. filter/process is the email (in which mailbox do we store it –
+       possibly the spam mailbox, or your regular inbox)
+    3. read it
+
+   For each of these steps, the following jargon is used:
+     * when you download your email, you are using a mail transfer agent
+       i.e. [11]MTA
+     * when filtering/processing it, you are using a mail delivery agent
+       i.e. [12]MDA
+     * and finally when reading it, you are using a mail user agent
+       i.e. [13]MUA
+
+   Weird ? Not really if you know the UNIX philosophy: each program does
+   one
+   thing, but it does it well (Yeah, I know: sounds like a real cliche).
+
+   When you use thunderbird or outlook, you are using a MTA, MDA and MUA
+   at the
+   same time. I will not talk about mail submission agent
+   [14]MSA that is in charge of sending the email you wrote: this is out
+   of scope :-).
+
+   Ok, now let’s go back to the purpose of this post: backing up my gmail
+   account.
+
+the big plan
+
+   So, given the previous steps described above, I will:
+     * use fetchmail as my MTA to connect to gmail and retrieve my emails
+     * use procmail as my MDA to store the content in the various
+       mailboxes
+     * read it on mutt, yes mutt is my MUA
+
+step 1: retrieving mail with fetchmail
+
+configuring my gmail account
+
+   google provides access to my email using [15]POP3 or [16]IMAP.
+
+   I will retrieve my email using POP3, google provides interesting
+   features for it. The one I am interested in is located at settings ->
+   forward and pop/imap -> POP download.
+   Here I select “Enable POP for all mail (even mail that’s already been
+   downloaded)”: it will allow me to download all my emails, including the
+   ones I already did read.
+   WARNING: be sure to select “When messages are accessed with POP –
+   keep gmail’s copy in inbox” otherwise, gmail will remove your
+   downloaded email
+   from your account – which is not my intent.
+
+   I also select, in the same page, enabling IMAP, so I can read my emails
+   from everywhere using the IMAP protocol which allows me to view my
+   emails from
+   anywhere while keeping them on the server i.e. I browse them, when I
+   finish reading my mail, it’s still there on the server: be sure to
+   check [17]IMAP wikipedia entry.
+
+   I download them only for backup purpose and use POP3 for that.
+
+   Do not forget to save the changes you made to your google account …
+
+dealing with gmail server security
+
+   Access to my account is encrypted (a good thing) hence I need to setup
+   some security before beeing able to download some emails.
+   SSL as used by google, requires you to download some credentials from
+   a certificate authority; it is used to authenticate google server i.e.
+   making sure you really are connecting to google and not to some random
+   (and possibly malicious) server.
+
+   First, I need to retrieve the certificate of the CA used by google:
+# wget -O Equifax_Secure_Certificate_Authority.pem https://www.geotrust.com/reso
+urces/root_certificates/certificates/Equifax_Secure_Certificate_Authority.cer
+
+   and convert it to something that can actually be used by our beloved
+   ssl tools:
+# openssl x509 -in Equifax_Secure_Certificate_Authority.pem -fingerprint -subjec
+t -issuer -serial -hash -noout
+
+   I now store it where they can latter be referenced and checked. Since I
+   am always setting up workstations when moving from one workplace to
+   another, I store that kind of information in the UNIX account that has
+   been given to me:
+# mkdir ~/.certificates
+# mv Equifax_Secure_Certificate_Authority.pem ~/.certificates
+
+   Now I make them available to the various programs I use:
+# c_rehash ~/.certificates
+
+   On opensolaris c_rehash is not available (I don’t know why). It’s a
+   perl script and I found a version using google code [18]here.
+
+   cut and paste this code into a file named c_rehash and execute it:
+# cd ~
+# perl c_rehash .certificates
+Doing .certificates/
+Equifax_Secure_Certificate_Authority.pem => 594f1775.0
+
+   This is it for the security part, SSL credentials are now ready to be
+   used by fetchmail.
+
+configuring fetchmail for POP access
+
+   my gmail account is something like:
+     * user ‘vodoom@gmail.com’
+     * pop3 server is ‘pop.gmail.com’
+
+   my local settings are:
+     * user on my machine is ‘ppereira’
+     * my google certificate is located at ‘~/.certificates’ (see previous
+       step)
+     * mda to be used is ‘procmail’ (more on that later)
+
+   The corresponding fetchmail configuration (to be stored in
+   ~/.fetchmailrc):
+set daemon 600
+poll pop.gmail.com with proto POP3 and options no dns
+user 'vodoom@gmail.com' there is 'ppi' here
+options keep ssl sslcertck sslcertpath '~/.certificates'
+mda '/usr/bin/procmail -d %T'
+
+   For more details about these options, see [19]fetchmail’s manual.
+
+configuring procmail for delivery
+
+spam filtering ?
+
+   Note that there is no spam filtering configuration here: since this
+   setup is only for my gmail account, I rely on gmail spam filter to take
+   care of those.
+   If you need a spam filtering setup, you may want to have a look at
+   http://wiki.apache.org/spamassassin/UsedViaProcmail.
+
+managing my mailing lists
+
+   I use the TO_ recipe rule of procmail: I do not use the list-id header,
+   it is more covenient for me as explained
+   in http://www.ii.com/internet/robots/procmail/qs/#alt2TO.
+   Procmail recipes are matching rules associated with a mailbox (yes, I
+   am over simplifying).
+   For example, here is a simple recipe:
+:0:
+* ^TO_zfs-discuss@opensolaris.org
+osol-zfs
+
+   :0: is the delivery options, in my case I want locking when accessing
+   to the inbox (that’s the second ‘:’)
+
+   * ^TO_zfs-discuss@opensolaris.org
+   means that we want to match messages that were sent
+   to zfs-discuss@opensolaris.org
+   One can use regular expressions and special matching rules e.g. ^From
+   to create a matching rule.
+
+   osol-zfs tells procmail to store this email in the mailbox ‘osol-zfs’
+
+   here are my recipes to match the mailing lists I am subscribed to:
+:0:
+* ^TO_zfs-discuss@opensolaris.org
+osol-zfs
+
+:0:
+* ^TO_perf-discuss@opensolaris.org
+osol-perf
+
+:0:
+* ^TO_opensolaris-code@opensolaris.org
+osol-code
+
+:0:
+* ^TO_opensolaris-announce@opensolaris.org
+osol-announce
+
+:0:
+* ^TO_indiana-discuss@opensolaris.org
+osol-indiana
+
+:0:
+* ^TO_ogb-discuss@opensolaris.org
+osol-board
+
+:0:
+* ^TO_eeepc-discuss@opensolaris.org
+osol-eeepc
+
+:0:
+* ^TO_crypto-discuss@opensolaris.org
+osol-crypto
+
+:0:
+* ^TO_xvid-devel@xvid.org
+xvid-devel
+
+:0:
+* ^TO_users@crater.dragonflybsd.org
+dragonfly-bsd
+
+   All those recipes are stored in their own file: rc.mailing-lists.
+   This file will be included from a ‘master’ file, the main .procmailrc
+   file.
+   The .procmailrc file looks like:
+# Directory for storing procmail configuration and log files
+# You can name this variable anything you like, for example
+# PROCMAILDIR, or don't set it (but then don't refer to it!)
+PROCMAIL_DIR=$HOME/procmail
+SHELL=/bin/sh
+
+# LOGFILE should be specified ASAP so everything below it is logged
+LOGFILE=$PROCMAIL_DIR/procmail.log
+
+# where are the various mailboxes stored ?
+# note that this is *not* the location of the system email
+# this is where I want my mailboxes to be stored by procmail i.e. the
+# destination after filtering
+MAILDIR=$HOME/mail
+
+# recipes/filters are included from here
+INCLUDERC=$PROCMAIL_DIR/rc.mailing-lists
+INCLUDERC=$PROCMAIL_DIR/rc.banking
+
+   Now that procmail is setup, time to retrieve some emails:
+# fetchmail -vk
+File /export/home/ppi/.fetchmailrc must have no more than -rwx--x--- (0710) perm
+issions.
+
+   oops I forgot to setup the proper permissions for the .fetchmailrc
+   file,
+   let’s fix that:
+# chmod 710 .fetchmailrc
+
+   Running it again, and failing again for a very different reason, from
+   my logfile in ~/fetchmail/fetchmail.log:
+fetchmail: starting fetchmail 6.3.8 daemon
+fetchmail: 6.3.8 querying pop.gmail.com (protocol POP3) at Thu Jan 28 00:06:43 2
+010: poll started
+fetchmail: getaddrinfo("pop.gmail.com","pop3s") error: service name not availabl
+e for the specified socket type
+fetchmail: Try adding the --service option (see also FAQ item R12).
+fetchmail: POP3 connection to pop.gmail.com failed: Bad file number
+fetchmail: 6.3.8 querying pop.gmail.com (protocol POP3) at Thu Jan 28 00:06:43 2
+010: poll completed
+fetchmail: Query status=2 (SOCKET)
+fetchmail: sleeping at Thu Jan 28 00:06:43 2010 for 600 seconds
+
+   hum, fetchmail is looking for the port number corresponding to the
+   ‘pop3s’ service. AFAIK, on my opensolaris box I don’t have such service
+   configured:
+# grep -i pop3s /etc/services
+#
+
+   To connect to gmail I have to manually setup use the port number
+   corresponding to ‘pop3s’, as suggested by fetchmail in the log:
+   'fetchmail: Try adding the --service option (see also FAQ item R12).'
+   so here I go again:
+   # fetchmail -vk --service 995
+   now from my fetchmail log I can see:
+fetchmail: 6.3.8 querying pop.gmail.com (protocol POP3) at Fri Jan 29 00:15:07 2
+010: poll started
+fetchmail: Trying to connect to 74.125.93.111/995...connected.
+fetchmail: Issuer Organization: Google Inc
+fetchmail: Issuer CommonName: Google Internet Authority
+fetchmail: Server CommonName: pop.gmail.com
+fetchmail: pop.gmail.com key fingerprint: 92:73:17:4C:34:4B:68:F7:B2:17:71:42:0D
+:7F:9F:33
+fetchmail: POP3< +OK Gpop ready for requests from 70.31.248.56 8pf4635265qwj.1
+fetchmail: POP3> CAPA
+fetchmail: POP3< +OK Capability list follows
+fetchmail: POP3< USER
+fetchmail: POP3< RESP-CODES
+fetchmail: POP3< EXPIRE 0
+fetchmail: POP3< LOGIN-DELAY 300
+fetchmail: POP3< X-GOOGLE-VERHOEVEN
+fetchmail: POP3< UIDL
+fetchmail: POP3< .
+fetchmail: POP3> USER vodoom@gmail.com
+fetchmail: POP3< +OK send PASS
+fetchmail: POP3> PASS *
+fetchmail: POP3< +OK Welcome.
+fetchmail: POP3> STAT
+fetchmail: POP3< +OK 354 21544383
+fetchmail: POP3> LAST
+fetchmail: POP3< -ERR Not supported
+fetchmail: Not supported
+fetchmail: POP3> UIDL
+fetchmail: POP3< +OK
+fetchmail: POP3< 1 GmailIdfbe952ed20bfe97
+fetchmail: POP3< 2 GmailIdfc26b09f74e3775
+fetchmail: POP3< 3 GmailIdfc6f980243d2a13
+fetchmail: POP3< 4 GmailId1043d10888f8ed70
+...
+fetchmail: POP3< 354 GmailId10e7b3433c301f94
+fetchmail: POP3< .
+fetchmail: 354 messages for vodoom@gmail.com at pop.gmail.com (21544383 octets).
+fetchmail: POP3> LIST 1
+fetchmail: POP3< +OK 1 1694617
+fetchmail: POP3> RETR 1
+fetchmail: POP3< +OK message follows
+fetchmail: reading message vodoom@gmail.com@pop.gmail.com:1 of 354 (1694617 octe
+ts)
+...
+
+   Yes ! This is working :-)
+
+   So now my gmail account is backed up. From time to time I run my
+   fetchmail script, and it downloads the new emails that are not yet
+   backed up.
+   If like me you have thousands of emails waiting to be download, be
+   patient, as emails are not downloaded in a single connection: each
+   connection will download hundreds of emails, fetchmail will have to
+   reconnect to download the rest. This is fine, that’s why I setup the
+   daemon mode in fetchmail :-).
+
+   Ok now I have to access my emails with IMAP, but thats another post :-)
+
+   enjoy and share.
+
+Share this:
+
+     * [20]StumbleUpon
+     * [21]Digg
+     * [22]Reddit
+     *
+
+Like this:
+
+   [23]Like
+   Be the first to like this post.
+     __________________________________________________________________
+
+About this entry
+
+   You’re currently reading “making a backup of my gmail account with
+   fetchmail and procmail,” an entry on my core dump is your sigfault
+
+   Published:
+          9 February, 2010 / 12:40 am
+
+   Category:
+          [24]configuration, [25]email, [26]unix
+
+   Tags:
+          [27]backup, [28]email, [29]fetchmail, [30]gmail, [31]procmail
+     __________________________________________________________________
+
+No comments yet
+
+   [32]Jump to comment form | [33]comment rss [?] | [34]trackback uri
+   [35][?]
+
+Leave a Reply [36]Cancel reply
+
+   Enter your comment here...
+
+   ____________________________________________________________
+   ____________________________________________________________
+   ____________________________________________________________
+   ____________________________________________________________
+
+   Fill in your details below or click an icon to log in:
+     *
+     *
+     *
+     *
+
+   Gravatar
+   Email (required) (Not published)
+   ____________________
+   Name (required)
+   ____________________
+   Website
+   ____________________
+   WordPress.com Logo
+
+   Please log in to WordPress.com to post a comment to your blog.
+
+   Twitter picture
+
+   You are commenting using your Twitter account.
+   ( [37]Log Out / [38]Change )
+   Facebook photo
+
+   You are commenting using your Facebook account.
+   ( [39]Log Out / [40]Change )
+   [41]Cancel
+
+   Connecting to %s
+
+   [ ] Notify me of follow-up comments via email.
+
+   Post Comment
+     __________________________________________________________________
+
+Pages
+
+     * [42]About Me
+     * [43]Disclaimer
+     * [44]my configuration files
+          + [45]fetchmailrc
+          + [46]moria256.vim
+          + [47]mutt-gmail.conf
+          + [48]muttrc
+          + [49]procmailrc
+          + [50]vimrc
+
+Recently
+
+     * [51]11.03 simple and dirty FIX 4.2 parser and decoder
+     * [52]10.13 ion3 repository and patches on bitbucket
+     * [53]08.31 gnu/stubs-32.h: No such file or directory
+     * [54]02.09 making a backup of my gmail account with fetchmail
+       and procmail
+     * [55]11.18 virtualbox: setting up 1680×1050 screen resolution
+     * [56]05.06 xvid on opensolaris
+     * [57]04.05 migrating data from linux to opensolaris and zfs with a
+       mirror setup
+     * [58]03.27 const variable, const pointer and invalid const
+       assignment in c++
+     * [59]12.28 setting up my workstation: tweaking firefox, mutt and vim
+     * [60]12.16 Multi-core programming and design: tips and tricks
+
+Monthly Archives
+
+     * [61]November 2010 (1)
+     * [62]October 2010 (1)
+     * [63]August 2010 (1)
+     * [64]February 2010 (1)
+     * [65]November 2009 (1)
+     * [66]May 2009 (1)
+     * [67]April 2009 (1)
+     * [68]March 2009 (1)
+     * [69]December 2008 (2)
+     * [70]October 2008 (1)
+     * [71]September 2008 (2)
+     * [72]July 2008 (1)
+
+     * Blogroll
+          + [73]Adam Leventhal’s Weblog
+          + [74]Alan DuBoff’s Weblog
+          + [75]Alexander Kolbasov’s Weblog
+          + [76]Artima – C++
+          + [77]C++ Soup!
+          + [78]Code Craft
+          + [79]darren_moffat@blog$ cat /dev/mem | grep /dev/urandom
+          + [80]Eric.Weblog()
+          + [81]Jeff Bonwick’s Blog
+          + [82]Jon Haslam’s Weblog
+          + [83]Kate Gregory’s Blog
+          + [84]Liane Praza’s Weblog
+          + [85]Max Bruning’s weblog
+          + [86]My SysAd Blog — UNIX
+          + [87]Nothing but Unix
+          + [88]Predictable
+          + [89]Rich Teer’s Blog
+          + [90]Simon Phipps, SunMink
+          + [91]Sutter’s Mill
+          + [92]The view from the Engine Room
+          + [93]The View from the Moon
+          + [94]Ulrich Drepper
+     __________________________________________________________________
+
+   [95]Blog at WordPress.com. | Theme: [96]Hemingway by [97]warpspire.
+
+   [98]Entries RSS [99]Comments RSS
+
+   [100]Follow
+
+Follow my core dump is your sigfault
+
+   Get every new post delivered to your Inbox.
+
+   Enter email address_
+
+   Sign me up!
+   [101]Powered by WordPress.com
+
+References
+
+   Visible links
+   1. http://vodoom.wordpress.com/feed/
+   2. http://vodoom.wordpress.com/comments/feed/
+   3. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/feed/
+   4. http://vodoom.wordpress.com/2009/11/18/virtualbox-setting-up-1680x1050-screen-resolution/
+   5. http://vodoom.wordpress.com/2010/08/31/gnustubs-32-h-no-such-file-or-directory/
+   6. http://public-api.wordpress.com/oembed/1.0/?format=json&url=http%3A%2F%2Fvodoom.wordpress.com%2F2010%2F02%2F09%2Fmaking-a-backup-of-my-gmail-account-with-fetchmail-and-procmail%2F&for=wpcom-auto-discovery
+   7. http://public-api.wordpress.com/oembed/1.0/?format=xml&url=http%3A%2F%2Fvodoom.wordpress.com%2F2010%2F02%2F09%2Fmaking-a-backup-of-my-gmail-account-with-fetchmail-and-procmail%2F&for=wpcom-auto-discovery
+   8. http://vodoom.wordpress.com/osd.xml
+   9. http://wordpress.com/opensearch.xml
+  10. http://vodoom.wordpress.com/
+  11. http://en.wikipedia.org/wiki/Mail_transfer_agent
+  12. http://en.wikipedia.org/wiki/Mail_delivery_agent
+  13. http://en.wikipedia.org/w/index.php?title=Mail_user_agent
+  14. http://en.wikipedia.org/wiki/Mail_submission_agent
+  15. http://en.wikipedia.org/wiki/Post_Office_Protocol
+  16. http://en.wikipedia.org/wiki/Internet_Message_Access_Protocol
+  17. http://en.wikipedia.org/wiki/Internet_Message_Access_Protocol
+  18. http://www.google.com/codesearch/p?hl=en#2CnO_mGaYOA/source/openssl-0.9.8.tar.gz|RUDwtLKIcqo/openssl-0.9.8/tools/c_rehash&q=c_rehash
+  19. http://fetchmail.info/fetchmail-man.html
+  20. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/?share=stumbleupon
+  21. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/?share=digg
+  22. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/?share=reddit
+  23. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/?like=1&_wpnonce=e70618c7f0
+  24. http://vodoom.wordpress.com/category/configuration/
+  25. http://vodoom.wordpress.com/category/email/
+  26. http://vodoom.wordpress.com/category/unix/
+  27. http://vodoom.wordpress.com/tag/backup/
+  28. http://vodoom.wordpress.com/tag/email/
+  29. http://vodoom.wordpress.com/tag/fetchmail/
+  30. http://vodoom.wordpress.com/tag/gmail/
+  31. http://vodoom.wordpress.com/tag/procmail/
+  32. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/#comment-form
+  33. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/feed/
+  34. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/trackback/
+  35. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/#what-is-trackback
+  36. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/#respond
+  37. javascript:HighlanderComments.doExternalLogout( 'twitter' );
+  38. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/
+  39. javascript:HighlanderComments.doExternalLogout( 'facebook' );
+  40. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/
+  41. javascript:HighlanderComments.cancelExternalWindow();
+  42. http://vodoom.wordpress.com/about-paulo/
+  43. http://vodoom.wordpress.com/about/
+  44. http://vodoom.wordpress.com/configuration-files/
+  45. http://vodoom.wordpress.com/configuration-files/fetchmailrc/
+  46. http://vodoom.wordpress.com/configuration-files/moria256vim/
+  47. http://vodoom.wordpress.com/configuration-files/mutt-gmailconf/
+  48. http://vodoom.wordpress.com/configuration-files/muttrc/
+  49. http://vodoom.wordpress.com/configuration-files/procmailrc/
+  50. http://vodoom.wordpress.com/configuration-files/vimrc/
+  51. http://vodoom.wordpress.com/2010/11/03/simple-and-dirty-fix-4-2-decoder/
+  52. http://vodoom.wordpress.com/2010/10/13/ion3-repository-on-httpbitbucket-orgppianionoverview/
+  53. http://vodoom.wordpress.com/2010/08/31/gnustubs-32-h-no-such-file-or-directory/
+  54. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/
+  55. http://vodoom.wordpress.com/2009/11/18/virtualbox-setting-up-1680x1050-screen-resolution/
+  56. http://vodoom.wordpress.com/2009/05/06/xvid-on-opensolaris/
+  57. http://vodoom.wordpress.com/2009/04/05/migrating-data-from-linux-to-opensolaris-and-zfs-with-a-mirror-setup/
+  58. http://vodoom.wordpress.com/2009/03/27/const-variable-cont-pointers-and-invalid-const-assignment-in-c/
+  59. http://vodoom.wordpress.com/2008/12/28/setting-up-my-workstation-tweaking-firefox-mutt-and-vim/
+  60. http://vodoom.wordpress.com/2008/12/16/multi-core-programming-and-design-tips-and-tricks/
+  61. http://vodoom.wordpress.com/2010/11/
+  62. http://vodoom.wordpress.com/2010/10/
+  63. http://vodoom.wordpress.com/2010/08/
+  64. http://vodoom.wordpress.com/2010/02/
+  65. http://vodoom.wordpress.com/2009/11/
+  66. http://vodoom.wordpress.com/2009/05/
+  67. http://vodoom.wordpress.com/2009/04/
+  68. http://vodoom.wordpress.com/2009/03/
+  69. http://vodoom.wordpress.com/2008/12/
+  70. http://vodoom.wordpress.com/2008/10/
+  71. http://vodoom.wordpress.com/2008/09/
+  72. http://vodoom.wordpress.com/2008/07/
+  73. http://blogs.sun.com/ahl/
+  74. http://blogs.sun.com/aland/
+  75. http://blogs.sun.com/akolb/
+  76. http://www.artima.com/
+  77. http://blog.cplusplus-soup.com/
+  78. http://codecraft.info/
+  79. http://blogs.sun.com/darren/
+  80. http://software.ericsink.com/
+  81. http://blogs.sun.com/bonwick/
+  82. http://blogs.sun.com/jonh/
+  83. http://www.gregcons.com/KateBlog/
+  84. http://blogs.sun.com/lianep/
+  85. http://mbruning.blogspot.com/
+  86. http://www.mysysad.com/
+  87. http://unix-news.blogspot.com/
+  88. http://blogs.sun.com/sch/
+  89. http://richteer.blogspot.com/
+  90. http://blogs.sun.com/webmink/
+  91. http://herbsutter.wordpress.com/
+  92. http://blogs.sun.com/barts/
+  93. http://blogs.sun.com/dp/
+  94. http://udrepper.livejournal.com/
+  95. http://wordpress.com/?ref=footer
+  96. http://theme.wordpress.com/themes/hemingway/
+  97. http://warpspire.com/hemingway
+  98. http://vodoom.wordpress.com/feed/
+  99. http://vodoom.wordpress.com/comments/feed/
+ 100. javascript:void(0)
+ 101. http://wordpress.com/signup/?ref=lof
+
+   Hidden links:
+ 103. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/#comment-form-guest
+ 104. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/#comment-form-wordpress
+ 105. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/#comment-form-load-service:Twitter
+ 106. http://vodoom.wordpress.com/2010/02/09/making-a-backup-of-my-gmail-account-with-fetchmail-and-procmail/#comment-form-load-service:Facebook
