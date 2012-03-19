@@ -1,0 +1,221 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		58D5E1831517C541005AD1D6 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 58D5E1821517C541005AD1D6 /* CoreFoundation.framework */; };
+		58D5E1861517C541005AD1D6 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 58D5E1851517C541005AD1D6 /* main.c */; };
+		58D5E1881517C541005AD1D6 /* lbdb_ABQuery.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 58D5E1871517C541005AD1D6 /* lbdb_ABQuery.1 */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		58D5E17C1517C541005AD1D6 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+				58D5E1881517C541005AD1D6 /* lbdb_ABQuery.1 in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		58D5E17E1517C541005AD1D6 /* lbdb-ABQuery */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "lbdb-ABQuery"; sourceTree = BUILT_PRODUCTS_DIR; };
+		58D5E1821517C541005AD1D6 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		58D5E1851517C541005AD1D6 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		58D5E1871517C541005AD1D6 /* lbdb_ABQuery.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = lbdb_ABQuery.1; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		58D5E17B1517C541005AD1D6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				58D5E1831517C541005AD1D6 /* CoreFoundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		58D5E1731517C541005AD1D6 = {
+			isa = PBXGroup;
+			children = (
+				58D5E1841517C541005AD1D6 /* lbdb-ABQuery */,
+				58D5E1811517C541005AD1D6 /* Frameworks */,
+				58D5E17F1517C541005AD1D6 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		58D5E17F1517C541005AD1D6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				58D5E17E1517C541005AD1D6 /* lbdb-ABQuery */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		58D5E1811517C541005AD1D6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				58D5E1821517C541005AD1D6 /* CoreFoundation.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		58D5E1841517C541005AD1D6 /* lbdb-ABQuery */ = {
+			isa = PBXGroup;
+			children = (
+				58D5E1851517C541005AD1D6 /* main.c */,
+				58D5E1871517C541005AD1D6 /* lbdb_ABQuery.1 */,
+			);
+			path = "lbdb-ABQuery";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		58D5E17D1517C541005AD1D6 /* lbdb-ABQuery */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 58D5E18B1517C541005AD1D6 /* Build configuration list for PBXNativeTarget "lbdb-ABQuery" */;
+			buildPhases = (
+				58D5E17A1517C541005AD1D6 /* Sources */,
+				58D5E17B1517C541005AD1D6 /* Frameworks */,
+				58D5E17C1517C541005AD1D6 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "lbdb-ABQuery";
+			productName = "lbdb-ABQuery";
+			productReference = 58D5E17E1517C541005AD1D6 /* lbdb-ABQuery */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		58D5E1751517C541005AD1D6 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0430;
+				ORGANIZATIONNAME = Dyne.org;
+			};
+			buildConfigurationList = 58D5E1781517C541005AD1D6 /* Build configuration list for PBXProject "lbdb-ABQuery" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 58D5E1731517C541005AD1D6;
+			productRefGroup = 58D5E17F1517C541005AD1D6 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				58D5E17D1517C541005AD1D6 /* lbdb-ABQuery */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		58D5E17A1517C541005AD1D6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				58D5E1861517C541005AD1D6 /* main.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		58D5E1891517C541005AD1D6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		58D5E18A1517C541005AD1D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		58D5E18C1517C541005AD1D6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		58D5E18D1517C541005AD1D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		58D5E1781517C541005AD1D6 /* Build configuration list for PBXProject "lbdb-ABQuery" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				58D5E1891517C541005AD1D6 /* Debug */,
+				58D5E18A1517C541005AD1D6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		58D5E18B1517C541005AD1D6 /* Build configuration list for PBXNativeTarget "lbdb-ABQuery" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				58D5E18C1517C541005AD1D6 /* Debug */,
+				58D5E18D1517C541005AD1D6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 58D5E1751517C541005AD1D6 /* Project object */;
+}
