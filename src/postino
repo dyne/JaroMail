@@ -1,10 +1,10 @@
 #!/bin/zsh
 #
-# Postino, an humble and faithful postman
+# Postino, your humble and faithful electronic postman
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2011 Denis Roio <jaromil@dyne.org>
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
