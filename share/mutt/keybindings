@@ -1,0 +1,49 @@
+# Postino's keybindings for mutt
+# originally used by Jaromil
+
+bind index t create-alias
+bind index w search
+bind index x sync-mailbox
+macro index $ '<enter-command>set mark_old=yes<enter>'
+bind index a tag-prefix
+bind index \; tag-entry
+
+bind index      <pagedown>    next-page
+bind index      <pageup>  previous-page
+bind index      <home>      first-entry
+bind index      <end>        last-entry
+bind index      <right> display-message
+bind index      <left>             noop
+bind index      <           first-entry
+bind index      \e<         first-entry
+bind index      >            last-entry
+bind index      \e>          last-entry
+
+bind pager w search
+bind pager \n noop	# PINE prints "No default action for this menu."
+bind pager <up> previous-line
+bind pager <down> next-line
+bind pager <left> previous-entry
+
+# Little Brother Database settings
+# bind index,pager 	Q	     query
+bind editor 	<tab>	 complete-query
+macro index,pager A "<pipe-message>lbdb-fetchaddr -a" "add the sender address to lbdb"
+macro index,pager + "<pipe-message>lbdb-fetchaddr -a" "add the sender address to lbdb"
+
+macro pager \ef "|view-x-face<enter>" "display the X-Face included in the mail"
+
+# Not possible to simulate zoom-out...
+macro index z l~T\r
+
+# mutt sidebar
+# bind index,pager \CP sidebar-prev
+# bind index,pager \CN sidebar-next
+# bind index,pager \CO sidebar-open
+# macro index,pager B '<enter-command>toggle sidebar_visible<enter>'
+# color sidebar_new yellow default
+
+
+
+# for org-remember
+# macro index R "|remember-mail\n"

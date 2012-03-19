@@ -1,0 +1,131 @@
+# Postino's generic config settings for Mutt
+# originally used by Jaromil
+
+# specific configuration files:
+source ~/.mutt/crypto
+source ~/.mutt/colors
+source ~/.mutt/formats
+source ~/.mutt/keybindings
+
+###############
+## SMTP options
+unset use_8bitmime
+#set sendmail_wait = 0
+
+
+## Alias options TODO
+#set alias_file = ~/.mutt/aliases
+#source ~/.mutt/aliases
+
+##################
+## General options
+#set locale = "C"
+unset suspend
+unset wait_key
+
+set send_charset=utf-8
+set assumed_charset = us-ascii
+
+#set charset = iso-8859-1
+#set send_charset = us-ascii
+#set charset = utf-8
+#set shell = retrieved from passwd file
+#set simple_search = "~f %s | ~s %s"
+
+# Little Brother Database
+set query_command = "lbdbq '%s'"
+
+
+############
+## Main menu
+#set collapse_unread
+set arrow_cursor
+set ascii_chars
+set auto_tag
+unset beep
+unset help
+set mark_old
+unset markers
+#set resolve
+unset sort_re
+set wrap_search = yes
+#set mail_check = 5
+set timeout = 300
+set delete = yes
+#set reply_regexp = "^(re|aw):[ \t]*"
+set sort = threads
+#set status_chars = "-*%A"
+
+#set to_chars = " +TCF"
+set sort_aux = reverse-date
+
+################
+## Pager options
+#set prompt_after
+unset smart_wrap
+set tilde
+set pager_stop
+# set pager_format = "-%S- %C/%m: %-20.20n   %s"
+set quote_regexp="^ *[a-zA-Z]*[]>|}=][]>|}:=]*"
+auto_view text/html
+# also text/plain to convert charset
+# auto_view text/plain
+
+##################
+## Compose options
+set weed = yes
+
+################
+## Reply options
+set reply_to = ask-yes
+
+##################
+## Sending options
+set allow_8bit
+#set bounce_delivered
+set followup_to = yes
+set honor_followup_to = yes
+#unset force_name
+#unset save_name
+#set use_from
+set abort_nosubject = no
+set abort_unmodified = no
+set copy = yes
+
+##################
+## Forward options
+set forward_decode = yes
+#set forward_format = "[Fwd] %s"
+#set mime_forward
+
+######################
+## Folders and mailbox
+set noconfirmappend
+#set confirmcreate
+#unset mh_purge
+#unset save_address
+set save_empty
+#set folder_format = "%N %F %2l %-8.8u %-8.8g %8s %d %f"
+#set move = ask-no
+set mbox_type = mbox
+
+#######################################
+## Attaching documents and MIME options
+#set attach_sep = newline
+#set attach_split
+#set fcc_attach
+set fcc_clear = no
+#set attach_format = "%u%D%t%2n %T%.40d%> [%.7m/%.10M, %.6e, %s] "
+#set message_format = "%s"
+
+###################
+## mailcap and MIME
+set mailcap_sanitize
+
+###################
+## Printing options
+set print_command = lpr
+#set print = ask-no
+
+## end of general muttrc
+########################

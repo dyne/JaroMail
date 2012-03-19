@@ -1,0 +1,26 @@
+# Postino's display format strings for Mutt
+# originally used by Jaromil
+
+set alias_format="%2n %t %-20.20a: %r"
+
+set attach_format="%2n %D%I%u%t %T%f %d (%s) (%m/%M, %e, %C)"
+
+set compose_format="Compose %h [Approx. msg size: %l, Atts: %a] %v %>-"
+
+set date_format="!%a %e.%h'%y at %k:%M:%S %Z"
+
+set folder_format="%N %3C %d %2l (%5s) %f"
+
+set message_format="From: <%a>, Sub: %s"
+
+set index_format="%?M?_%M_ ?%Z %2C %.13d (%-$FCOL.${FCOL}F) %-$SCOL.${SCOL}s %?M?_%M_&(%c/%l?"
+
+set pager_format="%Z %C/%m %d (%F) %s (%c/%l) %|-"
+
+set pgp_entry_format="%3n %t%f %4l/0x%k %-4a %2c %u %[%a %e.%h'%y at %k:%M:%S %Z]"
+
+set status_format="_%r_ %h: %f, %l/%m (%P,%s) [ %?p?PP:%p ?%?t?Tag:%t ?%?d?DEL:%d ?]%?V?, %L/%M only=%V? < %?F?go:%F ?%?n?new:%n ?> %v"
+
+set forward_format = "[Fwd] %s"
+
+set hdr_format="%Z %3C %{%b %d} %-19.19L (%5c) %s"

@@ -1,0 +1,45 @@
+# Postino's color configuration for Mutt
+# originally used by Jaromil
+
+########################################################################
+## Color settings, you can use:
+# white   - brightwhite   # yellow - brightyellow # green - brightgreen
+# magenta - brightmagenta # blue   - brightblue   # black - brightblack
+
+color normal white default
+color tilde white default
+color indicator brightgreen default
+color tree brightred default # the thread tree in the index menu
+color status cyan default
+color hdrdefault cyan default
+color header brightred default ^(From|Subject|Date|To):
+color body magenta default "(ftp|http)://[^ ]+"	# point out URLs
+color body magenta default [-a-z_0-9.]+@[-a-z_0-9.]+	# e-mail addresses
+color underline brightgreen default
+color markers brightblack default
+color signature green default
+color error red default
+color attachment brightmagenta default
+color search default green   # how to hilite search patterns in the pager
+
+# quoted message
+color quoted brightgreen default
+color quoted1 green default
+color quoted2 brightgreen default
+color quoted3 green default
+color quoted4 brightgreen default
+color quoted5 green default
+
+# Colours for items in the index
+color index cyan default "."
+color index white default "~N" # New
+color index brightcyan default "~O" # Unread
+color index brightgreen default "~N (~x jaromil@* | ~h \"^In-[Rr]eply-[Tt]o: .*jaromil@*")"
+color index yellow default "~f jaromil@*"
+# color index brightblue default "~g" # gpg signed
+color index brightblue default "~G" # gpg encrypted
+color index brightgreen default "~F" # Flagged
+color index brightred default "~T" # Tagged
+color index red default "~f MAILER-DAEMON@*"
+color index red default "~f Mailer-Daemon@*"
+color index brightblack default "~D" # Deleted

@@ -1,0 +1,15 @@
+# Postino's GPG configuration for Mutt
+# originally used by Jaromil
+
+#forget the passphrase in 1h
+set pgp_timeout = 3600
+set pgp_auto_decode
+# set pgp_autosign
+set pgp_strict_enc
+set pgp_verify_sig = yes
+
+# # CLEARTEXT INLINE GPG
+# set pgp_create_traditional = no
+# macro compose \cx "Fgpg --clearsign\nyy"
+# macro pager \cv "|gpg --verify;sleep 1\n"
+# macro pager \ef "|view-x-face\n"
