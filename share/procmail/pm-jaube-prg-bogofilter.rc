@@ -1,0 +1,219 @@
+# pm-jaube-prg-bogofilter -- Interface to bogofilter program
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Warning
+#
+#       Put all your Unsolicited Bulk Emacil (aka spam) filters towards the
+#       end of your `~/.procmailrc'. The idea is that valid messages are filed
+#       first (mailing lists, your work and private mail, bounces) and only
+#       the uncategorized messages are checked last.
+#
+#       YOU CANNOT USE THIS PROCMAIL SUBROUTINE UNLESS YOU HAVE TRAINED THE
+#       BAYESIAN PROGRAM FIRST!
+#
+#       To train:
+#
+#           $  rm -f ~/.bogofilter/*.db         # delete database
+#           $  bogofilter -B -n good.msg ...
+#           $  bogofilter -B -s spam.msg ...
+#
+#   Overview of features
+#
+#       o   Implements interface to http://www.sf.net/projects/bogofilter
+#           project.
+#       o   variable `ERROR' is set if message was likely spam.
+#       o   Results are available by default in header
+#           `X-Spam-Bogofilter-Status'.
+#
+#   Description
+#
+#       There are several Bayesian based statistical analysis programs that
+#       study the message's tokens and then classify it into two categories:
+#       good or bad, or if you like, ham and spam. All the Bayesian programs
+#       are not the same, so if you want to achive magic 99.99% probability
+#       the only methodology to do that is to chain several programs in
+#       serially. There is no single program that can solve the UBE detection.
+#       This procmail subroutine implements call interface to program
+#       `bogofilter', which must already have been installed.
+#
+#   About bouncing message back
+#
+#       The general consensus is, that you should not send bounces. The UBE
+#       sender is not there, because the address forged. Do not increase
+#       the network traffic; you will not do any good to anybody by
+#       bouncing messgas -- you just increase mail traffic even more.
+#       Instead save the messages to folders and periodically periodically
+#       check their contents.
+#
+#   Required settings
+#
+#       If `bogofilter' program is available, define this variable in your
+#       `~/.procmailrc'. Use absolute path to make the external shell
+#       quick; it'll save server load considerably.
+#
+#           JA_UBE_BOGOFILTER_PRG = /usr/bin/bogofilter
+#
+#       If you _do_ _not_ have program installed, do not leave the
+#       variable lying aroung, because it will keep this subroutine active.
+#       Calling a non existing program is not a good idea, so it better to
+#       empty the variable if the program is not available.
+#
+#   Required settings
+#
+#       None. No dependencies to other procmail modules.
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   JA_UBE_BOGOFILTER_PRG, path to the program
+#       o   JA_UBE_BOGOFILTER_HEADER_NEW, the header name where the results
+#           are put. If not defined, no header is added.
+#           Defaults to `X-Spam-Bogofilter-Status'
+#       o   JA_UBE_BOGOFILTER_FORCE, if set to _yes_ then call program no matter
+#           what. Normally if there already is `X-Spam-*' header,
+#           it is assumed that the message has already been checked
+#           and no new checking is needed.
+#
+#   Return values
+#
+#       o   ERROR, is set to the return value of program if message was spam.
+#       o   ERROR_INFO, is set if case is "unsure".
+#
+#   Usage example
+#
+#           PMSRC                  = $HOME/procmail # procmail recipe dir
+#
+#           <other checks, mailing lists, work mail etc.>
+#
+#           JA_UBE_BOGOFILTER_PRG  = "/usr/bin/nice -n 5 /usr/bin/bogogilter"
+#           INCLUDERC              = $PMSRC/pm-jaube-prg-bogofilter.rc
+#
+#           #   The ERROR will contains reason if program classified
+#           #   the message into "bad" category.
+#
+#           :0 :
+#           * ! ERROR ?? ^^^^
+#           junk.mbox
+#
+#   File layout
+#
+#       The layout of this file is managed by Emacs packages tinyprocmail.el
+#       and tinytab.el for the 4 tab text placement.
+#       See project http://freshmeat.net/projects/emacs-tiny-tools/
+#
+#   Change Log
+#
+#       None
+
+dummy = "
+========================================================================
+pm-jaube-prg-bogofilter.rc: init:"
+
+# ................................................... User variables ...
+
+#   You must define program path, because we don't know
+#   if it has been installed in this system or not
+
+JA_UBE_BOGOFILTER_PRG             = ${JA_UBE_BOGOFILTER_PRG:-""}
+JA_UBE_BOGOFILTER_OPT		  = ${$JA_UBE_BOGOFILTER_OPT:-""}
+
+#  No user options cannot be passed, because the output would
+#  change. This variable is not used.
+# JA_UBE_BOGOFILTER_PRG_OPT       = ${JA_UBE_BOGOFILTER_PRG_OPT:-""}
+
+#  The original header name.
+
+JA_UBE_BOGOFILTER_HEADER_ORIGINAL = ${JA_UBE_BOGOFILTER_HEADER_ORIGINAL:-"\
+X-Bogosity"}
+
+#   The header name with no colon at the end. If this variable
+#   is empty, then external formail call is saved - results can still
+#   be checked from variable ERROR.
+
+JA_UBE_BOGOFILTER_HEADER_NEW = ${JA_UBE_BOGOFILTER_HEADER:-\
+"X-Spam-bogofilter-Status"}
+
+# Should we check even if there already was already header
+# 'JA_UBE_BOGOFILTER_HEADER' ?
+
+JA_UBE_BOGOFILTER_FORCE = ${JA_UBE_BOGOFILTER_FORCE:-"no"}
+
+# ............................................................ do it ...
+
+ERROR               # Kill variables
+ERROR_INFO
+
+:0
+*                   JA_UBE_BOGOFILTER_PRG          ?? [a-z]
+*$ ! 9876543210^0  ^$JA_UBE_BOGOFILTER_HEADER_NEW
+*    9876543210^0   JA_UBE_BOGOFILTER_FORCE        ?? yes
+{
+    #   This call will add header. Notice that newer version output
+    #   "Ham" instead of "No"
+    #
+    # X-Bogosity: No, tests=bogofilter, spamicity=0.000111, version=0.92.5
+    # X-Bogosity: Ham, tests=bogofilter, spamicity=0.004063, version=0.93.2
+    # X-Bogosity: Unsure, tests=bogofilter, spamicity=0.499327, version=0.92.5
+    # X-Bogosity: Yes, tests=bogofilter, spamicity=1.000000, version=0.92.5
+
+    jaubeBogoHdr   # Kill variable
+
+    :0
+    * ! JA_UBE_BOGOFILTER_HEADER_NEW ?? ^^^^
+    {
+        jaubeBogoHdr = $JA_UBE_BOGOFILTER_HEADER_NEW
+
+	#  -e  = Exit with code 0 if message is ham/unsure.
+	#  -p  = Pass through
+
+        :0 fhbw # : bogofilter$LOCKEXT
+        | $JA_UBE_BOGOFILTER_PRG \
+          -e \
+	  -p \
+          --spam-header-name="$JA_UBE_BOGOFILTER_HEADER_NEW" \
+          $JA_UBE_BOGOFILTER_OPT
+    }
+    :0 E
+    {
+        jaubeBogoHdr = $JA_UBE_BOGOFILTER_HEADER_ORIGINAL
+
+        :0 fhbw : bogofilter$LOCKEXT
+        | $JA_UBE_BOGOFILTER_PRG -e -p $JA_UBE_BOGOFILTER_OPT
+    }
+
+    #   Bogofilter returns three status messages: Yes, Unsure, No|Ham
+    #   Save the value for user to check
+
+    :0
+    *$ ^$jaubeBogoHdr: \/yes.*
+    {
+        ERROR = "bogofilter; $MATCH"
+    }
+    :0 E
+    *$ ^$jaubeBogoHdr: \/unsure.*
+    {
+        ERROR_INFO = "bogofilter; $MATCH"
+    }
+    :0 E
+    *$  ^$jaubeBogoHdr: \/.+
+    {
+        # Do nothing. Just record bogofilter response to log file
+    }
+}
+
+dummy = "pm-jaube-prg-bogofilter.rc: end: $ERROR"
+
+# End of file

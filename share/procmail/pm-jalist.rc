@@ -1,0 +1,1866 @@
+# pm-jalist.rc -- Subroutine to detect mailing LIST from message.
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This subroutine tries to detect and derive the mailing list name as
+#       it appears in some of the known methods that ezlm, smarlist,
+#       listserv, majordomo etc. normally use. After this subroutine has
+#       been applied to message the variable `LIST' contains the mailing
+#       list name. Subroutine adaptively finds new new mailing lists
+#       from the messages.
+#
+#       The alternative to subscribing to many mailing lists is to read
+#       them from web archives. Even better way is to use NNTP server at
+#       http://www.gmane.org which allows you to post as you would to a
+#       regular newsgroup. Consider using the NNTP interface and you may
+#       save you from receiving lot of messages that can already be found
+#       from Gmane's server.
+#
+#   Quick start
+#
+#       If you just want to jump in and use this module and you
+#       noteice that some list isn't trapped, please set
+#
+#       o   JA_LIST_HEADER_REGEXP to match the From: field
+#
+#       If you want to make some list more unique, like if name "Alert"
+#       was detected as a list name, please set
+#
+#       o   JA_LIST_MAKE_UNIQUE to match the list name, like "Alert".
+#           After that the list name will be converted to HOST-LIST format.
+#
+#   Sendmail plus type method for list subscription
+#
+#       If you can use sendmail type PLUS addressing capabilities, you may
+#       not be interested in this module, because you have an alternative
+#       way to handle mailing list messages. The extra information after
+#       "+" is available to procmail scripts via `$ARG' pseudo variable
+#       when procmail is the LDA. Let's suppose you want to subscribe to
+#       procmail mailing list and want to save all messages to folder
+#       list.procmail, then you'd subscribe with address:
+#
+#           login+list.procmail@site.com
+#
+#       If your email host doe snot provide the plus addressing then it the
+#       traditiona approach have been to add a piece of recipe to
+#       `~/.procmailrc' to catch each list. But that's manual work for
+#       every list. When you use this subroutine, you no longer need to
+#       write separate mailing list recipes to your `~/.procmailrc' every
+#       time you subscribe to a new mailing list. The detection of a new
+#       list will happen automatically.
+#
+#   What you need to know before using this module
+#
+#       There is lot of heuristics going on in this module and one thing
+#       that you must note:
+#
+#           If 'To:' domain is same as `From/Sender:/Reply-to:' domain
+#           then it is considered a mailing list message.
+#
+#       This causes certain messages to be treated as mailing list messages.
+#       The module can't possibly know that the following is not from
+#       mailing list, because it doesn't know "what is mailing list", only
+#       "how it probably looks like it". This is definitedly categorized as
+#       mailing list message, because `From' and even `Reply-to' has the same
+#       domain `foo.bar.net' as in `To'.
+#
+#           To: support@foo.bar.net
+#           From: message@foo.bar.net
+#           Reply-to: support@foo.bar.net
+#           Subject: Vmail See message to Eric
+#
+#       You must prevent checking messages like this by surrounding call
+#       to this subroutine with a check statement:
+#
+#           #   Do not check these messages
+#
+#           noList = "From.*(foo.bar.net|support.my.com)"
+#
+#           :0
+#           *$ ! $noList
+#           {
+#               INCLUDERC = $RC_LIST
+#               # ... save messsag by examining variable LIST (which see)
+#           }
+#
+#   Ask for help
+#
+#       If you find mailing lists that this subroutine does not detect, but
+#       which could have been detected by looking the headers in standard
+#       way, please send a email to maintainer. There may be cases where it
+#       is impossible to detect the mailing list and in those cases you
+#       just has to carve a new entry to your `~/.procmailrc'.
+#       When you keep your procmail log running, you may see message
+#
+#            *** potential list ***
+#
+#       Which is an indication that some new recipe could be added to
+#       to this subroutine to detect that mailing list. If the message
+#       you received _was_ from a mailing list, please send all the headers
+#       to the maintainer so that support can be added.
+#
+#   Further reading
+#
+#       You can search for mailing list that interests you at:
+#
+#           http://www.lsoft.com/lists/listref.html
+#
+#       Python based mailing list manager; the mailman:
+#
+#           http://www.list.org/
+#
+#   Code note: Errors-To
+#
+#       Bill Houle sent interesting headers which caused to add
+#       more heuristic than was feasible to solve the list detection.
+#       From the below headers it is practically impossible to derive the
+#       original list name. So, the list name is artificially constructed
+#       by combining Reply-To's LOGIN with Errors-To field's first host
+#       name
+#
+#           Reply-To: news@doodle.foo.net
+#           Errors-To: bounced@doodle.foo.net
+#
+#       The list name formed is "news-doodle". So, If you happen to see
+#       an odd name like this which doesn't remind the original list
+#       name, it may be due to poor headers that have no clue about
+#       the real name. No problem, check below how you would convert
+#       this name to better mailbox name.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       will followign extra module, which must have been installed.
+#
+#       o   pm-javar.rc
+#
+#   Variable JA_LIST_FROM_TO_IGNORE
+#
+#       This is regexp of sender addresses to ignore so that the if To and
+#       From are identical, it is not considered a list messages. This is
+#       typical for system generated messages that take form:
+#
+#           From: root@host (Cron Daemon)
+#           To: root@host
+#
+#   Variable JA_LIST_SAVE
+#
+#       If set to "yes" then the list name information detected is saved to
+#       separate header. The `LIST_DETECTED' is the original grabbed word from
+#       the headers and the 'LIST' is the final name after possible
+#       list name conversions. According to RFC the X- can be user for
+#       user headers.
+#
+#           X-List-Detected: $LIST_DETECTED mapped to $LIST
+#
+#   Variable JA_LIST_KILL_POSTFIX
+#
+#       If grabbed `LIST' match this regexp at the end of list name, then
+#       the postfix match will be removed. It is traditional that many
+#       list names are like list1-info, list2-beta, list3-L and ut would
+#       be preferable to see names like list1, list2 and list3. The
+#       default value will ditch "-(info|beta|L)".
+#
+#   Variable JA_LIST_KILL_PREFIX
+#
+#       Just like the postfix variable. If this string is matched at the
+#       beginning of the LIST, it is removed.
+#
+#   Variable JA_LIST_DISREGARD_EMAIL
+#
+#       In some cases this list detection recipe "thinks" that the address
+#       picked is the list sender. You may have a dedicated address where
+#       all you mailing list mails arrive and you have named it like
+#       mailing-list@me.here.at, which will effectively trigger: Ah,
+#       you have -list in email address, so this message must be from
+#       mailing list name 'mailing'. Of course it is not and you have to
+#       disallow the heuristics to make such assumption by defining a
+#       regexp that rejects a possible choice. For the above example, you
+#       would define:
+#
+#           JA_LIST_DISREGARD_EMAIL = "posting-list@me.here.at"
+#
+#       If you have several such addresses, just add them to the
+#       variable separating with normal regular expression "|" OR
+#       statement.
+#
+#   Variable JA_LIST_HEADER_REGEXP
+#
+#       This is *optional* variable, which you can set to match regexp of
+#       the mailing list domain address if it slipped through the tests
+#       in this module. There are some lists that send messages that don't
+#       carry enough information in headers to determine their list status.
+#       If you narrow the group by setting JA_LIST_HEADER_REGEXP, then for
+#       example lists like these, that identify themselves only through
+#       two headers, can be found:
+#
+#           Reply-To: dispatch-faq@cnet.com
+#           From: CNET Digital Dispatch <dispatch@cnet.com>
+#
+#       For that list you would set
+#
+#           JA_LIST_HEADER_REGEXP = "(@cnet\.com)"
+#
+#       Don't worry. all the other list detection recipes has already
+#       been tried, so this is last test that are carried out and variable
+#       JA_LIST_HEADER_REGEXP helps eliminating possible mishist
+#
+#        You don't need set this variable to include all mailing list
+#        domains. Only to those ones that were not trapped. The default
+#        value for this is:
+#
+#           "(amazon\.com|bookpool\.com)"
+#
+#   Variable JA_LIST_MAKE_UNIQUE
+#
+#       If you're subscribed to many mailing lists, that simply tell that
+#       they are *news* or *newsletter*, it will be impossible to
+#       differiantiate A *news* from B *news*. This variable holds regular
+#       expression that, if matched, prepend the first host name to the
+#       beginning of list name, thus making the list unique:
+#
+#           news@some.com       --> some-news
+#           news@here.com       --> here-news
+#
+#       The default value matches lists that contain word *news*, but you
+#       may need to set this to more matches.
+#
+#   Variable JA_LIST_CONVERSION
+#
+#           Note: before using this feature, make sure your `LINEBUF'
+#           is big enough, say 4096 or otherwise the variable's content
+#           is truncated.
+#
+#       Many times the grabbed `LIST' name is not what you would like to
+#       use for your mailbox name. You want to make the name perhaps
+#       more shorter, more descriptive or categorize the messages according
+#       to hierarchy. Let's say that you have subscribed to following mailing
+#       lists:
+#
+#           LIST            LIST name    Description of mailing list
+#           (as grabbed)    you want
+#           -------------------------------------------------------------
+#           jde             java.jde    Java Development Env
+#           java            java.lang   Java programming
+#           FLAMENCO        flamenco    Flamenco music
+#           tango-l         tango       Argentine Tango dancing
+#           tm-en-help      tm-en       Emacs TM mime package mailing list
+#           w3-beta         w3          Emacs WWW mailing list
+#
+#       First, remember that the variable `JA_LIST_KILL_POSTFIX' is first
+#       applied, so the actual `LIST' appears as follows:
+#
+#           jde, java, FLAMENCO, tango, tm-en, w3
+#
+#       Ok, now we apply the conversion table by defining it as follows.
+#       The grabbed LIST name is first, then comes space(s), new name
+#       _and_ terminating colon. Repeat this for each list you want to
+#       convert.
+#
+#           LIST CONVERSION[,LIST CONVERSION ...]
+#
+#       This gives us table below: notice that entries tango-l, w3-beta
+#       were not included, because the `JA_LIST_KILL_POSTFIX' already got
+#       rid of the postfixes. Also note how the uppercase match FLAMENCO is
+#       converted to more suitable lowercase mailbox name. After you have
+#       set up this variable you can start saving messages to folders.
+#
+#           JA_LIST_CONVERSION = "\
+#           jde       java.jde,\
+#           java      java.lang,\
+#           FLAMENCO  flamenco,\
+#           "
+#
+#       The list conversion is done with pure procmail means, so it is very
+#       fast. It also means that the conversion is limited to FROM-STRING
+#       TO-STRING syntax. No wild cards or regular expressions are allowed.
+#
+#         If you consider using an external process, like `sed' or `perl'
+#         to convert the grabbed list name to something else (when
+#         `JA_LIST_CONVERSION' method was not enough); think again. For
+#         each incoming mailing list message you launch external process.
+#         It is not unusual to receive 700 messages from various mailing
+#         lists a day, it can be imagined how much load any external
+#         process would add to the server. Use the grabbed mailing list
+#         name and `JA_LIST_CONVERSION' table if you care about system
+#         load.
+#
+#       If you have many mailing lists that use uppercase names, it may be
+#       tedious to add each mailing list name to `JA_LIST_CONVERSION'.
+#       Possible alternative is to use very efficient `tr' program
+#       to convert characters to lowercase. Again; think twice,
+#       because any extra process could be avoided if `JA_LIST_CONVERSION'
+#       was used.
+#
+#           :0
+#           * ! LIST ?? ^^^^
+#           {
+#               :0 D            # still uppercase list name?
+#               * LIST ?? [A-Z]
+#               {
+#                   LIST = `echo $LIST | tr A-Z a-z`
+#               }
+#
+#               :0 :
+#               list.$LIST
+#           }
+#
+#   List name is not always the same
+#
+#       One important thing to keep in mind is that when mailing list
+#       manager sends out list messages, the headers may change.
+#       This means that the list name grabbed previously changes too.
+#       This is unfortunate, but it sometimes happens. Let's see an example.
+#       I was previously receiving messages from Cygwin mailing list named
+#       `gnu-win32'
+#
+#           To: <gnu-win32@cygnus.com>, "Foo Bar" <foo@example.com>
+#
+#       However, one day that same list was grabbed under name "cygwin", due
+#       to new header
+#
+#           Mailing-List: contact cygwin-help@sourceware.cygnus.com; run by ezmlm
+#      Now I had two list names that both should be going to the same
+#       mailbox.  No worries, just add new entry to the translate
+#       table to convert the new list name to mailbox name:
+#
+#           JA_LIST_CONVERSION = "\
+#           gnu-win32           cygwin32,\
+#           cygwin              cygwin32,\
+#           "
+#
+#   Example: basic installation
+#
+#       Here is recipe to save all your mailing list to separate folders.
+#       If you subscribe to new lists or unsubscribe to lists, you don't
+#       need to change anything. The grabbed list name will appear
+#       in variable `LIST'
+#
+#           RC_LIST = $PMSRC/pm-jalist.rc   # name the subroutine
+#
+#           ...
+#
+#           #   Handle all mailing lists with one subroutine and recipe
+#           #   following it. Set also JA_LIST_CONVERSION before
+#           #   calling this subroutine to cnvert the found list names.
+#
+#           INCLUDERC = $RC_LIST
+#           imap      =                 # Kill var. Set to "/" to enable
+#
+#           :0                          # if list name was grabbed
+#           * LIST ?? [a-z]
+#           {
+#               dummy = "Saving mailing list: $LIST"
+#
+#               :0 w:
+#               ${imap+".INBOX."}list.$LIST$imap
+#           }
+#
+#       What's that IMAP thing there, you may wonder. Normally
+#       procmail delivers to standard mailbox, so the name is
+#       something like '$MAILDIR/list.abc'. For IMAP, the delivery
+#       must happen using principle "one file, one message", so
+#       procmail must deliver to a directory. That's what the added
+#       `$imap' is there for. It is also customary that IMAP folders
+#       are prefixed with ".INBOX", so the actual name becomes
+#       `$MAILDIR/.INBOX.list.abc'. For IMAP there should also
+#       be proper `MAILDIR=$HOME/Maildir' setting.
+#
+#   Change Log (none)
+#
+#       [Not updated any more - See project's ChangeLog file]
+#
+#       1998-06-16 dattier@wwa.com (David W. Tamkin) in list.procmail
+#       Message-Id: <m0ym1M3-001HE1C@tekka.wwa.com> replied to my
+#       my first announcement of list detection module. I used to use
+#       `expr' to delete -(help|owner) suffixes in complicated cases,
+#       but David showed that procmail could do that also.
+#
+#       Now this subroutine does not use shell anywhere and is therefore
+#       as lightweight as possible and suitable for heavy mailing lists.
+#
+#       1998-06-30 Teresa Nunes <icecream@alaska.net> reported that
+#       more list were not trapped. Added new rule to match servers
+#       that use "@lists." id. Added "estimation" rule.
+#
+#       1998-08-10 Teresa Nunes <icecream@alaska.net> reported that
+#       more list were not trapped and <Bill.Houle@sandiegoca.ncr.com>
+#       sent cases which he labelled "Probably nothing can be done for this
+#       and this...". Well, suprise to your both. All the examples could
+#       be detected and list name derived.
+#
+#       1998-11 and 199-12 Bill Houle <bhoule@sandiegoca.ncr.com> sent
+#       me numerous new mailing ist message headers that improved detecting
+#       new mailing lists format a great deal. Thank you very much.
+#
+#       1999-01 Bill Houle <bhoule@sandiegoca.ncr.com> Still kept
+#       subscribing to mailing list that were not triggered by this module :-)
+#       Thank Bill for the samples.
+#
+#       1999-04 Tony Lam <Tony.Lam@Eng.Sun.Com> suggested adding
+#       X-List-Detected header and storing the original grabbed word
+#       to LIST_DETECTED. He also suggested new Received: "for" header
+#       check for possible mailing list names that contains dash(-).
+
+# .................................................... &initialising ...
+
+dummy = "
+========================================================================
+pm-jalist.rc: init:"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# .......................................................... &public ...
+#  tango-l, spam-list-d (discussion)
+
+#   These pre/postfix regexps and they must _not_ contain leading slashes:
+#
+#   "-(help|beta)"      Wrong
+#   "(help|beta)"       Right
+
+JA_LIST_KILL_PREFIX = ${JA_LIST_KILL_PREFIX:-"\
+(return|owner|info|beta|help|announce|users|subscribers)"}
+
+JA_LIST_KILL_POSTFIX = ${JA_LIST_KILL_POSTFIX:-"\
+(return|owner|info|beta|help|request|digest\
+|announce|users|subscribers|maint\
+|unjoin|join\
+|discuss\
+|errors\
+|on|off|[ld])"}
+
+#   See installation
+
+JA_LIST_CONVERSION    = ${JA_LIST_CONVERSION:-""}
+JA_LIST_HEADER_REGEXP = ${JA_LIST_HEADER_REGEXP:-"\
+(amazon\.com|bookpool\.com)"}
+
+#   If we detect plain list name line "news" "announce" or "daily",
+#   that is too general, because same name can come from several sites.
+
+JA_LIST_MAKE_UNIQUE  = ${JA_LIST_MAKE_UNIQUE:-"\
+^^(news(letters?|[0-9]+)?\
+|talk(tous)?\
+|unjoin|join\
+|announce(ments?)?\
+|daily|scripts?\
+|modules?)\
+^^"}
+
+JA_LIST_DISREGARD_EMAIL = ${JA_LIST_DISREGARD_EMAIL:-""}
+
+#   Messages that have identical From-To and match this regexp are ignored.
+
+JA_LIST_FROM_TO_IGNORE = ${JA_LIST_FROM_TO_IGNORE:-\
+"(root|postmaster|webmaster|abuse|spam)"}
+
+#   returned value
+
+LIST_DETECTED   # Kill variable
+LIST            # Kill variable
+
+# ........................................................... &check ...
+
+pfx     = "( *<?(mailto:)?)?"
+abc     = "[^][<>(){}$WSPC?&,@\"\'=]"
+
+# THIS LINE: Emacs font-lock.el fix to  close previous quote(")
+
+
+# Words that are included in the list name, like "food-discuss"
+
+trigger = "(\
+[ld]\
+|admin\
+|announce\
+|apps\
+|beta\
+|digest\
+|discuss\
+|errors\
+|help\
+|info\
+|join\
+|maint\
+|off
+|on
+|owner\
+|return\
+|request\
+|subscribers\
+|unjoin\
+|users\
+)"
+
+from    = "(X-From-Line:|X-From:|From:|From )"
+from1   = "(X-From-Line:|X-From:|From:)"
+to      = "((Apparently-)?To:)"
+
+email   = $abc+@$abc+
+agent   = (owner|info|errors)
+
+rc_email = $PMSRC/pm-jaaddr.rc
+
+# .................................................... &setting-vars ...
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::::::: #FROM"
+
+#   This variable is used as a hint to get a unique list name.
+#   If not set, then define sender name from $from.
+
+unique_from     = ""
+
+sender_field    = ""
+sender_addr     = ""
+sender_addr2    = ""
+sender_site     = ""
+sender_domain   = ""
+sender_sub1     = ""
+sender_account  = ""
+
+:0
+*$  $SUPREME^0 ^(Sender:|$from1)\/.*
+*$  $SUPREME^0 ^From \/.*
+{
+    sender_field = $MATCH
+
+    # Call subroutine
+
+    save=$VERBOSE
+
+        VERBOSE     = "off"
+        INPUT       = $MATCH
+        INCLUDERC   = $rc_email
+
+    VERBOSE=$save
+
+    sender_addr     = $ADDRESS                  # foo@a.b.com
+    sender_addr2    = $ACCOUNT@$DOMAIN          # foo@b.com
+
+    sender_account  = $ACCOUNT                  # foo
+    sender_domain   = $DOMAIN                   # b.com
+    sender_site     = $SITE                     # a.b.com
+    sender_sub1     = $SUB1
+
+    unique_from     = $sender_field
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::::::: #TO"
+
+to_field    = ""
+to_addr     = ""
+to_addr2    = ""
+to_site     = ""
+to_account  = ""
+to_domain   = ""
+to_sub1     = ""
+
+:0
+* ^To:\/.*
+{
+    to_field    = $MATCH
+
+    saved = $VERBOSE
+
+        VERBOSE     = "off"
+        INPUT       = $to_field
+        INCLUDERC   = $rc_email
+
+    VERBOSE = "$saved"
+
+    to_addr     = $ADDRESS
+    to_addr2    = $ACCOUNT@$DOMAIN
+
+    to_account  = $ACCOUNT
+    to_domain   = $DOMAIN
+    to_site     = $SITE
+    to_sub1     = $SUB1
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::::: #REPLY"
+
+reply_field     = ""
+reply_addr      = ""
+reply_addr2     = ""
+reply_account   = ""
+reply_site      = ""
+reply_domain    = ""
+reply_sub1      = ""
+
+:0
+*   ^Reply-To:\/.*
+{
+    reply_field     = $MATCH
+
+    saved = $VERBOSE
+
+        VERBOSE     = "off"
+        INPUT       = $reply_field
+        INCLUDERC   = $rc_email
+
+    VERBOSE = "$saved"
+
+    reply_addr      = $ADDRESS
+    reply_addr2     = $ACCOUNT@$DOMAIN
+
+    reply_account   = $ACCOUNT
+    reply_domain    = $DOMAIN
+    reply_site      = $SITE
+    reply_sub1      = $SUB1
+}
+
+cc_field     = ""
+cc_addr      = ""
+cc_addr2     = ""
+cc_account   = ""
+cc_site      = ""
+cc_domain    = ""
+cc_sub1      = ""
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::::: #CC"
+
+:0
+*   ^CC: \/[^,]+
+{
+    cc_field     = $MATCH
+
+    saved = $VERBOSE
+
+        VERBOSE     = "off"
+        INPUT       = $cc_field
+        INCLUDERC   = $rc_email
+
+    VERBOSE = "$saved"
+
+    cc_addr      = $ADDRESS
+    cc_addr2     = $ACCOUNT@$DOMAIN
+
+    cc_account   = $ACCOUNT
+    cc_domain    = $DOMAIN
+    cc_site      = $SITE
+    cc_sub1      = $SUB1
+}
+
+# ....................................................... &microsoft ...
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: #MICROSOFT"
+
+# Microsoft mailing lists
+#
+# From BackOfficeEditor_004060@news.newswire.microsoft.com
+# From: "Microsoft TechNet" <MicrosoftTechNet_004@news.newswire.microsoft.com>
+
+:0*  LIST ?? ^^^^
+*$ ^$from.*@news.*.microsoft
+{
+    :0
+    *$ ^$from.*$pfx+\/$abc+_$d+@
+    *$  MATCH ?? ()\/$a+
+    {
+        LIST = $MATCH
+    }
+}
+
+# ................................................. &targetted-catch ...
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: #LSV"
+
+# X-LSV-ListID: SPAM-L
+
+:0
+*  LIST ?? ^^^^
+*$ ^X-LSV-ListID:$s+\/$abc+
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: #List-Id"
+
+# -- The first supreme matches both these cases
+#
+# List-Id: A user list for the exim MTA <exim-users.exim.org>
+# List-ID: <java.mysql.com>
+
+# -- The second supreme mathes this
+#
+# List-ID: <mailto:java-subscribe@lists.mysql.com>
+# List-Id: gnome-print-list.gnome.org
+
+
+dummy = "pm-jalist.rc: List-ID"
+
+:0
+*  LIST ?? ^^^^
+*$ $SUPREME^0 ^List-ID:.*<\/$abc+
+*$ $SUPREME^0 ^List-ID:.*$pfx\/$abc+>
+*$ $SUPREME^0 ^List-ID:$s*\/$abc+
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: #List-* "
+
+# More similar headers that can be used ...
+#
+# Precedence: bulk
+# List-Help: <mailto:java-help@lists.mysql.com>
+# List-Unsubscribe: <mailto:java-unsubscribe-posting-list=mailandnews.com@lists.mysql.com>
+# List-Post: <mailto:java@lists.mysql.com>
+# List-Subscribe: <mailto:java-subscribe@lists.mysql.com>
+#
+# Precedence: list
+# List-Help: <mailto:sympa@mandrivalinux.org?subject=help>
+# List-Subscribe: <mailto:sympa@mandrivalinux.org?subject=subscribe%
+# 20cooker>
+# List-Unsubscribe:
+#         <mailto:sympa@mandrivalinux.org?subject=unsubscribe%20cooker>
+# List-Post: <mailto:cooker@mandrivalinux.org>
+# List-Owner: <mailto:cooker-request@mandrivalinux.org>
+
+dummy = "pm-jalist.rc: Other List-* headers"
+
+:0
+*  LIST ?? ^^^^
+*$ $SUPREME^0 ^List-Post:.*<\/$abc+
+*$ $SUPREME^0 ^List-Post:.*$pfx\/$abc+>
+*$ $SUPREME^0 ^List-(Un)?Subscribe:.*$pfx\/$abc+>
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: Mailman"
+
+# X-Mailman-Version: 1.0
+# Precedence: bulk
+# List-Id: LeoCAD Development List <leocad-devel.gerf.org>
+# X-Loop: docwhat@gerf.org
+
+:0
+*  !
+*  LIST ?? ^^^^
+* ^X-Mailman-Version:
+* ^List-Id:[^<]+<\/[^>]+
+{
+    dummy = "pm-jalist.rc: Mailman MATCH is $MATCH"
+    LIST  = `echo $MATCH | sed 's/\./@/'`
+    dummy = "$is: Mailman LIST is $LIST"
+}
+
+# ..................................................... mailing-list ...
+# X-Mailing-List: <procmail@informatik.rwth-aachen.de> archive/latest/17987
+# X-Mailing-List: <info-bbdb@xemacs.org> archive/latest/954
+# X-Mailing-List: <efs-help@cuckoo.hpl.hp.com> archive/latest/119
+# X-Mailing-List: <xemacs-beta@xemacs.org>
+# Mailing-List: contact jde-help@sunsite.auc.dk; run by ezmlm
+# Mailing-List: contact pgp-users-help@joshua.rivertown.net; run by ezmlm
+# X-Mailing-List: <procmail@informatik.rwth-aachen.de> archive/latest/22876
+
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: X-Mailing-List1"
+
+dummy = "pm-jalist.rc: X-Mailing-List AGENT-"
+
+:0
+*   LIST ?? ^^^^
+*$  ^(X-)?Mailing-List:$pfx$agent-\/$abc+@
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: X-Mailing-List non-greedy match"
+
+:0
+*   LIST ?? ^^^^
+*$  ^(X-)?Mailing-List:${pfx}\/$abc+@
+{
+    LIST  = $MATCH
+}
+
+dummy = "pm-jalist.rc: X-Mailing-List greedy match"
+
+:0
+*   LIST ?? ^^^^
+*$  ^(X-)?Mailing-list:.*${pfx}\/$abc+@
+{
+    LIST = $MATCH
+}
+
+# .................................................... &list-headers ...
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::: list-* [$LIST]"
+
+#   A great of good set of headers to pick list name from
+#
+# List-Software: Lyris Server version 2.54, <http://www.lyris.net>
+# List-Subscribe: <mailto:subscribe-perl-win32-users@lyris.activestate.com>
+# List-Owner: <mailto:owner-perl-win32-users@lyris.activestate.com>
+# List-Help: <mailto:help@lyris.activestate.com>
+# X-List-Host: ActiveState Tool Corp. <http://www.activestate.com>
+# Reply-To: "Christopher Maujean (Volt Computer)" <a-chrism@microsoft.com>
+# Sender: perl-win32-users-admin@lyris.activestate.com
+# Precedence: bulk
+# X-Lyris-To: [foo@example.com]
+# X-Lyris-MemberID: 45971
+# X-Lyris-MessageID: 32936
+# X-listname: perl-win32-users
+# X-ListMember: [foo@example.com]
+
+:0
+*  LIST ?? ^^^^
+*$ ^X-Listname:$s+\/$abc+
+{
+    LIST        = $MATCH
+}
+
+:0
+*  LIST ?? ^^^^
+*$ ^List-Owner:$pfx$agent-\/$abc+@
+{
+    LIST        = $MATCH
+}
+
+# List-Unsubscribe: <mailto:leave-jscript-146465L@ls.activeserverpages.com>
+# List-Unsubscribe: unsubscribe network-computing-newsletter
+
+:0
+*  LIST ?? ^^^^
+*$ $SUPREME^0 ^List-Unsubscribe: +unsubscribe$pfx\/$abc+
+*$ $SUPREME^0 ^List-Unsubscribe:$pfx\/$abc+
+{
+
+    LIST = $MATCH
+
+    :0
+    * ^List-Unsubscribe:\/.*
+    {
+        unique_from = $MATCH
+    }
+
+    #   Check if there is Reply-To and narrow "leave-jscript-146465L" to
+    #   "jscript" by searching common match.
+
+    :0
+    *$ $SUPREME^0 ^Reply-To:.*[<]\/$abc+
+    *$ $SUPREME^0 ^Reply-To:.*$pfx\/$abc+
+    {
+        replyToListName = $MATCH
+
+        dummy = "pm-jalist.rc: is replyToListName included in List-Unsubscribe?"
+
+        :0
+        *$ LIST ?? $replyToListName
+        {
+            LIST = $replyToListName
+        }
+    }
+}
+
+# ........................................................ &triggers ...
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: TO #TRIGGER"
+
+#   Just impossible to know that this is list....without -discuss keyword
+
+#   From  list-relay@mlist.ucsd.edu  Fri Jan 22 20:13:07 1999
+#   Sender: foo@bar.com
+#   From: foo@bar.com
+#   To: <fhs-discuss@ucsd.edu>
+
+:0
+*   LIST ?? ^^^^
+*$  ^To:$pfx\/$abc+-$trigger@
+{
+    LIST        = $MATCH
+    unique_from = $to_field
+}
+
+# ...................................................... envelope-to ...
+# X-Envelope-to: tango-L@mitvma.mit.edu
+
+dummy = "pm-jalist.rc: TRY X-Envelope-to"
+
+:0
+*  LIST ?? ^^^^
+*$ ^X-Envelope-to:${pfx}\/$abc+
+{
+    LIST = $MATCH
+}
+
+# ........................................................... sender ...
+# Sender: Discussion of Any Aspect of the Argentine Tango
+#               <TANGO-L@MITVMA.MIT.EDU>
+# Sender: Open discussion of TI Graphing Calculators
+#              <CALC-TI@LISTS.PPP.TI.COM>
+# Sender: owner-ding@hpc.uh.edu
+# Sender: Flamenco discussion group <FLAMENCO@LISTSERV.TEMPLE.EDU>
+# Sender: owner-ntemacs-users@cs.washington.edu
+
+#  (((((  NOTE  )))))
+#  This would match
+#
+#       Sender: owner-announce@perl.org -->  LIST = "announce"
+#
+#   Which is prevented with JA_LIST_KILL_POSTFIX test
+#
+#   The SUPREME will match first Sender field, then any field that has
+#   agent properties like owner- ...
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: Sender"
+
+:0
+*    LIST ?? ^^^^
+*$   $SUPREME^0  ^Sender:$pfx$agent-\/$abc+
+*$   $SUPREME^0  ^[-a-z]+:$pfx$agent-\/$abc+
+*$ ! MATCH ?? ^^$JA_LIST_KILL_POSTFIX^^
+{
+    LIST = $MATCH
+
+    :0
+    *$ ^Sender:\/.*
+    {
+        unique_from = $MATCH
+    }
+}
+
+dummy = "pm-jalist.rc: TRY sender1a"
+
+:0
+*  LIST ?? ^^^^
+*$ ^Sender:.*${pfx}\/$abc+-L\>
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: TRY sender1b"
+
+:0
+*  LIST ?? ^^^^
+*$ ^Sender:.*${pfx}\/$abc+@listserv
+{
+    LIST = $MATCH
+}
+
+# Sender: semi-gnus-en-owner@meadow.scphys.kyoto-u.ac.jp
+
+dummy = "pm-jalist.rc: sender postfix words in list name"
+
+:0
+*   LIST ?? ^^^^
+*$  ^Sender:${pfx}\/$abc+-$agent
+{
+    LIST = $MATCH
+}
+
+# Reply-To: "AIP Public" <public@lists.association.org>
+# Sender: public-admin@lists.association.org
+
+dummy = "pm-jalist.rc: sender lists.domain"
+
+:0
+*   LIST ?? ^^^^
+*$  ^Sender:.*\/${abc}+@lists\.
+{
+    LIST = $MATCH
+}
+
+# ............................................................. From ...
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: From-Owner 1"
+
+:0
+*  LIST ?? ^^^^
+*$ ^$from.*${pfx}\/$abc+-$agent
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: From-Owner 2"
+
+:0
+*  LIST ?? ^^^^
+*$ ^$from.*$pfx\/$agent-$abc+@
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: From-Owner 3 TRIGGER"
+
+# To: Planet IT Members:;
+# Subject: Join Planet IT's New Systems-Management Technology Center
+# From: Planet IT Announcements <cmpnet-announcements@lists.cmpnet.com>
+# Errors-To: anchovy+cmp-planetit010899-1@mx.lodo.infobeat.com
+
+:0
+*  LIST ?? ^^^^
+*$ $SUPREME^0 ^$from.*$pfx.*\/${abc}+-$trigger@
+*$ $SUPREME^0 ^$from.*$pfx.*\/${trigger}-$abc+@
+{
+    LIST = $MATCH
+}
+
+#   We can't do anything automatic to detect this list. User must
+#   set JA_LIST_HEADER_REGEXP to match @motleyfool.com, then the
+#   FoolWatch: from Subject line it taken.
+
+# From: foolexpress@motleyfool.com
+# Received: (qmail 1528 invoked by uid 536); 17 Dec 1998 02:31:49 -0000
+# Message-ID: <19981217023149.1527.qmail@mail3.motleyfool.com>
+# Date: 16 Dec 1998 21:31:49 -0500
+# Subject: FoolWatch: Downsizing Tidal Wave? and Rule Breaker on Amazing Amazon
+# Subject: Fool Watch:
+# To: foo@bar.com
+
+dummy = "pm-jalist.rc: TRY FromLogin 2"
+
+:0
+*   LIST ?? ^^^^
+*$  $SUPREME^0 ^Subject: +\/$abc$abc$abc$abc+:
+*$  $SUPREME^0 ^Subject: $abc$abc$abc$abc+ +\/$abc$abc$abc$abc+:
+*$  MATCH ?? ()\/[^:]+
+*$  $JA_LIST_HEADER_REGEXP
+{
+    LIST = $MATCH
+}
+
+#   This is tough. We pick the host names from the From address and try to
+#   see if those exist in the Subject line. SIDEWALK can be found
+#
+#   The regexp ^Subject:.* +\/$abc$abc$abc$abc+: makes sure there is
+#   some list name with colon. Simple "re:" won't do, but "Alert:" does.
+
+# From: talktous@sandiego.sidewalk.com
+# To: <foo@bar.com>
+# Subject: Sidewalk Ticket Alert: Handel's "Messiah," Jingle Ball
+
+dummy = "pm-jalist.rc: TRY From-Subject 1"
+
+:0                                      # host 1 after @
+*  LIST ?? ^^^^
+*$ ^Subject:.* +\/$abc$abc$abc$abc+:
+*$ ^$from.*@\/$abc+
+*$ ^Subject:.*$\MATCH
+{
+    tmp = $MATCH
+
+    :0
+    *$ ^$from.*\/$S+@.*$tmp
+    *$  MATCH ?? ()\/[^@]+
+    {
+        LIST = $MATCH
+
+        :0
+        *$ ^()\/$from.*@.*$tmp
+        {
+            unique_from = $MATCH
+        }
+    }
+}
+
+dummy = "pm-jalist.rc: TRY From-Subject 2"
+
+:0                                      # host 2 after @
+*  LIST ?? ^^^^
+*$ ^Subject:.* +\/$a$a$a$a+:
+*$ ^$from.*@$a+\.\/$a+\.$a+
+*$  MATCH ?? ()\/$a+
+*$ ^Subject:.*$\MATCH
+{
+
+    #  We can use this "sidewalk", because it's sub-domain and UNIQUE
+    #  would pick. We want something outside...
+
+    tmp = $MATCH
+
+    #  Get the login. find the correct FROM that contains TMP, then extract
+    #  the login
+
+    :0
+    *$ ^$from.*\/$S+@.*$tmp
+    *$  MATCH ?? ()\/[^@]+
+    {
+        LIST = $MATCH
+
+        :0
+        *$ ^()\/$from.*@.*$tmp
+        {
+            unique_from = $MATCH
+        }
+    }
+}
+
+dummy = "pm-jalist.rc: TRY From-Subject 3 words"
+
+# Try to match three same words from both SUBJECT and FROM:
+#
+#    To: foo@bar.com
+#    Subject: Silicon Alley Daily for Monday, January 4, 1999
+#    From: Silicon Alley Daily <daily@sar.infobeat.com>
+#    Errors-To: daily-errors+1.0.92574.foo#bar.com@bounce.sar.infobeat.com
+#
+# Notice that here are 2 common words
+#
+#    Subject: Silicon Alley Reporter Net TV Show @ 4 p.m.
+#    From: Silicon Alley Daily <daily@sar.infobeat.com>
+#
+# Ignore messages that come from daemon, like
+#
+#    From: Mail Delivery System <Mailer-Daemon@example.org>
+#    Subject: Mail delivery failed: returning message to sender
+
+:0
+*     LIST ?? ^^^^
+*$ !  $JA_FROM_DAEMON
+*$ !  $JA_FROM_MAILER
+*$   ^Subject: +\/$S+ +$S+
+*$   ^$from1\/$s*$\MATCH.*
+*$   ^Subject: +\/$S+ +$S+ .*
+{
+    tmp     = $MATCH        # save "Silicon alley Daily"
+    status  = "read-more"
+
+    :0                      # Record the correct FROM line
+    *$ ^()\/$from.*$tmp.*
+    {
+        unique_from = $MATCH
+    }
+
+    # Now make list name. Note that first "]" character must end reading
+    # words
+    #
+    #   Subject: [this list]
+
+    dummy = "                           *** WORD 1"
+
+    :0
+    *$ tmp ?? ^^()\/$S+
+    {
+        part = $MATCH
+
+        :0
+        * part ?? ()\/[a-zA-Z0-9_-]+
+        {
+            LIST = $MATCH
+        }
+
+        :0
+        *$ part ?? \]^^
+        {
+            status = "stop"
+        }
+    }
+
+    dummy = "                           *** WORD 2"
+
+    :0
+    *  status   ?? read-more
+    *$ tmp      ?? ^^$S+ +\/$S+
+    {
+        part = $MATCH
+
+        :0
+        * part ?? ()\/[a-zA-Z0-9_-]+
+        {
+            LIST = $LIST-$MATCH
+        }
+
+        :0
+        *$ part ?? \]^^
+        {
+            status = "stop"
+        }
+    }
+
+    dummy = "                           *** WORD 3"
+
+    :0
+    *  status   ?? read-more
+    *$ tmp      ?? ^^$S+ +$S+ +\/$S+
+    {
+        part = $MATCH
+
+        :0
+        * part ?? ()\/[a-zA-Z0-9_-]+
+        {
+            LIST = $LIST-$MATCH
+        }
+    }
+}
+
+# ................................................ FromLogin-Subject ...
+
+# Check if LOGIN is found from SUBJECT
+#
+# From: newsletter@x10.com
+# To: <login@some.com>
+# Subject: X-10 Newsletter: FREE Sticka Switches
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: From-Login"
+
+:0
+*   LIST ?? ^^^^
+*$ ^$from.*${pfx}\/$abc+
+*$ ^Subject:.*$MATCH:
+{
+    LIST = $MATCH
+}
+
+# ....................................................... subscriber ...
+
+# To: "internet-subscribers" <foo@bar.com>
+# From: <internet-editor@amazon.com>
+# Subject: Amazon.com Delivers Internet
+
+:0
+*  LIST ?? ^^^^
+*$ ^To:.*\/($abc.*subscriber|subscriber.*$abc)
+*$ $JA_LIST_HEADER_REGEXP
+{
+    LIST = $MATCH
+}
+
+# ........................................................... X-list ...
+# X-Listserver: ListSTAR v1.1 by StarNine Technologies, a Quarterdeck Company
+# X-List-Subscribe: <mailto:FAQ-Maintainers@consensus.com?subject=subscribe>
+# X-List-Help: <mailto:FAQ-Maintainers@consensus.com?subject=help>
+# List-Subscribe: <mailto:updatemail-on@lists.funnytown.com>
+
+#       The list name can't be deternined by $trigger, but we can
+#       estimate that if
+#
+#               Sender = To, then it's list
+#       OR
+#               Reply-To = To
+#
+#       Reply-To: Alpha K9s <ALPHAK9S@APPLE.EASE.LSOFT.COM>
+#       Sender: Alpha K9s <ALPHAK9S@APPLE.EASE.LSOFT.COM>
+#       From: "Mark A. Winters" <wintdavi@PANIX.COM>
+#       To: ALPHAK9S@APPLE.EASE.LSOFT.COM
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: Using heuristics"
+
+# ....................................................... sender ...
+
+dummy = "pm-jalist.rc:  ****** Checking Sender"
+
+:0
+*   LIST ?? ^^^^
+*   sender_addr ?? [a-z]
+*   to_addr     ?? [a-z]
+{
+    dummy = "pm-jalist.rc: to_addr $to_addr ??  sender_addr $sender_addr"
+
+    #   We try first with exact matches, then with only the top level domain
+    #
+    #   addr  = site.this.com
+    #   addr2 = this.com
+
+    :0
+    *$ $SUPREME^0 to_addr  ?? ()\/$\sender_addr
+    *$ $SUPREME^0 to_addr  ?? ()\/$\sender_addr2
+    *$ $SUPREME^0 to_addr2 ?? ()\/$\sender_addr
+    *$ $SUPREME^0 to_addr2 ?? ()\/$\sender_addr2
+    *$ MATCH   ?? ()\/$abc+@
+    {
+        :0
+        *$ ! sender_addr ?? $JA_LIST_FROM_TO_IGNORE
+        {
+            dummy       = "pm-jalist.rc: Sender is identical to To."
+            unique_from = $to_addr2
+            LIST        = $MATCH
+        }
+    }
+
+    #   To: humor@NewHumor.com
+    #   Sender: ListManager@NewHumor.com
+    #
+    #   But, it must not be person-to-person message, that's why
+    #   JA_LIST_HEADER_REGEXP addition.
+
+    dummy = "pm-jalist.rc: sender_addr [$sender_addr] ?? to_site [$to_site] [$to_addr]"
+
+    :0 E
+    *$ $JA_LIST_HEADER_REGEXP
+    *$ sender_addr ?? $\to_site
+    *$ to_addr     ?? ()\/$abc+
+    {
+        dummy = "pm-jalist.rc: Sender address matched To domain."
+        LIST  = $MATCH
+    }
+}
+
+# ..................................................... reply-to ...
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: Reply-to"
+
+:0
+*    LIST ?? ^^^^
+*   ^Reply-To:\/.*
+*$   to_addr  ?? ()\/$abc+
+{
+
+    # ................................. Reply-To identical to To ...
+    # To: web-consultants@just4u.com
+    # Reply-To: web-consultants@just4u.com
+
+    dummy = "pm-jalist.rc: Check if Reply-To identical to To."
+    dummy = "pm-jalist.rc: [$to_addr] ?? [$reply_addr]"
+
+    :0
+    *$ $SUPREME^0 to_addr  ?? ()\/$\reply_addr
+    *$ $SUPREME^0 to_addr  ?? ()\/$\reply_addr2
+    *$ $SUPREME^0 to_addr2 ?? ()\/$\reply_addr
+    *$ $SUPREME^0 to_addr3 ?? ()\/$\reply_addr2
+    *$ MATCH   ?? ()\/$abc+@
+    {
+        unique_from = $to_addr2
+        LIST = $MATCH
+    }
+
+    # ............................... Reply-To identical to From ...
+
+    dummy = "pm-jalist.rc: Check if Reply-To identical to From."
+    dummy = "pm-jalist.rc: [$sender_addr] ?? [$reply_addr]"
+
+    :0 E
+    *$ sender_addr ?? $\reply_addr
+    *$ MATCH       ?? ()\/$abc+@
+    *$ $JA_LIST_HEADER_REGEXP
+    {
+        dummy = "pm-jalist.rc: MAYBE LIST, Reply-To is identical to From address."
+        LIST = $MATCH
+    }
+
+    #   Hm, not identical addresses; but partially.
+    #
+    #   Reply-To: dispatch-faq@cnet.com
+    #   From: CNET Digital Dispatch <dispatch@cnet.com>
+
+    dummy = "pm-jalist.rc: SENDER/REPLY acc [$sender_account] ?? [$reply_account]"
+    :0 E
+    *$ $SUPREME^0 sender_account  ?? ()\/$reply_account
+    *$ $SUPREME^0 reply_account   ?? ()\/$sender_account
+    *$ $JA_LIST_HEADER_REGEXP
+    {
+        LIST = $MATCH
+    }
+
+    #   Well: howabout site names then?
+    #
+    #   From: TripMiles <sender@que.thetrip.com>
+    #   Reply-to: feedback@thetrip.com
+
+    dummy = "pm-jalist.rc: SENDER/REPLY domain [$sender_domain] ?? [$reply_adomain]"
+
+    :0 E
+    *$ $SUPREME^0 sender_domain  ?? ()\/$\reply_domain
+    *$ $JA_LIST_HEADER_REGEXP
+    {
+        LIST = $reply_sub1-$reply_account
+    }
+}
+
+# ...................................................... Error-To ...
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: Errors-to"
+
+:0
+*    LIST ?? ^^^^
+*$  ^Errors-To:.*\/$email
+*    MATCH ?? @()\/.*
+{
+    errors_domain = $MATCH
+
+    #   Hmmm The address is not identical, but maybe there is Errors-To
+    #   Header that we could use for tracking a list context ?
+    #
+    #   To: list-member@foo.com
+    #   Reply-To: news@fusion.nww.com
+    #   Errors-To: bounced@fusion.nww.com
+
+    dummy = "pm-jalist.rc: Errors-To [$errors_domain] reply_addr [$reply_addr]"
+
+    :0
+    * ! reply_addr ?? ^^^^
+    *$  reply_addr ?? $\errors_domain
+    {
+        unique_from = $reply_addr
+
+        :0
+        *$ reply_addr ?? ()\/$abc+
+        {
+            LIST = $MATCH
+        }
+    }
+
+    dummy = "pm-jalist.rc: Errors-To [$errors_domain] reply_addr [$sender_addr]"
+
+    :0 E
+    * ! sender_addr         ?? ^^^^
+    *$  sender_addr         ?? $\errors_domain
+    {
+        unique_from = $sender_addr
+
+        :0
+        *$ sender_addr ?? ()\/$abc+
+        {
+            LIST = $MATCH
+        }
+    }
+
+    dummy = "pm-jalist.rc: Errors-To [$errors_domain] to_addr [$to_addr]"
+
+    :0 E
+    * ! to_addr     ?? ^^^^
+    *$  to_addr     ?? $\errors_domain
+    {
+        unique_from = $to_addr
+
+        :0
+        *$ to_addr ?? ()\/$abc+
+        {
+            LIST = $MATCH
+        }
+    }
+}
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: From-newsletter"
+
+# From: newsletter@x10.com
+# Subject: X-10 Buyer's Alert: Super-Saver Weekend Deals - up to 60% OFF!
+
+:0 E
+*$ ^$from:.*newsletter@
+{
+    LIST = "newsletter"
+
+    :0
+    *$  ^()\/$from:.*newsletter@.*
+    {
+        unique_from = $MATCH
+    }
+}
+
+# ................................................. named LIST in CC ...
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: TO-CC mailing List"
+
+#   Somebody is replying direct, but also sending to list with CC:
+#
+#       To: Foo Bar <foo@bar.com>
+#       Cc: procmail mailing list <procmail@informatik.rwth-aachen.de>
+#
+#   Also find
+#
+#       JAVAL-L <foo@bar.com>
+
+:0
+*   LIST   ?? ^^^^
+*$ ^(To|CC):\//*(.*mailing$s+list|\<$S+-L\>).*
+*$  MATCH  ?? ()\/[^$WSPC<]+@
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: TO-CC postfix match"
+
+#  Try to find POSTFIX address somewhere in header
+#  To:foo@example.com
+#  Cc: winNT Emacs list <foo-users@cs.washington.edu>
+
+:0
+*   LIST   ?? ^^^^
+*$ ()[<, ]\/$abc+-$trigger@
+{
+    LIST = $MATCH
+}
+
+# ..................................................... X-ListMember ...
+# some lists are announce only and they contain "null". Pick name from
+# X-ListMember field
+#
+# To: ora-news@list.ora.com
+# From: Ora-News <null@list.ora.com>
+# Reply-To: <null@list.ora.com>
+# X-ListMember: me@here.com [ora-news@list.ora.com]
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: X-ListMember"
+
+dummy = "pm-jalist.rc: check SENDER ?? TO_FIELD [$sender] ?? [$to_field] "
+
+#   See if DOMAIN if same in both From and To
+#   See if ACCOUNT is found from FROM field
+
+:0
+*   LIST ?? ^^^^
+*   X-ListMember
+*$ ^To:.*@\/$abc+
+*$ ^$from.*$MATCH
+*$ ^To:.*$pfx\/$abc+
+*$ ^$from.*$MATCH
+{
+    LIST = $MATCH
+}
+
+# ...................................................... &ListServer ...
+# From: ListServer@wrox.com
+# Message-Id: <199812301439.IAA13867@neuman.interaccess.com>
+# Date: 30 Dec 1998 08:37:27 -0600
+# Subject: Wrox Press Newsletter, 12/29/98
+# To: foo@bar.com
+
+:0
+*   LIST ?? ^^^^
+*$ ^$from1.*ListServer@\/[^.]+
+{
+    LIST = $MATCH                       # grab server
+
+    :0                                  # Grab fist word too
+    *$ ^Subject: $LIST +\/$S+
+    {
+        LIST = $LIST-$MATCH
+    }
+}
+
+# .......................................................... &digest ...
+
+# From foo@bar.com
+# From: sans@clark.net
+# To: foo@bar.com
+# Subject: SANS Digest Vol 2, No. 11
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: DIGEST"
+
+#   The \/$from.* is just for logging purposes
+
+:0
+* LIST ?? ^^^^
+* ! ^Subject:.*re:
+*   ^()\/$from.*
+*   ^Subject: +\/.*digest ()
+*$   MATCH ?? ()\/$abc+ +digest
+*$   MATCH ?? ()\/$abc+
+*$  ^$from.*$MATCH@
+{
+    LIST = $MATCH
+
+    # The $from can match multiple from fields, like
+    #
+    #   From foo@bar.com
+    #   From: sans@clark.net
+    #
+    # And we want to force reading UNIQUE from "From:", otherwise the
+    # $from would take the "From ". See Unique recipe and SUPREME.
+
+    :0
+    *$  ^()\/$from.*$MATCH.*
+    {
+        unique_from = $MATCH
+    }
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: #NEWS"
+
+#   From: sender@thetrip.com
+#   Reply-to: feedback@thetrip.com
+#   Subject: TheTrip.com Newsletter
+#
+#   Sender: SERVERWATCH <SERVERWATCH@listserv.internet.com>
+#   From: SERVERWATCH <Serverwatchnews@internet.com>
+#   Subject: Serverwatch News - January 22, 1999
+
+:0
+*     LIST ?? ^^^^
+*  ! ^Subject:.*(Re:|fwd)
+*$   ^Subject:$s+\/$S+$s+news(letter)?.*
+*$   ^Subject:$s+\/$S+
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: #[LIST]"
+
+# This must be last, because relying on the [] syntax is last resort.
+# Many users indicate the nature of message in the first word, like
+#
+#   [off topic]
+#   [bug]
+#
+# And those are not list names. But then again this is:
+#
+# Message-Id: <199903031849.NAA19835@defender.perl.org>
+# From: TPI News Pumpking <pudge@perl.org>
+# To: TPI News List <daily-news@perl.org>
+# Subject: [TPI News] March 03, 1999
+# Sender: owner-announce@perl.org
+# Precedence: bulk
+# Reply-To: news@perl.org
+# X-Debug: List=(announce@perl.org)
+
+x    = $abc
+word = "($x$x$x$x?$x?$x?$x?$x?$x?$x?)"      # maximum size of the word
+
+:0
+*  LIST ?? ^^^^
+*$ ^Subject: +\[\/$word($s+$word)?\]
+*$ $JA_LIST_HEADER_REGEXP
+{
+    tmp = $MATCH
+
+    :0
+    *$ tmp ?? ()\/$x+
+    {
+        LIST = $MATCH
+    }
+
+    :0                  # second word
+    *$ tmp ?? $x$s+\/$x+
+    {
+        LIST = "$LIST-$MATCH"
+    }
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: @LIST.COM"
+
+#  To: <webprog@list.cgibook.com>
+
+:0
+*  LIST ?? ^^^^
+*$ ()\/$abc+@list\.*
+*  MATCH ?? ()\/[^@]+
+{
+    LIST = $MATCH
+}
+
+dummy = "pm-jalist.rc: ::::::::::::::::::::::::::::::::: FOR list-name"
+
+#  Suggestion by Tony Lam <Tony.Lam@Eng.Sun.COM>
+#
+#       To: nm-interest@foo.com, nm-consulting@foo.com
+#
+#       1. if header matches the following, extract the full email
+#          address from the match:
+#
+#                for <[a-z0-9]+-[a-z0-9]+.*>;
+#
+#       2. if the extracted email address is also found in any of the
+#          To/Cc, extract the portion before @ as the name of alias
+#
+#       (3. BTW, if step 2 fails, the mesage is very likely an ube)
+#
+
+:0
+*  LIST ?? ^^^^
+*$ for($SPCL)+[<]()\/[a-z0-9]+-[a-z0-9]$S+@
+{
+    tmp = $MATCH
+
+    :0
+    *$ (To|CC):\/.*$MATCH
+    {
+        unique_from = $MATCH
+        LIST        = $tmp
+    }
+}
+
+# ...................................................... experiments ...
+#   Many times domain name has server "list" if it's running mailing list
+#   Try to catch some of them if previous ones failed.
+
+dummy = "pm-jalist.rc: :::::::::::::::::::::::: Last try [$LIST]"
+
+:0
+* LIST ?? ^^^^
+{
+    :0
+    *   ()\/list server.*
+    {
+        dummy = "pm-jalist.rc: ==== potential list ==== $MATCH"
+    }
+
+    :0 E
+    *$   ()\/(From|X-From-Line|Sender:|CC:|To:).*\.lists?.*\
+        |(From|X-From-Line|Sender:|CC:|To:).* list$S*@.*
+    {
+        dummy = "pm-jalist.rc: ==== potential list ==== $NL     $MATCH"
+    }
+
+    :0 E
+    * ()\/(From|Sender:|CC:).*(Majordomo|listserv).*
+    {
+        dummy = "pm-jalist.rc: ==== potential list ==== $NL     $MATCH"
+    }
+
+    :0 E
+    * ()\/Errors-To:.*
+    {
+        dummy = "pm-jalist.rc: ==== potential list ==== $MATCH"
+    }
+
+    :0 E
+    *$ ()\/^Reply-To:(.*\<list|@$abc+list).*
+    {
+        dummy = "pm-jalist.rc: ==== potential list ==== $MATCH"
+
+
+        #  We can safely conver this to list name
+        #  Reply-To: "The Radicati Group, Inc." <list@radicati.com>
+
+        :0
+        *$ ^Reply-To.*list@\/$a+
+        {
+            LIST = list-$MATCH
+        }
+    }
+
+    :0 E
+    * ()\/^Subject.*\<digest\>
+    {
+        dummy = "pm-jalist.rc: ==== potential list ==== $MATCH"
+    }
+
+    :0 E
+    * ()\/Mailing-list:.*
+    {
+        dummy = "pm-jalist.rc: ==== potential list ==== $MATCH"
+    }
+}
+
+# ............................................................ clean ...
+
+dummy = "pm-jalist.rc: Cleaning matched list: ($LIST)"
+
+:0
+* !  LIST  ?? ^^^^
+{
+
+    :0                          # delete "@" from the end of string
+    * LIST ?? @
+    * LIST ?? ^^\/[^@]+
+    {
+        LIST = $MATCH
+    }
+
+    :0                          # delete "mailto:" from the beginning of string
+    * LIST ?? mailto:\/.*
+    {
+        LIST = $MATCH
+    }
+
+    #   Remove numbers
+    #   mailto:leave-jscript-146465L --> mailto:leave-jscript
+    #   1.  Check if it has numbers at the end
+    #   2.  Match everything until last -
+    #   3.  Remove last -
+
+    :0
+    * LIST  ?? ().*[-][0-9]+.^^
+    * LIST  ?? ()\/.*[-]
+    * MATCH ?? ()\/.*[^-]
+    {
+        LIST = $MATCH
+    }
+
+    # ................................................. postfix deletion ...
+
+    #   The regexp says:
+    #   1) see if these keywords are there
+    #   2) Read everything up till last dash and store it to MATCH
+    #   3) Match up till not including final dash
+
+    :0
+    *$  LIST  ?? ()-${JA_LIST_KILL_POSTFIX}^^
+    *   LIST  ?? ^^\/.*-
+    *   MATCH ?? ^^\/.*[^-]
+    {
+        LIST = $MATCH
+    }
+
+    # .............................................. prefix deletion ...
+
+    dummy = "pm-jalist.rc: prefix deletion"
+
+    :0
+    *$  LIST  ?? ^^${JA_LIST_KILL_PREFIX}-\/.*
+    {
+        LIST = $MATCH
+    }
+
+    # ....................................................... unique ...
+
+    dummy = "pm-jalist.rc: make unique list name: $NL$NL  $unique_from"
+
+    :0
+    *$ LIST                            ?? $JA_LIST_MAKE_UNIQUE
+    *$ $SUPREME^0 unique_from          ?? ()\/$abc+@$abc+
+    *$ $SUPREME^0 ^()\/$from.*${pfx}$abc+@$abc+
+    {
+        host    = $MATCH
+        save    = $VERBOSE
+        VERBOSE = "off"
+
+            INPUT       = $host
+            INCLUDERC   = $rc_email
+
+        VERBOSE = "$save"
+
+        #   list.shopguidenews.com, we can't accept "list" as match, so we
+        #   use "shopguidenews"
+
+        :0
+        * SUB1 ?? [a-z]
+        {
+            LIST = $SUB1-$LIST
+        }
+
+        :0 E
+        {
+            LIST = $host-$LIST
+        }
+    }
+
+    # ............................................. converting list name ...
+
+    dummy = "pm-jalist.rc: ::::::::::::::::::::::::  List conversion"
+
+    LIST_DETECTED = $LIST
+
+    dummy = "pm-jalist.rc: Searching for conversion in array JA_LIST_CONVERSION"
+    dummy = $JA_LIST_CONVERSION
+
+    :0
+    *$ JA_LIST_CONVERSION ?? $LIST$s+\/[^$WSPC,]+
+    {
+        LIST = $MATCH
+    }
+
+    :0
+    * JA_LIST_SAVE ?? yes
+    {
+         :0 fhw
+         | ${FORMAIL:-formail} \
+           -I "X-List-Detected: $LIST_DETECTED mapped to $LIST"
+    }
+}
+
+dummy       = "pm-jalist.rc: end: grabbed list ($LIST)"
+
+# end of file pm-jalist.rc

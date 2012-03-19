@@ -1,0 +1,67 @@
+# pm-jaube1.rc -- Jari's UBE filter. Subroutine 1
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Documentation
+#
+#	This file is part of the "pm-jaube.rc". This subroutine is called
+#       when likely UBE message has been triggered.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This recipe file
+#       will include
+#
+#       o   pm-jastore.rc
+#
+#   Change Log (none)
+
+# ............................................................ &code ...
+#
+
+id    = "pm-jaube1.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+
+#   Should we write log message to file which identifies this UBE
+
+:0 hic: $JA_UBE_LOG$LOCKEXT
+* JA_UBE_LOG ?? [a-z]
+|echo "    [jaube; $ERROR; $ERROR_MATCH]" >> $JA_UBE_LOG
+
+
+#	Add new header to the message
+
+:0 fhw
+* JA_UBE_HDR ?? [a-z]
+| $FORMAIL -A "$JA_UBE_HDR: $ERROR, $ERROR_MATCH"
+
+#	Should it be stored directly?
+
+:0
+* JA_UBE_MBOX ?? [a-z]
+{
+	MBOX        = $JA_UBE_MBOX
+	INCLUDERC   = $RC_STORE
+}
+
+dummy = "$id: end:"
+
+
+# pm-jaube1.rc ends here

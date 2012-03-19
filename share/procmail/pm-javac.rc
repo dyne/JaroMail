@@ -1,0 +1,144 @@
+# pm-javac.rc -- Procmail: Vacation framework recipe (id-cache)
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       Framework for all programs that need to reply to messages only once.
+#       Usually known as "vacation" feature. If you cahnge th cache file,
+#       you can attach this recipe to any messages that you want to deal with
+#       only once.
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   JA_VAC, To activate vacation, set value to "yes"
+#       o   JA_VAC_RC, When new message-id is found, run this includerc
+#       o   JA_VAC_ID_CACHE, Remember to clear this file when you start
+#           the vacation.
+#
+#   Usage example
+#
+#	To turn on the vacation feature, create ~/.vac file and recipe below
+#	activates vacation. If the vacation is not active, then cache file
+#	is removed. (automatic cleanup). The VERBOSE is also turned off
+#	when you're on vacation; so that your procmail log will not get
+#	filled.
+#
+#       So when you go to vacation, you 'touch ~/.vac' and update
+#       ~/vacation.msg. When you come back, you 'rm ~/.vac'. That's it.
+#
+#       IMPORTANT: If you are subscribed to mailing lists, be sure to file
+#       messages from those services first and put the vacation recipe
+#       only after the list or bot messages. Also add sufficent "!" conditions
+#       in order not to reply to other "bot" service messages.
+#
+#           JA_VAC_ID_CACHE = $HOME/.pm-vac.cache
+#
+#           :0
+#           *$ ? $IS_EXIST $HOME/.vac
+#           {
+#               VERBOSE     = off
+#               JA_VAC      = "yes"
+#               JA_VAC_RC   = $PMSRC/pm-myvac.rc	# my vacation recipe
+#               INCLUDERC   = $PMSRC/pm-javac.rc	# framework
+#           }
+#           :0 E                                        # else
+#           * ? $IS_EXIST $JA_VAC_ID_CACHE
+#           {
+#               dummy = `$RM -f $JA_VAC_ID_CACHE`
+#           }
+#
+#       Here is example of pm-myvac.rc recipe
+#
+#           #  Change subject
+#
+#           :0 fhw
+#           * ^Subject: *\/[^ ].*
+#           | $FORMAIL -I "Subject: vacation (was: $MATCH)"
+#
+#           :0 fb           # put message to body
+#           | $CAT $HOME/.vacation.msg
+#
+#           :0              # Send it
+#           | $SENDMAIL
+#
+#   Change Log (none)
+
+dummy = "
+========================================================================
+pm-javac.rc: init:"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# .......................................................... &public ...
+
+JA_VAC                  = ${JA_VAC:-"no"}
+JA_VAC_RC               = ${JA_VAC_RC:-""}
+JA_VAC_XLOOP            = ${JA_VAC_XLOOP:-"$LOGNAME@$HOST X-loop"}
+JA_VAC_ID_CACHE         = ${JA_VAC_ID_CACHE:-"$HOME/pm-vac.cache"}
+JA_VAC_ID_CACHE_SIZE    = ${JA_VAC_ID_CACHE_SIZE:-8192}
+
+# ........................................................... &do-it ...
+# - The `! precedence'  match should prevent from replying to "bot"
+#   messages
+# - Mailing lists should use type "list"
+
+:0
+*     JA_VAC ?? yes
+*$ !  $JA:FROM_DAEMON
+*$ ! ^X-Loop: $JA_VAC_XLOOP
+*  ! ^Precedence:.*(bulk|list|junk)
+*     JA_VAC_RC ?? [a-z]
+{
+    dummy = "pm-javac.rc: checking."
+
+    oldLock  = $LOCKFILE
+    LOCKFILE = ${JA_VAC_ID_CACHE}${LOCKEXT}
+
+    :0 c
+    * ! ? $FORMAIL -rD $JA_VAC_ID_CACHE_SIZE $JA_VAC_ID_CACHE
+    {
+        # Compose reply and add some basic headers
+
+        :0 fhw
+	|   $FORMAIL -rt                                                    \
+            -A "Precedence: junk"                                           \
+            -A "X-Loop: $JA_VAC_XLOOP"
+
+        :0 a    # Formail succeeded
+        {
+            # New user, call this rc to send a reply
+            INCLUDERC   = $JA_VAC_RC
+        }
+    }
+
+    LOCKFILE = $oldLock
+}
+
+dummy = "pm-javac.rc: end:"
+
+# End of file

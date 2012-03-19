@@ -1,0 +1,281 @@
+# pm-jaube-prg-spamoracle.rc -- Interface to Spamoracle program
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Warning
+#
+#       Put all your Unsolicited Bulk Emacil (aka spam) filters towards the
+#       end of your `~/.procmailrc'. The idea is that valid messages are filed
+#       first (mailing lists, your work and private mail, bounces) and only
+#       the uncategorized messages are checked last.
+#
+#       YOU CANNOT USE THIS PROCMAIL SUBROUTINE UNLESS YOU HAVE TRAINED THE
+#       BAYESIAN PROGRAM FIRST!
+#
+#       To train:
+#
+#           $ spamoracle add -v -spam good.msg ...  # feed individual messages
+#           $ spamoracle add -v -good good.msg ...  # feed individual messages
+#
+#       To test
+#
+#           $  spamoracle test mail.msg | less
+#
+#   Overview of features
+#
+#       o   Implements interface to http://freshmeat.net/projects/spamoracle
+#           OCaml language based Bayesian Mail program.
+#       o   Variable `ERROR' is set to "yes" if the message was UBE.
+#       o   Results are available in headers `X-Spam-Spamoracle-Status',
+#           `X-Spam-Spamoracle-Score', `X-Spam-Spamoracle-Details' and
+#           `X-Spam-Spamoracle-Attachment'  for further analysis.
+#
+#   Description
+#
+#       There are several bayesian based statistical analysis programs that
+#       study the message's tokens and then classify it into two categories:
+#       good or bad, or if you like, ham and spam. All the Bayesian programs
+#       are not the same, so if you want to achive magic 99.99% probability
+#       the only methodology to do that is to chain several programs in
+#       serially. There is no single program that can solve the UBE detection.
+#
+#       Using Spamoracle as sole spam protection is inefficient, because
+#       version version 1.4 (2004-09-29) does not accept messages from
+#       stdin. Becaus of this message has to be written to a temporary file
+#       before calling Spamoracle. Later the temporary file must be removed
+#       with `rm'. All these three shell calls are needed for each message.
+#       If you have other detection programs, call them first to identify
+#       unsolicited Bulk Email.
+#
+#   About bouncing message back
+#
+#       The general consensus is, that you should not send bounces. The UBE
+#       sender is not there, because the address forged. Do not increase
+#       the network traffic; you will not do any good to anybody by
+#       bouncing messgas -- you just increase mail traffic even more.
+#       Instead save the messages to folders and periodically periodically
+#       check their contents.
+#
+#   Required settings
+#
+#       If `spamoracle' program is available, define this variable in your
+#       `~/.procmailrc'. Use absolute path to make the external shell
+#       quick; it'll save server load considerably.
+#
+#           JA_UBE_SPAMORACLE_PRG = /usr/bin/spamoracle
+#
+#       If you _do_ _not_ have program installed, do not leave the
+#       variable lying aroung, because it will keep this subroutine active.
+#       Calling a non existing program is not a good idea, so it better to
+#       empty the variable if the program is not available.
+#
+#   Required settings
+#
+#       None. No dependencies to other procmail modules.
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   `JA_UBE_SPAMORACLE_PRG', path to program
+#       o   `JA_UBE_SPAMORACLE_HEADER_PREFIX', the header name where the results
+#           are put. If not defined, no headers are added. Default
+#           value is  *X-Spam-Spamoracle'*.
+#       o   `JA_UBE_SPAMORACLE_FORCE', if set to _yes_ then call program no matter
+#           what. Normally if there already are *X-Spam-Spamoracle-* headers,
+#           it is assumed that the message has already been checked
+#           and no new checking is needed.
+#       o   `JA_UBE_SPAMORACLE_REGEXP', regexp to match for spam probability.
+#           Defaul value will match probabbility of 0.8 with 5 interesting words.
+#           The match is tried agains *X-Spam-Spamoracle-Score* header.
+#
+#   Return values
+#
+#       o   `ERROR', value  "yes" if `JA_UBE_SPAMORACLE_REGEXP' matched.
+#       o   `ERROR_MATCH' contains detailed content of
+#           `X-Spam-Spamoracle-Score' header.
+#
+#       If headers were enabled, they will contain these values. The
+#       score's values are spam probability 0.0 - 1.0 and the degree of
+#       similarity 0-15 of the message with the spam messages in the
+#       corpus.
+#
+#           X-Spam-Spamoracle-Status: yes
+#           X-Spam-Spamoracle-Score: 1.00 -- 15
+#           X-Spam-Spamoracle-Details: refid:98 $$$$:98 surfing:98 asp:95 click:93
+#             cable:92 instantly:90 https:88 internet:87 www:86 U4:85 isn't:14 month:81
+#             com:75 surf:75
+#           X-Spam-Spamoracle-Attachments: cset="GB2312" type="application/octet-stream"
+#             name="Guangwen4.zip"
+#
+#   Usage example
+#
+#           PMSRC            = $HOME/procmail # procmail recipe dir
+#
+#           <other checks, mailing lists, work mail etc.>
+#
+#           JA_UBE_SPAMORACLE_PRG   = "/usr/bin/nice -n 5 /usr/bin/bmf"
+#           INCLUDERC               = $PMSRC/pm-jaube-prg-spamoracle.rc
+#
+#           #   The ERROR will contains word "yes" if it program classified
+#           #   the message into "bad" category.
+#
+#           :0 :
+#           * ERROR ?? yes
+#           junk.mbox
+#
+#   File layout
+#
+#       The layout of this file is managed by Emacs packages tinyprocmail.el
+#       and tinytab.el for the 4 tab text placement.
+#       See project http://freshmeat.net/projects/emacs-tiny-tools/
+#
+#   Change Log
+#
+#       None
+
+dummy = "
+========================================================================
+pm-jaube-prg-spamoracle.rc: init:"
+
+# ................................................... User variables ...
+
+#   You must define program path, because we don't know
+#   if it has been installed in this system or not
+
+JA_UBE_SPAMORACLE_PRG           = ${JA_UBE_SPAMORACLE_PRG:-""}
+
+#   The header name prefix with no colon at the end. If this variable
+#   is empty, then `formail' is not called and no headers are added to
+#   the message. This saves a shell call and will make this repice a
+#   bit faster.  The return status can still be checked from variable
+#   ERROR
+
+JA_UBE_SPAMORACLE_HEADER_PREFIX = ${JA_UBE_SPAMORACLE_HEADER_PREFIX:-"\
+X-Spam-Spamoracle-"}
+
+#   Should we run the check even if there aready were header
+#   JA_UBE_SPAMORACLE_HEADER_PREFIX? Setting to 'yes' might mean:
+#
+#   o   We suspect that someone else had added the header, so don't
+#       trust it but generate our own
+#   o   We don't trust the local MDA's result (if it had invoked
+#       bmf for us), because we want' to run the message
+#       through our own trained database
+#   o   Or, we're simply testing and have several INCLUDERC=$RC_UBE_SPAMORACLE calls
+#       in our ~/.procmailrc to find out what location would be the
+#       best (beginning, middle, last) by examining the procmail LOGFILE.
+
+JA_UBE_SPAMORACLE_FORCE = ${JA_UBE_SPAMORACLE_FORCE:-"no"}
+
+#   This regexp is matched against header like below. If found, the ERROR
+#   is set to "yes" to flag the spam. Range 0.8 - 1.00 and at least 5
+#   or more interesting words.
+#
+#        X-Spam--Spamoracle-Score: 0.81 -- 5
+
+JA_UBE_SPAMORACLE_REGEXP = "\
+(\.[8-9]|1\.).* *-- *([5-9]|[0-9][0-9])"
+
+#   Program cannot read message from STDIN, so we must write it to a file
+
+JA_UBE_SPAMORACLE_TMP_FILE = ${JA_UBE_SPAMORACLE_TMP_FILE:-\
+$HOME/spamoracle-${USER:-${LOGNAME:-foo}}.tmp}
+
+# ............................................................ do it ...
+# Kill variables
+
+ERROR
+ERROR_MATCH
+
+:0
+*  JA_UBE_SPAMORACLE_PRG ??   [a-z]
+*$ 9876543210^0          !  ^$JA_UBE_SPAMORACLE_HEADER_PREFIX
+*  9876543210^0          !    JA_UBE_SPAMORACLE_FORCE ?? yes
+{
+    jaubeSpamoracleData    = ""
+    jaubeSpamoracleDetails = ""
+    jaubeSpamoracleAttach  = ""
+
+    #   This area must be locked, so that no other process
+    #   is writing at the same time.
+
+    LOCKFILE = spamoracle$LOCKEXT
+
+        savedMetas  = $SHELLMETAS
+        savedShell  = $SHELL
+        SHELLMETAS  = ">"
+        SHELL       = /bin/sh
+
+        :0 wc
+        | ${CAT:-/bin/cat} > $JA_UBE_SPAMORACLE_TMP_FILE
+
+        :0 w
+        jaubeSpamoracleData=| $JA_UBE_SPAMORACLE_PRG    \
+                              test                      \
+                              $JA_UBE_SPAMORACLE_TMP_FILE
+
+         dummy = `${RM:-/bin/rm} -f $JA_UBE_SPAMORACLE_TMP_FILE`
+
+        SHELLMETAS  = $savedMetas
+        SHELL       = $savedShell
+
+    LOCKFILE
+
+    #   An empty message looks like this
+    #
+    #   From:
+    #   Subject:
+    #   Score: 0.50 -- 0
+    #   Details:
+
+    :0
+    * jaubeSpamoracleData ?? ^From: .+
+    * jaubeSpamoracleData ?? ^(X-)?(Spam-)?Score: \/.+
+    {
+        dummy       = $jaubeSpamoracleData
+        ERROR_MATCH = $MATCH
+
+        :0
+        * jaubeSpamoracleData ?? ^(X-)?(Spam-)?Details:\/.+
+        {
+            jaubeSpamoracleDetails = $MATCH
+        }
+
+        :0
+        * jaubeSpamoracleData ?? ^(X-)?(Spam-)?Attachments:\/.+
+        {
+            jaubeSpamoracleAttach = $MATCH
+        }
+
+        dummy = "pm-jaube-prg-spamoracle.rc: Does score match?"
+
+        :0
+        *$ ERROR_MATCH ?? $JA_UBE_SPAMORACLE_REGEXP
+        {
+            ERROR = "yes"
+        }
+
+        :0 fhw
+        | ${FORMAIL:-formail}  \
+            -I "${JA_UBE_SPAMORACLE_HEADER_PREFIX}Status: ${ERROR:-no}" \
+            -I "${JA_UBE_SPAMORACLE_HEADER_PREFIX}Score: $ERROR_MATCH" \
+            -I "${JA_UBE_SPAMORACLE_HEADER_PREFIX}Details:$jaubeSpamoracleDetails" \
+            -I "${JA_UBE_SPAMORACLE_HEADER_PREFIX}Attachments:$jaubeSpamoracleAttach"
+    }
+}
+
+dummy = "pm-jaube-prg-spamoracle.rc: end: $ERROR"
+
+# pm-jaube-prg-spamoracle.rc ends here

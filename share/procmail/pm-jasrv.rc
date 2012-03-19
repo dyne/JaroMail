@@ -1,0 +1,704 @@
+# pm-jasrv.rc -- MIME capable Procmail File server
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This is the MPFS (Mime Procmail File Server) and it can send MIME
+#       compliant messages with command
+#
+#           "send <ITEM> [WORD1] [WORD2]"
+#
+#       Usually only the ITEM arg is used, and the rest of the words are for
+#       special uses like password and preventing file encoding. A typical
+#       request looks like:
+#
+#           Subject: send help              # ask for file named 'help'
+#
+#   Overview of features
+#
+#       o   MIME types gzip and text/plain are supported.
+#       o   .gz .zip etc. files are sent out as base64 attachments
+#       o   .gz .tar.gz files that exceed 100K are sent out as MIME multiparts
+#       o   requires procmail 3.11+ and MATCH operator \/
+#       o   requires `mmencode' and `gzip' executables to be present in PATH.
+#
+#   Install: server file directory
+#
+#       You have to create a directory for the server where the files are kept.
+#       Usually I don't put the files there, but whenever I want to make a
+#       file available, I draw a hard or softlink to the real file.
+#
+#           % mkdir $HOME/pm-server
+#
+#           # Repeat this as needed for files you want to put available
+#
+#           % cd $HOME/pm-server
+#           % ln -s $HOME/txt/interesting-file.txt interesting-file.txt
+#
+#       You define the server directory by setting
+#
+#           JA_SRV_FILE_DIR = $HOME/pm-server
+#
+#       The short server log is written to file pointed by this variable:
+#
+#           JA_SRV_LOG = $HOME/pm-server.log
+#
+#       The incoming "send" requests are stored to mailbox pointed by
+#       following variable. The default value is /dev/null, but
+#       you may want to set it to ~/Mail/spool/log.srv.spool which can be
+#       used read as a newsgroup by Emacs Gnus [In Gnus create newsgroup with
+#       `G` `m' `nnml' `log.srv']
+#
+#           JA_SRV_MSG_MBOX
+#
+#   Install: special files
+#
+#       Tweak this variable to commands you want to allow shell to execute
+#       in server's directory. This tells when <ITEM> "ls" means command
+#       instead of file
+#
+#           JA_SRV_SH_COMMAND = "^(ls|what)$"
+#
+#       That means that request like this:
+#
+#           Subject: send ls            # run "ls" command and return results
+#
+#       Be sure that the commands exist in your system. See man pages for
+#       more if you want to know what these commands do. Commands cannot
+#       take switches currently for security reasons. E.g. if you want to
+#       give access to "ls -la" listing, put a file "ls-la.txt" available
+#       in the directory, user can get it with "send ls-la.txt"
+#
+#           ls      -- list directory
+#           file    -- print file type information.
+#           what    -- prints all @(#) tags from files
+#           ident   -- print all $ $ tags from files
+#
+#   Install: file `help'
+#
+#       Users want to get a help file with message "send help" and the
+#       `help' is just a file in your server directory. Be sure to supply it
+#       prior to any other files. You can always draw a link to a file if you
+#       don't want to name it that way (e.g. if you keep several server help
+#       files in a RCS tree)
+#
+#           #   draw symlink to `help'
+#
+#           % ln -s $HOME/txt/srv-public-hlp.txt $HOME/server/help
+#
+#   Basic usage in details
+#
+#       The server accepts command in format
+#
+#           "send <ITEM> [CMD|PASSWORD]"
+#
+#       Where ITEM can be any name as long as it starts with [^ .]. The
+#       regexp says: Anything goes as long as FILE does _not_ start with
+#       space or period. This gives you quite a much freedom to construct
+#       filenames. if you want to hand out file:
+#
+#           .procmailrc
+#
+#       You can't. Instead make a link to point to plain "procmailrc"
+#       without the leading period. There is also additional checks
+#       against possible security threat "../" like below; user can't
+#       request such file.
+#
+#           ../../../gotcha  or  dir/../../gotcha
+#
+#       The filename cannot contain special characters like [*?<>{}()].
+#
+#   Advanced usage
+#
+#       [conversions]
+#
+#       If some of your files are big, it makes sense to send them in
+#       compressed base64 format; which in MIME world is called content-type
+#       gzip. You can set a regexp to enforce encoding for your big
+#       files before they are sent to user. The following setting will send
+#       all text files in compressed format to user.
+#
+#           JA_SRV_XGZIP_REGEXP = "\.txt"
+#
+#       When the message is composed a header is inserted into the message
+#       telling how the message is to be decoded, in case user doesn't have
+#       decent MUA that can handle the MIME type:
+#
+#           X-comment: To decode, cat msg| mmencode -u| gzip -d > test.txt
+#
+#       [noconv and gz]
+#
+#       The `WORD1' parameter after the `FILE' is optional and user can
+#       override base64 encoding and request plain file if he uses word
+#       "noconv".
+#
+#           Subject: send <FILE> [noconv|gzip]
+#
+#       However, there are files where `noconv' must not be obeyed, like
+#       the compressed packages that you have put available in .zip, .gz,
+#       .tar.gz or .tgz (GNU tar) format. Following variable controls
+#       when file is always sent as base64:
+#
+#           JA_SRV_BASE64_ALWAYS
+#
+#       If the `WORD1' is "gz" or "gzip", then the gzip is explicitly
+#       requested, This may be desirable, because some of the text files in
+#       the server directory may be big and some accounts don't accept big
+#       messages. A typical bounce looks like:
+#
+#           552 <foo@site.com>... Message is too large; 100000 bytes max
+#           554 <foo@site.com> Service unavailable
+#
+#       These kind of file server bounce messages are handled in separate
+#       module which notifies the user that his account didn't accept the
+#       sent file.
+#
+#       [case sensitivity]
+#
+#       By default the request word ("send") and ITEM (filename) are not
+#       case sensitive, unless you set these flags:
+#
+#           JA_SRV_F_CMD_CASE_SENSITIVE  = "yes"
+#           JA_SRV_F_FILE_CASE_SENSITIVE = "yes"
+#
+#       If values are "no", then these are identical commands:
+#
+#           Subject: Send Help
+#           Subject  SEND HELP
+#
+#   Multi part mime messages
+#
+#       If you want to deliver big files, you better be sure not to send
+#       them as a big file. That blocks the connection between every host
+#       along the path that the big file is transferred. The
+#       solution is to use MIME multi parts that can be assembled back in
+#       the receiving MUA. (In case you don't have multi part assembler
+#       receive Perl script to do it).
+#
+#       MIME multiparts are sent out if
+#
+#       o   Filename matches JA_SRV_BASE64_ALWAYS, typically tar.gz, zip
+#       o   Filesize is bigger than JA_SRV_MULTIPART_THRESHOLD, where
+#           default chunk size is 100K.
+#
+#       When a file meets these criteria, it is read to the `BODY' of message
+#       and base64 encoded. This all happens in memory, so watch
+#       procmail logs to see if any problems with very big files. (>30Meg).
+#       Next, if the base64 conversion succeeded, the composed is handed
+#       to
+#
+#           JA_SRV_MIME_MULTI_SEND
+#
+#       Which does the actual delivery and splitting. The default program
+#       used is `splitmail'. Make sure you have it or substitute the
+#       program with some equivalent one.
+#
+#   Stopping server
+#
+#       Sometimes you're making rearrangements in you file directory or
+#       doing some other maintenance and you are unable to respond to `send'
+#       requests. You can stop the server by setting
+#
+#           JA_SRV_IN_USE = "no"
+#
+#       And when you want to enable the server again; just comment out the
+#       statement or assign `yes'. [The default is `yes']. When this
+#       variable is set to `no', the server sends a message from following
+#       variable as a response to any "send" request.
+#
+#           JA_SRV_IN_USE_NO_MSG
+#
+#   Using password to validate file requests
+#
+#       You should be aware that this file server's implementation is public
+#       in nature. Anyone who asks for a file is allowed to get it. But it
+#       would be good if you could limit the access to documents with some
+#       simple way, like if you set up two file servers (see next chapter)
+#       where one is public and the other is interesting only to group of
+#       people. You can define a string that must be found in Subject field
+#       by setting the following variable
+#
+#           JA_SRV_PASSWORD = ".*"    # default
+#
+#       The default value will match anything in the subject, thus making the
+#       server public. But if you set it like this
+#
+#           JA_SRV_PASSWORD ".*123"
+#
+#       Then string "123" must be there somewhere in the line, like here
+#
+#           Subject: send <FILE> 123
+#
+#       Yes, "123" is actually a CMD definition, but it doesn't matter
+#       because there is no CMD 123. Subject now matches password and the
+#       server can be accessed. Of course the following is valid too.
+#
+#           Subject: send <FILE> noconv 123
+#
+#       If the password was wrong, server won't tell it. The message just
+#       lands to your mailbox in that case and you can investigate who
+#       tried to access the restricted server.
+#
+#   Changing server's command string (multiple servers)
+#
+#       The default command string is "send", but you can change it and thus
+#       create multiple services. Here is one example, where you have set up
+#       two file servers where each has its own directory.
+#
+#           #   The public server
+#
+#           JA_SRV_CMD_STRING           = "send"
+#           JA_SRV_FILE_DIR             = $HOME/server/public
+#           INCLUDERC                   = $HOME/procmail/pm-jasrv.rc
+#
+#           #   Company server, only interests fellow workers.
+#           #   Here "xyz-send" is just magic server request string.
+#           #   Notice case sensitivity settings.
+#
+#           JA_SRV_F_CMD_CASE_SENSITIVE = "yes"
+#           JA_SRV_CMD_STRING           = "xyz-send"
+#           JA_SRV_PASSWORD             = ".*12qw"
+#           JA_SRV_FILE_DIR             = $HOME/server/public/xyz-dir
+#           INCLUDERC                   = $HOME/procmail/pm-jasrv.rc
+#
+#   Notes from the author
+#
+#       [basic Mime type note]
+#
+#       All basic files that you send must be US-ASCII, 7bit. At least that
+#       is the default MIME type used. See `JA_SRV_CONTENT_TYPE'. I once
+#       received following message back
+#
+#           ----- Transcript of session follows -----
+#           554 <foo@bar>... Cannot send 8-bit data to 7-bit destination
+#           501 <foo@bar>... Data format error
+#
+#       because in the previous releases, the MIME type headers were not
+#       in the message saying that the content really was plain 7bit ascii.
+#
+#       [Sending the file as is]
+#
+#       Note, that the file is included "as is" without any extra
+#       *start-of-file* or *end-of-file* tags. This is possible, because
+#       the file is sent in MIME format.
+#
+#       [Using one line log entry]
+#
+#       It may look very spartan to print a single line log entry. You see
+#       messages like above in the file server log. Using one line entry
+#       instead of multi line announcements makes it possible to write a small
+#       perl tool to parse information from a single line. If you get many
+#       file server messages per day, it quicker to look at the single line
+#       entries too.
+#
+#           [ja-srv1; sh file;  Foo Bar <foo@site.com>;]
+#           [ja-srv1; send xxx-file.txt; Foo Bar <foo@site.com>;]
+#                     |
+#                     Server's request keywords (you may have multiple servers)
+#
+#       [wish list]
+#
+#       (*) MIME multipart message's mime headers may need some adjustments.
+#
+#       (*) I rely on simple regexp to send out base64 or gzip files.
+#       The natural extension would be to use file size threshold: if file
+#       is bigger than N bytes, send it out with gzip. And further: if
+#       file is more than NN bytes, send it out as multi part MIME.
+#
+#       (*) In fact there is a slight mime type errors: .zip files
+#       should be send as application/zip. If you have experience with the
+#       mime types, please contact me and help me to sort out proper
+#       mime headers.
+#
+#   Required settings
+#
+#       PMSRC must point to the source directory of procmail code. This
+#       subroutine will include many pm-jasrv-*.rc modules and other files
+#       from there.
+#
+#       Please test the File Server in your environment before you start
+#       using it for every day. For example I had some weird local problem
+#       where PATH had /usr/contrib/bin/ where gzip was supposed to be, but
+#       in spite of my tries procmail didn't find it along the path. Don't
+#       ask why. I now use absolute binary name:
+#
+#           GZIP = /usr/contrib/bin/gzip
+#
+#       In addition, if your messages are not sent to recipient, but you
+#       get daemon message:
+#
+#           ... Recipient names must be specified
+#
+#       That's because you have setting SENDMAIL="sendmail"; which is not
+#       enough. It must be
+#
+#           SENDMAIL = "sendmail -oi -t"
+#
+#   Usage example
+#
+#       This is my .procmailrc installation. Notice that the file server
+#       code is used only if you get "send" request. On the other hand, this
+#       double wrapping is not all necessary, you could as well rely on the
+#       File server's capability to detect SEND request.
+#
+#
+#           PMSRC   = $HOME/pm      # directory where the procmail rc files are
+#           RC_FSRV = $PMSRC/pm-jasrv.rc
+#
+#           mySavedLOGFILE = $LOGFILE   # record file server actions elsewhere
+#           LOGFILE        = $PMSRC/pm-jasrv.log
+#
+#           #   Listen "send" requests.
+#           :0
+#           *   ^Subject: +send\>
+#           {
+#               JA_SRV_FILE_DIR = $HOME/fsrv      # Where to get the files
+#               JA_SRV_LOG      = $HOME/fsrv.log  # Write log here
+#               INCLUDERC       = $RC_FSRV        # Use file server now
+#           }
+#
+#           LOGFILE = $mySavedLOGFILE
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+
+id    = "pm-jasrv.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+#  Too many people forget that SENDMAIL definition must include flags -oi -t
+
+:0
+* ! SENDMAIL ?? (-)
+{
+   LOG = "(jasrv) ** ERROR: please make sure SENDMAIL contains flags -oi -t"
+   LOG = "(jasrv) ** ERROR: please see pm-javar.rc for SENDMAIL definition"
+   HOST         # Quit immediately
+}
+
+# .......................................................... &public ...
+#   Public variables. User configurable section.
+#
+#   ** DO NOT MAKE MODIFICATIONS TO THIS FILE **
+#   Copy variables to your ~/.procmailrc and make changes there.
+#   Recall the 'Installation example'
+
+# ... ... ... ... ... ... ... ... ... ... ... ... ... ... ... . flags ...
+
+#   Notify errors on returned Subject line?
+#   - Always adds message to the body too.
+
+JA_SRV_F_SUBJ_NOTIFY            = ${JA_SRV_F_SUBJ_NOTIFY:-"yes"}
+
+#   Should Command be case sensitive? How about file names?
+
+JA_SRV_F_CMD_CASE_SENSITIVE     = ${JA_SRV_F_CMD_CASE_SENSITIVE:-"no"}
+JA_SRV_F_FILE_CASE_SENSITIVE    = ${JA_SRV_F_FILE_CASE_SENSITIVE:-"no"}
+
+#   Should the initial "send" request be copied to folder "as is"
+
+JA_SRV_F_MBOX_REQUEST           = ${JA_SRV_F_MBOX_REQUEST:-"yes"}
+
+#   And how about our answer to the request?
+
+JA_SRV_F_MBOX_REQUEST_SENT      = ${JA_SRV_F_MBOX_REQUEST_SENT:-"no"}
+
+# ... ... ... ... ... ... ... ... ... ... ... ... ... ...  files-dirs ...
+
+JA_SRV_TMP_DIR      = ${JA_SRV_TMP_DIR:-$TMPDIR}
+JA_SRV_FILE_DIR     = ${JA_SRV_FILE_DIR:-"$HOME/pm-server"}
+JA_SRV_LOG          = ${JA_SRV_LOG:-"$HOME/pm-srv.log"}
+JA_SRV_MSG_MBOX     = ${JA_SRV_MSG_MBOX:-"/dev/null"}
+
+# ... ... ... ... ... ... ... ... ... ... ... ... ... .. basic-config ...
+
+JA_SRV_CMD_STRING   = ${JA_SRV_CMD_STRING:-"send"}
+JA_SRV_PASSWORD     = ${JA_SRV_PASSWORD:-".*"}
+
+
+#   From: header in OUTGOING MAIL
+#
+#   - This is the "From:" header that is set when you send a reply
+#   - You may want to set this to different address than your regular
+#     login address.
+
+JA_SRV_FORMAIL_FROM  = ${JA_SRV_FORMAIL_FROM:-""}
+
+JA_SRV_XGZIP_REGEXP  = ${JA_SRV_XGZIP_REGEXP:-"dummy-regexp"}
+JA_SRV_BASE64_ALWAYS = ${JA_SRV_BASE64_ALWAYS:-"\.(zip|tar|tgz|gz)$"}
+
+JA_SRV_X_HEADER      = ${JA_SRV_X_HEADER:-"X-Mpfs-Info"}
+JA_SRV_SH_COMMANDS   = ${JA_SRV_SH_COMMANDS:-"^(ls|what|ident|file)$"}
+
+# ... ... ... ... ... ... ... ... ... ... ... ... ... ... .. headers  ..
+
+#   Headers read from INCOMING MAIL
+#
+#   We could do ${JA_SRV_FROM:-`$FORMAIL -xFrom:`} here, but
+#   this way we prevent calling extra formail processes.
+
+JA_SRV_SUBJECT      = ${JA_SRV_SUBJECT:-""}
+JA_SRV_FROM         = ${JA_SRV_FROM:-""}
+
+:0
+* JA_SRV_SUBJECT ?? ^^^^
+* ^Subject:\/.*
+{
+    JA_SRV_SUBJECT = $MATCH
+}
+
+
+:0
+* JA_SRV_FROM ?? ^^^^
+* ^From:\/.*
+{
+    JA_SRV_FROM = $MATCH
+}
+
+# ... ... ... ... ... ... ... ... ... ... ... ... ... .. maintenance  ..
+
+JA_SRV_IN_USE        = ${JA_SRV_IN_USE:-"yes"}
+JA_SRV_IN_USE_NO_MSG = ${JA_SRV_IN_USE_NO_MSG:-\
+"File server is not functional at the moment due to maintenance."}
+
+#   Could also be application/octet-stream for plain files
+
+JA_SRV_CONTENT_TYPE    = ${JA_SRV_CONTENT_TYPE:-"text/plain; charset=US-ASCII"}
+JA_SRV_CONTENT_ENCODING= ${JA_SRV_CONTENT_ENCODING:-"7bit"}
+
+# ................................................... multipart mime ...
+
+#   If file is bigger than 100K, it is better that it is sent as mime multipart
+#   to save network connections.
+#
+#   This applies to only files that match regexp JA_SRV_BASE64_ALWAYS
+
+JA_SRV_MULTIPART_THRESHOLD = ${JA_SRV_MULTIPART_THRESHOLD:-100000}
+
+#   When the message has been composed, (file is in the body), it is
+#   handed to this program to do the actual mail split and sending.
+#   make sure you have this in your system.
+
+JA_SRV_MIME_MULTI_SEND = ${JA_SRV_MIME_MULTI_SEND:-"\
+splitmail -d -s $JA_SRV_MULTIPART_THRESHOLD"}
+
+# ..................................................... &subroutines ...
+# You could replace any of these modules.
+# if you change them and think the change would be useful for others too,
+# send me an update or improvement.
+
+JA_SRV_RC_REQUEST  = ${JA_SRV_RC_REQUEST:-$PMSRC/pm-jasrv-req.rc}
+JA_SRV_RC_FROM     = ${JA_SRV_RC_FROM:-$PMSRC/pm-jasrv-from.rc}
+JA_SRV_RC_REPLY    = ${JA_SRV_RC_REPLY:-$PMSRC/pm-jasrv-msg.rc}
+JA_SRV_RC_CHECK    = ${JA_SRV_RC_CHECK:-$PMSRC/pm-jasrv-check.rc}
+JA_SRV_RC_SEND     = ${JA_SRV_RC_SEND:-$PMSRC/pm-jasrv-send.rc}
+JA_SRV_RC_SEND2    = ${JA_SRV_RC_SEND2:-$PMSRC/pm-jasrv-multi.rc}
+JA_SRV_RC_SEND_ERR = ${JA_SRV_RC_SEND_ERR:-$PMSRC/pm-jasrv-err.rc}
+JA_SRV_RC_DAEMON   = ${JA_SRV_RC_DAEMON:-$PMSRC/pm-jasrv-daemon.rc}
+JA_SRV_RC_MBOX     = ${JA_SRV_RC_MBOX:-$PMSRC/pm-jastore.rc}
+
+#   Please do _not_ change this variable; it is important the revision
+#   Number is shown there. And when you upgrade tp a new version, the
+#   variable has again the right version number.
+
+JA_SRV_XLOOP        = ${JA_SRV_XLOOP:-\
+"Mime Procmail file server (MPFS $Revision: 2.9 $)\
+$JA_SRV_FORMAIL_FROM"}
+
+# .......................................................... &daemon ...
+
+INCLUDERC   = $JA_SRV_RC_DAEMON         # Is this bounce to FileServer msg?
+
+:0                                      # is stat is empty, everything is ok.
+* stat ?? ^^^^
+{
+    INCLUDERC   = $JA_SRV_RC_REQUEST    # Determine if we got request.
+}
+
+
+# ......................................................... &service ...
+
+:0
+*    stat ?? ok
+*$   ^Subject:.*$JA_SRV_PASSWORD
+*$ ! ^X-Loop: $JA_SRV_XLOOP
+{
+
+    #   The nice thing is that the dummies show up in the VERBOSE log
+    #   so you have a better clue where program is executing.
+
+    dummy = "$NL$NL$id: copying original request to $JA_SRV_MSG_MBOX $NL"
+
+    :0 c                # Copy the original request
+    * JA_SRV_F_MBOX_REQUEST ?? yes
+    {
+        MBOX        = $JA_SRV_MSG_MBOX
+        INCLUDERC   = $JA_SRV_RC_MBOX
+    }
+
+    INCLUDERC = $JA_SRV_RC_FROM         # compose initial -rt reply
+
+    # ......................................... &server-in-use-check ...
+    # Is the server up or down currently: If not; send message and quit.
+
+    dummy = "$NL$NL$id: Is server down currently? $NL"
+
+    :0
+    * JA_SRV_IN_USE ?? no
+    {
+        stat        = "NotInUse"
+        code        = "echo \"$JA_SRV_IN_USE_NO_MSG\""
+        INCLUDERC   = $JA_SRV_RC_REPLY
+   }
+
+    #   "send THISFILE noconv"
+    #         |        |
+    #         <FILE>   WORD
+    #
+
+    dummy = "$NL$NL$id: Subject: $JA_SRV_SUBJECT [reading the file] $NL"
+    FILE  = ""
+    WORD  = ""
+
+    :0
+    *$ JA_SRV_SUBJECT ?? $NSPC+$s+\/$NSPC+
+    {
+        FILE = $MATCH
+    }
+
+    :0
+    *$ JA_SRV_SUBJECT ?? $NSPC+$s+$NSPC+$s+\/$NSPC+
+    {
+        WORD = $MATCH
+    }
+
+    # ....................................................... &check ...
+
+    INCLUDERC   = $JA_SRV_RC_CHECK
+    dummy       = "$NL$NL$id: was $FILE a legal name $NL"
+
+    :0
+    * ! stat ?? ok
+    {
+        code        = "echo \"$FILE is not acceptable\""
+        INCLUDERC   = $JA_SRV_RC_REPLY
+    }
+
+    # ....................................................... &shell ...
+
+    dummy = "$NL$NL$id: Check if FILE [$FILE] is allowed SHELL command $NL"
+
+    :0
+    *  FILE ?? [a-z0-9]
+    *$ FILE ?? $JA_SRV_SH_COMMANDS
+    {
+        dummy = "$NL$NL$id: PATH used for shell command is [$PATH] $NL"
+        stat        = "sh"
+        code        = "$FILE * "
+        INCLUDERC   = $JA_SRV_RC_REPLY
+    }
+
+    # ........................................................ &send ...
+
+    dummy = "$NL$NL$id: Test if file exists in server dir $NL"
+
+    MAILDIR = $JA_SRV_FILE_DIR      # chdir to the fileserver directory
+    file    = $MAILDIR/$FILE        # absolute filename
+
+    :0
+    *    FILE ?? [a-z0-9]
+    *$ ? test -r $file
+    {
+
+        dummy = "$NL$NL$id: Checking mime multipart $NL"
+        size  = ""
+
+        #   only binary files are send out as multiparts.
+        #   We call Perl only if we need the file size information
+
+        :0
+        *   JA_SRV_BASE64_ALWAYS ?? [a-z]
+        *$  FILE                 ?? $JA_SRV_BASE64_ALWAYS
+        {
+            size = `$PERL -e 'print "", (stat shift @ARGV)[7]; exit' $file`
+        }
+
+        #   If we got the file size, (perl succeeded), and if the size is
+        #   more than the threshold, send the file as MIME multipart.
+        #   ELSE then send the file conventionally.
+
+        :0
+        *   size                        ?? [0-9]
+        *   JA_SRV_MULTIPART_THRESHOLD  ?? [0-9]
+        *$  $size                       ^0
+        *$ -$JA_SRV_MULTIPART_THRESHOLD ^0
+        {
+            INCLUDERC = $JA_SRV_RC_SEND2
+        }
+
+        :0 E
+        {
+            INCLUDERC = $JA_SRV_RC_SEND
+        }
+
+    }
+    :0 E
+    {
+        INCLUDERC = $JA_SRV_RC_SEND_ERR
+    }
+
+    # ........................................................ &mbox ...
+    # Sink the "send FILE" msg
+
+    dummy = "$NL$NL$id: Sinking request to $JA_SRV_MSG_MBOX $NL"
+
+    :0
+    * JA_SRV_F_MBOX_REQUEST_SENT ?? yes
+    {
+        #   Do we have anything to report before sinking to folder?
+        #   Add possible new fields ($fld) in one call.
+
+        dummy = "$NL$NL$id: Anything to report in headers? $NL"
+
+        :0 fhw
+        * ! fld ?? ^^^^
+        | $FORMAIL ${fld+"$fld"}
+
+        MBOX        = $JA_SRV_MSG_MBOX
+        INCLUDERC   = $JA_SRV_RC_MBOX
+    }
+
+    #  IF the answer was not filed (JA_SRV_F_MBOX_REQUEST_SENT == no)
+    #  Then kill the message.
+
+    :0 h
+    /dev/null
+}
+
+
+dummy = "$id: end:"
+
+# Enf of pm-jasrv1.rc

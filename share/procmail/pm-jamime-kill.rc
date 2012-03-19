@@ -1,0 +1,712 @@
+# pm-jamime-kill.rc -- General MIME attachment killer (vcards, html)
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#           Note: If you think this module can do miracles, it cannot.
+#           MIME messages are very complex in structure and all this module
+#           can do is to detect *simple* attachements. It cannot be used
+#           as - all purpose - all detecting - MIME attachement killer.
+#           But the part it can do, is done efficiently, because most of the
+#           things are accomplished using procmail and resource friendly
+#           `awk'.
+#
+#       There are meny programs that add additional information to the
+#       messages. Microsoft's mail program is one which may include
+#       a 7k application/ms-tnef attachment to the end of
+#       message. Many other programs may do the same. This was the idea
+#       in 1997 when this module was written; to get rid of the extra
+#       cruft which should not land in the mailbox.
+#
+#       This recipe works like this: If email's structure is
+#
+#           --boundary
+#           message-text (maybe quoted-printable)
+#           --boundary
+#           some-unwanted-mime-attachment
+#           --boundary
+#
+#       then the attachment is killed from the body. The message-text part
+#       is also decoded if it was quoted printable. This leaves clean text
+#       with no MIME anywhere. MIME headers have will be modified as needed
+#       due to conversion from multi part and possibly quoted printable to
+#       plain text and the final  message looks like:
+#
+#           message
+#
+#       But if email's structure is anything else, like if there were 3
+#       mime sections:
+#
+#           --boundary
+#           message-text (maybe quoted-printable)
+#           --boundary
+#           some-attachment
+#           --boundary
+#           some-unwanted-mime-attachment
+#           --boundary
+#
+#       then the "unwanted" part is emptyed by replacing with one empty
+#       line. The message structure stays the same, but the killed
+#       "some-unwanted-mime-attachment" part is labelled as text/plain
+#       so that the MUA (Mail User Agent; the email reader program)
+#       can decode the MIME message correctly.
+#
+#   Applications for other mime attachments
+#
+#       The following cases are ncluded on in this module. You need to
+#       separately the behavior before this module will start working.
+#
+#       o   Lotus Notes attachment.
+#       o   Microsoft Express attachement. It sends a copy of message in HTML
+#           format.
+#       o   Mozilla's Netscape attachement. It sends a copy of message in HTML.
+#       o   `Vcard' attachments.
+#       o   Openmail attachment. It sends 10-20 line base64 attachments
+#           WINMAIL.DAT.
+#
+#   Example of lotus notes attachment
+#
+#           Subject: message
+#           From: foo@bar.com
+#           X-Lotus-FromDomain: XXX COMPANIES
+#           Mime-Version: 1.0
+#             Boundary="0__=cieg4oHxUNf2h3evyOXIsHTGDpFfaZilTDCFhpZSgsw"
+#           Content-Type: multipart/mixed;
+#             Boundary="0__=cieg4oHxUNf2h3evyOXIsHTGDpFfaZilTDCFhpZSgsw"
+#
+#           --0__=cieg4oHxUNf2h3evyOXIsHTGDpFfaZilTDCFhpZSgsw
+#           Content-type: application/octet-stream;
+#               name="PIC10898.PCX"
+#           Content-transfer-encoding: base64
+#
+#           eJ8+IjsQAQaQCAAEAAAAAAABAAEAAQeQBgAIAAAA5AQAAAAAAADoAAEIgAcA
+#           b3NvZnQgTWFpbC5Ob3RlADEIAQ2ABAACAAAAAgACAAEEkAYAyAEAAAEAAAAQ
+#
+#           <AND-THE-REST-OF-BASE64>
+#
+#           --0__=cieg4oHxUNf2h3evyOXIsHTGDpFfaZilTDCFhpZSgsw--
+#
+#   Example of MS Explorer's ms-tnef message
+#
+#           Subject: message
+#           From: foo@bar.com
+#           MIME-Version: 1.0
+#           Content-Type: multipart/mixed;
+#               boundary="---- =_NextPart_000_01BD04D4.A5AC6B00"
+#           Lines: 158
+#
+#           ------ =_NextPart_000_01BD04D4.A5AC6B00
+#           Content-Type: text/plain; charset="iso-8859-1"
+#           Content-Transfer-Encoding: quoted-printable
+#
+#           <MESSAGE ITSELF IS HERE>
+#
+#           ------ =_NextPart_000_01BD04D4.A5AC6B00
+#           Content-Type: application/ms-tnef
+#           Content-Transfer-Encoding: base64
+#
+#           eJ8+IjsQAQaQCAAEAAAAAAABAAEAAQeQBgAIAAAA5AQAAAAAAADoAAEIgAcA
+#           b3NvZnQgTWFpbC5Ob3RlADEIAQ2ABAACAAAAAgACAAEEkAYAyAEAAAEAAAAQ
+#
+#           <AND-THE-REST-OF-BASE64>
+#
+#           ------ =_NextPart_000_01BD04D4.A5AC6B00--
+#
+#   Example of MS Express's HTML message
+#
+#           MIME-Version: 1.0
+#           Content-Type: multipart/alternative;
+#               boundary="----=_NextPart_000_003A_01BD16E2.C97E27B0"
+#           X-Mailer: Microsoft Outlook Express 4.72.2106.4
+#           X-MimeOLE: Produced By Microsoft MimeOLE V4.72.2106.4
+#
+#           This is a multi-part message in MIME format.
+#
+#           ------=_NextPart_000_003A_01BD16E2.C97E27B0
+#           Content-Type: text/plain;
+#               charset="iso-8859-1"
+#           Content-Transfer-Encoding: quoted-printable
+#
+#           <ACTUAL TEXT>
+#
+#           ------=_NextPart_000_003A_01BD16E2.C97E27B0
+#           Content-Type: text/html;
+#               charset="iso-8859-1"
+#           Content-Transfer-Encoding: quoted-printable
+#
+#           <SAME IN HTML>
+#           ------=_NextPart_000_003A_01BD16E2.C97E27B0--
+#
+#   Example of Netscape's HTML attachment
+#
+#           X-Mailer: Mozilla 4.04 [en] (X11; U; Linux 2.0.33 i686)
+#           MIME-Version: 1.0
+#           Content-Type: multipart/alternative;
+#               boundary="------------69D9D579CF587DC8BB26C49C"
+#
+#
+#           --------------69D9D579CF587DC8BB26C49C
+#           Content-Type: text/plain; charset=us-ascii
+#           Content-Transfer-Encoding: 7bit
+#
+#           <ACTUAL TEXT>
+#
+#           --------------69D9D579CF587DC8BB26C49C
+#           Content-Type: text/html; charset=us-ascii
+#           Content-Transfer-Encoding: 7bit
+#
+#           <SAME IN HTML>
+#           --------------69D9D579CF587DC8BB26C49C--
+#
+#   Example of Netscape's vcard attachment.
+#
+#           Content-Type: text/x-vcard; charset=us-ascii; name="vcard.vcf"
+#           Content-Transfer-Encoding: 7bit
+#           Content-Description: Card for Laird Nelson
+#           Content-Disposition: attachment; filename="vcard.vcf"
+#
+#           begin:          vcard
+#           fn:             Laird Nelson
+#           n:              Nelson;Laird
+#           org:            Perot Systems Corporation
+#           adr:            101 Main Street;;;Cambridge;MA;02142;USA
+#           email;internet: ljnelson@unix.amherst.edu
+#           title:          Software Engineer
+#           tel;work:       (617) 303-5059
+#           tel;fax:        (617) 303-5293
+#           tel;home:       (978) 741-3126
+#           note;quoted-printable:Information is for reference only;=0D=0A=
+#                   please do not abuse it.
+#           x-mozilla-cpt:  ;0
+#           x-mozilla-html: TRUE
+#           version:        2.1
+#           end:            vcard
+#
+#   Required settings
+#
+#       To handle base64 encoded messages, package called `metamail' must
+#       have been installed to system. It provides program `mimencode'
+#       which is used through variable $MIME_BIN (see pm-javar.rc).
+#
+#       Variable $PMSRC must point to source directory of procmail code.
+#       This subroutine will include
+#
+#       o   pm-javar.rc
+#       o   pm-jamime.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       First of all, this is primarily a framework recipe to kill any kind
+#       of attachment. If you do not set `JA_MIME_TYPE' before calling
+#       this recipe, recipe will try to determine the right value by itself.
+#       If the automatic detection fails you _need_ to preset the value
+#       of `JA_MIME_TYPE' beforehand.
+#
+#       o   `JA_MIME_TYPE' is a case sensitive AWK *REGEXP*. Always use
+#           *lowercase* letters in this regexp because the line is lowercased
+#           before match is made. This regexp determines if the kill
+#           recipe is applied to the message or not. Suggested default
+#           value: "text/html". If empty (not set), the heuristics
+#           tries to set it for MS explorer, MS express, Netscape,
+#           Lotus Notes etc.
+#       o   `JA_MIME_KILL_RE', additional *REGEXP* to kill lines from the
+#           message. Value is case sensitive awk regexp and by default matches
+#           Lotus notes tag: name="XXX.PCX".
+#       o   `JA_MIME_EXTRA_HEADER', name of header added to the message
+#           if the MIME portion was killed. Default value is
+#           "X-Mime-Type-Killed".
+#
+#       It may be possible that some messages are malformed and that
+#       they do not contain proper "boundary" definition string in the
+#       header. There have been messages that have text/html
+#       attachments, but no proper Mime headers. For those cases there
+#       is additional variable that will kill all text up till
+#       matching line regardless of message content.
+#
+#       o   `JA_MIME_KILL2_RE' is set to "text/html|application/ms-tnef".
+#           Update this to match attchements you receive. Set variable to
+#           "" if you don't want to change the body of non-compliant MIME
+#           message.
+#
+#       That variable is the last resort if the standard MIME detection
+#       failed. There must have been some problem in the sender's MUA that
+#       composed message. It's dangerous, so make sure you don't set it
+#       lightly.
+#
+#   Possible conflict with the awk
+#
+#       If you see an error message in the log file saying that awk failed:
+#
+#           procmail: Executing awk,
+#           ...
+#           procmail: Error while writing to "awk"
+#           procmail: Rescue of unfiltered data succeeded
+#
+#       it means that the system's standard `awk' doesn't support the
+#       variable passing syntax. Do the following test:
+#
+#           % awk '{print VAR; exit}' VAR="value" /etc/passwd
+#
+#       It should print "value". If not, then see if you have `gawk' or
+#       `mawk' in the system. Try whcih awk understands the variable passing
+#       syntax. The only change needed is to define variable AWK
+#       somewhere at the top of `~/.procmailrc'.
+#
+#           AWK = "gawk"        # Better than standard "awk"
+#
+#        WARNING: In some systems the `gawk' is not real GNU awk, but a
+#        symlink to somewhere alse. E.g. in SunOs/Solaris you may find this
+#        setup, which is unsufficient. For Solaris, the GNU awk is available
+#        at http://www.blastwave.org
+#
+#	    $ which gawk
+#           $ gawk --version
+#             <syntax error>
+#	    $ ls -l /usr/local/bin/gawk
+#	    /usr/local/bin/gawk -> /usr/bin/nawk
+#
+#   Warnings
+#
+#       You should know that the variable `JA_MIME_KILL_RE' is used to wipe
+#       any lines that match that regexp. This is due to MIME structure
+#       where continuing header lines exist in the body:
+#
+#           ------=_NextPart_000_003A_01BD16E2.C97E27B0
+#           Content-Type: text/plain;
+#               charset="iso-8859-1"                << kill this line too
+#
+#       If you want to be absolutely sure that anything valuable won't be
+#       accidentally killed (like a code line in programming language scripts),
+#       you should set this variable to nonsense value that newer matches:
+#
+#           JA_MIME_KILL_RE = "match_it_never_I_hope"
+#
+#   Usage example: Customizing the attachment killing
+#
+#       Suppose you receive new `application/ms' type attachment that the
+#       default settings doesn't cover. This is a new mime type and you
+#       have to instruct this module to kill it. Add this and similar
+#       tests for other mime types:
+#
+#           myCustomMimeType = "application/ms"     # must be all lowercase
+#
+#           :0
+#           *$ $myCustomMimeType
+#           {
+#               PM_JA_MIME_TYPE = $myCustomMimeType
+#           }
+#
+#           INCLUDERC = $PMSRC/pm-jamime-kill.rc
+#
+#   Usage example
+#
+#       To kill text/html or pdf, postscript and others add something
+#       like this to `~/.procmailrc'. It demonstrates how the correct
+#       MIME types are detected:
+#
+#           # .....................................................
+#           # 1) Uncomment following line if your standard "awk" is broken
+#
+#           # AWK = "gawk"
+#
+#           # .....................................................
+#           #  2) Set correct value for attachment killing
+#
+#           :0
+#           * ^X-Lotus-FromDomain:
+#           {
+#               #  Kill Lotus notes .pcx attachments
+#               JA_MIME_TYPE = "application/octet-stream"
+#           }
+#
+#           :0
+#           * H ?? ^From:.*foo@example.com
+#           * B ?? ^Content-Type:.*text/html
+#           {
+#               #   Kill html attachments
+#               JA_MIME_TYPE = "text/html"
+#           }
+#
+#           # .....................................................
+#           #  3) Call module
+#
+#           INCLUDERC = $PMSRC/pm-jamime-kill.rc
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+
+
+id    = "pm-jamime-kill.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+:0
+* !  MIME_VER ?? [0-9]
+{
+    INCLUDERC = $PMSRC/pm-jamime.rc
+}
+
+# .......................................................... &public ...
+# User configurable sections
+
+#   If linebuf is too small, then AWK scripts can't be called
+JA_MIME_KILL_LINEBUF = ${JA_MIME_KILL_LINEBUF:-524280}
+
+JA_MIME_KILL_RE = ${JA_MIME_KILL_RE:-"\
+name=.*(pcx|PCX)|charset=|This is.*MIME"}
+
+JA_MIME_KILL2_RE = ${JA_MIME_KILL2_RE:-"\
+Content-Type: +(text/html|application/ms-tnef|x-vcard)"}
+
+#   If set, this header will contain the MIME type ("text/html" etc.)
+#   which was killed
+JA_MIME_EXTRA_HEADER = ${JA_MIME_EXTRA_HEADER:-"X-Mime-Type-Killed"}
+
+# .................................................... &set-defaults ...
+#   Set default value, unless user has set this previously.
+
+:0
+*  JA_MIME_TYPE ?? ^^^^
+{
+    dummy = "$id: automatic JA_MIME_TYPE detection"
+
+    #   The (safe) default value. Will be changed below
+
+    JA_MIME_TYPE = "application/ms-tnef"
+
+    :0
+    * ^Content-Type:.*image/()\/(jpeg|tiff|png|gif|bmp)
+    {
+        JA_MIME_TYPE = "image/$MATCH"
+    }
+
+    :0 E
+    * ^X-Lotus-FromDomain:
+    {
+        JA_MIME_TYPE = "application/octet-stream"
+        dummy        = "$id: Type: Lotus Notes"
+    }
+
+    :0 E
+    * ^X-Mailer: (Microsoft.*Express|mozilla)
+    {
+        JA_MIME_TYPE = "text/html"
+        dummy        = "$id: Type: MS Express,Netscape"
+    }
+
+    :0 E
+    *      ^X-Mailer:.*mozilla
+    * B ?? begin:.*vcard
+    {
+        JA_MIME_TYPE = "text/x-vcard"
+        dummy        = "$id: Type: Netscape vcard"
+    }
+
+    :0 E
+    * B ?? application/x-openmail
+    {
+        JA_MIME_TYPE = "application/x-openmail"
+        dummy        = "$id: Openmail attachment found"
+    }
+
+    #  Remove executables
+
+    :0 E
+    * B ?? application/x-msdownload
+    *      MIME_B_ATTACHMENT ?? \.(hqx|com|exe|pif)
+    {
+        JA_MIME_TYPE = "application/x-msdownload"
+        dummy        = "$id: MS *.exe attachment found"
+    }
+}
+
+#   - If user set JA_MIME_KILL_RE, make sure that value is not empty,
+#     because awk doesn't like empty regexps
+#   - Subtitute the value with something that doesn't match.
+
+:0
+*$ JA_MIME_KILL_RE ?? ^^^^
+{
+    JA_MIME_KILL_RE = "_do_not___match_"
+}
+
+:0                                      # This must have value
+*!  LINEBUF ?? [0-9]
+{
+    LINEBUF = 8192
+}
+
+jaMimeKillLINEBUF = $LINEBUF            # save old value
+
+# ........................................................... &do-it ...
+
+#   Prevent calling sh -c here. This speeds up procmail
+
+jaMimeKillSHELLMETAS = $SHELLMETAS      # save original value
+jaMimeKillModified   = "no"             # Flag
+jaMimeKillMsg                           # Kill variable
+SHELLMETAS                              # kill variable
+
+dummy = "JA_MIME_TYPE [$JA_MIME_TYPE]"
+dummy = "MIME_BOUNDARY [$MIME_BOUNDARY]"
+dummy = "Check if running the kill recipe, SHELL= $SHELL"
+
+:0
+* !     JA_MIME_TYPE    ?? ^^^^
+* !     MIME_BOUNDARY   ?? ^^^^
+*  H ?? ^Content-Type:.*multipart
+*$ B ?? ^Content-Type:$s+$JA_MIME_TYPE
+{
+    #   If there were only 3 mime tags, then then message is in format
+    #
+    #       boundary-tag
+    #         message
+    #       boundary-tag
+    #         unwanted-mime-part
+    #       boundary-tag
+    #
+    #   a) make sure count is 3
+    #   b) make sure we have the boundary string
+
+    LINEBUF = $JA_MIME_KILL_LINEBUF
+
+    :0
+    * MIME_BOUNDARY_COUNT   ?? ^^3^^
+    {
+        dummy = "$NL$NL$id: exactly 3 boundary strings"
+
+        #   - AWK removes the mime boundary strings, so we must remember
+        #     if the message had quoted printable. The variable MIME_B_QP
+        #     contain the qp information.
+        #
+        #   Program logic (effectively a state machine)
+        #   - First blank line is header end. Print header verbatim.
+        #   - Keep track of seen boundaries: 1, 2, 3
+        #   - When EAT (text/html) portion is found, kill text up
+        #     till next boundary marker
+        #
+        #   We need the "i" flag because awk quits before it has read
+        #   all the input
+
+        :0 fbw i
+        | $AWK                                                  \
+          '                                                     \
+           /^[ \t]*$/ {                                         \
+               print;                                           \
+               header = 0;                                      \
+           }                                                    \
+                                                                \
+           header {                                             \
+               print;                                           \
+               next;                                            \
+           }                                                    \
+                                                                \
+           $0 ~ RE {                                            \
+               boundary++;                                      \
+           }                                                    \
+                                                                \
+           {                                                    \
+                if ( killUntil )                                \
+                {                                               \
+                    if ( boundary < killUntil )                 \
+                    {                                           \
+                        next;                                   \
+                    }                                           \
+                    killUntil = 0;                              \
+                }                                               \
+                                                                \
+                line = tolower($0);                             \
+                                                                \
+                if ( ! found  &&  match($0, EAT) > 0 )          \
+                {                                               \
+                    found++;                                    \
+                    killUntil = boundary + 1;                   \
+                }                                               \
+                                                                \
+                if ( match($0, RE)          > 0 ) {next}        \
+                if ( match($0, KILL)        > 0 ) {next}        \
+                if ( match($0, "^Content-") > 0 ) {next}        \
+                                                                \
+                print;                                          \
+            }                                                   \
+          ' RE="$MIME_BOUNDARY"                                 \
+            EAT="^Content-Type:.*$JA_MIME_TYPE"                 \
+            KILL="$JA_MIME_KILL_RE"
+
+        #   -- If AWK succeeded --
+        #   The body is no more  multipart/mixed. Correct headers or
+        #   the MUA may get confused
+
+        :0 a
+        {
+            #   Why Rewrite Mime-Version:
+            #
+            #   Lotus notes adds the boundary string to this header, but
+            #   because we have already removed all boundary strings from the
+            #   body, we must clear this header.
+            #
+            #   Call to replace Mime-Version header wipes the `boundary=` tag
+
+            :0 fhw
+            | $FORMAIL                                                      \
+                -I "Content-Type: text/plain"                               \
+                -I "Mime-Version: $MIME_VER"
+
+            jaMimeKillMsg      = "$JA_MIME_TYPE"
+            jaMimeKillModified = "yes"        # Yes, we changed body
+
+        }
+    }
+
+    #   Note: 1997-12-30
+    #
+    #   - This works fine for ms-tnef, but it may be dangerous with
+    #     Lotus notes, because it's attachment is a general
+    #     "application/octec-stream".
+    #   - Report me the problems if you encounter them with Lotus Notes.
+    #
+
+    #   There was more than 2 mime parts: just remove the base64 block.
+    #
+    #   - raise suppress flag if we find mime. Also change the mime type.
+    #   - set flag back to 0 when the ending tag is found
+    #   - print the lines when flag is 0
+    #
+    #   The ms-tnef is now converted to:
+    #
+    #       ------ NextPart_000_01BD04D4.A5AC6B00
+    #       Content-Type: text/plain;
+    #
+    #       ------ NextPart_000_01BD04D4.A5AC6B00--
+    #
+
+    dummy = "$NL$NL$id: _not_ exactly 3 boundary strings"
+
+    :0 fbw
+    * ! MIME_BOUNDARY_COUNT ?? ^^3^^
+    | $AWK                                                                  \
+      ' {                                                                   \
+            line = tolower($0);                                             \
+                                                                            \
+            if ( match(line, HDR) > 0 )                                     \
+            {                                                               \
+                 flag = 1;                                                  \
+                 print "Content-Type: text/plain;";                         \
+            }                                                               \
+                                                                            \
+            if ( match($0, RE) )                                            \
+            {                                                               \
+                flag = 0;                                                   \
+            }                                                               \
+                                                                            \
+            if ( flag == 0 )                                                \
+            {                                                               \
+                print;                                                      \
+            }                                                               \
+        }                                                                   \
+      ' RE="$MIME_BOUNDARY" HDR="$JA_MIME_TYPE"
+
+    LINEBUF = $jaMimeKillLINEBUF
+}
+
+# ..................................................... &invalid-mime ...
+# This is last resort, if message looks like MIME, but it isn't
+# because it doesn't have headers:
+#
+#       MIME-Version: 1.0
+#       Content-Type:  multipart/alternative; boundary="...."
+
+dummy = "$NL$NL$id: last resort, kill up till regexp"
+
+#   Non-mime compliant messages
+#
+#   The only way to kill attachment is to use approximation.
+#   If we do not have the boundary string (i.e. this not mime),
+#   then apply this recipe.
+
+dummy = "$id: MIME_BOUNDARY $MIME_BOUNDARY"
+
+:0
+*        MIME_BOUNDARY    ?? ^^^^
+*        JA_MIME_KILL2_RE ?? [a-z]
+*$ B ?? $JA_MIME_KILL2_RE
+{
+    LINEBUF = $JA_MIME_KILL_LINEBUF
+
+    #   Well we could use SED here, but then there is a problem with
+    #   "/" delimiter in sed. The awk solution accepts REGEXP as is
+    #   as you don't have to play with funny quoting
+    #
+    #       sed -e "'"/$regexp/q"'"
+    #
+    #   or something like that... (the above is untested)
+
+    :0 fbw
+    | $AWK                                                                  \
+      ' {                                                                   \
+            if ( match($0,RE) > 0 )  {exit}                                 \
+            print                                                           \
+        }                                                                   \
+      ' RE="$JA_MIME_KILL2_RE"
+
+    :0 A
+    {
+        jaMimeKillMsg      = "Forced kill by JA_MIME_KILL2_RE"
+        jaMimeKillModified = "yes"
+    }
+
+    LINEBUF = $jaMimeKillLINEBUF
+}
+
+# ............................................................... &qp ...
+#   Run conversion if it was quoted printable.
+#   Also reflect correct MIME header
+
+dummy = "$id: handle quoted printable"
+
+:0 fhw
+*   jaMimeKillModified   ?? yes
+* ! jaMimeKillMsg        ?? ^^^^
+* ! JA_MIME_EXTRA_HEADER ?? ^^^^
+| $FORMAIL -I "$JA_MIME_EXTRA_HEADER: $jaMimeKillMsg"
+
+:0 fbw
+*   jaMimeKillModified  ?? yes
+*   MIME_B_QP           ?? yes
+*   MIME_BIN_QP         ?? [a-z]
+|   $MIME_BIN_QP
+
+    #   If the previous recipe succeeded, then fix the headers to indicate
+    #   decoding.
+
+    :0 A fhw
+    | $FORMAIL -I "Content-Transfer-Encoding: 8bit"
+
+SHELLMETAS  = $jaMimeKillSHELLMETAS                 # Restore original value
+
+dummy = "$id: end:"
+
+# end of file pm-jamime-kill.rc

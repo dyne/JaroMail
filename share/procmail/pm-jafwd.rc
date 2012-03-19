@@ -1,0 +1,401 @@
+# pm-jafwd.rc -- Controlling forwarding remotedly
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Overview of features
+#
+#       o   Requires latest procmail (formail -z switch)
+#       o   You can send forward-on and forward-off control
+#           messages via email to control the forwarding in remote site.
+#
+#   Description
+#
+#       This includerc makes it possible to control your message forwarding
+#       via simple remote email message. Thanks to Era Eriksson and Timothy
+#       J Luoma who gave the initial idea to this forwarding module in the
+#       procmail mailing list 1997-10-07.
+#
+#   Activating the forwarding by hand
+#
+#       If you want to activate the forwarding from the local site where
+#       this module is, then you could simply write the forward address
+#       to the file pointed by *JA_FWD_FILE* which is `~/.forward-address'
+#       by default.
+#
+#           % echo Me@somewhere.com > ~/.forward-address
+#
+#       and when you no longer need forwarding, then remove that file.
+#       But really, this module is not used for that purpose, because it is
+#       lot easier to write
+#
+#           :0
+#           ! Me@somewhere.com
+#
+#       as a first statement in your .procmailrc when you want to forward
+#       your mail to another account.
+#
+#   Activating the forwarding by remote email
+#
+#       Suppose you're on the road and suddenly realize that you want your
+#       mail forwarded to the current account, then you send following
+#       control message
+#
+#           Subject: forward-on password new-address@bar.com
+#           To: my-account@bar.com
+#           From: onTheRoad@some.com
+#
+#       That message is is enough to get the mail forwarded to the address
+#       new-address@bar.com This script will respond to address From that
+#       the current forwarding is now pointing to address
+#       "new-address@bar.com".
+#
+#   Deactivating forwarding by remote email
+#
+#       The message is very similar, but the Subject header says
+#
+#           Subject: forward-off password
+#
+#       And no other fields are checked. Not even Reply-To. In this case
+#       the confirmation message is sent directly back to From address.
+#
+#   Activating forwarding via body message
+#
+#       If for some reason you have no control over the headers of email,
+#       eg when you send GSM-Mail message from your phone to your account:
+#
+#           EMAIL foo@bar.com FORWARD-ON PASSWORD new-address@bar.com
+#
+#       The email message looks like this:
+#
+#           From: GenEmail <sms@FooBar.net>
+#           Date: Thu Sep 17, 11:42am +0200
+#           To:   "'Foo.Bar'" <foo@bar.com>
+#           Subject: Message 03384874987
+#
+#           FORWARD-ON PASSWORD new-address@bar.com
+#
+#       Instead of looking at the `Subject' field, you can get this module
+#       to look at the first words in the body field. See variable
+#       `JA_FWD_CONTROL_FIELD' which you want to set to "body".
+#
+#   Restricting the control message aceptance
+#
+#       If you only have persistent accounts, then you should set the
+#       *JA_FWD_FROM_MUST_MATCH* to match those addresses that you have.
+#       The following setting says that only control messages sent from
+#       these addresses are accepted. Nobody else can't change your
+#       forwarding settings.
+#
+#           JA_FWD_FROM_MUST_MATCH = ".*(acc1@a.com|acc2@b.com)"
+#
+#       Hm, that's not a bullet proof, because someone may in theory forge
+#       the From address. You probably should also set this variable to
+#       point to accounts where the mail can be legally forwarded to. Then,
+#       even if the imposter forges the From address; he can't get the
+#       email forwarded anywhere else than to the valid locations.
+#
+#           JA_FWD_TO_MUST_MATCH = $JA_FWD_FROM_MUST_MATCH
+#
+#       Consider also setting *JA_FWD_PASSWORD_CASE* to Procmail flag
+#       `D' which causes your control word "forward-on" and password
+#       to be case sensitive.
+#
+#   Diagnostics
+#
+#       If you don't receive confirmation message, then your control
+#       message was ill formed or you're not in the *JA_FWD_FROM_MUST_MATCH*
+#       list. There is no notification sent on failure, so that no attacker
+#       can draw conclusions.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#
+#   Installation
+#
+#       You should preset all necessary variables prior adding the
+#       includerc command to your .procmailrc. Here is one simple setup
+#
+#           #JA_FWD_SENDMAIL    = "tee $HOME/test.mail" # Uncomment if testing
+#           JA_FWD_COPY         = no    # no copies stored while forwarding
+#           JA_FWD_PASSWORD_CASE= "D"   # case sensitive
+#           JA_FWD_PASSWORD     = "MyMagicString"
+#           JA_FWD_FROM         = $FROM # This is already known.
+#           INCLUDERC           = $PMSRC/pm-jafwd.rc
+#
+#   Comments from the author
+#
+#       Please realise that when you set the forwarding from a remote site,
+#       be very carefull when you type in the forward address or your mail
+#       ends up to somebody else's mailbox. Also I recommend that you keep
+#       *JA_FWD_COPY* to *yes* so that your local account always keep the
+#       copy of forwarded message.
+#
+#       A step further would conventionally encrypt(1)'ing your forwarded
+#       messages. This way even your top secret messages would be mostly safe
+#       even if they end up to someone else's mailbox.
+#
+#   File layout
+#
+#       The layout of this file is managed by Emacs packages folding.el/{{{}}}
+#       tinybm.el/&tags and tinytab.el for the 4 tab text placement.
+#
+#   Change Log (none)
+
+
+# {{{ Variables
+# .................................................... &initialising ...
+
+
+id    = "pm-jafwd.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ....................................................... &variables ...
+
+#   If you're testing, set this to "tee FILE", and the sent confirmation
+#   messages are stored to your disk and not actually mailed.
+
+JA_FWD_SENDMAIL         = ${JA_FWD_SENDMAIL:-"sendmail -oi -t"}
+
+#   File to hold the forward address. When forward is off, this file does
+#   not exist.
+
+JA_FWD_FILE             = ${JA_FWD_FILE:-"$HOME/.forward-address"}
+
+#   The password needed after the control command.
+
+JA_FWD_PASSWORD         = ${JA_FWD_PASSWORD:-"password"}
+
+#   If you want case sensitive control messages and passwords,
+#   set this variable to procmail flag "D". Then commands like below
+#   are different. You should use flag `D' for your own security.
+#
+#       forward-on password
+#       Forward-on password
+
+JA_FWD_PASSWORD_CASE    = ${JA_FWD_PASSWORD_CASE:-""}
+
+#   Set this to account names and addresses that you use if you want some
+#   protection. The control messages can be sent only from the matched
+#   addresses only. The default "." accepts control message from anywhere
+#   and to be forwarded anywhere.
+
+JA_FWD_FROM_MUST_MATCH  = ${JA_FWD_FROM_MUST_MATCH:-"."}
+JA_FWD_TO_MUST_MATCH    = ${JA_FWD_TO_MUST_MATCH:-"."}
+
+#   Should the messages stored locally to this account too while forwarding
+#   messages? a good idea is to keep this "yes", because you never know if
+#   the forward address was faulty.
+
+JA_FWD_COPY             = ${JA_FWD_COPY:-"yes"}
+
+#   The accepted control messages in Subject field
+
+JA_FWD_ON               = ${JA_FWD_ON:-"forward-on"}
+JA_FWD_OFF              = ${JA_FWD_OFF:-"forward-off"}
+
+#   Initialize these variables unless they're already set.  please set
+#   before this module, so that you save extra formail call, if you have
+#   already read the value.
+#
+#       JA_FWD_FROM     = $FROM
+
+JA_FWD_FROM             = ${JA_FWD_FROM:-`$FORMAIL -zxFrom:`}
+
+#   From which header to find the password information.
+#
+#   o   "header"    Look Subject field.
+#   o   "body"      Look first words in the body of message
+#
+
+JA_FWD_CONTROL_FIELD    = ${JA_FWD_CONTROL_FIELD:-"subject"}
+
+#   This has only meanng if `JA_FWD_CONTROL_FIELD' is set to "body"
+#
+#       "^^"    "forward-on password" must be at the very beginning
+#               of the body
+#       ".*"    "forward-on password" can be anywhere in the body
+
+JA_FWD_CONTROL_REGEXP = ".*"
+
+#   If the address where we're forwarding bounces, make sure
+#   we don't get into loop.
+
+JA_FWD_XLOOP            = ${JA_FWD_XLOOP:-"$LOGNAME@$HOST"}
+
+# }}}
+# {{{ Code
+
+dummy = "Check forward-off control message"
+
+# ..................................................... &state-check ...
+
+forward = ""
+address = ""
+
+dummy   = "$id: Check if control message is in the Subject"
+
+:0
+*   JA_FWD_CONTROL_FIELD ?? subject
+*$  ^From:$JA_FWD_FROM_MUST_MATCH
+{
+
+    :0 $JA_FWD_PASSWORD_CASE
+    *$  ^Subject: $JA_FWD_OFF ${JA_FWD_PASSWORD}$
+    {
+        forward = "off"
+    }
+
+    :0 E $JA_FWD_PASSWORD_CASE
+    *$ ^Subject: $JA_FWD_ON ${JA_FWD_PASSWORD} \/.*
+    *$  MATCH ?? $JA_FWD_TO_MUST_MATCH
+    {
+        forward = "on"
+        address = "$MATCH"
+    }
+}
+
+dummy = "$id: Check if control message is in the body"
+
+:0 E
+*    JA_FWD_CONTROL_FIELD ?? body
+*$  ^From:$JA_FWD_FROM_MUST_MATCH
+{
+    :0 $JA_FWD_PASSWORD_CASE
+    *$ B ?? $JA_FWD_CONTROL_REGEXP$JA_FWD_OFF ${JA_FWD_PASSWORD}
+    {
+        forward = "off"
+    }
+
+    :0 E $JA_FWD_PASSWORD_CASE
+    *$     B ?? $JA_FWD_CONTROL_REGEXP$JA_FWD_ON ${JA_FWD_PASSWORD} \/.*
+    *$ MATCH ?? $JA_FWD_TO_MUST_MATCH
+    {
+        forward = "on"
+        address = "$MATCH"
+    }
+}
+
+# ............................................................. &off ...
+
+dummy = "$id: check forward OFF"
+
+:0
+*   forward ?? off
+{
+    :0 hwic
+    * ? $IS_EXIST $JA_FWD_FILE
+    | $RM $JA_FWD_FILE
+
+    #   Kill all fields except the From and make reply to that address.
+
+    subject = "Forward is now off."
+
+    :0 wc
+    |   ( $FORMAIL -X From: |                                               \
+          $FORMAIL -rt -I"Subject: $subject"                                \
+        ) | $JA_FWD_SENDMAIL
+
+}
+
+
+# .............................................................. &on ...
+#   It's important that we don't forward mailer daemon messages
+#   of self bounces. The X-Loop was attached by us and while
+#   the FROM_DAEMON would already trigger bounce message, we double
+#   check with X-Loop
+
+
+dummy = "$id: check forward ON $address"
+
+:0 E
+*     forward ?? on
+*$ ! ^X-Loop: $JA_FWD_XLOOP
+*$ !  $JA_FROM_DAEMON
+{
+
+    #   Beware invalid address. The required @ character prevents from
+    #   at least some mistakes.
+
+    :0 c
+    *$ address ?? [^$WSPC]+@
+    | echo "$address" > $JA_FWD_FILE
+
+    #   - formail -rt will use Reply-To but we also CC to the 'From:' address.
+    #   - If the From and Reply to are the same, then this sends two messages
+    #     but that's not a bad thing.
+    #   - The `A' says that this recipe is executed only if the
+    #     previous recipe put the `address' to `JA_FWD_FILE'
+
+    subject = "Forwarding to [$address]"
+
+    :0 Ahwc
+    | ( $FORMAIL -IReply-To: |                                              \
+        $FORMAIL -rt                                                        \
+                 -I"Subject: $subject" -I"CC: $JA_FWD_FROM";                \
+                 -i"X-Loop: $JA_FWD_XLOOP"                                  \
+        echo "Forwarding has been activated"                                \
+      ) | $JA_FWD_SENDMAIL
+
+}
+
+# .................................................... do-forwarding ...
+#   Now do the forwarding
+#   File tests:
+#
+#   s => file exists and has a size greater than zero
+#   r => file must be readable by us
+
+dummy = "$NL$NL$id: Check if forward is activated $NL"
+
+:0
+*  forward ?? ^^^^
+*$ ? $IS_NOT_EMPTY $JA_FWD_FILE
+*$ ? $IS_READABLE  $JA_FWD_FILE
+{
+    #   If the copy option is on, store the mail also locally
+    #   and send a copy to forwarded address.
+    #
+    #   The `E' Receipe only forwards and does not keep local copy.
+
+    :0
+    *$ JA_FWD_COPY ?? yes
+    {
+        :0 c
+        ! `$CAT $JA_FWD_FILE`
+    }
+    :0 E
+    ! `$CAT $JA_FWD_FILE`
+}
+
+dummy = "$id: end:"
+
+# }}}
+
+
+# pm-jafwd.rc ends here

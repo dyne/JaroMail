@@ -1,0 +1,90 @@
+# unread-mh.rc
+#
+# procmail recipe to compute how many unread messages
+# for MH as the MUA (mail user agent).
+#
+# $Id: unread-mh.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+#    Copyright (C) 1995  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+#
+# Usage:
+#
+#   Referenced by "ackmail.rc" when MUA=mh and the text of the
+#   reply includes the string '$UNREAD'
+#
+#   If MH_INFOLDERS is set, uses the output of "folder +$folder"
+#   for each folder mentioned in MH_INFOLDERS.  The sum of the
+#   current message number subtracted from the last message
+#   number for each folder is returned.
+#
+#   If MH_INFOLDERS is not set, then check for the Unseen-Sequence
+#   profile entry.  If this is set, uses the number of messages
+#   in this sequence.
+#
+#   If there is no Unseen-Sequence profile entry, or there is no
+#   sequence in the +inbox, then use the output of 'folders +inbox'
+#   as for MH_INFOLDERS above.
+#
+
+# Note: PATH should include the MH bin directory
+
+UNREAD=no			# default output
+SHELL=/bin/sh			# be sure
+
+# If the user has defined one or more explicit folders in the
+# variable MH_INFOLDERS, then use a shell script to get UNREAD
+:0
+* MH_INFOLDERS ?? .+
+{
+  UNREAD=`(for f in $MH_INFOLDERS ; do folder +$f ; done) |
+	  sed -n -e 's/^.*- *\([0-9]*\)); cur= *\([0-9]*\);.*/ok \1 \2/p' |
+	  awk '/ok/ { s+=$2-$3 } END { print s }'`
+}
+
+# If no explicit folder list, try using unseen sequences
+:0 E
+{
+  # Get some MH info
+  MH_INBOX=`mhpath +inbox`
+  MH_UNSEENSEQ=`mhparam Unseen-Sequence`
+  MH_INSEQFILE=$MH_INBOX/.mh_sequences
+
+  :0 chW
+  * MH_UNSEENSEQ ?? [a-z]+
+  * ? test -f $MH_INSEQFILE
+  * ? grep "^$MH_UNSEENSEQ:" $MH_INSEQFILE
+  |UNREAD=`pick +inbox $MH_UNSEENSEQ 2>/dev/null | wc -l`
+
+  # Ok -- no unseen sequence.  Try last resort of using +inbox info.
+  :0 E
+  {
+    INFOLDER=`folder +inbox`
+    :0
+    * INFOLDER ?? cur= *\/[0-9]+
+    { CUR=$MATCH
+      :0
+      * INFOLDER ?? messages *\( *[0-9]+- *\/[0-9]+
+      { MAX=$MATCH
+	:0
+	* ? test "$MAX" -gt "$CUR"
+	{ UNREAD=`expr $MAX - $CUR` }
+      }
+    }
+  }
+}

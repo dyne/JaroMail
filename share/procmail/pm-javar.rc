@@ -1,0 +1,562 @@
+# pm-javar.rc -- Global variable definitions
+#
+#   File id
+#
+#	Copyright (C) 1997-2010 Jari Aalto
+#
+#	This program is free software; you can redistribute it and/or
+#	modify it under the terms of the GNU General Public License as
+#	published by the Free Software Foundation; either version 2 of the
+#	License, or (at your option) any later version
+#
+#	This program is distributed in the hope that it will be useful, but
+#	WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#	General Public License for more details at
+#	<http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	This file defines common variables that you can use in the recipe's
+#	condition line. Procmail does not know about escape sequences
+#	like `\t' or `\n' and it is therefore much more readable to use
+#	variables as substitute for common regular expression
+#	atoms. Pay attention that the line starts with "*$ ", where
+#	"$" expands the variables: In this file, the variable names
+#	represent the well known Perl regular expression names, so
+#	that $s is alost like Perl expression \s (whitespace) and $S
+#	is almost equivalent to `\S' (non-whitespace). Similarly, $d is
+#	`\d' (digit) and $D resembled `\D' (non-digit).
+#
+#	    :0
+#	    *$ $s+something+$s+$d+$a+
+#
+#	The equivalent without variables (you don't see the tabs and
+#	spaces here):
+#
+#	    :0
+#	    #  Space + tab
+#	    * [		]something[	][0-9]+[a-z]+
+#
+#
+#	In addition all system dependent variables are defined in this module.
+#	For example if you have Gnu awk, it is strongly suggest that you set:
+#
+#	    AWK = "/path/to/gawk"  # in Linux, this would be /usr/bin/awk
+#
+#	You can define these variables before or after the module, just make
+#	sure the binaries reflect your operating system's paths. In general,
+#	if you "port" your setup to several system, dont' include absolute
+#	paths. In the other hand, if your setup is in the same place using
+#	absolute paths will speed up executions by a factor of 3 or more.
+#	(depending on how long your PATH is)
+#
+#   Standard variables defined
+#
+#	See pm-tips.txt file for full explanation or look at the source code.
+#
+#	    SPC WSPC NSPC SPCL	     # Whitespace, Non Whitespace, W+linefeed
+#	    \s \d \D \w \W and \a \A # perl equivalents
+#
+#   Special variable JA_FROM_DAEMON
+#
+#	In order to boost procmail and to save extra CPU cycles, this module
+#	defines variable `JA_FROM_DAEMON' that caches the information of
+#	^FROM_DAEMON. You can refer to `JA_FROM_DAEMON' as you would to
+#	big brother FROM_DAEMON. This has the advantage that procmail
+#	has already computed the result and the variable `JA_FROM_DAEMON'
+#	is used as a cache, thus avoiding repeated FROM_DAEMON regexp
+#	tests, which are expensive. Variable `JA_FROM_DAEMON_match'
+#	contains "" or the result of matched daemon text.
+#
+#	    *$ $JA_FROM_DAEMON
+#
+#	or the familiar
+#
+#	    *$ ! $JA_FROM_DAEMON
+#
+#	Instead of using the regexp parsing with
+#
+#	    * ^FROM_DAEMON
+#
+#	and
+#
+#	    * ! ^FROM_DAEMON
+#
+#   Special variable JA_FROM_MAILER
+#
+#	Works like `JA_FROM_DAEMON' variable but in respect to FROM_MAILER.
+#	The matches text is in `JA_FROM_MAILER_MATCH'
+#
+#   Usage example
+#
+#	For your .procmailrc, you can simply put this, because you
+#	want to load the variables at startup
+#
+#	    PMSRC     = "/path/to/install/location/of/this/library"
+#	    INCLUDERC = $PMSRC/pm-javar.rc
+#
+#	If you're developing your own modules that use these variables
+#	put these lines at the beginning. `~/.procmailrc'. It checks
+#	if WSPC variable does not include a space --> load the
+#	variable definitions. If the variable is already defined, the
+#	file is not loaded. The test line is something alike #ifdef --
+#	#endif in C/C++ language or a conditional "import" command in
+#	other languages.
+#
+#	    :0
+#	    * ! WSPC ?? [ ]
+#	    {
+#		INCLUDERC = $PMSRC/pm-javar.rc
+#	    }
+#
+#   Defined modules
+#
+#	After this file loads, you can refer to any module with $RC_JA_MODULE.
+#	E.g. to call email spit module in your code you would use following.
+#	See at the end of this file for all defined module names.
+#
+#	    INCLUDERC = $RC_JA_UBE
+#
+#   Change Log (none)
+
+dummy = "
+========================================================================
+pm-javar.rc: init:"
+
+#   pure newline, you could use is like:
+#   LOG = "message $NL"
+
+NL	= "
+"
+LF	= $NL			# synonym, linefeed
+CR	= ""			# Carriage return
+TAB	= "	"		# \t character, you won't see it.
+WSPC	= " $TAB"		# whitespace in procmail: space + tab
+
+#   These are the variables that you're likely to use in
+#   condition lines. Notice that there is Perl styles `s' variable
+#   for shorter name for most used SPC.
+
+SPC	= "[$WSPC]"		# Regexp space/tab
+NSPC	= "[^$WSPC]"		# Negation, non-whitespace
+
+#   Whitespace with linefeed
+#   Note that in regexps, the character class is faster that OR.
+#   Refer to O'Reilly book "Mastering Regular Expressions"
+#
+#	space + tab + dollar
+#
+#	( | |$)	 is slower than ([ ]|$)
+
+SPCL   = "($SPC|$|$CR)"		# space or tab; linefeed; Carriage return
+
+# ..................................................... &perl-styled ...
+# http://www.perl.com/
+# Shorter variable names, mimic perl token names.
+
+n	= "$NL"			# Newline	   -- Perl \n
+t	= "$TAB"		# Tab		   -- Perl \t
+s	= "$SPC"		# whitespcae	   -- Almost like perl \s
+S	= "$NSPC"		# Non-Whitespace   -- Almost like Perl \S
+d	= "[0-9]"		# digit		   -- Perl \d
+D	= "[^0-9]"		# Non-digit	   -- Perl \D
+w	= "[0-9a-z_A-Z]"	# word		   -- Perl \w
+W	= "[^0-9a-z_A-Z]"	# Non-word	   -- Perl \W
+
+#   No perl equivalents for these, but handy anyway.
+
+a	= "[a-zA-Z]"		# alphabetic (7 bit)
+A	= "[^a-zA-Z]"		# Non-alphabetic
+h	= "[0-9a-fA-F]"		# Hex value
+H	= "[^0-9a-fA-F]"	# Non-Hex value
+
+# ............................................................ &misc ...
+
+SUPREME = "9876543210"		# The highest score value. See pm-tips.txt
+OR	= "$SUPREME"		# Multiline OR-ing in score recipes
+NOR	= "-$SUPREME"
+
+# For IP addresses
+
+OCTET	= "([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"
+DOTQUAD = "$OCTET[.]$OCTET[.]$OCTET[.]$OCTET"
+
+
+#   Getting month or month-number matches. See pm-jadate*rc modules
+#   for examples.
+
+mm2nbr	 = "Jan01Feb02Mar03Apr04May05Jun06Jul07Aug08Sep09Oct10Nov11Dec12"
+nbr2mm	 = "01Jan02Feb03Mar04Apr05May06Jun07Jul08Aug09Sep10Oct11Nov12Dec"
+weekdays = "(Sun|Mon|Tue|Wed|Thu|Fri|Sat)"
+
+TMPDIR	    = ${TMPDIR:-"/tmp"}
+
+# ........................................................ &programs ...
+#   Substitute these with absolute path names and binaries will run faster
+
+FORMAIL	    = ${FORMAIL:-"formail"}
+PROCMAIL    = ${PROCMAIL:-"procmail"}
+
+#	Don't ever leave out flags -oi and -t
+
+SENDMAIL_FLAGS	= "-oi -t"
+SENDMAIL	= ${SENDMAIL:-"sendmail $SENDMAIL_FLAGS"}
+
+#	This _must_ be Perl 5.x version. Old version 4.0 is way too old
+#	and obsolete for statements like BEGIN{}
+
+PERL	    = ${PERL:-"perl"}
+
+LS	    = ${LS:-"/bin/ls"}
+LS_BY_DATE  = ${LS:-"/bin/ls -t"}
+TR	    = ${TR:-"/bin/tr"}
+RM	    = ${RM:-"/bin/rm"}
+MV	    = ${MV:-"/bin/mv"}
+CP	    = ${CP:-"/bin/cp"}
+CAT	    = ${CAT:-"/bin/cat"}
+SED	    = ${SED:-"/bin/sed"}
+AWK	    = ${AWK:-"awk"}
+
+RMDIR	    = ${RMDIR-"/bin/rmdir"}
+MKDIR	    = ${MKDIR-"/bin/mkdir"}
+
+TOUCH	    = ${TOUCH:-"touch"}
+CHMOD	    = ${CHMOD:-"chmod"}
+DATE	    = ${DATE:- "date"}	    # must accept POSIX % escapes as date(1)
+
+EGREP	    = ${EGREP:-"egrep"}
+FGREP	    = ${EGREP:-"fgrep"}
+GREP	    = ${EGREP:-"egrep"}	    # use "grep -E" if you have GNU version
+NSLOOKUP    = ${NSLOOKUP:-"nslookup"}
+GZIP	    = ${GZIP:-"gzip"}
+BZIP	    = ${BZIP:-"bzip2"}	    # Name BZIP is shorter than pedantic BZIP2
+
+# ............................................................ &test ...
+#   The `test' command is not identical on every operating system, so they
+#   must be put behind variables. E.g. On Irix the -e
+#   option is not recognized so IS_EXIST must be changed to -r there.
+
+IS_READABLE   = ${IS_READABLE:-"test -r"}
+IS_EXIST      = ${IS_READABLE:-"test -e"}
+IS_EXECTABLEU = ${IS_READABLE:-"test -x"}
+IS_FILE	      = ${IS_READABLE:-"test -f"}
+IS_DIR	      = ${IS_READABLE:-"test -d"}
+IS_NOT_EMPTY  = ${IS_READABLE:-"test -s"}    # exist and not empty
+
+# ............................................................ &mime ...
+# Mime decode commands: Install package 'metamail' if the system
+# does not have program `mimencode'.
+# See <ftp://ftp.funet.fi/pub/unix/mail/metamail> and "mm2.7*"
+# Metamail's description:
+#
+#    Collection of MIME handling utilities Metamail is an implementation of
+#    MIME, the Multipurpose Internet Mail Extensions, a proposed standard
+#    for multimedia mail on the Internet. Metamail implements MIME, and also
+#    implements extensibility and configuration via the "mailcap" mechanism
+#    described in an informational RFC that is a companion to the MIME
+#    document.
+
+MIME_BIN	= ${MIME_BIN:-"mimencode"}
+MIME_BIN_QP	= ${MIME_BIN_QP:-"$MIME_BIN -u -q"} # decode Quoted printable
+MIME_BIN_64	= ${MIME_BIN_64:-"$MIME_BIN -u -b"} # decode base64
+
+#  encode commands with "E" at the end
+
+MIME_BIN_QP_E	= ${MIME_BIN_QPE:-"$MIME_BIN -q"}
+MIME_BIN_64_E	= ${MIME_BIN_64E:-"$MIME_BIN -b"}
+
+# ...................................................... &exit-codes ...
+# These should be pretty standard. See /usr/include/sysexits.h
+
+EX_OK	       = 0	  # successful termination
+EX__BASE       = 64	  # base value for error messages
+
+EX_USAGE       = 64	  # command line usage error
+EX_DATAERR     = 65	  # data format error
+EX_NOINPUT     = 66	  # cannot open input
+EX_NOUSER      = 67	  # addressee unknown
+EX_NOHOST      = 68	  # host name unknown
+EX_UNAVAILABLE = 69	  # service unavailable
+EX_SOFTWARE    = 70	  # internal software error
+EX_OSERR       = 71	  # system error (e.g., can't fork)
+EX_OSFILE      = 72	  # critical OS file missing
+EX_CANTCREAT   = 73	  # can't create (user) output file
+EX_IOERR       = 74	  # input/output error
+EX_TEMPFAIL    = 75	  # temp failure; user is invited to retry
+EX_PROTOCOL    = 76	  # remote error in protocol
+EX_NOPERM      = 77	  # permission denied
+
+# ........................................................ &messages ...
+# Reserve string variables
+
+JA_MSG_ERROR	   = "ERROR: *** "	  # Message follows after this
+JA_MSG_ERROR_FATAL = "ERROR: FATAL: *** " # Message follows after this
+
+# ................................................... character sets ...
+#  Define character sets grouped by language.
+#  Contact: <PSE-L@mail.professional.org>
+#  2004-04-16 included from http://www.professional.org/procmail/furrin.rc
+#  See thread "furrin character sets" 2203-02-22 at
+#  http://info.ccone.at/INFO/Mail-Archives/procmail/Feb-2003/threads.html#00521
+
+#   In emacs, you can generate any character: See key C-x 8 C-h
+#
+#   There are entities: u umlaut (small/big), SZ ligature
+CHAR_LIST_GERMAN       = "¸‹ﬂ"
+
+#   These are entities: a A ring, a A umlaut, o O umlaut
+CHAR_LIST_FINLAND      = "Â≈‰ƒˆ÷È"
+CHAR_LIST_SWEDEN       = $CHAR_LIST_FINLAND
+
+# included entity: o slash
+CHAR_LIST_NORWAY       = "$CHAR_LIST_FINNISH¯ÿ"
+
+#   included entity: ae AE ligature
+CHAR_LIST_DENMARK      = "Ê∆"
+
+CHAR_LIST_SCANDINAVIAN = "\
+$CHAR_LIST_FINLAND\
+$CHAR_LIST_NORWAY\
+$CHAR_LIST_DENMARK\
+"
+
+#   You can make regular expressions like:
+#
+#	unclean7bit = "[^$CHAR_7BIT_SET]"
+#
+#	:0 :
+#	* HB ?? unclean7bit
+#	spam
+
+#  Newline
+CHAR_7BIT_CONTROL	   = ""
+
+CHAR_7BIT_PUNCTUATION	   = "-+^~\"\'\`&/\\|*@%!?,.:;\(\){}<>\[\]\$#"
+
+CHAR_7BIT_SET		   = "$TAB !-~"	 # This is range: from SPC to TILDE.
+CHAR_7BIT_SCANDINAVIAN_SET = "$CHAR_7BIT_SET$CHAR_LIST_SCANDINAVIAN"
+
+CHARSET_JP = "WINDOWS-932|EUC-JP|(cs-?)?ISO-?2022-?JP(-[12])?|ISO-2022-D\
+|SHIFT[-_]JIS|JIS[-_]?X[-_]?02(08|01|12|13)|sjis|jis7|ms-kanji\
+|(x-)?mac(-)?japanese|x-EBCDIC-Japanese(Katakana|AndUSCanada\
+|AndJapaneseLatin|AndKana)"
+
+CHARSET_CN = "WINDOWS-(936|950)|EUC-CN|(hz-|x-euc-tw)?GB[-_]?2312\
+|(cn-)?(BIG5|gb)|ISO-2022-([EGHIJKLM]|cn|cn-ext)|ISO-IR-165\
+|GB8565\.2(-1988)?|x-euc-tw|hz|iso-ir-58|gbk|big5-hkscs|gb18030\
+|(x-)?mac(-)?chinese(trad|imp)|iso-ir-58\
+|x-EBCDIC-(Traditional|Simplified)Chinese|x-Chinese-(CNS|eten)"
+
+#   non-standards compliant variations of chinese
+
+CHARSET_CN_BOGUS = "CHINESEBIG5|BIG-5"
+
+CHARSET_KR = "WINDOWS-949|EUC-KR|KS[-_ ]?C[-_ ]?5601([-_ ]?1987)?\
+|ISO-2022-(C|kr)|KS[-_]?X[-_]?1001|ksc5636|iso-646-kr|uhc\
+|johab|(x-)?mac(-)?korean|iso-ir-149|x-EBCDIC-(KoreanAnd)?KoreanExtended"
+
+#   some mailer actually sets this
+
+CHARSET_BOGUS = "X-UNKNOWN|USER-DEFINED"
+
+#   Not recommended to block these - they're all rather encompassing
+
+CHARSET_UNICODE = "UTF(-)?(7|8|16)]|UCS(-)?(2|4)\
+|UNICODE-1-1-UTF-7|ISO-10646-UCS-2|UNICODE-(16|32)(LITTLE|BIG)-ENDIAN)?\
+|unicodeFFFE|JAVA|x-EBCDIC-International(-euro)?"
+
+#   If you're english, you probably don't want to block this one either.
+
+CHARSET_ENG = "US-ASCII|ASCII|iso-ir-6|iso646-us|x-EBCDIC-(cp-us|UK)(-euro)?"
+
+#   Western European (English, but also French and many others.	 Standard)
+
+CHARSET_WESTEURO = "WINDOWS-1252|ISO-?8859-(1|15)|iso-ir-100\
+|(x-)?mac(-)?roman|latin-?(1|9)|macintosh|x-IA5(-German)?\
+|x-ebcdic-(spain|italy|germany|france)(-euro)?|x-europa"
+
+#   Central/Eastern European (non-english)
+
+CHARSET_SLAVIC = "WINDOWS-1250|ISO-?8859-(2|16)\
+|iso-ir-(87|102)|(x-)?mac(-)?(central-europe|ce|croatian)\
+|latin-?2|CP870"
+
+#   uncommon stuff and/or generally obsoleted. Includes maltese (eh, sorry if
+#   that's you)
+
+CHARSET_FUNKYLATIN = "ISO-?8859-[34]|iso-ir-109|latin-?3"
+
+#   Russian, et-al.
+#   KOI8-T is Tajiki (Tajikistan)
+#   armscii-8 is Armenian
+
+CHARSET_CYRILLIC = "WINDOWS-1251|ISO-?8859-5|KOI8(-(RU|[RTU]))?\
+|ISO-IR-(101|111|144|147)|IBM866\
+|(x-)?mac(-)?(romanian?|cyrillic|ukran(e|ian))\
+|nunacom-8|armscii-8|x-EBCDIC-Cyrillic(SerbianBulgarian|Russian)"
+
+# Arabic
+
+CHARSET_ARABIC = "WINDOWS-1256|ISO-?8859-6|iso-ir-127\
+|(x-)?mac(-)?arabic|asmo-708|x-EBCDIC-Arabic"
+
+# Greek
+
+CHARSET_GREEK = "WINDOWS-1253|ISO-?8859-7|(x-)?mac(-)?greek\
+|iso-ir-(126|150)|x-EBCDIC-Greek(Modern)?"
+
+# Hebrew
+
+CHARSET_HEBREW = "WINDOWS-1255|ISO-?8859-8(-i)?|(x-)?mac(-)?hebrew\
+|iso-ir-138|x-EBCDIC-Hebrew"
+
+# Turkish
+
+CHARSET_TURKISH = "WINDOWS-1254|ISO-?8859-9|(x-)?mac(-)?turkish\
+|iso-ir-(109|148)|latin-?5|x-EBCDIC-Turkish|CP1026"
+
+# Icelandic/Nordic (i.e. Iceland, Greenland, Norway, Sweden...)
+
+CHARSET_NORDIC = "ISO-?8859-10|(x-)?mac(-)?iceland(ic)?|iso-ir-60\
+|x-IA5-(Norwegian|Swedish)\
+|x-EBCDIC-(FinlandSweden|DenmarkNorway|Icelandic)(-euro)?"
+
+# Thai (ISO not _actually_ used, but draft standard is same)
+
+CHARSET_THAI = "WINDOWS-874|TIS[-_]?620|ISO-?8859-11\
+|mulelao-1|ibm-cp1133|(x-)?mac(-)?thai|x-EBCDIC-Thai"
+
+# ISO-8859-12 is bogus (was suggested to be vietnamese, but can't fit).
+# However, I've seen this encoding specified in spam though, and lacking an
+# official designation, I'm hocking it here.
+
+CHARSET_VIETNAM = "WINDOWS-1258|ISO-?8859-12|viscii|tcvn5712|vps"
+
+# Baltic Rim
+
+CHARSET_BALTIC = "WINDOWS-1257|ISO-?8859-13|iso-ir-110"
+
+# Celtic (Irish and Welsh)
+
+CHARSET_CELTIC = "ISO-?8859-14"
+
+# Other stuff which escapes categorization at this time
+
+CHARSET_MISC = "isiri-3342|x-iscii-(as|be|de|gu|ka|ma|or|pa|ta|te)"
+
+# ..................................................... &from-daemon ...
+
+JA_FROM_DAEMON = "!"
+
+:0
+* ^FROM_DAEMON
+{
+    JA_FROM_DAEMON_MATCH   = $MATCH
+    JA_FROM_DAEMON	   = "!!"  # double !! means "OK"
+
+    #  2000-01-08  This has been copied from procmail log file
+    #  because we can't get the match otherwise.
+    #  Procmail version: v3.11pre4 1995/10/29
+    #
+    #  The following recipe is dummy: It solely sets MATCH to show
+    #  what procmail thinks triggered FROM_DAEMON
+
+#    :0
+#    * ()\/^(Precedence:.*(junk|bulk|list)|To: Multiple recipients of |(((Resent-)?(From|Sender)|X-Envelope-From):|>?From )([^>]*[^(.%@a-z0-9])?(Post(ma?(st(e?r)?|n)|office)|(send)?Mail(er)?|daemon|mmdf|n?uucp|LIST(SERV|proc)|NETSERV|owner|r(e(quest|sponse)|oot)|b(ounce|bs\.smtp)|echo|mirror|s(erv(ices?|er)|mtp)|A(dmin(istrator)?|MMGR|utoanswer))(([^).!:a-z0-9][-_a-z0-9]*)?[%@>	 ][^<)]*(\(.*\).*)?)?$([^>]|$)))
+#    { }
+
+}
+
+# ..................................................... &from_mailer ...
+
+JA_FROM_MAILER = "!"
+
+:0
+* ^FROM_MAILER
+{
+    JA_FROM_MAILER_MATCH   = $MATCH
+    JA_FROM_MAILER	   = "!!"  # double !! means "OK"
+}
+
+# .................................................. &define-modules ...
+
+:0
+* PMSRC ?? [a-z]
+{
+    RC_ADDR		 = $PMSRC/pm-jaaddr.rc
+    RC_BUP		 = $PMSRC/pm-jabup.rc
+    RC_COOKIE		 = $PMSRC/pm-jacookie.rc
+    RC_COOKIE1		 = $PMSRC/pm-jacookie1.rc
+    RC_CRON		 = $PMSRC/pm-jacron.rc
+    RC_DAEMON		 = $PMSRC/pm-jadaemon.rc
+    RC_DATE		 = $PMSRC/pm-jadate.rc
+    RC_DATE1		 = $PMSRC/pm-jadate1.rc
+    RC_DATE2		 = $PMSRC/pm-jadate2.rc
+    RC_DATE3		 = $PMSRC/pm-jadate3.rc
+    RC_DATE4		 = $PMSRC/pm-jadate4.rc
+    RC_DATE5		 = $PMSRC/pm-jadate5.rc
+    RC_DUP		 = $PMSRC/pm-jadup.rc
+    RC_EMPTY		 = $PMSRC/pm-jaempty.rc
+    RC_FROM		 = $PMSRC/pm-jafrom.rc
+    RC_FWD		 = $PMSRC/pm-jafwd.rc
+    RC_LIST		 = $PMSRC/pm-jalist.rc
+
+    RC_MIME_DECODE	 = $PMSRC/pm-jamime-decode.rc
+    RC_MIME_KILL	 = $PMSRC/pm-jamime-kill.rc
+    RC_MIME_SAVE	 = $PMSRC/pm-jamime-save.rc
+    RC_MIME		 = $PMSRC/pm-jamime.rc
+
+    RC_NETMIND		 = $PMSRC/pm-janetmind.rc
+    RC_NSLOOKUP		 = $PMSRC/pm-janslookup.rc
+    RC_ORIG		 = $PMSRC/pm-jaorig.rc
+    RC_PING		 = $PMSRC/pm-japing.rc
+    RC_POP3		 = $PMSRC/pm-japop3.rc
+    RC_RANDF		 = $PMSRC/pm-jarandf.rc
+    RC_SRV_CHECK	 = $PMSRC/pm-jasrv-check.rc
+    RC_SRV_DAEMON	 = $PMSRC/pm-jasrv-daemon.rc
+    RC_SRV_ERR		 = $PMSRC/pm-jasrv-err.rc
+    RC_SRV_FROM		 = $PMSRC/pm-jasrv-from.rc
+    RC_SRV_MSG		 = $PMSRC/pm-jasrv-msg.rc
+    RC_SRV_MULTI	 = $PMSRC/pm-jasrv-multi.rc
+    RC_SRV_REQ		 = $PMSRC/pm-jasrv-req.rc
+    RC_SRV_SEND		 = $PMSRC/pm-jasrv-send.rc
+    RC_SRV		 = $PMSRC/pm-jasrv.rc
+    RC_STORE		 = $PMSRC/pm-jastore.rc
+    RC_SUBJECT		 = $PMSRC/pm-jasubject.rc
+    RC_TIME		 = $PMSRC/pm-jatime.rc
+    RC_UBE		 = $PMSRC/pm-jaube.rc
+    RC_UBE1		 = $PMSRC/pm-jaube1.rc
+    RC_UBE_BMF		 = $PMSRC/pm-jaube-prg-bmf.rc
+    RC_UBE_BOGOFILTER	 = $PMSRC/pm-jaube-prg-bogofilter.rc
+    RC_UBE_IFILE	 = $PMSRC/pm-jaube-prg-ifile.rc
+    RC_UBE_SPAMASSASSIN	 = $PMSRC/pm-jaube-prg-spamassassin.rc
+    RC_UBE_SPAMPROBE	 = $PMSRC/pm-jaube-prg-spamprobe.rc
+    RC_UBE_SPAMORACLE	 = $PMSRC/pm-jaube-prg-spamoracle.rc
+    RC_UBE_ANNOYANCE	 = $PMSRC/pm-jaube-prg-annoyance-filter.rc
+    RC_UBE_BSFILTER	 = $PMSRC/pm-jaube-prg-bsfilter.rc
+    RC_UBE_RUNALL	 = $PMSRC/pm-jaube-prg-runall.rc
+    RC_UBE_KEYWORDS	 = $PMSRC/pm-jaube-keywords.rc
+    RC_VAC		 = $PMSRC/pm-javac.rc
+    RC_VAR		 = $PMSRC/pm-javar.rc
+}
+
+:0 E
+{
+    # Set LINEBUF so that next message line is not truncated.
+    LINEBUF = 1024
+    dummy   = "
+-----------------------------------------------------------------------
+
+	pm-javar.rc: PANIC: Variable PMSRC does not point to procmail
+	recipe code directory. Add something like this to ~/.procmailrc
+	(using correct install location):
+	PMSRC = $HOME/procmail/procmail-lib/lib
+
+-----------------------------------------------------------------------
+"
+}
+
+dummy = "pm-javar.rc: end: variables defined."
+
+# End of file pm-javar.rc

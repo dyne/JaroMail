@@ -1,0 +1,64 @@
+# pf-save.rc
+#
+# $Id: pf-save.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+# Author: Alan K. Stebbens <aks@sgi.com>
+#
+# Procmail recipe file to save the current message to
+# a list of one or more folders set by pf-check.rc.
+#
+# You may wish to set the variable PF_DEST before invoking.
+#
+# INCLUDERC=pf-save.rc
+#
+# If the message is filed into a folder, LOGABSTRACT is
+# set to "off" so a duplicate log is not created.
+
+:0
+* PF_DEST ?? .
+{
+
+  # Add a new X-Filed if necessary
+  :0 fh
+  * !^X-Filed:
+  | formail -A "X-Filed: $PF_DEST"
+
+  # Else, if there is already a header, possibly append to it
+  :0 E
+  {
+    OLD_PF_DEST=`formail -zxX-Filed:`
+    :0 fh
+    * $!^X-Filed:.*$PF_DEST
+    |formail -I"X-Filed: $OLD_PF_DEST $PF_DEST"
+  }
+
+  # If filing into MH folders, use one copy and procmail will take
+  # care of linking.
+  :0 c
+  * PF_DEST ?? /\.$
+  $PF_DEST
+
+  # If not filing into MH folders, use recursive filing
+  :0 E
+  {
+    DEST=`echo $PF_DEST | cut -d' ' -f1`
+    PF_DEST=`echo $PF_DEST' ' | cut -d' ' -f2-`
+
+    # File into the first folder now
+    :0 c:
+    $DEST
+
+    # Possibly file into the 2nd and other folders with recursion
+    # It must be non-blanks, and not identical to the already filed DEST
+    :0 c
+    * PF_DEST ?? [^ ]
+    * $! DEST ?? $PF_DEST
+    |procmail -pm PF_RECURSE=yes pf-save.rc
+
+    # If we were recursing, don't file multiple copies into DEFAULT
+    :0
+    * PF_RECURSE ?? yes
+    { HOST=_stop_now_ }
+  }
+  LOGABSTRACT=off
+}

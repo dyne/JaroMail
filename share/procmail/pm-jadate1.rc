@@ -1,0 +1,224 @@
+# pm-jadate1.rc -- 'Tue, 31 Dec 1997' date parser from variable INPUT
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	This includerc parses date from variable `INPUT' which has string
+#
+#           "Week, Daynbr Month Year"
+#
+#       Example input
+#
+#           "Tue, 31 Dec 1997"      -- without comma
+#           "Tue 31 Dec 1997"       -- with comma
+#
+#       Returned values
+#
+#	    YYYY    = 4 digits
+#           YY      = 2 digits
+#           MON     = 3 characters
+#           MM      = 2 digits
+#           DAY     = 3 characters
+#           DD      = 2 digits
+#           hh      = 2 digits      If available
+#           mm	    = 2 digits	    If available
+#           ss      = 2 digits      If available
+#           TZ      = 5 characters  If available
+#
+#	Variable ERROR is set to `yes' if it couldn't recognize the INPUT
+#	and couldn't parse the basic YYYY, YY, MM, DD variables.
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include pm-javar.rc from there.
+#
+#   Call arguments (variables to set before calling)
+#
+#           INPUT = string-to-parse
+#
+#       The INPUT can have anything after "Week, dayNbr Month Year", or
+#       before it: you can pass a string like
+#       "Thu, 13 Nov 1997 11:43:23 +0200".
+#
+#   Usage example
+#
+#	The first *Received* header will tell when the message was received
+#	by your mailserver. We parse the date and avoid calling expensive
+#       `date' command.
+#
+#	    PMSRC	    = $HOME/pm
+#	    RC_DATE_WDMY    = $PMSRC/pm-jadate1.rc #Week-Day-Month-Year parser
+#
+#           # Get time from first header, it ends like this:
+#           #
+#           #       Received: ... ; Thu, 13 Nov 1997 11:43:50 +0200
+#
+#           :0
+#           *$ ^Received:.*;$s+\/...,$s+$d.*
+#           {
+#               INPUT = $MATCH
+#
+#               #  Turn off the logging while executing this part
+#
+#               VERBOSE=off   INCLUDERC = $RC_DATE_WDMY   VERBOSE=on
+#
+#               :0
+#               * ERROR ?? yes
+#               {
+#		   # Use some other way to get the time or shout loudly
+#		}
+#           }
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+
+
+id    = "pm-jadate1.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ..................................................... &output-vars ...
+# output variables
+
+YYYY MM MON DD DAY hh mm ss TZ
+ERROR = "yes"		# set defualt value
+
+# ........................................................... &do-it ...
+#	Check that input is something like: Thu, 13 Nov 1997
+
+dummy = "$id: Parse date like [Tue, 31 Dec 1997]"
+dummy = "$id: INPUT = $INPUT"	       #  show what we try to match
+
+:0 D
+*$ INPUT ?? $s*\/[SMTWF]$a$a[,$WSPC]+$d+$s+$a$a$a.*
+{
+    INPUT = $MATCH
+
+    :0
+    * INPUT ?? ^\/...
+    {
+        DAY = $MATCH
+    }
+
+    #	Move to the DD MON section
+
+    :0
+    *$ INPUT ?? [SMTWF]$a$a[,$WSPC]+\/$d.*
+    {
+        INPUT = $MATCH
+    }
+
+
+    :0
+    *$  INPUT ?? ^\/$d$d
+    {
+        DD = $MATCH
+    }
+    :0 E                        # else
+    *$  INPUT ?? ^\/$d
+    {
+        DD = "0$MATCH"
+    }
+
+    :0
+    *$ INPUT ?? ^$d+$s+\/...
+    {
+        MON = $MATCH
+    }
+
+    # ........................................................ &year ...
+
+    :0
+    *$ INPUT ?? ^$d+$s+...$s+\/....
+    {
+        YYYY = $MATCH
+    }
+
+
+    #	If this last recipe succeeds, then the whole string has been parsed.
+    #
+    :0
+    * YYYY ?? ..\/..
+    {
+        YY    = $MATCH
+        ERROR = "no"
+    }
+
+
+    # ........................................................ &time ...
+    # Change INPUT
+
+    in = $INPUT
+
+    :0
+    *$ INPUT ?? ^$d+$s+...$s+....$s+\/.*
+    {
+        INPUT = $MATCH
+    }
+
+
+    :0
+    *$ INPUT ?? ^\/$d$d
+    {
+        hh = $MATCH
+    }
+
+    :0
+    *$ INPUT ?? ^$d$d:\/$d$d
+    {
+        mm = $MATCH
+    }
+
+
+    :0
+    *$ INPUT ?? ^$d$d:$d$d:\/$d$d
+    {
+        ss = $MATCH
+    }
+
+    :0
+    *$ INPUT ?? ^$d$d:$d$d:$d$d$s+\/[-+]....
+    {
+        TZ = $MATCH
+    }
+
+
+    #   Now reverse engineer to the numer, David Tamkin <dattier@miso.wwa.com>
+    #   technically one should use $\monthnym but here it doesn't matter
+    #   If user gave invalid input, will not match
+
+    :0
+    * $ mm2nbr ?? $MON\/..
+    {
+        MM = $MATCH
+    }
+}
+
+dummy = "$id: end:"
+
+# end of file pm-jadate.rc

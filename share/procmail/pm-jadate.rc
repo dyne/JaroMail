@@ -1,0 +1,146 @@
+# pm-jadate.rc -- Read date from the message hdrs: From_, Receved:
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	This recipe will scan several headers to find the date string.
+#       When suitable header is found and the parsing has succeeded, the
+#       return variables are set. The Date values reflects the arrive time
+#       of the message; not the sending time. If nothing works, a shell call
+#       `date' is used as a last resort.
+#
+#	Returned values
+#
+#	    YYYY    = 4 digits
+#	    YY	    = 2 digits
+#	    MON	    = 3 characters
+#	    MM	    = 2 digits
+#	    DAY	    = 3 characters
+#	    DD	    = 2 digits
+#	    hh	    = 2 digits      if available
+#	    mm	    = 2 digits      if available
+#	    ss	    = 2 digits      if available
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-jadate1.rc
+#       o   pm-jadate3.rc
+#       o   pm-jadate4.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       (none)
+#
+#   Usage example
+#
+#           INCLUDERC = $PMSRC/pm-jadate.rc
+#           #   now we have all date variables that we need
+#           #
+#           $TODAY    = $YYYY-$MM-$DD
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+
+
+id    = "pm-jadate.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ..................................................... &output-vars ...
+# output variables, these actually come from the another subroutine,
+# but let's mention them here too
+#
+# DATE YYYY MM MON DD DAY hh mm ss
+
+ERROR = "yes"
+
+# ........................................................... &do-it ...
+
+#   Try MDA From_ header first
+#   From foo@bar.com  Tue Nov 18 12:43:56 1997
+
+fromRegexp = "...$s+...$s+$d+$s+$d$d:.*"
+
+dummy = "$id: From_ date test"
+
+:0
+*$ ^From$s+$NSPC+\/$s+$fromRegexp
+{
+    dummy = "$id: Standard From_ header matched"
+    INPUT       = $MATCH
+    INCLUDERC   = $PMSRC/pm-jadate3.rc # Date parser
+}
+
+# Get time from first header, which is in some systems is
+# Received: ... ; Thu, 13 Nov 1997 11:43:50 +0200
+
+dummy = "$id: Received date test"
+
+:0
+*$ ! YYYY ?? $d
+*$   ^Received:.*;$s+\/...,$s+$d+$s+...$s$d$d$d$d.*
+{
+    dummy       = "$id: First Received header matched"
+    INPUT       = $MATCH
+    INCLUDERC   = $PMSRC/pm-jadate1.rc # Date parser
+}
+
+#   Emacs Gnus add X-From-line to the message
+#   Emacs Rmail adds Mail-from line to the message
+#   This is same as From_
+
+dummy = "$id: MUA date test"
+
+:0
+*$ ! YYYY ?? $d
+*$   ^(X-From-Line|Mail-from):$s+$NSPC+\/$s+$fromRegexp
+{
+    dummy       = "$id: Other possible From_ header matched"
+    INPUT       = $MATCH
+    INCLUDERC   = $PMSRC/pm-jadate3.rc # Date parser
+}
+
+
+#   Still no luck, I should add more tests to the above but I don't
+#   know what. Call sh 'date' as a last resort
+#
+
+dummy = "$id: sh date test"
+
+:0
+*$ ! YYYY ?? $d
+{
+    dummy       = "$id: Last chance, calling sh date "
+    INCLUDERC   = $PMSRC/pm-jadate4.rc
+}
+
+dummy = "$id: end:"
+
+# end of file pm-jadate.rc

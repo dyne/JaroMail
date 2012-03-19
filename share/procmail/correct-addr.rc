@@ -1,0 +1,411 @@
+# correct-addr.rc
+#
+# $Id: correct-addr.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+#    Copyright (C) 1996 Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+# Procmail recipe file to help forward mail from an OLD address to a
+# NEW address, and do some mailing list mail management.
+#
+# This recipe file is intended to make it easy for users to forward
+# their mail from their old address to a new address, and, at the same
+# time, educate their correspondants about it by CC'ing them with the
+# mail.
+#
+# Only mail directly addressing the user at the old address will cause a
+# "correction notice" to be sent.
+#
+# Mail *not* directly addressing the old address (eg: from a mailing list)
+# is treated separately, according to the MAILLIST variable; it can be one
+# or more of these values:
+#
+#   drop	This is the default behaviour, and is only defined to
+#		explicitly acknowledge this.  In other words, "drop"
+#		and "forward" are mutually exclusive, and omitting
+#		"forward" implies "drop", but not vice versa.
+#
+#   forward	forward all mailing list mail to $NEWADDR, inserting
+#		"Resent-From:" and "Resent-To:" headers.  Of course,
+#		$NEWADDR must also be defined.
+#
+#   report	report the headers of all mailing list mail to
+#		$POSTMASTER, so that the person handling this role can
+#		send the appropriate unsubscription requests.
+#
+# *** NOT IMPLEMENTED ***
+#
+#   bounce	return all mailing list mail with "User has moved!" to
+#		the "request" or "owner" address; great pains are taken
+#		to not respond to a general distribution list address.
+#		If the proper list address cannot be determined, then
+#		the ultimate fallback return address is "postmaster" at
+#		the originating domain.
+#
+#   remove	If the originating mailing list software type can be
+#		determined, automatically generate an "unsubscribe"
+#		address on the $OLDADDR.  Currently, the recipe
+#		understands Majordomo, SmartList, and LISTSERV commands.
+#		If the mailing list software cannot be determined, then
+#		falls back to "report" action.
+#
+#   change	If the originating mailing list software type can be
+#		determined, automatically generate mails to the list
+#		request address to unsubscribe the old address and to
+#		subscribe the new address, if given.  If the mailing
+#		list software cannot be determined, then falls back
+#		to "report" action.
+#
+# Multiple keywords can be given to accomplish several things on the
+# mailing list mail.
+#
+# Without the "forward" keyword, mailing list mail will not ever be
+# forwarded, even if NEWADDR is defined.  Therefore, to have mailing
+# list mail be both forwarded and bounced, use "forward,bounce".  To
+# have mailing list mail be forwarded, and have the subscription
+# changed where possible, use "forward,change".
+#
+#
+# Usage:
+#
+#   These variables are *optional*, with the defaults as shown:
+#
+#	OLDLOGIN=$LOGNAME
+#		The primary old login; this will be used in the
+#		correction notice sent to correspondants.
+#
+#	OLDUSER=$FRIENDLY (see get-from.rc}
+#		The user's old real name, included in the correction
+#		notice.  If not set by the user, FRIENDLY is used, which
+#		is determined by the procmail recipe file "get-from.rc".
+#
+#	OLDLOGINS='$\LOGNAME'
+#		A regexp matching the old login name(s).  If the user
+#		received mail at more than one login name, this should
+#		match them all.  For most users, the default is fine.
+#
+#	NOTLOGINS=
+#		A regexp matching logins mail to which should NOT be
+#		forwarded or corrected.  This can be used to form
+#		a filter to correct mail addressed ambiguously.  See
+#		the man page for examples.
+#
+# 	NOTSUBJECTS=
+#		Any mail containing subjects matching this regexp does
+#		not get corrected or filtered.
+#
+#	DOMAIN=
+#		The domain in which this user resides; without this
+#		definition, this script can only match on the user
+#		name.
+#
+#	HOSTS='[^. 	]+'
+#		A regexp matching the hosts at which the OLDLOGIN
+#		receives mail.  This is used in conjunction with $DOMAIN
+#		so don't place the domain in this regexp.
+#
+#	NEWADDR=
+#		The address to which mail should be forwarded.  There is
+#		no default, resulting in no forwarding; in this case, only
+#		reply with "no such user" notices.
+#
+#	NEWUSER=$OLDUSER
+#		The new user name, defaulting to the old user name.  This
+#		is used for correction notices.
+#
+#	POSTMASTER=Postmaster <postmaster>
+#		This is used as the From: address for both the correction
+#		"no such user" notices.
+#
+#	MAILLIST=[keyword,...]
+#		One or more keywords: forward, report, bounce, remove,
+#		or change, separated by spaces or commas.  See the
+#		description above for details.
+#
+#	INCLUDERC=correct-addr.rc
+#
+# Examples:
+#
+# a. John Carter has moved from his current location to "carter@mars.com",
+#    and he wishes to have his mailing mail forwarded.
+#
+#	NEWADDR   =	carter@mars.com
+#	MAILLIST  =	forward
+#	INCLUDERC = correct-addr.rc
+#
+# b. Clark Kent has moved back to his hometown, and does not want his
+#    mail forwarded at all, especially his mailing lists.
+#
+#	NEWADDR				# guarantee no NEWADDR
+#	MAILLIST  =	bounce,remove
+#	INCLUDERC = correct-addr.rc
+#
+# c. Dennis Mitchell has been receiving mail by many aliases, and, having
+#    gone off to college, wishes to have all of his mail sent to his
+#    new email address.
+#
+#       NEWADDR   =	menace@engineering.ucsb.edu
+#	OLDLOGINS =	"(Dennis|D.Mitchell|Dennis.Mitchell|Menace)"
+#	MAILLIST  =	forward
+#	INCLUDERC = correct-addr.rc
+#
+# d. Lois Lane has gotten married, and wishes to have her mail forwarded
+#    to her new address, with her mailing list subscriptions changed, and
+#    she wishes to have any correction notices mention her new name.
+#
+#	NEWADDR   =	lois@smallville.ia.us
+#	OLDLOGINS =	"(Lois|Lane|L.Lane|Lois[._]Lane)"
+#	NEWUSER   =	"Lois Kent"
+#	MAILLIST  =	forward,change
+#	INCLUDERC = correct-addr.rc
+#
+# e. Tom, a clever system manager, has installed an automatic alias for
+#    users when their logins expires (and they no longer have a home
+#    directory in which to place a ~/.procmailrc file), which invokes
+#    a small shell script, called "correct-mail":
+#
+#	olduser1: "|correct-mail olduser1"
+#	olduser2: "|correct-mail olduser2"
+#
+#    The shell script looks like this:
+#
+#	#!/bin/sh
+#	PATH=$PATH:/usr/local/bin ; export PATH
+#	procmail -m 	LOGNAME=$1 				\
+#		    	MAILLIST=bounce,report			\
+#			DEFAULT=/dev/null			\
+#			MAILDIR=/tmp				\
+#			LOGFILE=/usr/adm/correct-mail.log	\
+#			LOGABSTRACT=yes				\
+#		/etc/procmailrcs/correct-addr.rc
+#
+
+# First let's do some optional logging
+# If the file "correct-addr.rc.log" exists, we log extensively
+# to it.
+
+:0
+* ? test -f correct-addr.rc.log
+{ CA_LOGFILE=$LOGFILE
+  CA_LOGABSTRACT=$LOGABSTRACT
+  CA_VERBOSE=$VERBOSE
+  LOGFILE=correct-addr.rc.log
+  LOGABSTRACT=all
+  VERBOSE=yes
+}
+
+# A temporary file used to hold mail being reported to the postmaster
+REPORTMAIL=tmp.ca-mail.$LOGNAME
+
+# Make sure variables have default settings
+
+OLDLOGIN=${OLDLOGIN:-$LOGNAME}
+HOSTS=${HOSTS:-'[^. 	>(),;]+'}
+POSTMASTER="${POSTMASTER:-\"Postmaster <postmaster>\"}"
+MAILLIST=${MAILLIST:-forward}
+
+DOMAIN="`echo \"$DOMAIN\" | sed -e 's/\\./\\\\./'`"
+
+# HOSTPART matches the entire hostname part of an address
+HOSTPART="(@($HOSTS(\.$DOMAIN)?|$DOMAIN))?([,();>	 ]|$)"
+
+# Define a regexp matching the old addresses
+:0
+* OLDLOGINS ?? .
+{ OLDADDRS="($OLDLOGIN|$OLDLOGINS)$HOSTPART" }
+
+# There isn't a set of other logins
+:0 E
+{ OLDADDRS="$OLDLOGIN$HOSTPART" }
+
+# Okay -- now begin the basic tests.
+
+# Be sure we don't loop
+:0
+* $ ^X-Loop: $LOGNAME@$HOST
+{ }
+
+# Make sure that the negative filters do not apply
+
+# If there is a NOTLOGINS defined, and it matches the addressee
+# then don't correct/forward
+:0 E
+* NOTLOGINS ?? .
+* $ ! ^TO$NOTLOGINS$HOSTPART
+{ }
+
+# If there is a NOTSUBJECTS defined, and it matches the subject
+# then don't correct or forward
+:0 E
+* NOTSUBJECTS ?? .
+* $ ! ^Subject: *$NOTSUBJECTS
+{ }
+
+# Else, if the mail matches the OLDLOGINS, then correct and forward
+:0 E
+* $ ^TO$OLDADDRS
+{
+  # Begin the correction and forwarding part
+  OLDADDR=$MATCH
+
+  :0
+  * OLDADDR ?? [,(); 	>]$
+  { OLDADDR="`echo \"$OLDADDR\" | sed -e 's/[,(); 	>]$//'`" }
+
+  # First, save a copy
+  LOCKFILE=$REPORTMAIL.lock
+
+  :0 c
+  $REPORTMAIL
+
+  # Set OLDUSER to FRIENDLY if not already set
+  :0
+  * ! OLDUSER ?? .
+  { INCLUDERC=get-from.rc
+    OLDUSER=$FRIENDLY }
+
+  # Generate a new header
+  :0 fhw
+  | formail -rt   -I"From: $POSTMASTER" \
+		  -I"Subject: Your mail to $OLDADDR" \
+		  -I"X-Loop: $LOGNAME@$HOST"
+
+  # Is there a new address for forwarding?
+  :0 a
+  * NEWADDR ?? .
+  {
+    # Be sure NEWUSER is set
+    NEWUSER=${NEWUSER:-$OLDUSER}
+
+    # Make sure the new user gets a copy of the correction notice
+    :0 afhw
+    | formail -A"Cc: $NEWADDR ($NEWUSER)"
+
+    :0 afbi
+    | echo "Your mail to $OLDUSER at:" ;	\
+      echo "" ;					\
+      echo "	$OLDADDR" ;			\
+      echo "" ;					\
+      echo "is no longer correct; ${NEWUSER} now receives mail at:" ; \
+      echo "" ;					\
+      echo "	$NEWADDR" ;			\
+      echo "" ;					\
+      echo "This message, with your original mail, is also being forwarded" ; \
+      echo "to the new address." ; 		\
+      echo "" ;					\
+      echo "Please remember to update the address you have for $NEWUSER in" ; \
+      echo "any mail address database you may use."
+  }
+
+  # If NEWADDR is not set, just tell the sender that this address
+  # is no longer valid
+  :0 Efbi
+  | echo "Your mail to $OLDUSER at:" ;	\
+    echo "" ; 				\
+    echo "	$OLDADDR" ;		\
+    echo "" ;				\
+    echo "is being returned because this user is no longer at this address" ; \
+    echo "and no forwarding address has been provided."
+
+  # Append the signature and the original mail, and send it
+  :0 fb
+  | cat ;					\
+    echo "" ;					\
+    echo "Regards, the $POSTMASTER" ;		\
+    echo "" ;					\
+    echo "Your original mail follows:" ;	\
+    echo "------------------------------------------------------------" ; \
+    formail <$REPORTMAIL
+
+  JUNK=`rm -f $REPORTMAIL`
+
+  LOCKFILE
+
+  # Now ship off the mail to sendmail
+  :0
+  ! -oi -t
+}
+
+# If the mail wasn't directly to $OLDLOGIN, it is mail from a
+# mailing list, so don't send a correction notice,
+
+#### Mailing list mail ####
+
+:0 E
+* MAILLIST ?? (forward|report|bounce|remove|change)
+* $!^X-Loop: $LOGNAME@$HOST
+{
+
+  # Both change and remove require some mailing list heuristics
+  # Use common code for this
+  :0
+  * MAILLIST ?? (change|remove)
+  {
+    # get common header definitions
+    INCLUDERC=headers.rc
+
+    # Try to determine the mailer address
+    INCLUDERC=list-addr.rc
+
+    # ***** NOT YET IMPLEMENTED *****
+
+  }
+
+  :0c
+  * MAILLIST ?? report
+  {
+    LOCKFILE=tmp.mail.lock
+    :0 chw			# save a copy of the headers
+    | sed -en '1,/^[	 ]*$/s/^/    /p' >tmp.mail
+
+    :0 fhw			# generate report header to Postmaster
+    | formail   -I"From:    Mailer-Daemon <mailer-daemon>"	         \
+		-I"To:      $POSTMASTER"			         \
+		-I"Subject: Mailing list mail to old address: $OLDLOGIN" \
+		-I"X-Loop: $LOGNAME@$HOST"
+
+    :0 afbwi			# make a report
+    | echo "Mail is still being sent to $OLDLOGIN indirectly, possibly" ;     \
+      echo "through a mailing list.  The headers of the mail are supplied " ; \
+      echo "below." ;							      \
+      echo "" ; 							      \
+      echo "------------------- Original mail headers ------------------" ;   \
+      cat tmp.mail
+
+    LOCKFILE
+
+    :0 aw			# file the report
+    ! -oi -t
+  }
+
+  # forward it if NEWADDR defined, and MAILLIST includes "forward"
+  :0
+  * MAILLIST ?? forward
+  * NEWADDR ?? .
+  { # Add new headers indicating the forwarding
+    :0 fhw
+    | formail	-A"X-Loop: $LOGNAME@$HOST" 	\
+		-i"Resent-From: $OLDADDR"	\
+		-i"Resent-To:   $NEWADDR"
+    :0 aw
+    ! $NEWADDR
+  }
+
+  # Otherwise, assume a drop
+  :0
+  /dev/null
+
+}

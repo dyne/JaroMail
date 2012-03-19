@@ -1,0 +1,185 @@
+# pm-jamime-recode.rc -- re-encode MIME Header: Subject, From as quoted-printable
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Documentation
+#
+#       This subroutine supposes that message has been handled by
+#       'pm-jamime-decode.rc'. The purpose is to restore *Subject* and
+#       *From* headers back to quoted printable format so that
+#       messages can be savely saved through IMAP system which may not
+#       handle 8-bit messages. If message is stored directly to
+#       mailbox and the used Mail user Agent has no problems with
+#       dealing 8-bit characters, this module is not needed.
+#
+#	An example where this subroutine could be applied:
+#
+#	o   Feed message to `pm-jamime-decode.rc'
+#	o   Feed message `pm-jasubject.rc' (to clean multiple Re: Re: Fwd ..)
+#	o   Restore From/Subject encodings with `pm-jamime-recode.rc'
+#	o   Save message to mailbox
+#
+#   Notes
+#
+#       Perl or python is not used, because both are CPU intensive.
+#       It would be too expansive for accounts or environments
+#       receiving hundreds of mails per day (like from several mailing
+#       lists).
+#
+#   Required settings
+#
+#       Variable `PMSRC' must point to source directory of procmail code.
+#       This subroutine will include
+#
+#       o   pm-javar.rc
+#       o   pm-jamime.rc
+#       o   Program `$MIME_BIN_QP_E'
+#           must have been installed (see pm-javar.rc).
+#	o   pm-jamine-decode.rc must have been called and message must
+#	    contain headers `X-Mime-Header-Decoded-*'
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   `JA_MIME_RECODE_TREAT_SUBJECT', default "yes". Decode
+#           Subject header by removing mime.
+#       o   `JA_MIME_RECODE_TREAT_FROM', default "no". Decode
+#           From header by removing mime.
+#
+#   Return values
+#
+#       (none)
+#
+#   Examples
+#
+#       To fix Subject header and then make it 7bit clean again. Note,
+#       this may not be exactly what you want. The pm-jamime-decode.rc
+#       file does a little more than  From/Header handling (also modifies
+#       message body). Read documentation of each file before using
+#       following example
+#
+#           INCLUDERC = $PMSRC/pm-jasubject.rc
+#           INCLUDERC = $PMSRC/pm-jamime-decode.rc
+#           INCLUDERC = $PMSRC/pm-jamime-recode.rc
+#
+#   Change Log (none)
+
+dummy = "
+========================================================================
+pm-jamime-recode.rc: init:
+"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+:0
+* !  MIME_VER ?? [0-9]
+{
+    INCLUDERC = $PMSRC/pm-jamime.rc
+}
+# .......................................................... &public ...
+# User configurable sections
+
+JA_MIME_RECODE_REGEXP = ${JA_MIME_RECODE_REGEXP:-\
+"^Content-Type: *text/plain"}
+
+JA_MIME_RECODE_TREAT_SUBJECT = "yes"   # Set to "no"  to disable
+JA_MIME_RECODE_TREAT_FROM    = "no"    # Set to "yes" to enable
+
+# ........................................................... &do-it ...
+#   Run conversion if it was quoted printable.
+#   Also reflect correct MIME header
+
+#  Must be same header than in pm-jamime-decode.rc
+JA_MIME_RECODE_HEADER         = "X-Mime-Header-Decoded"
+JA_MIME_RECODE_HEADER_SUBJECT = ${JA_MIME_RECODE_HEADER}-Subject
+JA_MIME_RECODE_HEADER_FROM    = ${JA_MIME_RECODE_HEADER}-From
+
+#  Hard coded, do not change. We DO not know what chacters are in there,
+#  so we just use this encoding stanza and hope for the best.
+
+JA_MIME_RECODE_CHARSET_BEG = "=?iso-8859-1-?Q?"
+JA_MIME_RECODE_CHARSET_END = "?="
+
+dummy = "pm-jamime-recode.rc: handle quoted printable"
+
+handledSubject = "no"
+
+:0
+*   JA_MIME_RECODE_TREAT_SUBJECT ?? yes
+*$ ^$JA_MIME_RECODE_HEADER_SUBJECT
+*  ^Subject: +\/.*
+{
+    str  = $MATCH
+    bin  = $MIME_BIN_QP_E
+    beg  = $JA_MIME_RECODE_CHARSET_BEG
+    end  = $JA_MIME_RECODE_CHARSET_END
+
+    #  NOTE: not all sed (SunOS) know \t shortcuts.
+
+    new =			    \
+    `	echo "$str"		    \
+	| $bin			    \
+	| ${SED:-sed}		    \
+	  -e "s/^\(.*\)$/$beg\\1$end/" \
+	  -e 's/ /_/g'		    \
+    `
+
+    handledSubject = "yes"
+
+    :0 fhw
+    * ! new ?? ^^^^
+    | $FORMAIL				    \
+	-I "Subject: $new"		    \
+        -I "$JA_MIME_RECODE_HEADER_SUBJECT:"
+}
+
+#  This part is identical to above (Procmail does not have subroutines)
+
+handledFrom = "yes"
+
+:0
+*   JA_MIME_RECODE_TREAT_FROM ?? yes
+*$ ^$JA_MIME_RECODE_HEADER_FROM
+*  ^From: +\/.*
+{
+    str  = $MATCH
+    bin  = $MIME_BIN_QP_E
+    beg  = $JA_MIME_RECODE_CHARSET_BEG
+    end  = $JA_MIME_RECODE_CHARSET_END
+
+    new =			        \
+    `	echo "$str"		        \
+	| $bin			        \
+	| ${SED:-sed}		        \
+	  -e "s/^\(.*\)$/$beg\\1$end/"  \
+	  -e 's/ /_/g'		        \
+    `
+
+    handledFrom = "yes"
+
+    :0 fhw
+    * ! new ?? ^^^^
+    | $FORMAIL				    \
+	-I "From: $new"		            \
+        -I "$JA_MIME_RECODE_HEADER_FROM:"
+}
+
+dummy = "pm-jamime-recode.rc: end:"
+
+# End of file pm-jamime-recode.rc

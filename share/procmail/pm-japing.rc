@@ -1,0 +1,125 @@
+# pm-japing.rc -- reply shortly to message "Subject: ping"; account ok
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       When I'm on remote site and I don't seem to get throught
+#       with telnet or even with Unix ping(1), I want to know if the
+#       at least the mail server is up. I can send a ping message and the
+#       auto responder will reply immediately.
+#
+#       Sometimes, when you send a message to a person, it would be nice,
+#       if you could test that the destination address is valid, before
+#       sending a message to a black hole. If the receiver had ping
+#       service running; like this, then you would know that you spelled the
+#       the right address. (after wondering two weeks; why you don't get
+#       response). Nowadays `finger(1)' command seems to be blocked many times.
+#
+#       This recipe answers to simple ping message like this:
+#
+#           To: you@site.com
+#           Subject: ping
+#
+#       Recipe sends a short message back to the sender.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-jastore.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       (see Usage)
+#
+#   Usage example
+#
+#           JA_PING_MBOX    = $HOME/Mail/spool/ping.spool
+#           INCLUDERC       = $PMSRC/pm-japing.rc
+#
+#   Change Log (none)
+
+
+# .................................................... &initializing ...
+
+
+id    = "pm-japing.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ........................................................... &input ...
+
+JA_PING_MBOX    = ${JA_PING_MBOX:-"junk.ping"}
+JA_PING_XLOOP   = ${JA_PING_XLOOP:-"$LOGNAME ping"}
+
+# ............................................................ &code ...
+
+dummy = "$id: start:"
+
+:0
+*$   ^Subject:$s*ping$s*$
+*$ ! ^X-Loop: $JA_PING_XLOOP
+*$ ! $JA_FROM_DAEMON
+{
+    :0 fhw
+    | $FORMAIL -rt -A "X-Loop: $JA_PING_XLOOP"
+
+    #   Remember, Don't send back anything that would be vital to attacker.
+    #   It doesn't matter if the `uptime` or other scripts fail, the reply
+    #   is sent anyway.
+    #
+    #   Record this ping request
+    #
+    #   'a' Makes sure Formail succeeded and could create reply address.
+    #   HOST is your Mail delively host; the same where your programs
+    #   will run.
+
+    :0 ahwc
+    |   ( $CAT -;                                                           \
+          uptime;                                                           \
+          echo "[$HOST] User count: "; who | wc -l;                         \
+          echo "Unread mail count:"; $GREP '^From ' $DEFAULT |wc -l;        \
+        ) | $SENDMAIL
+
+    MBOX        = $JA_PING_MBOX
+    INCLUDERC   = $PMSRC/pm-jastore.rc
+}
+
+
+#   When pinging yourself
+#   the reply message comes back to you as "Re: ping"
+
+:0
+*$ ^Subject:.*\<ping\>$s*$
+{
+    MBOX        = $JA_PING_MBOX
+    INCLUDERC   = $PMSRC/pm-jastore.rc
+}
+
+dummy = "$id: end:"
+
+# end of pm-japing.rc

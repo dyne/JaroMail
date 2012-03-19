@@ -1,0 +1,283 @@
+# pm-jaube-prg-bmf.rc -- Interface to Bayesian Mail Filter program
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Warning
+#
+#       Put all your Unsolicited Bulk Emacil (aka spam) filters towards the
+#       end of your `~/.procmailrc'. The idea is that valid messages
+#       are filed first (mailing lists, your work and private mail,
+#       bounces) and only the uncategorized messages are checked last.
+#
+#       YOU CANNOT USE THIS PROCMAIL SUBROUTINE UNLESS YOU HAVE TRAINED THE
+#       BAYESIAN PROGRAM FIRST!
+#
+#       To train:
+#
+#           $ ls spam/*.mail | xargs -n 1 bmf -s # feed individual messages
+#           $ ls good/*.mail | xargs -n 1 bmf -n # feed individual messages
+#
+#       To test
+#
+#           $  bmf -p < test.mail | less
+#
+#   Overview of features
+#
+#       o   Implements interface to http://www.sf.net/projects/bmf
+#           "Bayesian Mail Filter" project. The called binary is "bmf"
+#           hence the name of this subroutine. Bmf program uses well
+#           know statistical analysis which is much more reliable than
+#           any hand made procmail scripts could ever achieve.
+#       o   Variable `ERROR' is set if the message was UBE.
+#       o   Results are available in headers `X-Spam-bmf-Status' and
+#           `X-Spam-bmf-Flag' for further analysis.
+#
+#   Description
+#
+#       There are several bayesian based statistical analysis programs that
+#       study the message's tokens and then classify it into two categories:
+#       good or bad, or if you like, ham and spam. All the Bayesian programs
+#       are not the same, so if you want to achive magic 99.99% probability
+#       the only methodology to do that is to chain several programs in
+#       serially. There is no single program that can solve the
+#       UBE detection.
+#
+#       For serious discussion of strenghts of the different programs,
+#       refer to a very good article "Spam Filters" by Sam Holden at
+#       2004-08-16 <http://freshmeat.net/articles/view/964>. The
+#       article evaluated throughly following programs:
+#
+#       o   Bayesian Mail Filter        (bayesian)
+#       o   Bogofilter                  (bayesian)
+#       o   dbacl                       (bayesian; multiple wordlists)
+#       o   Quick Spam Filter           (bayesian)
+#       o   SpamAssassin                (perl matching + bayesian)
+#       o   SpamProbe                   (bayesian)
+#       o   SPASTIC                     (procmail recipes)
+#
+#       This subroutine implements call interface to `bmf' program. Why
+#       whould you need it? Because unfortunately `bmf' by default
+#       use exactly the same headers as spamasassin and the two cannot
+#       co-operate together: bmf would overwrite existing
+#       spamassasin headers. This subroutine takes care of saving
+#       previous headers and move `bmf' results to their own
+#       `X-Spam-bmf-*' headers.
+#
+#   About bouncing message back
+#
+#       The general consensus is, that you should not send bounces.
+#       The UBE sender is not there, because the address forged. Do
+#       not increase the network traffic; you will not do any good to
+#       anybody by bouncing messgas -- you just increase mail traffic
+#       even more. Instead save the messages to folders and
+#       periodically periodically check their contents.
+#
+#   Required settings
+#
+#       If `bmf' program is available, define this variable in your
+#       `~/.procmailrc'. Use absolute path to make the external shell
+#       quick; it'll save server load considerably.
+#
+#           JA_UBE_BMF_PRG = "/usr/bin/bmf"
+#
+#       If you _do_ _not_ have program installed, do not leave the
+#       variable lying aroung, because it will keep this subroutine active.
+#       Calling a non existing program is not a good idea, so it better to
+#       empty the variable if the program is not available.
+#
+#   Required settings
+#
+#       None. No dependencies to other procmail modules.
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   JA_UBE_BMF_PRG, path to program
+#       o   JA_UBE_BMF_HEADER_PREFIX, the header name where the results
+#           are put. If not defined, no headers are added. Default
+#           value is `X-Spam-bmf'.
+#       o   JA_UBE_BMF_FORCE, if set to _yes_ then call program no matter
+#           what. Normally if there already are `X-Spam-bmf-*' headers,
+#           it is assumed that the message has already been checked
+#           and no new checking is needed.
+#
+#   Return values
+#
+#       o   ERROR, is set to short ube trigger recipe reason. Contains
+#           content of `X-Spam-bmf-Status' header which you can check
+#           for values
+#       o   ERROR_MATCH contains detailed content of
+#           `X-Spam-bmf-Status' header.
+#
+#       If headers were enabled, they will contain:
+#
+#           X-Spam-bmf-Status: Yes, hits=1.000000 required=0.900000, tests=bmf
+#           X-Spam-bmf-Flag: YES
+#
+#   Usage example
+#
+#           PMSRC            = $HOME/procmail # procmail recipe dir
+#
+#           <other checks, mailing lists, work mail etc.>
+#
+#           JA_UBE_BMF_PRG   = "/usr/bin/nice -n 5 /usr/bin/bmf"
+#           INCLUDERC        = $PMSRC/pm-jaube-prg-bmf.rc
+#
+#           #   The ERROR will contains word "yes" if it program classified
+#           #   the message into "bad" category.
+#
+#           :0 :
+#           * ERROR ?? yes
+#           junk.mbox
+#
+#   File layout
+#
+#       The layout of this file is managed by Emacs packages tinyprocmail.el
+#       and tinytab.el for the 4 tab text placement.
+#       See project http://freshmeat.net/projects/emacs-tiny-tools/
+#
+#   Change Log
+#
+#       None
+
+dummy = "
+========================================================================
+pm-jaube-prg-bmf.rc: init:"
+
+# ................................................... User variables ...
+
+#   You must define program path, because we don't know
+#   if it has been installed in this system or not
+
+JA_UBE_BMF_PRG           = ${JA_UBE_BMF_PRG:-""}
+JA_UBE_BMF_PRG_OPT       = ${JA_UBE_BMF_PRG_OPT:-"-p"}
+
+#   The header name prefix with no colon at the end. If this variable
+#   is empty, then `formail' is not called and no headers are added to
+#   the message. This saves a shell call and will make this repice a
+#   bit faster.  The return status can still be checked from variable
+#   ERROR
+
+JA_UBE_BMF_HEADER_PREFIX = ${JA_UBE_BMF_HEADER_PREFIX:-"X-Spam-Bmf-"}
+
+#   Should we run the check even if there aready were header
+#   JA_UBE_BMF_HEADER_PREFIX? Setting to 'yes' might mean:
+#
+#   o   We suspect that someone else had added the header, so don't
+#       trust it but generate our own
+#   o   We don't trust the local MDA's result (if it had invoked
+#       bmf for us), because we want' to run the message
+#       through our own trained database
+#   o   Or, we're simply testing and have several INCLUDERC=$RC_UBE_BMF
+#       calls in our ~/.procmailrc to find out what location would be the
+#       best (beginning, middle, last) by examining the procmail LOGFILE.
+
+JA_UBE_BMF_FORCE         = ${JA_UBE_BMF_FORCE:-"no"}
+
+# ............................................................ do it ...
+
+ERROR    # Kill variable
+
+# The condition below reads:
+# - Require that variable is defined (contains path to 'bmf' program)
+# - Run immediately: if there is no X-spambmf header
+# - OR Run immediately: (even if there were headers) forced evaluation
+
+:0
+*  JA_UBE_BMF_PRG ??   [a-z]
+*$ 9876543210^0    !  ^$JA_UBE_BMF_HEADER_PREFIX
+*  9876543210^0    !   JA_UBE_BMF_FORCE ?? yes
+{
+
+    #  Unfortunately bmf inserts same headers as Spamassassin (SA), so
+    #  we must first save previous SA values. Kill variables first
+    #
+    #  Note: the initial value is set here to header name, so that if
+    #  there is no previous SA headers, they will be left empty. This
+    #  works fine, because e.g. "formail -I X-Name:" does nothing when
+    #  message does not include "X-Name:" header.
+
+    dummy = "pm-jaube-prg-bmf.rc: saving previous X-Spam-* headers"
+
+    jaubeBmfSaStatus = "X-Spam-Status:"
+    jaubeBmfSaFlag   = "X-Spam-Flag:"
+
+    :0
+    *   ^\/X-Spam-Status:.*
+    * ! ^\/X-Spam-Status:.*tests=bmf
+    {
+        jaubeBmfSaStatus = $MATCH
+
+        :0
+        * ^\/X-Spam-Flag:.*
+        {
+            jaubeBmfSaFlag = $MATCH
+        }
+    }
+
+    # Now run the filter with -p "pass through".
+
+    jaubeBmfStatus
+    jaubeBmfFlag
+
+    :0 fw : bmf$LOCKEXT
+    | $JA_UBE_BMF_PRG ${JA_UBE_BMF_PRG_OPT}
+
+    # After previous call, there should be these headers. It is unfortunate,
+    # that "tests=bmf" is not included with "No" case
+    #
+    #   X-Spam-Status: No, hits=0.000000 required=0.900000
+    #   X-Spam-Status: Yes, hits=1.000000 required=0.900000, tests=bmf
+    #   X-Spam-Flag: YES
+
+    :0 a
+    * ^X-Spam-Status: \/.+
+    {
+
+        :0
+        * ^X-Spam-Status: \/.+tests=bmf
+        {
+            ERROR = $MATCH
+        }
+
+        jaubeBmfStatus = "${JA_UBE_BMF_HEADER_PREFIX}Status: $MATCH"
+        jaubeBmfFlag   = "${JA_UBE_BMF_HEADER_PREFIX}Flag:"  # Initial value
+
+        :0
+        * ^X-Spam-Flag: \/.*
+        {
+            jaubeBmfFlag = "$jaubeBmfFlag $MATCH"
+        }
+
+        dummy = "pm-jaube-prg-bmf.rc: restore X-Spam-* / add X-Spam-Bmf headers"
+
+        #   Rearrange headers nicely and put back all Spamassassin values
+
+        :0 fhw
+        * ! jaubeBmfSaStatus  ?? ^^^^
+        * ! jaubeBmfSaFlag    ?? ^^^^
+        * ! jaubeBmfStatus    ?? ^^^^
+        * ! jaubeBmfFlag      ?? ^^^^
+        | ${FORMAIL:-formail}       \
+            -I "$jaubeBmfSaStatus"  \
+            -I "$jaubeBmfSaFlag"    \
+            -I "$jaubeBmfStatus"    \
+            -I "$jaubeBmfFlag"
+    }
+}
+
+dummy = "pm-jaube-prg-bmf.rc: end: $ERROR"
+
+# pm-jaube-prg-bmf.rc ends here

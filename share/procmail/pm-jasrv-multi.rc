@@ -1,0 +1,136 @@
+# pm-jasrv-multi.rc -- send multipart MIME message, subroutine for FileSrv
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This subroutine is part of MPFS file server. Send out FILE as
+#	multipart MIME message. The message will always be base64
+#	encoded before sending.
+#
+#   Input
+#
+#	o   JA_SRV_MIME_MULTI_SEND, command to feed the composed and message
+#	    which will handle sending it as multipart MIME.
+#	o   JA_SRV_MULTIPART_THRESHOLD is the hunk size for slitting mail.
+#	o   FILE, only filename part. Included in MIME headers.
+#       o   file, absolute path to send
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+
+id    = "pm-jasrv-multi.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+fld     = ""
+ok      = "no"
+to      = `$FORMAIL -rtzxTo:`       # LOGFILE: To whom we're sending message
+
+# ........................................................ read file ...
+# Read file and base64 encode it to BODY. Flag "yes" is everything is ok
+
+:0 fbw
+| $CAT $file
+
+dummy = "$NL$id:  Base64 encoding... $NL"
+
+:0 fbw
+| $MIME_BIN_64_E
+
+    :0 a
+    {
+	ok = "yes"
+    }
+
+# ............................................... error while base64 ...
+
+
+:0
+* ok ?? no
+{
+    #   Combine this message to previous field. See pm-tips.txt
+
+    msg = "-AX-Error: $MIME_BIN_64_E failed. Notify server admin."
+    nl  nl=${fld+"$NL"}    fld="$fld${nl}$msg"
+
+    #   We might as well kill the body, because user
+    #   doesn't want to receive binary (gzip)
+
+    :0 fbw
+    | echo
+
+
+    :0 wc: $JA_SRV_LOG.$LOCKEXT
+    |   $FORMAIL -I From ${fld+"$fld"} | $SENDMAIL;                         \
+	echo "    [ja-srv; $file; $JA_SRV_FROM;]"                           \
+	>> $JA_SRV_LOG;
+
+}
+
+# ................................. base64 succeeded, send multipart ...
+
+:0
+* ! ok ?? no
+{
+    dummy   = "$NL$NL$id:  Sending multipart message:$NL  $to$NL  $file$NL"
+
+
+    type    = "application/octet-stream"
+    coding  = "base64"
+    comment = "This is MIME multipart. You must assemble every part$NL\
+  together in sequential order. Then decode, cat BODY| mmencode -u > $FILE$NL"
+
+    :0 fhw
+    | $FORMAIL                                                              \
+	-I From                                                             \
+	-I "Content-Type: $type"                                            \
+	-I "Content-Transfer-Encoding: $coding"                             \
+	-I "Content-Disposition: attachment; filename=\"$FILE\""            \
+	-I "Content-Description: $comment"
+
+    :0 wc
+    | $JA_SRV_MIME_MULTI_SEND
+
+        :0 a hwic:
+        | echo "    [ja-srv; $type $file; $JA_SRV_FROM;]"                   \
+          >> $JA_SRV_LOG;
+
+    :0 E
+    {
+	dummy = "$NL$NL$id: $JA_MSG_ERROR ERROR While calling $JA_SRV_MIME_MULTI_SEND $NL"
+
+        :0 hwic:
+        | echo "    [ja-srv; SENDMAIL FAIL $type $file; $JA_SRV_FROM;]"     \
+          >> $JA_SRV_LOG;
+    }
+
+}
+
+
+
+#   kill body contents before saving to log
+
+:0 fbwi
+| echo
+
+
+dummy = "$id: end:"
+
+# Enf of pm-jasrv-multi.rc

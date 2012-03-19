@@ -1,0 +1,103 @@
+# pm-jasrv-from.rc -- compose reply, subroutine for File Server
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This subroutine is part of the MPFS file server.
+#       Compose headers for reply message using `formail' -rt.
+#
+#       Here is dry run example to test this module
+#
+#	    % procmail DEFAULT=/dev/null VERBOSE=on LOGABSTRACT=all         \
+#		FORMAIL=/opt/local/bin/formail                              \
+#		JA_SRV_FORMAIL_FROM=me@here                                 \
+#		JA_SRV_CONTENT_TYPE=content-type                            \
+#		JA_SRV_XLOOP=xloop                                          \
+#		$HOME/pm/pm-jasrv-from.rc				    \
+#	        < $HOME/any-sample.email
+#
+#   Input
+#
+#       o   JA_SRV_FORMAIL_FROM, JA_SRV_XLOOP
+#       o   JA_SRV_CONTENT_TYPE
+#
+#   Output
+#
+#       (none)
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+
+id    = "pm-jasrv-from.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+
+#   add initial headers. The MIME headers may
+#   very well change later on
+
+dummy = "$id: Preparing reply."
+
+#   This a bit special. When we construct reply to user with formail
+#   -rt, the From address would include the address where your
+#   server is. That't usually fine.
+#
+#   But if you have some virtual or `contact' address that you want
+#   poeple to use instead of the current address where are, then you
+#   want to rewrite the `From' field. Hm. You could also add Reply-To,
+#   but suppose you don't want to show the real address at all.
+#
+#   If you set JA_SRV_FORMAIL_FROM variable, then the email address
+#   appears in From field. If you don't define the variable, a normal
+#   formail -rt is used.
+#
+#   Adding "From:" automatically adds From_, get rid of it too
+#
+#	NOTE: We must put something into `header'; because the above formail
+#	fails if the header contains only "". In here we duplicate the
+#	harmless call to "-aMessage-ID:"
+
+header  = "-aMessage-ID:"
+
+:0
+* JA_SRV_FORMAIL_FROM ?? [a-z]
+{
+    header =  "-AFrom: $JA_SRV_FORMAIL_FROM"
+}
+
+
+:0 fhw
+| $FORMAIL -rt                                                              \
+    -a  Message-ID:                                                         \
+    -A "Mime-Version: 1.0"                                                  \
+    -A "Content-Type: $JA_SRV_CONTENT_TYPE"                                 \
+    -A "Content-Transfer-Encoding: 7bit"                                    \
+    -A "Precedence: bulk"                                                   \
+    -A "X-Loop: $JA_SRV_XLOOP"                                              \
+    -I "From "                                                              \
+    ${header+"$header"}
+
+
+#    test = `$CAT - >> $HOME/tmp/srv.tst`
+
+
+dummy = "$id: end:"
+
+# Enf of pm-jasrv-from.rc

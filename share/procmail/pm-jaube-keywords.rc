@@ -1,0 +1,785 @@
+# pm-jaube-keywords.rc -- Bare bones word list based UBE filter
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Warning
+#
+#       Put all your UBE (aka spam) filters towards the _end_ of your
+#       ~/.procmailrc. The idea is that valid messages are filed
+#       first (mailing lists, your work and private mail, bounces) and only
+#       the uncategorized messages are checked.
+#
+#       Now, if 50-70 % hit rate is good enough for your starting point,
+#       go ahead and read more. This file is supposed to be the last resort,
+#       if you really do not have any better tool to analyze messages.
+#
+#   Overview of features
+#
+#       o   Word and phrase based matching
+#       o   50-70 % success rate. 90 % never achieved. That's a guarantee.
+#       o   Extremely fast and a dream to CPU resources. Implemented in pure
+#           procmail and you can almost hear the humming sound of its
+#           regular expression engine shredding UBE messages to pieces.
+#
+#   Description
+#
+#       Are you sure you want use this word list based checking?
+#
+#       Think twice before you use this subroutine. It knows nothing about
+#       the content your mail. "It's all UBE unless proven otherwise" is the
+#       motto. The brutal search tracks words and phrases to find an indication
+#       of mass posting and traces of Unsolicited Bulk Email (UBE aka spam).
+#       _Repeat:_ Read the first paragraph again before you consider putting
+#       this file into action. This filter WILL PASS through unwanted mail
+#       and it WILL catch good mail. This is rule based matching, so I suppose
+#       you know where you're putting your head with this. Ahem. Alerted? Good.
+#
+#      The Story
+#
+#       There was a man and mail account. The account had limited space,
+#       couldn't install any other programs because disk quota would have
+#       exceeded. System administrators weren't' interested in installing
+#       anything. The Mail server ran behind firewall and had OS that was
+#       never heard of - it couldn't run other programs. Or if it could,
+#       the Bad system administrator was too scared to install extra
+#       programs to the host MTA ran. No joy -- no means to stop incoming
+#       UBE -- Right?
+#
+#       Wrong. There was procmail. The Bad system adminitrator didn't mention
+#       that `~/.procmailrc' was honored - just the the external programs
+#       we a no-no-no (Technical: the MDA host mounted user disks; the
+#       server ran on separate host and couldn't use any of the user
+#       compiled programs. Statically linked ones filled up the man's disk
+#       space).
+#
+#       First line of defense, any defense would do. So, this rule based
+#       file was born. Nothing else was installed in that account and the
+#       happy word list based matching routine kept chewing mail, mail,
+#       mail. And the system administrator was happy - he nurtured the MTA
+#       host's CPU resources and noticed nothing alarming. All ticked like
+#       clockwork.
+#
+#       Life began again. After 1000 mail bombards a day, the account was
+#       usable again.
+#
+#      Motivation
+#
+#       If you can, use the Bayesian filters and forget all rule based
+#       ones, word and phrase matching based ones; all static filters. On
+#       the other hand, if you want quick solution, even imperfect, until
+#       you have time to learn and setup other tools, this subroutine may
+#       be of interest.
+#
+#       The best part. You can carry this single file anywhere where procmail
+#       lives. No other files are needed. Setup couldn't be simpler.
+#
+#   About bouncing message back
+#
+#       The general consensus is, that you should not send bounces. The UBE
+#       sender is not there, because the address is usually forged. Do not
+#       increase the network traffic. Instead save the messages to folders
+#       and periodically check their contents. It's not nice to be forced to
+#       apologize about bounces to a wrong destination.
+#
+#   Code Note
+#
+#       Procmail is picky about the whitespace in continuing lines, make sure
+#       there is _not_ a single spaces left after the continuation backslash.
+#       Use good editors or external programs to get rid of the white spaces. In
+#       Emacs you would add this line to your `~/.emacs' startup file:
+#       "(add-hook 'write-file-hooks 'delete-trailing-whitespace)"
+#
+#           :0
+#           * ^Subject:.*(regexp\
+#                   |and-more\
+#                   |and-more\
+#                   )
+#           {
+#               # Process it
+#           }
+#
+#       Why are the regexps put into this file and not to a separate regexp
+#       file? Good question. It is possible to check message's content with
+#       external process, like `grep', to see if any matches are found.
+#       This kind of methodology is covered in Procmail Tips section
+#       "Using grep with file lists to mach messages" at
+#       <http://pm-tips.sf.net>. The reason why all the regexp are maintained
+#       inside this file is:
+#
+#       o   Simplicity. One file - no extra configuration files or regexp
+#           databases.
+#       o   Self standing. Does not call external processes, so it's a little
+#           faster than possible `grep' and `fgrep' solution.
+#
+#   Required settings
+#
+#       None. No dependencies to other procmail modules.
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   JA_UBE_KEYWORD_HEADER, if set, then the results are put to
+#           messages headers. By default this variable is not defined
+#           to save from external `formail' process call.
+#           Suggestion: "X-Spam-JaubeKwd"; without trailing colon.
+#
+#   Return values
+#
+#       o   `ERROR_STATUS' is set to word "Bad" otherwise empty.
+#       o   `ERROR' is set to short descriptive word that indicate which
+#           rule was matched. Values: *Header-FromKeywords*,
+#           *Header-SubjectKeywords* and *Body-Keywords*
+#       o   `ERROR_MATCH' is set to some words that happened to trigger
+#           UBE catch rule.
+#
+#   Usage example
+#
+#           PMSRC     = "/path/to/procmail/lib"
+#           #   Exclude these addresses from tests
+#           VALID_FROM = "(my@address.example.com|word@here.example.com)"
+#
+#           :0
+#           *$ ! ^From:.*$VALID_FROM
+#           *  !  FROM_DAEMON
+#           {
+#               INCLUDERC = $PMSRC/pm-jaube-keywords.rc
+#
+#               #  Variable "ERROR" is set if message was UBE
+#
+#               :0 :
+#               * ! ERROR ?? ^^^^
+#               junk.ube.spool
+#           }
+#
+#   File layout
+#
+#       The layout of this file is managed by Emacs packages tinyprocmal.el
+#       and tinytab.el for the 4 tab text placement.
+#       See project http://freshmeat.net/projects/emacs-tiny-tools/
+#
+#   Change Log
+#
+#       None.
+
+dummy = "
+========================================================================
+pm-jaube-keywords.rc: init:"
+
+
+#######################################################################
+#
+#   User configurable variables. Set these, before calling this
+#   module/subroutine.
+#
+#######################################################################
+
+#   Set to a empty to suppress external shell call to `formail'.
+
+JA_UBE_KEYWORD_HEADER = ${JA_UBE_KEYWORD_HEADER:-"X-Spam-JaubeKwd"}
+
+#######################################################################
+#
+#   Private variables. Do not touch
+#
+#######################################################################
+
+#   Kill variables or set default values
+
+ERROR
+ERROR_MATCH
+ERROR_STATUS
+
+NL      = "
+"
+LF      = $NL                   # synonym, linefeed
+CR      = ""                  # Carriage return
+TAB     = "	"               # \t character, you won't see it.
+WSPC    = " $TAB"               # whitespace in procmail: space + tab
+
+#   These are the variables that you're likely to use in
+#   condition lines. Notice that there is Perl styles `s' variable
+#   for shorter name for most used SPC.
+
+SPC     = "[$WSPC]"             # Regexp space/tab
+NSPC    = "[^$WSPC]"            # Negation, non-whitespace
+CHAR    = "[^ $TAB$NL$CR]"      # A character
+
+#   Whitespace with linefeed
+#   Note that in regexps, the character class is faster that OR.
+#   Refer to O'Reilly book "Mastering Regular Expressions"
+#
+#       space + tab + dollar
+#
+#       ( | |$)  is slower than ([ ]|$)
+
+SPCL   = "($SPC|$|$CR)"         # space or tab; linefeed; Carriage return
+
+jaubeKwdLinebufOld  = $LINEBUF
+LINEBUF             = 65535          # Increase
+
+jaubeKwdVerboseOld  = $VERBOSE      # don't write log for these variables
+VERBOSE             = off
+
+# German, Spanish and other languages
+
+jaubeLanguage="(\
+[a-z] (con|m[ae]s|para) [a-z]\
+|\<aloha\
+|\<bitte\>\
+|\<arbeitet\
+|\<bail[ae]\
+|\<damen\
+|\<ganz\
+|\<herren\
+|\<bestaetigung\
+|\<contenidos\
+|\<fabricamos\
+|\<freundlichen\
+|\<kontakte\
+|\<seguridad\
+|<\ihre\
+|\<jetzt\
+|\<keine?\>\
+|\<kontakt\
+|\<telefono\
+|\<tenga\
+|\<totalmente\
+|\<trabaj\
+|\<vacantes\
+)"
+
+#       English words. These keywords must be strict, because they are used
+#       BOTH in header and body.
+
+jaubeKeywords="(\
+[0-9][0-9.]* +per +(month|year)\
+|\<18th\>\
+|\<accessor(y|ies)\
+|\<acne\>\
+|\<adult\>\
+|\<advertis\
+|\<adorn\
+|\<a+n+a+l\
+|\<aphrodi\
+|\<affordable\
+|\<at + no +charge\
+|\<babe\>\
+|bachelor\
+|\<be\>.*\<(again|strong)\
+|bedroom\
+|bewitch\
+|\<bitch(es)?\>\
+|\<biz\>\
+|\<blonde\>\
+|\<bodyguard\
+|\<bondage>\
+|\<boob([sy]|ed)?\>\
+|boyfriend\
+|\<breast\
+|\<brunette\
+|\<bucks\>\
+|business +on our\>.*\<site\>\
+|\<call +[+]?[0-9][0-9]\
+|\<call +(me|us)\>\
+|\<cash\>\
+|\<cable +tv\
+|calsium\
+|cartoon\
+|cartridge\
+|casino\
+|celebrit\
+|\<censor(ed)?\>\
+|\<cheap(er|est)?\>\
+|cholesterol\
+|C[|i]+a[|]*1is\
+|\<clinic\
+|\<click +here\
+|\<clits?\>\
+|\<cocaine\
+|\<cock\>\
+|\<congrat\
+|confiden(c|tial)\
+|confrontation\
+|consultation\
+|\<cutie\
+|\<credits?\>\
+|\<cum(shots?)?\>\
+|\<daughter\
+|\<(dating|escort) +service\
+|\<deal.*to.*\<you\
+|\<dear.*(user|owner)\
+|\<defensa\
+|\<delight\
+|\<dental\
+|depressant\
+|detective\
+|\<diabet\
+|\<dick\>\
+|\<dildo\>\
+|diploma\
+|discreet\
+|\<do +you +like\
+|\<doctor\
+|domestic\
+|download.*today\
+|dramatic\
+|drugs\
+|earnings\
+|\<eighteen\
+|erection\
+|eroti[ck]\
+|fair +exchange\
+|exchange +rate\
+|exquisite\
+|\<fags\>\
+|farmac[yo]\
+|fashion\
+|female\
+|financ(e|ial)\
+|filing.*quotes\
+|\<films?\>\
+|filthy\
+|fitness\
+|\<for .*your.*Needs\
+|\<f+u+c+k\
+|\<funds?\>\
+|\<g+a+y+\>\
+|get it for (just)?.*[$]\
+|get +perfect.*your\
+|get +(lucky|fucked)\
+|Get +the +best\
+|girls?\>\
+|get +(a|for)? *free\
+|\<granny\
+|greetings\
+|gouranga\
+|h+a+r+d+c+o+r+e\
+|herbalife\
+|(hi|hello|hey)[.!?]* +(people|lucky)\
+|\<hot\>\
+|\<honey\>\
+|horoscope\
+|hurry +(now|fast)\
+|\<job +offer\
+|\<husband\
+|\<illnes\
+|\<income\
+|\<in +bed\
+|\<invest(ment)?\>\
+|\<interest +rates\>?\
+|\<iraq\
+|just .*$d+.*days\
+|\<jude\>\
+|\<kenedy\
+|laboratory\
+|\<laden\>\
+|\<lad(y|ies)\>\
+|legislation\
+|lesbian\
+|\<libido\
+|lifestyle\
+|(limited|special|future)\>.*\<offer\
+|\<li+m+i+t+e+d.*time\
+|lingerie\
+|\<lo+l+i+t+a+\
+|\<lose +(some)? *(weight|pounds)\
+|losing +it +all\
+|\<low.*rate\
+|\<loan\
+|\<lott(o|ery)\>\
+|madam\
+|mafia\
+|manhood\
+|\<marine\<\
+|masturbat\
+|medic(a[lt]|in)\
+|mexican\
+|money\
+|mortgage\
+|movie\
+|\<new.*<(video|dvd|cd)s?\>\
+|nigeria\
+|nipple\
+|offer.*valid\
+|offshore\
+|<\oil\>\
+|oppurtun\
+|\<orgy\>\
+|\<our +(company|product)\
+|order +(soon|now|fast)\
+|pain killer\
+|paycheck\
+|paying\
+|\<partner\
+|\<pence\
+|\<penis\>\
+|\<pharmae?c\
+|\<poker\
+|\<prank\
+|\<pregnan\
+|\<p[0o]+rn\
+|\<polls?\>\
+|\<profit\>\
+|promotion\
+|prostitute\
+|\<puss(y|ies)\>\
+|\<rape\>\
+|\<rates +starting +at\
+|\<realestate\
+|refinance\
+|regalis\
+|(restaurant|food) +recipe\
+|\<rich\>\
+|robbery\
+|\<rolex\
+|\<sadd?am\
+|sadomasokism\
+|satellite.*\<(tv|dish)\>\
+|\<(sav(ing|e)|buy|see|web).*\<(pills|meds|m +e +d +s)\>\
+|\<scent\>\
+|screensaver\
+|\<sex\>\
+|\<sin\>\
+|since we've chatted\
+|\<silver\
+|\<singles\
+|\<sir\>\
+|\<s[i|]ze +(real[a-z|]+ +)*matters?\>\
+|\<sluts?\>\
+|sperm\
+|stamina\
+|stocks?\
+|sydney\
+|\<save .*[0-9]+ *%\
+|\<(secretary|wom[ea]n|girl|nude|teen).*\<strip\
+|sweetheart\
+|\<tax\>\
+|\<teeny?(ie)?s?\>\
+|terrorist\
+|\<trad(e|ing)\
+|tobacco\
+|\<try .* our\>\
+|\<USD? *[$]\
+|\<[$][0-9][0-9.,]*[0-9]\>\
+|\<uncle\>\
+|Unauthorized access.*paypal\
+|u+n+d+e+r+a+g+e\
+|update.*your.*(bank)\
+|\<vegas\
+|\<venture\>\
+|\<v[1i@.,!:;?]a+[:]*g+[:]*r+[:]*a\
+|\<v[^ ]+gra\>\
+|v[i|]+aggar\
+|\<vip\>.*visitor\
+|view +my +profile\
+|wanted you to hear about.*\<new\
+|\<wanna\
+|\<we +specialize\
+|\<weight[ -]+loss\
+|welcome +to +our\
+|\<h[0o]usew[1i]f\
+|\<webcam\
+|\<women acting\
+|\<wom[ae]n.*your.*area\
+|\<your?\>.*\<(benefit|w[io]n|satisf|payment|pri[zc]e|need|loan)\
+|\<your on\
+|\<you're on\
+|\<you search for something\
+|\<your cr[a-z.]* (rating|record)\
+|\<you can be\>.*\<(safe|secure)\
+|\<youth\
+|$jaubeLanguage\
+)"
+
+#  Some regexps cannot be used, because they would easily match legimite mail:
+#
+#  - "your.*address" would match
+#    Please confirm your XXX Forwarding Address
+#  - "charm" would match
+#    works like a charm...
+#
+#  Notes:
+#  - Regalis, Cialis are viagra drugs
+
+jaubeSubjectKeywordsOnly="(\
+[?][?]\
+|!!\
+|(\$|USD) *[0-9][0-9.,]\
+|\<(down|king).*size\
+|\<(try|do).*<(it|now|today)\
+|\<(offer|receive).* you\
+|\<(china|korea|usa|europe|australia|r+u+s+i+a|ira[qn]|beijing|iraq)\
+|\<(bush|clinton)\>\
+|\<(tv|she|us|hi|heya?|hiya|hello|win|ink|pics?|yo)\>\
+|\<action\
+|\<advisor\
+|\<aging\>\
+|anytime\
+|anywhere\
+|attractive\
+|\<are you\>\
+|\<ass\>\
+|\<award(ing)?\>\
+|\<back +to\
+|\<be +successful\
+|\<believ\
+|\<belowed\
+|\<bid\
+|\<[bm]illion\
+|\<blowjob\
+|\<bonus\>\
+|\<breath\
+|\<bringing\
+|bulk_mailer\
+|\<busines\
+|\<buy\
+|\<camera\
+|\<candle\
+|\<cds?\>\
+|\<charge\
+|\<che+a+[pt]\>\
+|\<check.*\<out\>\
+|\<child\>\
+|\<ciao\
+|\<cigar\
+|\<cold\
+|\<contact.*\<(bank)\
+|\<coral\
+|\<cost\
+|\<coupon\
+|\<dance\
+|\<dear\>\
+|\<(debt|debs)\>\
+|\<density\
+|\<deserve\
+|\<diet\
+|\<digital\
+|\<discount\
+|\<d[0o]llar\
+|\<don't +be\
+|doesn't.*\<(hurt)\
+|\<dudes?\>\
+|\<dvds?\>\
+|\<dying\
+|\<earn\
+|effortless\
+|eliminate\
+|\<employ\
+|\<enjoy\
+|\<enlarge\
+|\<expedition\
+|find +out\
+|fingering\
+|\<free\>.*(website|download)\
+|\<for\>.*\<you.*(order|self)\
+|\<fortune\
+|\<fountain\
+|\<friend\
+|\<fun\>\
+|\<g[eo]t +some\
+|\<gain\
+|\<g[eo0]t\>.*\<(smart)\
+|\<go.* for\
+|\<gold\
+|good +day\
+|governor\
+|\<got +it\
+|\<gratis\
+|\<guarant\
+|\<health\
+|\<hold +of\
+|\<hope\
+|\<h[0o]use\
+|\<hussy\
+|\<humble\
+|\<instant\
+|\<is your\>\
+|\<judical\
+|\<large\
+|\<life\
+|\<love\
+|\<luck\
+|\<make\>.*\<(her)\
+|\<master\>\
+|\<market\
+|\<mastercard\
+|\<mobile\
+|\<more[!?]\
+|\<movie\
+|\<mp3\
+|\<muscle\
+|\<music\
+|newsletter\
+|\<now!? \
+|\<nurtur\
+|\<oil\>\
+|\<online.*web\
+|\<our\>\
+|\<overnight\
+|\<paid\>\
+|\<pay\>\
+|\<passi[o0]\
+|\<pda\>\
+|\<personal\
+|\<phone\
+|\<photo\
+|\<picture\
+|\<pills?\>\
+|\<premier\
+|\<prescri[pb]\
+|\<pound\
+|president\
+|\<pretty\>\
+|\<prices?\
+|\<propagand\
+|\<reciprocal\
+|\<representative\
+|\<refill\
+|\<sales?\>\
+|\<screensaver\
+|\<see\>.*\<this\>.*(www|web|site|page)\
+|\<sell\>\
+|\<sensati\
+|\<sense\
+|\<she\>.*(happy|try|tried)\
+|\<shop\
+|\<sincer\
+|\<sisters?\>\
+|\<smok(e|ing)?\>\
+|\<solicit\
+|\<spend\>\
+|\<spirit\
+|\<stress\
+|\<stock\
+|\<summer\>\
+|\<super\
+|\<swallow\
+|\<seeking.*assistance\
+|\<target\
+|\<thank +you\
+|\<the +time\
+|\<thin\
+|thousand\
+|\<time +to\
+|\<today\
+|\<toner\
+|\<tons\>\
+|\<travel\
+|\<try\>\
+|\<typing\
+|\<ultimate\
+|\<(university|college) .*(degree|diploma)\
+|\<up +to\
+|\<urgent\
+|\<utmost\
+|\<video\
+|\<visitor\
+|\<wash\
+|\<watch\
+|\<we +ship\
+|\<we need your\
+|\<weather\
+|\<welcome\
+|\<wife\
+|\<wines?\>\
+|\<wish\
+|\<w[oi]n\>\
+|\<wom[ae]n\
+|\<work.*\<for\>\
+|XXX\
+|yellow +page\
+|\<young\
+|$jaubeKeywords\
+)"
+
+#  Restore saved values
+
+VERBOSE = $jaubeKwdVerboseOld
+
+dummy="pm-jaube-keywords.rc: TEST Subject keywords"
+
+:0
+*$  ^Subject:.*\/$jaubeSubjectKeywordsOnly$CHAR*
+{
+    ERROR       = "Header-SubjectKeywords"
+    ERROR_MATCH = "$MATCH"
+}
+
+dummy = "pm-jaube-keywords.rc: TEST Header From keywords"
+
+:0
+*$  ^From.*()\/$jaubeKeywords$CHAR*
+{
+    ERROR_MATCH = "$MATCH"
+
+    :0
+    * ERROR ?? ^^^^
+    {
+        ERROR = "Header-FromKeywords"
+    }
+    :0 E
+    {
+        ERROR = "$ERROR:Header-FromKeywords"
+    }
+}
+
+dummy = "pm-jaube-keywords.rc: TEST body keywords"
+
+:0
+*$ B ?? ()\/$jaubeKeywords$CHAR*
+{
+    ERROR_MATCH  = "$MATCH"
+
+    :0
+    * ERROR ?? ^^^^
+    {
+        ERROR = "Body-Keywords"
+    }
+    :0 E
+    {
+        ERROR = "$ERROR:Body-Keywords"
+    }
+}
+
+:0
+* ! ERROR ?? ^^^^
+{
+    ERROR_STATUS = "Bad"
+
+    #  strip leading and trailing whitespace.
+
+    :0
+    * ERROR_MATCH ?? ^^[$WSPC]
+    * ERROR_MATCH ?? ()\/[^$WSPC].*[^$WSPC]
+    {
+	ERROR_MATCH = "$MATCH"
+    }
+
+    :0
+    * ! JA_UBE_KEYWORD_HEADER ?? ^^^^
+    {
+	jaubeKwdInfo   = "$ERROR $ERROR_MATCH"
+	jaubeKwdHeader = "$ERROR_STATUS $jaubeKwdInfo"
+
+	:0 fw
+	| ${FORMAIL:-"formail"} \
+	  -I "$JA_UBE_KEYWORD_HEADER: $jaubeKwdHeader"
+    }
+}
+
+LINEBUF = $jaubeKwdLinebufOld
+dummy   = "pm-jaube-keywords.rc: end: $ERROR_STATUS $ERROR"
+
+# pm-jaube.rc ends here

@@ -1,0 +1,214 @@
+# pm-janetmind.rc -- handle http://minder.netmind.com/ messages
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	** THIS MODULE IS OBSOLETE. THE NETMIND SERVICE NO LONGER EXISTS **
+#
+#       http://minder.netmind.com/
+#
+#       ...Netmind, or The URL-minder is a free, automatic Web-surfing robot
+#       that keeps track of changes to Web pages that are important to you.
+#       When the URL-minder detects changes in any of the Web pages you
+#       have registered, it sends you e-mail. an effective way to test if
+#       the address is known to Internet. You could use this information to
+#       see if some automated reply to a address can be sent.
+#
+#
+#       In another words, if you're interested in some URL; say an FAQ page
+#       and any updates to them, you can tell Netmind to monitor the page
+#       changes for you and it send a message back every time page changes.
+#
+#       This recipe "pretty formats" the announcement sent by Netmind
+#       by stripping the message to bare minimum. You usually aren't interested
+#       in 4k message which includes "Note from our sponsors", "Try the free
+#       online demo" etc. The things saved from the announcement message are:
+#
+#       o   The changed url, which is moved to subject
+#       o   Cancellation url pointer
+#       o   url to the lists of your monitored urls
+#       o   your id number
+#
+#       [Note]
+#
+#       Please let Netmind send you one "pure" message first so that you
+#       have a huch what it originally looks like. Then plug int his module
+#       and see how the original message is reduced.
+#
+#       [Thank you]
+#
+#       The Doctor What <docwhat@holtje-christian-isdn.mis.tandem.com>
+#       1998-03-12 send me a patch, where a)body message is more informative
+#       b) URL is now included in the body for auto-click browsers c)
+#       mime headers were removed.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   If you se variable JA_NETMIND_SUBJECT to "yes", then the changed
+#           url http pointer is put to subject line.
+#
+#   Usage example
+#
+#           INCLUDERC = $PMSRC/pm-janetmind.rc          # reformat the message
+#
+#           :0:                                         # drop to folder
+#           * netmind
+#           url.mbox
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+
+
+
+id    = "pm-janetmind.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+
+# Are we allowed to change the Subject?
+
+JA_NETMIND_SUBJECT = ${JA_NETMIND_SUBJECT:-"no"}
+
+# ........................................................... &do-it ...
+# catch both "From" and "From:" header lines
+
+:0
+* ^From.*netmind\.
+{
+    # ............................................... change subject ...
+    #   Get the changed page and put it into subject line: you see immediate
+    #   what page has changed when you browse your mailbox summary.
+
+    subject = ""
+
+    :0
+    *$ ^Subject:\/.*
+    *$ MATCH ?? ()\/$a.*
+    {
+        subject = $MATCH
+    }
+
+
+    :0
+    *$ 1^1 B     ?? new changes in:$SPCL+\/.*
+    *$ 1^1 B     ?? changed page, +visit:($)\/.*
+    *$ MATCH ?? ()\/$a.*
+    {
+
+        TheUrl = $MATCH
+
+        :0 fhw
+        * JA_NETMIND_SUBJECT ?? yes
+        | $FORMAIL -I "Subject: $MATCH"
+
+    }
+
+    # .................................................. change body ...
+    #   The message from URL-minder is roughly 4k and lot of the information
+    #   is useless. There is "note from out sponsor", how to stop requesting
+    #   messages etc.
+
+    # To retrieve the password
+
+    pass = ""
+
+    :0
+    * B ?? ()\/http.*netmind.*responder.*
+    {
+        pass = $MATCH
+    }
+
+    #  To update your account visit
+
+    update = ""
+
+    :0
+    *$ B ?? ().*update.*account.*($)\/.*
+    {
+        update = $MATCH
+    }
+
+
+    #   Save the cancel information
+
+    cancel = ""
+
+    :0
+    *$ B ?? ^To$s+cancel.*this.*($)\/.*
+    {
+        cancel = $MATCH
+    }
+
+    #   Save "NetMind List" pointer: list of monitored urls
+
+    cancelAll = ""
+
+    :0
+    *$ B ?? ^To$s+cancel.*all.*($)\/.*
+    {
+        cancelAll = $MATCH
+    }
+
+    # .......................................................... body ...
+    # modify the body only if we got enough matches
+
+    dummy = "$id: changing message contents"
+
+    :0
+    * update        ?? [a-z]
+    * cancel        ?? [a-z]
+    * cancelAll     ?? [a-z]
+    {
+
+        #   Remove the mime headers, the message is no longer MIME.
+
+        :0 fhw
+        | $FORMAIL -I "Content-Type:" -I "Mime-Version:"
+
+        #   Avoid multiple echo commands and put message into one string
+
+        msg = "Subject : $subject${NL}Changed : $TheUrl${NL}Update  : $update"
+        msg = "$msg${NL}${NL}Cancel this: $cancel${NL}Cancel all : $cancelAll"
+
+        :0 fbw
+        |   echo "$msg$NL"
+
+    }
+    :0 E    #else statement
+    {
+        dummy = "$id: $JA_MSG_ERROR the message format has changed"
+        dummy = "$id: $JA_MSG_ERROR send copy to maintainer of the module"
+    }
+
+}
+
+dummy = "$id: end:"
+
+# end of file pm-jadate.rc

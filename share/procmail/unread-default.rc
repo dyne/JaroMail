@@ -1,0 +1,48 @@
+# unread-default.rc
+#
+# procmail recipe to compute how many unread messages
+# for the $DEFAULT delivery.
+#
+# $Id: unread-default.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+#    Copyright (C) 1995  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+#
+# Just count how many messages in $DEFAULT
+
+
+UNREAD=no			# default output
+
+# There are two basic methods: a fast way and a slow way
+
+# The fast way (loses sometimes -- but, really, who cares? we're
+# just counting unread messages.)
+
+:0
+* ? test -f $DEFAULT
+{ UNREAD=`egrep -c '^From ' $DEFAULT` }
+
+# The slow way, but, the "procmail" way :^)
+#
+#:0
+#* ? test -f $DEFAULT
+#{ JUNK=`formail -e -s echo -n x < $DEFAULT`
+#  :0
+#  * JUNK ?? 1^1 x
+#  { UNREAD = $= }
+#}

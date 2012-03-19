@@ -1,0 +1,75 @@
+#
+# list-addr.rc
+#
+# Get a mailing list address, if possible.
+#
+
+:0
+* DEBUG ?? .
+{ SENDMAIL=true
+  LOGABSTRACT=all
+  VERBOSE=yes }
+
+INCLUDERC=headers.rc
+
+# There seems to be a new convention to provide sub/unsub info on
+# informational headers.  The following is an attempt to discover
+# if there is any header which contains the patter .*-request.
+# If so, it's a good bet that the string is the list request address.
+
+:0 H
+* $\/${USERADDR}-request@$HOSTADDR
+{ LISTADDR=$MATCH }
+
+# Okay, if that didn't work, now we do some heuristic lookups of
+# well-known list mailer addresses.
+
+# However, we must do this carefully, because some mails have the
+# "From:" or "Sender:" set to "BLAH-request" or "BLAH-owner", but
+# the "From " header has "Daemon" or "Root".  The problem is that
+# just doing a "^$FROM\/$LIST_MAILERS" will always match the "From "
+# header if it was from "root" or "daemon", even though the more
+# useful address is on the subsequent "Resent-From:" or "Sender:"
+# header.  This is why the multi-line condition below
+
+:0 EH
+* $!^Resent-Reply-To:$PRE_ADDR_SPAN\/$LIST_MAILERS@$HOSTADDR
+* $!^Resent-Sender:$PRE_ADDR_SPAN\/$LIST_MAILERS$HOSTADDR
+* $!^Resent-From:$PRE_ADDR_SPAN\/$LIST_MAILERS$HOSTADDR
+* $!^Reply-To:$PRE_ADDR_SPAN\/$LIST_MAILERS$HOSTADDR
+* $!^Sender:$PRE_ADDR_SPAN\/$LIST_MAILERS$HOSTADDR
+* $!^From:$PRE_ADDR_SPAN\/$LIST_MAILERS$HOSTADDR
+* $!^X-Envelope-From:$PRE_ADDR_SPAN\/$LIST_MAILERS@$HOSTADDR
+* $!^From $PRE_ADDR_SPAN\/$LIST_MAILERS@$HOSTADDR
+{
+  :0
+  * $ $FROM$LIST_MAILERS@$HOSTADDR
+  { LISTADDR=$MATCH }
+}
+
+# Cool.  We matched one of the headers from above
+:0 E
+{ LISTADDR=$MATCH }
+
+# This stuff only happens in DEBUG mode
+# ie:   procmail -DDEBUG -m list-addr.rc <testmail
+#
+
+:0
+* DEBUG ?? .
+{
+  :0
+  * LISTADDR ?? .
+  { LOG="List address = $LISTADDR
+" }
+
+  :0E
+  { SENDER=`formail -zxSender:`
+    :0
+    * $ SENDER ?? @\/$HOSTADDR
+    { ORIGHOST=$MATCH
+      LOG="Postmaster = Postmaster@$ORIGHOST
+"   }
+  }
+  HOST=bye
+}

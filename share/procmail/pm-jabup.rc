@@ -1,0 +1,140 @@
+# pm-jabup.rc --  Keeep N arriving message backup in separate directory
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	Preserve last N arriving messages in a separate sub-directory.
+#	This should be your safety-belt recipe that you put to the beginning
+#	of your .procmailrc.
+#
+#	Procmail saves the backup files with names like: msg.rcG  msg.scG
+#	msg.3YS1, msg.4YS1, msg.VYS1, msg.fYS1 to the backup directory.
+#
+#	Note: this recipe will alawys call shell commands for each message
+#       you recive. That is needed because cleaning of the backup directory.
+#       If you receive only small number of messages per day, the performance
+#       drop of your .procmailrc is not crucial. But if you store many messages
+#       per day, then the shell calls may be a performance problem.
+#
+#       In that case, consider moving the cleanup to the pm-jacron.rc
+#       module (The cleanup is run only once a day, not for every message)
+#
+#       John Gianni send his simple bsckup script to Jari, who packaged
+#       and generalized the code. The code is reused with John's permission
+#       and maintaining responsibility was transferred to Jari
+#
+#   Required settings
+#
+#       (none)
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   JA_BUP_MAX, How many messages to keep at maximum. 32 is default
+#       o   JA_BUP_DIR, Where to store the messages. $HOME/Mail/bup by default
+#       o   JA_BUP_FILES, regexp to match the saved files. Procmail default.
+#       o   JA_BUP_CHECK_DIR. Once you have verified that this recipe works,
+#           that directories are ok, please set this flag to "no" to prevent
+#           running unnecessary `test' command for each email.
+#
+#   Usage example
+#
+#       You only want to keep backup of messages that are not from mailing
+#       lists. You may want to use TO_ macro to detect addresses better,
+#       this example matches against all headers
+#
+#           LISTS          = "(procmail|list-1|list-2)"
+#           JA_BUP_DIR     = $HOME/Mail/backup/.        # Create the path too
+#           JA_BUP_MAX     = 42                         # this should be enough
+#
+#           :0
+#           *$ ! $LISTS
+#           {
+#               INCLUDERC = $PMSRC/pm-jabup.rc
+#           }
+#
+#       If you get many messages, please don't use this module. Instead
+#       see pm-jacron.rc where similar backup work is done better.
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+id    = " pm-jabup.rc"
+dummy = "subroutine: $id start"
+
+# .......................................................... &public ...
+
+default             = "$HOME/Mail/bup"
+JA_BUP_DIR          = ${JA_BUP_DIR:-$default}
+JA_BUP_MAX          = ${JA_BUP_MAX:-32}
+JA_BUP_FILES        = ${JA_BUP_FILES:-"msg.*"}
+JA_BUP_CHECK_DIR    = $JA_BUP_CHECK_DIR:-"yes"}
+
+# ........................................................... &check ...
+
+:0
+* JA_BUP_CHECK_DIR ?? yes
+{
+    #   - If we're using the default directory, check that it exists.
+    #   - Create one if needed and exit if create was unsuccessfull
+
+    :0
+    *$      JA_BUP_DIR ?? $default
+    *$ ! ?  $IS_DIR $default || $MKDIR $default
+    {
+        EXITCODE = 217			# just some code, doesn't mean anything
+        HOST				# stop immediately
+    }
+
+
+    :0
+    *$ ! ? $IS_DIR $JA_BUP_DIR
+    {
+        dummy = "$id: $JA_MSG_ERROR $JA_BUP_DIR is not a directory"
+        EXITCODE = 217
+        HOST
+    }
+}
+
+# ........................................................... &do-it ...
+
+dummy = "subroutine: pm-jabup.rc delivering backup."
+
+:0 c:
+$JA_BUP_DIR
+
+#   i = ignore write errors
+#
+#   - The 'rm -f dummy' makes sure that rm always has at least one argument,
+#     because there may not be files in the directory.
+#   - 'ls -t' returns files sorted by date, newest first
+#   - 'sed' just chops first N files from the ls listing, leaving list
+#     of old files
+#
+#   NOTE
+#
+#   - If you get lot of mail, it is too expensive to run this after
+#     every message. Plese use cron(1) or pm-jacron.rc module to run something
+#     only once a day.
+
+:0 hwic
+| cd $JA_BUP_DIR \
+  && $RM -f dummy `$LS_BY_DATE $JA_BUP_FILES | $SED -e 1,${JA_BUP_MAX}d`
+
+
+dummy = "subroutine: $id end."
+
+# end of file pm-jadate.rc

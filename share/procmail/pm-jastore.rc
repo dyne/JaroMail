@@ -1,0 +1,139 @@
+# pm-jastore.rc -- Store messagee to inbox or gzip inbox
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	This subroutine stores the message to file pointed by `MBOX'. This
+#	subroutine is meant to be used with the the other general purpose
+#	includerc files. This makes it possible to have a centralized file
+#	storage handling for all your rc files.
+#
+#	Regular user doesn't get much out of this rc unless he mixes both
+#	.gz and regular files in his .procmailrc
+#
+#	R e p e a t: This module is basis for general purpose procmail
+#	rc plug-ins to strre message to mailbox pointed by some rc
+#	configuration variable. Normal user can simply say in his .procmailrc:
+#
+#	    :0:
+#	    mail.private
+#
+#   Required settings
+#
+#	(none)
+#
+#   Call arguments (variables to set before calling)
+#
+#	`MBOX'		must have been set to point to message storage.
+#	`MBOX_SUFFIX'	is extension added to MBOX. Default is none.
+#	`MBOX_MH'	if "yes" then deliver to MH mailbox with
+#			`MBOX_MH_CMD' which is "rcvstore" by default.
+#
+#	o   message is delivered to MH mailbox using `MBOX_MH_CMD'
+#
+#       otherwise
+#
+#	o   If MBOX is `some.mbox'     the message is stored as is.
+#	o   If MBOX is `some.mbox.gz'  the message is gzipped to folder.
+#	o   If MBOX is `some-dir/.'    then deliver as individual files
+#
+#   Example usage
+#
+#           $RC_MBOX   = $PMSRC/pm-jastore.rc
+#
+#           :0
+#           * condition
+#           {
+#               MBOX = $HOME/Mail/spool/junk.mbox   INCLUDERC = $RC_MBOX
+#           }
+#
+#   Change Log: (none)
+
+# ............................................................ &init ...
+
+id    = "pm-jastore.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+
+# ........................................................... &do-it ...
+#   make sure you define MBOX before calling this module.
+
+:0 h
+* MBOX ?? /dev/null
+/dev/null
+
+:0 E
+*   MBOX ?? [a-z]
+{
+
+    MBOX_SUFFIX = ${MBOX_SUFFIX:-""}
+    MBOX_MH     = ${MBOX_MH:-"no"}
+    MBOX_MH_CMD = ${MBOX_MH_CMD:-"rcvstore"}
+    lock        = "$MBOX$LOCKEXT"
+
+    :0 fhw              # Add possibly missing From_ line
+    * ! ^From +
+    | $FORMAIL
+
+    dummy = "pm-jastore.rc: testing MH mbox"
+
+    :0
+    * MBOX_MH ?? yes
+    {
+        #   Do we need lock for MH ?
+
+        :0 w: $lock
+        | $MBOX_MH_CMD $MBOX
+    }
+    :0 E
+    {
+
+    	dummy = "pm-jastore.rc: testing compressed mbox"
+
+        :0 w: $lock
+        * MBOX ?? \.gz
+        | $GZIP -9fc >> $MBOX
+
+        #   Whether it is regular mbox or directory, this
+        #   will deliver the message to it
+
+        :0 E
+ 	{
+
+    	    dummy = "pm-jastore.rc: if empty MBOX_SUFFIX (ordinary mbox)"
+
+	    :0 :
+	    * MBOX_SUFFIX ?? ^^^^
+	    $MBOX
+
+	    :0 E:
+	    $MBOX$MBOX_SUFFIX
+ 	}
+
+}
+
+:0 E
+{
+    dummy = "pm-jastore.rc: ***** WARNING - MBOX variable is empty ******"
+}
+
+dummy = "$id: end:"
+
+# pm-store.rc ends here

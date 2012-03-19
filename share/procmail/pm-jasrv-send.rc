@@ -1,0 +1,333 @@
+# pm-jasrv-send.rc -- server request check, subroutine for File Server
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This subroutine is part of the MPFS file server.
+#       Send the requested file. You can dry-run test this module with
+#       following command: a) make sure that $HOME/test conatins any simple
+#       email message b) define FORMAIL if it isnot found from path.
+#
+#	    % procmail DEFAULT=/dev/null VERBOSE=on LOGABSTRACT=all	\
+#	      PMSRC=$HOME/txt JA_SRV_LOG=/dev/null			\
+#	      FORMAIL=/opt/local/bin/formail				\
+#	      file=$HOME/test FILE=test WORD=WORD JA_SRV_FROM=foo@bar   \
+#	      SENDMAIL="tee -a $HOME/test.send" txt/pm-jasrv-send.rc < ~/test
+#
+#   Note:
+#
+#	The MIME headers here selected previously were:
+#
+#	    Content-type: application/octet-stream
+#	    Content-transfer-encoding: x-gzip64
+#
+#	But Defining own CTE such as x-gzip64 is strongly discouraged by
+#	the MIME RFC's. Most e-mail clients would be at a loss on how to
+#	handle these. Many would just bomb out and not even give you the
+#	opportunity to save it to a file. A more correct MIME type is this,
+#	which is now used:
+#
+#	    Content-type: application/x-gzip
+#	    Content-transfer-encoding: base64
+#
+#   Input
+#
+#      o    `FILE' is the filename(chdir to directory is already done)
+#	    `file' is _absolute_ filename
+#	    `WORD' is next word from subject line after FILE word.
+#      o    JA_SRV_CMD_STRING is flag
+#      o    JA_SRV_F_SUBJ_NOTIFY is flag
+#
+#   Output
+#
+#       o   FILE_ERROR is set to "yes" if file is not found.
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+
+
+id    = "pm-jasrv-send.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* IS_READABLE ?? ^^^^
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+
+stat	    = ""
+FILE_ERROR  = ""
+
+:0
+*    FILE ?? [a-z0-9]
+*    file ?? [a-z0-9]
+*$ ? $IS_READABLE $file
+{
+    stat = "$JA_SRV_CMD_STRING"
+
+    #  no header notify here, because this is ok situation,
+    #  Some MUA's thread the sending according to Subject,
+    #  so keep subject clean. (it already has Re:)
+    #
+    #  In error situations, it's desirable to Subject line
+    #  to tell the condition right away.
+
+#	:0 fh
+#	*  JA_SRV_F_SUBJ_NOTIFY ?? yes
+#        | $FORMAIL -I"Subject: Re: $JA_SRV_SUBJECT [$stat]"
+
+    # ...................................................... gzip ...
+    #   How should we send the file?
+    #   - If FILE matches list of files in JA_SRV_XGZIP_REGXP
+    #     then it is send in compresses base64 gzip format, because
+    #     it's too big.
+    #
+    #     There must be no "noconv" word request from the user
+    #
+    #   - For other files, send it without conversions.
+
+    dummy = "$NL$NL$id: Setting defaults and clearing variables $NL"
+
+    comment = "regular file"
+    type    = "$JA_SRV_CONTENT_TYPE"
+    coding  = "$JA_SRV_CONTENT_ENCODING"
+    convert = ""
+    xgzip   = ""
+
+    # ........................................................ xgzip ...
+
+    dummy = "$NL$NL$id: check that there is no noconv $NL"
+
+    :0
+    *	 JA_SRV_XGZIP_REGEXP ?? [a-z]
+    *$	 FILE		     ?? $JA_SRV_XGZIP_REGEXP
+    * !	 WORD		     ?? noconv
+    {
+        xgzip = "yes"
+    }
+
+    dummy = "$NL$NL$id: Has user requested gzip: $WORD $NL"
+
+    :0
+    *	WORD ?? ^^(gz|gzip)^^
+    {
+        xgzip = "yes"
+    }
+
+    dummy = "$NL$NL$id: Was xgzip YES? $NL"
+
+
+    :0
+    * xgzip ?? yes
+    {
+	convert  = "gzip-base64"
+	comment = "To decode, cat BODY| mmencode -u| gzip -d > $FILE$NL\
+If you don't have MIME capable MUA (Email agent) or if you don't have$NL\
+mmencode, you can request file without conversion with subject:$NL\
+'send $FILE noconv'"
+	type    = "application/x-gzip"
+	stat    = "$stat gzip"
+	coding  = "base64"
+    }
+
+    #   But, do always "gzip" for these files, even if "noconv"
+    #   was requested.
+
+    dummy = "$NL$NL$id: Decide if we convert to base64 -- $FILE $NL"
+
+    :0
+    *	 JA_SRV_BASE64_ALWAYS ?? [a-z]
+    *$	 FILE		      ?? $JA_SRV_BASE64_ALWAYS
+    {
+        xgzip	                    # kill variable
+        convert  = "base64"
+	comment = "To decode, cat BODY| mmencode -u > $FILE$NL"
+	type    = "application/octet-stream"
+	stat    = "$stat gzip"
+	coding  = "base64"
+
+    }
+
+    # .................................................... MIME-TYPE ...
+
+    :0
+    * FILE ?? \.(doc|rtf)^^
+    {
+	type = "application/winword"
+    }
+
+    :0
+    * FILE ?? \.zip^^
+    {
+	type = "application/zip"
+    }
+
+    :0
+    * FILE ?? \.gz^^
+    {
+	type = "application/gzip"
+    }
+
+
+    # ...................................................... headers ...
+    #   Prevent calling shell layer (because there is ; in the command)
+    #   This speeds up procmail
+
+    saved      = $SHELLMETAS
+    SHELLMETAS
+
+    #   Complete the MIME headers: user can download the file if he
+    #   has mime aware MUA
+
+    :0 fhw
+    | $FORMAIL                                                          \
+	-I "Content-Type: $type"                                        \
+	-I "Content-Transfer-Encoding: $coding"                         \
+	-I "Content-Disposition: attachment; filename=\"$FILE\""        \
+	-I "Content-Description: $comment"
+
+    SHELLMETAS = $saved
+
+
+    # ................................................. &sending ...
+    #   pick the right sending method
+
+    dummy = "$NL$NL$id: Sending $file $convert $NL"
+
+    #   See procmail tips page. We stack all headers to variable *f*
+    #   and avoid calling multiple `formail' processes.
+
+    fld   # kill variable
+
+    :0
+    * convert ?? [a-z]
+    {
+	ok	= "yes"
+	error	= "no"
+
+	:0			    # insert file "as is"
+	* ! convert ?? gzip
+	{
+	    :0 fbw
+	    | $CAT $file
+
+	    :0 e
+	    {
+		error = "yes"
+	    }
+	}
+
+	:0
+	* convert ?? gzip
+	{
+	    :0 fbw                  # gzip while insert
+	    | $GZIP -9c $file
+
+	    :0 e
+	    {
+		error = "yes"
+	    }
+	}
+
+
+	:0
+	* error ?? yes
+	{
+	     #   If previous command failed
+	     #   Add error message to separate header
+
+	     ok   = "no"
+	     fld  = "-AX-Error: $GZIP failed, try with noconv."
+	}
+
+	# ............................................... base64 ...
+
+	:0 fbw
+	* convert ?? base64
+	* ok	  ?? yes
+	| $MIME_BIN_64_E
+
+	:0 E
+	* ok ?? yes
+	{
+	    #   Combine this message to previous field. See pm-tips.txt
+
+	    msg = "-AX-Error: $MIME_BIN_64_E failed. Try with noconv."
+
+	    nl
+            nl  = ${fld+"$NL"}
+
+            fld = "$fld${nl}$msg"
+
+	    comment = ""
+
+	    #   We might as well kill the body, because user
+	    #   doesn't want to receive binary (gzip)
+
+	    :0 fbw
+	    | echo
+	}
+    }
+    :0 E fb wi
+    | $CAT $file
+
+
+    #   This is no-op as far as this recipe is concerned.
+    #   If you need to examine logs, you will see the TO address
+    #   where the message was sent in MATCH.
+
+    :0
+    * ^To:\/.*
+    { }
+
+    dummy = "$id: programs: $FORMAIL $SENDMAIL"
+    dummy = "$NL$NL$id: Extra fields: $fld $NL"
+
+    :0 fbw
+    * fld ?? [a-z]
+    | $FORMAIL ${fld+"$fld"}
+
+
+    :0 wc:  $JA_SRV_LOG$LOCKEXT
+    |  $FORMAIL -I "From "  | $SENDMAIL;                                    \
+	echo "    [ja-srv; $convert $FILE; $JA_SRV_FROM;]"                  \
+	>> $JA_SRV_LOG;
+
+    #   kill body contents before saving to log
+
+    :0 fb wi
+    | echo
+
+    #   Continue to the end
+
+    fld = "-A$JA_SRV_X_HEADER: $stat; $JA_SRV_FILE_DIR/$FILE"
+
+}
+
+:0 E
+{
+    FILE_ERROR = "yes"
+}
+
+dummy = "$id: end:"
+
+# Enf of pm-jasrv-send.rc

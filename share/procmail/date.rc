@@ -1,0 +1,485 @@
+# date.rc
+#
+#    Copyright (C) 1995  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+# $Id: date.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+# Procmail recipe to extract and create some variables related to
+# the date in the message.  If the message has no date reference,
+# either the variables are returned undefined, or set using the
+# current date depending upon DATE_DEFAULT_NOW.
+
+# Currently, this recipe file parses dates with these formats:
+#
+#  1. Tue(sday), 31 Dec 96
+#  2. Tue, 31 Dec 1996
+#  3. 12/31/96
+#  4. Tuesday, December 31, 1996
+#
+# If DATE is not defined, then obtain the date from the current input message
+# from the following headers, in decreasing priority: Resent-Date:, Date:,
+# and "From ".
+#
+# If DATE is defined, it is simply used as the input.
+#
+# Thus to parse the date from the current mail message do this:
+#
+#	DATE 	INCLUDERC=date.rc
+#
+# To make this even easier, use "get-date.rc":
+#
+#	INCLUDERC=get-date.rc
+#
+# To parse a given date string, simply set DATE:
+#
+#	DATE=12/31/96	INCLUDERC=date.rc
+#
+#
+# These variables are set from the parsing of DATE:
+#
+#  DATE			# the original, complete date string from which
+#			# all other variables were derived
+#  DATE_WEEKDAY		# the weekday name, if present
+#  DATE_WDAY		# the short weekday name, if present
+#  DATE_DAY		# the day of the month (eg: 1)
+#  DATE_DAY2		# the day of the month with two digits: (eg: 01)
+#  DATE_MONTH		# the month of the year
+#  DATE_MONTH2		# the month of the year with two digits: (eg: 01)
+#  DATE_MONTHNAME	# the long name of the month (eg: December)
+#  DATE_MONTHABBR	# the abbreviated name of the month (eg: Dec)
+#  DATE_YEAR		# the four-digit year (eg: 2001)
+#  DATE_YEAR2		# the last two digits of the year (eg: 96)
+#
+#  DATE_MMDDYY		# the date as MM/DD/YY (use DATE_SEP1 as separator)
+#  DATE_MMDDYYYY	# the date as MM/DD/YYYY
+#  DATE_YYMMDD		# the date as YY/MM/DD (use DATE_SEP1 as separator)
+#  DATE_YYYYMMDD	# the date as YY/MM/DD (use DATE_SEP1 as separator)
+#  DATE_DDMMMYY		# the date as DD MMM YY (use DATE_SEP2 as separator)
+#  DATE_DDMMMYYYY	# the date as DD MMM YYYY
+#
+#  DATE_UNIX		# the date as WDAY, DD MMM YYYY (ala `date`)
+#  DATE_LONG		# the date as WEEKDAY, MMMMM DD, YYYY
+#  DATE_DEC		# the date as DD-MMM-YYYY
+#  DATE_MMMDDYYYY	# the date as MMMMM DD, YYYY
+#  DATE_TIME		# the date/time in `date` format: Fri Oct 11 12:52:48 PDT 1996
+#  DATE_CTIME		# the date/time in "ctime" format: Fri Sep 13 00:00:00 1986
+#
+#  DATE_SEP1		# the character used to separate digits/letters of
+#			# MMDDYY or YYMMDD
+#  DATE_SEP2		# the character used to separate DDMMMYY
+#
+#  TIME			# the orininal string from which the time variables
+#		 	# were derived.
+#  TIME_HOURS		# hours (as given)
+#  TIME_HOURS2		# hours in 2 digits (as given) (eg: 01)
+#  TIME_HOURS12		# hours modulo 12
+#  TIME_HOURS24		# military hours [00-23]
+#  TIME_MINS		# minutes (eg: 34)
+#  TIME_SECS		# seconds (eg: 56)
+#  TIME_AMPM		# 'am' or 'pm'
+#  TIME_ZONE		# The timezone JST, EST, EDT, etc.
+#
+#  TIME_MILITARY	# hhmm (0000-2359) eg: 0630
+#  TIME_HHMM		# hh:mm (eg: 12:03)
+#  TIME_HHMMSS		# hh:mm:ss (eg: 12:03:45)
+#  TIME_12		# hh:mm am/pm
+#  TIME_24		# hh:mm (military style)
+#
+# These variables are used within date.rc but will not return
+# meaningful values.
+#
+#  DAYS_RE MONTHS_RE S Y N NN APM ZONE X D
+
+DAYS_RE='(Mon|Tues?|Wed(nes)?|Thu(rs)?|Fri|Sat(ur)?|Sun)(day)?'
+MONTHS_RE='(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|\
+July?|Aug(ust)?|Oct(ober)?|(Sept?|Nov|Dec)(ember)?)'
+S='[/-,. ]+'
+Y='[0-9][0-9][0-9][0-9]'
+N='[0-9]+'
+NN='[0-9][0-9]'
+APM='[ap]m'
+ZONE='([-+][0-9][0-9][0-9]( GMT)?|[PMCE][SD]T([45678][PMCE]DT)?|JST)'
+
+:0
+* ! DATE ?? .
+{ :0
+  * ^Resent-Date: *\/[^ ].*
+  { DATE=$MATCH }
+  :0 E
+  * ^Date: *\/[^ ].*
+  { DATE=$MATCH }
+  :0 E
+  * ^From *[^ ]+ +\/[^ ].*
+  { DATE=$MATCH }
+}
+
+:0
+* ! DATE ?? .
+* DATE_DEFAULT_NOW ?? .
+{ DATE=`date` }
+
+# If there is a date to work with, let's begin to parse it
+:0
+* DATE ?? .
+{ # First, look for a weekday, and extract it
+  :0
+  * $ DATE ?? ()\/$DAYS_RE
+  { DATE_WDAY=$MATCH
+    # See if the day was abbreviated or long
+    :0
+    * DATE_WDAY ?? day
+    { DATE_WEEKDAY=$DATE_WDAY	# get the long day name
+      # And, extract the short version from it
+      :0
+      * DATE_WEEKDAY ?? ^\/...
+      { DATE_WDAY=$MATCH }
+    }
+    :0 E			# okay, it was a short name
+    { :0
+      * DATE_WDAY ?? Tue
+      { DATE_WEEKDAY=Tuesday }
+      :0 E
+      * DATE_WDAY ?? Wed
+      { DATE_WEEKDAY=Wednesday }
+      :0 E
+      * DATE_WDAY ?? Thu
+      { DATE_WEEKDAY=Thursday }
+      :0 E
+      * DATE_WDAY ?? Sat
+      { DATE_WEEKDAY=Saturday }
+      :0 E
+      { DATE_WEEKDAY=${DATE_WDAY}day }
+    }
+  }
+
+  # Here's where we parse the date
+  :0				# MM/DD/YYYY?
+  * $ DATE ?? ()\/$N$S$N$S$Y
+  { X=$MATCH
+    :0
+    * $ X ?? ()\/$N
+    { MM=$MATCH }
+    :0
+    * $ X ?? $N$S\/$N
+    { DD=$MATCH }
+    :0				# try YYYY first
+    * $ X ?? $S\/$Y
+    { YYYY=$MATCH }
+    :0 E
+    * $ X ?? $N$S$N$S\/$N
+    { YY=$MATCH }
+  }
+  :0 E				# YYYY/MM/DD?
+  * $ DATE ?? ()\/$Y$S$N$S$N
+  { X=$MATCH
+    :0
+    * $ X ?? ()\/$Y
+    { YYYY=$MATCH }
+    :0
+    * $ X ?? $Y$S\/$N
+    { MM=$MATCH }
+    :0
+    * $ X ?? $Y$S$N$S\/$N
+    { DD=$MATCH }
+  }
+  :0 E				# MM/DD/YY or YY/MM/DD?
+  * $ DATE ?? $N$S$N$S$N
+  { X=$MATCH
+    :0
+    * $ X ?? ()\/$N
+    { MM=$MATCH }
+    :0
+    * $ X ?? $N$S\/$N
+    { DD=$MATCH }
+    :0
+    * $ X ?? $N$S$N$S\/$N
+    { YY=$MATCH }
+
+    # Use heuristics to determine of MM/DD/YY or YY/MM/DD
+    # If MM > 12, it must be YY
+    :0 E
+    * MM ?? ^([2-9][0-9]|1[3-9])
+    { X=$YY YY=$MM MM=$DD DD=$X X }	# swap formats
+  }
+  :0 E				# is it DD MMM YYYY ?
+  * $ DATE ?? ()\/$N$S$MONTHS_RE$S$N
+  { X=$MATCH
+    :0
+    * $ X ?? ()\/$N
+    { DD=$MATCH }
+    :0
+    * $ X ?? ()\/$MONTHS_RE
+    { MMM=$MATCH }
+    :0				# first try matching YYYY
+    * $ X ?? ()\/$Y
+    { YYYY=$MATCH }
+    :0 E			# ok, use YY, but don't match the first pair
+    * $ X ?? $N.*$S\/$N
+    { YY=$MATCH }
+  }
+  :0 E				# YYYY MMM DD?
+  * $ DATE ?? ()\/$Y$S$MONTHS_RE$S$N
+  { X=$MATCH
+    :0
+    * $ X ?? ()\/$Y
+    { YYYY=$MATCH }
+    :0
+    * $ X ?? ()\/$MONTHS_RE
+    { MMM=$MATCH }
+    :0
+    * $ X ?? $Y$S.*$S\/$N
+    { DD=$MATCH }
+  }
+  :0 E				# MMM DD, YYYY?
+  * $ DATE ?? ()\/$MONTHS_RE$S$N$S$Y
+  { X=$MATCH
+    :0
+    * $ X ?? ()\/$MONTHS_RE
+    { MMM=$MATCH }
+    :0
+    * $ X ?? ()\/$N
+    { DD=$MATCH }
+    :0
+    * $ X ?? ()\/$Y
+    { YYYY=$MATCH }
+  }
+  # Okay, this might be a Unix date: MMM DD HH:MM:SS ZONE YEAR
+  # So, test the parts individually
+  :0 E				# MMM DD ... YYYY?
+  * $ DATE ?? $MONTHS_RE$S$N.*$Y
+  { :0				# MMM DD?
+    * $ DATE ?? ()\/$MONTHS_RE$S$N
+    { X=$MATCH
+      :0				# get the month name
+      * $ X ?? ()\/$MONTHS_RE
+      { MMM=$MATCH }
+      :0				# get the day
+      * $ X ?? ()\/$N
+      { DD=$MATCH }
+      :0 E
+      { DD='??' }
+    }
+    :0 					# is there a year?
+    * $ DATE ?? ()\/$Y
+    { YYYY=$MATCH }
+  }
+
+  # Now match for any time
+  :0			# hh:mm(:ss) (a/pm) (+700 | pdt/pst...)
+  * $ DATE ?? ()\/$N:$NN(:$NN)?($S$APM)?($S$ZONE)?
+  { TIME=$MATCH		# get any time string
+			# clear these variables
+    TIME_HOURS TIME_HOURS2 TIME_MINS TIME_SECS TIME_AMPM TIME_HOURS24
+    :0			# get the hours
+    * $ TIME ?? ()\/$N
+    { TIME_HOURS=$MATCH TIME_HOURS2=$MATCH
+      :0
+      * TIME_HOURS2 ?? ^.$
+      { TIME_HOURS2=0$TIME_HOURS }
+    }
+    :0
+    * $ TIME ?? $N:\/$NN
+    { TIME_MINS=$MATCH }
+    :0
+    * $ TIME ?? $N:$NN:\/$NN
+    { TIME_SECS=$MATCH }
+    :0
+    * $ TIME ?? ()\/$APM
+    { TIME_AMPM=$MATCH
+      :0		# if 01..09,10,11 pm?
+      * TIME_AMPM ?? pm
+      * TIME_HOURS ?? (0?[1-9]|1[01])
+      { TIME_HOURS24=`expr $TIME_HOURS + 12` }
+      :0 E		# if 12 am?
+      * TIME_AMPM ?? am
+      * TIME_HOURS ?? 12
+      { TIME_HOURS24=00 }
+      TIME_HOURS12=$TIME_HOURS
+    }
+    # no AM/PM, create HOURS24, HOURS12
+    :0 E		# given time >= 13?
+    * TIME_HOURS ?? (1[3-9]|2.)
+    { TIME_HOURS24=$TIME_HOURS TIME_HOURS12=`expr $TIME_HOURS - 12` }
+    :0 E		# no am/pm, and time < 12
+    { TIME_HOURS24=$TIME_HOURS TIME_HOURS12=$TIME_HOURS }
+
+    :0			# now, check for time zone
+    * $ TIME ?? ()\/$ZONE
+    { TIME_ZONE=$MATCH }
+
+    			# Create the remaining derived vars
+    TIME_HHMM="$TIME_HOURS:$TIME_MINS"
+    TIME_HHMMSS=$TIME_HHMM:${TIME_SECS:-00}
+    TIME_MILITARY=$TIME_HOURS24$TIME_MINS
+  }
+  X T			# clear the variables we used
+
+  # We now have three parts: MM or MMM, DD, and YY or YYYY.
+
+  # If we have MMM, convert to MM (which will later be converted back to MMM)
+  :0			#  is MMM defined?
+  * MMM ?? .
+  { :0			# is it the long name?
+    * MMM ?? ^....
+    { DATE_MONTHNAME=$MMM
+      :0		# extract the abbreviation
+      * MMM ?? ^\/...
+      { DATE_MONTHABBR=$MATCH }
+      MM		# clear MM
+    }
+    :0 E		# nope, it must be an abbreviation
+    * MMM ?? Jan
+    { MM=01 }
+    :0E
+    * MMM ?? Feb
+    { MM=02 }
+    :0E
+    * MMM ?? Mar
+    { MM=03 }
+    :0E
+    * MMM ?? Apr
+    { MM=04 }
+    :0E
+    * MMM ?? May
+    { MM=05 }
+    :0E
+    * MMM ?? Jun
+    { MM=06 }
+    :0E
+    * MMM ?? Jul
+    { MM=07 }
+    :0E
+    * MMM ?? Aug
+    { MM=08 }
+    :0E
+    * MMM ?? Sep
+    { MM=09 }
+    :0E
+    * MMM ?? Oct
+    { MM=10 }
+    :0E
+    * MMM ?? Nov
+    { MM=11 }
+    :0E
+    * MMM ?? Dec
+    { MM=12 }
+    MMM			# clear MMM
+  }
+
+  # If we have MM, convert to MMM
+  :0
+  * MM ?? .
+  { :0			# check on leading zero
+    * MM ?? ^0?\/[0-9]$
+    { DATE_MONTH=$MATCH
+      DATE_MONTH2=0$MATCH
+    }
+    :0 E
+    { DATE_MONTH2=$MM DATE_MONTH=$MM }
+    MM=$DATE_MONTH
+    # Now, convert MM -> DATE_MONTHNAME
+    :0
+    * MM ?? 10
+    { DATE_MONTHNAME=October }
+    :0E
+    * MM ?? 11
+    { DATE_MONTHNAME=November }
+    :0E
+    * MM ?? 12
+    { DATE_MONTHNAME=December }
+    :0E
+    * MM ?? 1
+    { DATE_MONTHNAME=January }
+    :0E
+    * MM ?? 2
+    { DATE_MONTHNAME=February }
+    :0E
+    * MM ?? 3
+    { DATE_MONTHNAME=March }
+    :0E
+    * MM ?? 4
+    { DATE_MONTHNAME=April }
+    :0E
+    * MM ?? 5
+    { DATE_MONTHNAME=May }
+    :0E
+    * MM ?? 6
+    { DATE_MONTHNAME=June }
+    :0E
+    * MM ?? 7
+    { DATE_MONTHNAME=July }
+    :0E
+    * MM ?? 8
+    { DATE_MONTHNAME=August }
+    :0E
+    * MM ?? 9
+    { DATE_MONTHNAME=September }
+    MM			# clear MM
+  }
+  # Set the month abbreviation
+  :0
+  * DATE_MONTHNAME ?? ^\/...
+  { DATE_MONTHABBR=$MATCH }
+
+  # Now check on the day
+  :0
+  * DD ?? ^0?\/[0-9]$
+  { DATE_DAY=$MATCH DATE_DAY2=0$MATCH }
+  :0 E
+  { DATE_DAY=$DD DATE_DAY2=$DD }
+  DD			# clear DD
+
+  # Now check on the year: if YYYY is not available, use YY
+  YYYY=${YYYY:-$YY}
+  YY			# clear YY
+
+  # If YYYY only has two digits, derive the current year
+  :0
+  * YYYY ?? ^..$
+  { YYYY=`date +%Y | sed -e 's/..$/'$YYYY'/'`  }
+
+  DATE_YEAR=$YYYY
+  YYYY			# clear YYYY
+
+  :0			# get the last two digits of the year
+  * DATE_YEAR ?? ^..\/..
+  { DATE_YEAR2=$MATCH }
+
+  SEP1=${DATE_SEP1:-'/'}
+  SEP2=${DATE_SEP2:-' '}
+
+  # Now, setup the formatted strings
+  DATE_MMDDYY="$DATE_MONTH2$SEP1$DATE_DAY2$SEP1$DATE_YEAR2"
+  DATE_MMDDYYYY="$DATE_MONTH2$SEP1$DATE_DAY2$SEP1$DATE_YEAR"
+  YYMMDD="$DATE_YEAR2$SEP1$DATE_MONTH2$SEP1$DATE_DAY2"
+  YYYYMMDD="$DATE_YEAR$SEP1$DATE_MONTH2$SEP1$DATE_DAY2"
+  DATE_DDMMMYY="$DATE_DAY2$SEP2$DATE_MONTHABBR$SEP2$DATE_YEAR2"
+  DATE_DDMMMYYYY="$DATE_DAY2$SEP2$DATE_MONTHABBR$SEP2$DATE_YEAR"
+  DATE_MMMDDYYYY="$DATE_MONTHNAME $DATE_DAY, $DATE_YEAR"
+  DATE_UNIX="$DATE_WDAY, $DATE_DAY$SEP2$DATE_MONTHABBR$SEP2$DATE_YEAR"
+  DATE_LONG="$DATE_WEEKDAY, $DATE_MONTHNAME $DATE_DAY, $DATE_YEAR"
+  DATE_TIME="$DATE_WDAY $DATE_MONTHABBR $DATE_DAY2 $TIME_HHMMSS"
+  DATE_CTIME="$DATE_WDAY $DATE_MONTHABBR $DATE_DAY2 $TIME_HOURS24:$TIME_MINS:${TIME_SECS:-00}"
+  :0
+  * TIME_AMPM ?? .
+  { DATE_TIME="$DATE_TIME $TIME_AMPM" }
+  :0
+  * TIME_ZONE ?? .
+  { DATE_TIME="$DATE_TIME $TIME_ZONE" DATE_CTIME="$DATE_CTIME $TIME_ZONE" }
+  DATE_TIME="$DATE_TIME $DATE_YEAR"
+  DATE_CTIME="$DATE_CTIME $DATE_YEAR"
+}

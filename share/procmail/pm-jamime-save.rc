@@ -1,0 +1,486 @@
+# pm-jamime-save.rc -- save message's MIME attachement (one file) to a file
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Documentation
+#
+#       This module saves _one_ simple file attachment (MIME) from he
+#       message. The message must define following MIME headers. If
+#       "filename=" does not exists, then the message is ignored.
+#
+#           Mime-Version: <version>
+#           Content-Type: <type>
+#           Content-Disposition: attachment; filename="file.txt"
+#
+#       The last line can also be in separate line, provided that it
+#       is indented according to standard rules:
+#
+#           Mime-Version: <version>
+#           Content-Type: <type>
+#           Content-Disposition: attachment;
+#               filename="file.txt"
+#
+#       Procmail is not very suitable for saving MIME attachments and
+#       you should not think that this the right tool for you.
+#       If you receive anything more than 1 attachment, this recipe
+#       does nothing, because that's out of our league and you need some
+#       more heavy weight mime tools. E.g. Perl CPAN has MIME libraries.
+#
+#       _Note_: when the attachment is in the body, it is simply written
+#       to a disk and the location in message is replaced with test:
+#
+#           Extracted to file:/users/foo/junk/<YYYY-MM-DD-hhmm>.file.txt.
+#
+#       The existing mime headers that surround the attachment are
+#       lect untouched, so don't try to press your Mail Agent's MIME buttons
+#       at that point. There is no such file in that spot
+#       if you set `JA_MIME_SAVE_DEL' to `yes'.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This
+#       subroutine includes library:
+#
+#       o   pm-javar.rc
+#       o   pm-jamime.rc
+#       o   pm-jamime-decode.rc
+#       o   pm-jadate.rc (which will call other pm-jadate*.rc files)
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   `JA_MIME_SAVE_DIR', point this to directory where you
+#           want to store attachments.
+#       o   `JA_MIME_SAVE_DECODE', set this to "yes", if you want that
+#           attachment is decoded before written to disk. This usually
+#           opens quoted printable or base64 encoding.
+#       o   `JA_MIME_SAVE_DEL', set this to "yes", if you want to remove
+#           the attachment from the body of the message after it has
+#           been filed. Be vary careful if you use this option. If you
+#           keep backup cache of incoming mail, then you might try "yes".
+#       o   `JA_MIME_SAVE_OVERWRITE', set this to "yes" if it's okay to
+#           overwrite to an existing filename found from attachment.
+#           If you get periodic attachments always with same name, then
+#           you would want to set this to yes.
+#
+#   Core dump note
+#
+#       Because procmail uses LINEBUF when filtering messages, a core
+#       dump may happen if the attachment being filtered is bigger than
+#       the LINEBUF. The current setting accepts 524K attachments, but if
+#       you expect to get bigger than that, you want to increase
+#       `JA_MIME_SAVE_LINEBUF'.
+#
+#   Possible conflict with your awk
+#
+#       Awk is used because it is much more system load friendly than perl.
+#       If you see an error message in the log file saying that awk failed:
+#
+#           procmail: Executing awk,
+#           ...
+#           procmail: Error while writing to "awk"
+#           procmail: Rescue of unfiltered data succeeded
+#
+#       it means that the system's standard awk doesn't support the
+#       variable passing syntax. To verify that this is the case, run
+#       following test:
+#
+#           % awk '{print VAR; exit}' VAR="value" /etc/passwd
+#
+#       The proper awk should print "value". If not, then see if you have
+#       `nawk' or `gawk' in your system, which should understand the
+#       variable passing syntax. To change the AWK, you need to set
+#       following variable somewhere at the top of your *.procmailrc*
+#
+#           AWK = "gawk"        # if that works better than standard "awk"
+#
+#   Return values (none)
+#
+#   Change Log (none)
+
+dummy = "
+========================================================================
+pm-jamime-save.rc: init:"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+:0
+* !  MIME_VER ?? [0-9]
+{
+    INCLUDERC = $RC_MIME
+}
+
+:0
+* ! YYYY ?? [0-9]
+{
+    INCLUDERC = $RC_DATE
+}
+
+:0                              # if has no value, set it
+*$ ! LINEBUF ?? $d
+{
+    LINEBUF = 1024
+}
+
+jaMimeSaveLinebuf     = $LINEBUF
+
+# .......................................................... &public ...
+# User configurable sections
+
+JA_MIME_SAVE_DIR       = ${JA_MIME_SAVE_DIR:-"$HOME"}
+JA_MIME_SAVE_DECODE    = ${JA_MIME_SAVE_DECODE:-"no"}
+JA_MIME_SAVE_DEL       = ${JA_MIME_SAVE_DEL:-"no"}
+JA_MIME_SAVE_LINEBUF   = ${JA_MIME_SAVE_LINEBUF:-524280}
+JA_MIME_SAVE_OVERWRITE = ${JA_MIME_SAVE_OVERWRITE:-"no"}
+
+# ........................................................... &do-it ...
+
+dummy = "pm-jamime-save.rc: HEADER; $MIME_H_ATTACHMENT"
+
+:0
+*  MIME_H_ATTACHMENT ?? [a-z]
+{
+    jaMimeSaveFile = $MIME_H_ATTACHMENT
+
+    :0
+    * JA_MIME_SAVE_DECODE ?? yes
+    {
+        #   decode regardless of body content
+        JA_MIME_DECODE_REGEXP = ".*"
+
+        INCLUDERC = $RC_MIME_DECODE
+    }
+
+    # ..................................................... filename ...
+
+    :0
+    *    JA_MIME_SAVE_OVERWRITE ?? no
+    *$ ? $IS_EXIST $JA_MIME_SAVE_DIR/$jaMimeSaveFile
+    {
+        #  Kill variable
+        jaMimeSaveDate
+
+        :0
+        *$ YYYY ?? $d
+        {
+            jaMimeSaveDate = "$YYYY-$MM-$DD"
+
+            :0
+            *$ hh ?? $d
+            {
+                jaMimeSaveDate = "$jaMimeSaveDate-$hh$mm"
+            }
+
+            jaMimeSaveFile = "$jaMimeSaveDate.$jaMimeSaveFile"
+
+            #   Still not unique?
+
+            :0
+            *$ ? $IS_EXIST $JA_MIME_SAVE_DIR/$jaMimeSaveFile
+            {
+                :0 fhw
+                | $FORMAIL -I "X-jaMimeSave-Error: (file exists) $jaMimeSaveFile"
+
+                # kill variable to prevent next recipe from running
+                jaMimeSaveFile
+            }
+        }
+    }
+
+    # .................................................... write out ...
+
+    :0
+    * jaMimeSaveFile ?? [a-z]
+    {
+        :0 bwc:                                 # do not modify body
+        * JA_MIME_SAVE_DEL ?? no
+        | $CAT > $JA_MIME_SAVE_DIR/$jaMimeSaveFile
+
+        #       Write out the attachment and replace body
+        #       with reference to the file.
+
+        :0 E
+        {
+            :0
+            *$ LINEBUF ??  ^^([5-9]$d$d$d$d$d|$d$d$d$d$d$d$d)^^
+            {
+                # User has set bigger linebuf than our default
+            }
+            :0 E
+            {
+                LINEBUF = $JA_MIME_SAVE_LINEBUF
+            }
+
+            :0 fbw:
+            | ( $CAT > $JA_MIME_SAVE_DIR/$jaMimeSaveFile; echo "Saved to $JA_MIME_SAVE_DIR/$jaMimeSaveFile" )
+
+            LINEBUF = $jaMimeSaveLinebuf
+        }
+    }
+}
+
+dummy = "pm-jamime-save.rc: BODY check"
+
+:0 E
+*  MIME_B_ATTACHMENT               ??  [a-z]
+*  MIME_B_ATTACHMENT_FILE_COUNT    ??  ^^1^^
+{
+    dummy = "pm-jamime-save.rc: BODY ENTERED: only some limited operations."
+    jaMimeSaveFile  = $MIME_B_ATTACHMENT
+
+    #   Try to locate the header where the content type is defined for
+    #   file attachment. Note: there is no typo in the regexp, the
+    #   caret(^) matches newline.
+    #
+    #   Content-Type: application/octet-stream
+    #   Content-Disposition: attachment; filename="file.txt"
+    #   Content-Transfer-Encoding: 7bit
+
+    dummy = "pm-jamime-save.rc: Check contentType BODY 1"
+
+    :0
+    *$ B ?? ^Content-Type:$s+\/.*\
+            ^Content-Disposition:.*($MIME_B_ATTACHMENT\
+            |^$s+.*$MIME_B_ATTACHMENT)
+    *  MATCH ?? \/.*
+    {
+        contentType = $MATCH
+    }
+
+    dummy = "pm-jamime-save.rc: Check contentType BODY 2"
+
+    :0 E
+    *$ B ?? ^Content-Type:$s+\/.*\
+            ^Content-Transfer-Encoding:.*\
+            ^Content-Disposition:.*($MIME_B_ATTACHMENT\
+            |^$s+.*$MIME_B_ATTACHMENT)
+    *  MATCH ?? \/.*
+    {
+        contentType = $MATCH
+
+        #   The last "Content-Disposition" match allows two cases
+        #
+        #   1.  Content-Disposition: attachment; filename="file.txt"
+        #
+        #   2.  Content-Disposition: attachment;
+        #               filename="file.txt"
+
+        :0
+        *$ B ?? ^Content-Type:.*\
+                ^Content-Transfer-Encoding:$s\/.*\
+                ^Content-Disposition:.*($MIME_B_ATTACHMENT\
+                |^$s+.*$MIME_B_ATTACHMENT)
+        *  MATCH ?? \/.*
+        {
+            contentEncoding = $MATCH
+        }
+    }
+
+    #   We expect that the headers come in this order.
+    #   If they don't, then we can't know the encoding.
+    #   We don't even try anything else: Procmail is not the right tool
+    #   for complete MIME handling.
+
+    dummy = "pm-jamime-save.rc: Check contentEncoding BODY"
+
+    :0
+    *  contentEncoding ?? ^^^^
+    *$ B ?? ^Content-Type:.*\
+            ^Content-Disposition:.*\
+            ^Content-Transfer-Encoding:$s+\/.*
+    {
+        contentEncoding = $MATCH
+    }
+
+    :0 E
+    *  contentEncoding ?? ^^^^
+    *$ B ?? ^Content-Type:.*\
+            ^Content-Transfer-Encoding:$s+\/.*
+    {
+        contentEncoding = $MATCH
+    }
+
+    :0
+    *  contentEncoding ?? ^^^^
+    *$ B ?? ^Content-Type:.*\
+            ^Content-Transfer-Encoding:$s+\/.*
+    {
+        contentEncoding = $MATCH
+    }
+
+    # ............................................... fix mixed-part ...
+    #   In most typical message, sender "says" something in text/plain and
+    #   then adds an atatchement
+    #
+    #   But, due to order of the MIME headers we may have picked the
+    #   text/plain. Change it to application/octet-stream if found.
+    #
+    #   Mime-Version: 1.0
+    #   Content-Type: multipart/mixed; boundary="----------118D218634724256"
+    #
+    #   ------------118D218634724256
+    #   Content-Type: text/plain; charset=us-ascii
+    #   Content-Transfer-Encoding: 7bit
+    #
+    #
+    #   ------------118D218634724256
+    #   Content-Type: application/octet-stream; name="Ass_rake.dbf"
+    #   Content-Transfer-Encoding: base64
+    #   Content-Disposition: attachment; filename="Ass_rake.dbf"
+
+    dummy = "pm-jamime-save.rc: Check contentType ($contentType) text/plain => application"
+
+    :0
+    *  contentType ?? text/
+    *$ B           ?? ^Content-Type:$s+\/application.*
+    {
+        contentType = $MATCH
+
+        dummy = "pm-jamime-save.rc: finding Transfer-Encoding for application/*"
+
+        :0
+        *$ B     ?? ^Content-Type:$s+application.*\
+                    ^Content-Transfer-Encoding:$s\/.*
+        {
+            contentEncoding = $MATCH
+        }
+    }
+
+    # ............................................... check filename ...
+    #   Change filename if there is already that file
+
+    dummy = "pm-jamime-save.rc: check filename"
+
+    #  Kill variable
+    jaMimeSaveDate
+
+    :0
+    *$ YYYY ?? $d
+    {
+        jaMimeSaveDate = "$YYYY-$MM-$DD"
+
+        :0
+        *$ hh ?? $d
+        {
+            jaMimeSaveDate = "$jaMimeSaveDate-$hh$mm"
+        }
+
+        jaMimeSaveFile = "$jaMimeSaveDate.$jaMimeSaveFile"
+
+        #   Still not unique?
+
+        :0
+        *$ ? $IS_EXIST $JA_MIME_SAVE_DIR/$jaMimeSaveFile
+        {
+            :0 fhw
+            | $FORMAIL -I "X-jaMimeSave-Error: (file exists) $jaMimeSaveFile"
+
+            # kill variable to prevent next recipe from running
+            jaMimeSaveFile
+        }
+    }
+
+    # ........................................................ &save ...
+
+    # 1) Locate the positions where the attachment starts
+    # 2) When found, start looking for empty line which ends the mime
+    #    headers. GO is set to 1, when attachment starts
+    # 3) Attachment ends when mime boundary is hit. Actually
+    #    it ended one line before that, which was a empty line.
+
+    jaMimeSaveShellmetas  = $SHELLMETAS
+    LINEBUF               = $JA_MIME_SAVE_LINEBUF
+    SHELLMETAS
+
+    :0 fbw
+    *  MIME_BOUNDARY_COUNT  ?? [1-9]
+    *  jaMimeSaveFile       ?? [a-z]
+    |  $AWK                                                                 \
+      ' BEGIN { found = 0; go = 0 }                                         \
+        {                                                                   \
+            if ( match($0, MATCH) > 0 )                                     \
+            {                                                               \
+                 found++;                                                   \
+            }                                                               \
+            if ( found  &&  match($0, "^[ \t]*$") )                         \
+            {                                                               \
+                go = 1;                                                     \
+                next;                                                       \
+            }                                                               \
+            if ( match($0, MIME) > 0 )                                      \
+            {                                                               \
+                go = 0;                                                     \
+            }                                                               \
+            if ( go )                                                       \
+            {                                                               \
+                if ( DELETE == "yes")                                       \
+                {                                                           \
+                    if ( urlFlag == 0 )                                     \
+                    {                                                       \
+                        urlFlag = 1;                                        \
+                        printf "\nextracted to file:%s\n\n", FILE;          \
+                    }                                                       \
+                }                                                           \
+                else                                                        \
+                {                                                           \
+                    print;                                                  \
+                }                                                           \
+                print $0 >> FILE;                                           \
+                next;                                                       \
+            }                                                               \
+            print;                                                          \
+        }                                                                   \
+      ' DELETE="$JA_MIME_SAVE_DEL"                                          \
+        MIME="$MIME_BOUNDARY"                                               \
+        COUNT="$MIME_BOUNDARY_COUNT"                                        \
+        MATCH="Disposition:.*$MIME_B_ATTACHMENT"                            \
+        FILE="$JA_MIME_SAVE_DIR/$jaMimeSaveFile"
+
+    LINEBUF     = $jaMimeSaveLinebuf
+    SHELLMETAS  = $jaMimeSaveShellmetas
+
+    # ....................................................... decode ...
+    dummy = "pm-jamime-save.rc: Encoding($contentEncoding) of $jaMimeSaveFile"
+
+    :0
+    *$ jaMimeSaveFile   ?? $a
+    *$ contentEncoding  ?? $a
+    {
+        jaMimeSaveFile2 = "$jaMimeSaveFile.raw";
+
+        :0 wc
+        * contentEncoding ?? base64
+        | $CAT $JA_MIME_SAVE_DIR/$jaMimeSaveFile \
+          | $MIME_BIN_64 > $JA_MIME_SAVE_DIR/$jaMimeSaveFile2 \
+          && $MV $JA_MIME_SAVE_DIR/$jaMimeSaveFile2 \
+                 $JA_MIME_SAVE_DIR/$jaMimeSaveFile
+
+        :0 Ewc
+        * contentEncoding ?? quoted-printable
+        | $CAT $JA_MIME_SAVE_DIR/$jaMimeSaveFile \
+          | $MIME_BIN_QP > $JA_MIME_SAVE_DIR/$jaMimeSaveFile2 \
+          && $MV $JA_MIME_SAVE_DIR/$jaMimeSaveFile2 \
+                 $JA_MIME_SAVE_DIR/$jaMimeSaveFile
+
+    }
+}
+
+dummy = "pm-jamime-save.rc: end:"
+
+# End of file pm-jamime-save.rc

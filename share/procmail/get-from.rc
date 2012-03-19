@@ -1,0 +1,46 @@
+# get-from.rc -- procmail rc file to get the "best" from address
+#
+# Sets FROM and FRIENDLY, the latter being the "friendly" user name
+# sans any address.
+#
+# $Id: get-from.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+#    Copyright (C) 1995  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+# Get the best FROM
+:0
+* ! ^Reply-to: *\/[^ ].*
+* ! ^From: *\/[^ ].*
+* ! ^Sender: *\/[^ ].*
+* ! ^From +\/[^ ]+
+* ! ^X-Envelope: *\/[^ ].*
+{ FROM=nobody }
+:0E
+{ FROM=$MATCH }
+
+# Get the "friendly" name part of the address, by
+#  1. removing any bracketed address part,
+#  2. removing any unbracketed address part,
+#  3. unquoting any text
+#  4. unparenthesizing any text
+FRIENDLY=`echo $FROM | sed -e 's/ *<.*> *//' \
+			   -e 's/ *[^ ][^ ]*[\@\!][^ ][^ ]* *//' \
+			   -e 's/"\(.*\)"/\1/' \
+			   -e 's/(\(.*\))/\1/'`
+FRIENDLY=${FRIENDLY:-$FROM}
+

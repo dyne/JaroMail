@@ -1,0 +1,460 @@
+# pm-jacookie.rc -- Handle cookie (unique id) confirmations
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details.
+#
+#       You should have received a copy of the GNU General Public License
+#       along with program. If not, write to the
+#       Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+#       Boston, MA 02110-1301, USA.
+#
+#       Visit <http://www.gnu.org/copyleft/gpl.html>
+#
+#   Overview of features
+#
+#       o   Each user must register himself to cookie cache before he
+#           is considered "known"
+#       o   Unless user return the generated cookie string; which is
+#           typically a decimal or hex number, he is not considered as
+#           known and should not have access to services you provide.
+#       o   Can be used as a "doorbell" spam/UBE shield
+#
+#   Description
+#
+#	This recipe handles generating the cookie to new users, comparing
+#       the returned cookie against the original one and passing known
+#       users through if they already had returned their cookie.
+#
+#       When you run automatised scripts, eg. to manage mailing lists
+#       where users can subscribe and unsubscribe, you have better to
+#       install safety measure so that someone can not subscribe his enemy
+#       to 30 mailing lists.
+#
+#       The *cookie* is any continuous block of random characters that
+#       is sent to person who wanted to use the service. He must send
+#       back the *cookie* before the service starts an action, like
+#       subscribe. If someone forges the From address to pretend to be
+#       someone else and then subscribes as-beeing-someone-else to a
+#       mailing list, the cookie protects this from happening.
+#
+#       The cookie is sent to someone-else, and he must return the cookie
+#       before the "subscribe" service is activated. Obviously this
+#       someone-else will not be interested in sending back the cookie and
+#       thus the forgery fails. Isn't that simple, but efective protection
+#       against misuse?
+#
+#   Should I use this as Challenge-Response Spam shield?
+#
+#       Unsolicited Bulk Email aka Spam is crawling from every possible
+#       domain thinkable, so you might think that a challenge-response
+#       policy could be deployed to regular email communication as well.
+#       The idea would be that unknown people are requested to
+#       "join" to a white list, before discussion is initiated with them.
+#       Bulk email shotguns do not reply to challenges (here: cookies),
+#       so confirmations are not returned. Individual people that want to
+#       talk, *may* want to return the cookies.
+#
+#       Sounds like a perfect Unsolicited Bulk Email shield? No more
+#       non-invited mail? Wrong. Don't use this module for that. The
+#       whole idea of challenge-response is flawed and causes trouble
+#       for every person who tries to contact. Imagine for 10 people
+#       using C-R systems; they would all need to authenticate
+#       themselves. Who is going to believe that he is not replying to
+#       a spammer who is collecting email addresses? And what about
+#       automatic messages that might be received -- there is no
+#       artificial intelligence to deparate "human" messages from
+#       automatically generated messages, so challenges just
+#       increase the overall mail traffic. Every C-R system doubles
+#       the mail traffic and becomes spam problem by itself.
+#
+#       In short, don't use this module for implementing a C-R system
+#       to block regular mail to you.
+#
+#   How it works
+#
+#       By default the cookie generated uses CRC 32 `cksum', but if you have
+#       md5, you should use it. The cookie is generated from the reply
+#       address and immediately stored to cookie database file with entry
+#
+#           DATE FROM-a COOKIE-a
+#           DATE FROM-b COOKIE-b
+#
+#       If this was a new user or an old user, who has not registered his
+#       cookie yet, then original message is sent back to the sender with
+#       instructions: "please place the magic string to Subject line and
+#       resent the message."
+#
+#       When cookie is returned back, a new line to the database is added,
+#       simply by adding a duplicate entry. The file now looks like this:
+#
+#           DATE FROM-a COOKIE-a
+#           DATE FROM-b COOKIE-b
+#           DATE FROM-a COOKIE-a
+#
+#       When there is two or more same entries, like FROM-a, the address
+#       is supposed to be known and person behind it "cleared".
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-jadate.rc
+#       o   pm-jacookie1.rc
+#       o   pm-jastore.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   JA_COOKIE_SEND, flag. Default is "yes". Set to "no" if you want
+#           to take full control of the message returned to user. You can check
+#           variable `ERROR' and use `key' which holds the unique `cookie'
+#       o   JA_COOKIE_CACHE, cache to determine if this is new user or not.
+#       o   JA_COOKIE_AUTO_KEY, flag. If set to "yes"; the cookie is
+#           initially put to the Subject when the message is bounched back.
+#           Receiver only has to press "r" to reply to send the cookie
+#           and message back (convenient). You set this flag to "no" when
+#           you want to avoid accidnebts eg. when receiver is about to
+#           subscribe to a mailing lists: he has to manually insert the cookie
+#           into subject. But keep flag to "yes" if you use this module to
+#           get your friends registered easily.
+#       o   JA_COOKIE_KEYS, the cookie database. Email address and person's
+#           access cookie.
+#       o   JA_COOKIE_RC, dubroutine to generate the cookie id from INPUT.
+#           By default uses CRC 32.
+#       o   JA_COOKIE, the string from which the cookie will be generated.
+#           If you already have the return addres for the sender derived,
+#           you should assing a value to this to save unnecessary formail call.
+#
+#   Returned values
+#
+#       ERROR will contain the efective action when this recipe file ends
+#
+#       o   "new-user", This is first message from sender.
+#       o   "known-user", message has email that has been "cleared" ie.
+#           cookie had been returned and user registered.
+#       o   "key-mismatch", This is at least second message from sender.
+#           But he dind't send the confirmation in this message.
+#
+#       `key' is an internal variable in this recipe file and will hold the
+#       cookie id in case of "new-user" and "key-mismatch". You may want to
+#       use it if you generate your own reply.
+#
+#   Example usage for UBE shield
+#
+#       This is what I use to prevent unknown people from sending me UBE.
+#       It takes a bit extra, but they can easily return the message.
+#       Fill in the missing variables, this won't work out of the box for you.
+#
+#           WORK 	= "(domain1|domain2|domain3)"
+#           LISTS 	= "(procmail|list-2|list-3|list-4)"
+#           VALID 	= "(postmaster|abuse|$LISTS|$WORK)"
+#           RC_COOKIE   = $PMSRC/pm-jacookie.rc
+#           UBE_SPOOL   = $HOME/Mail/junk.ube.spool   # Save spam here
+#
+#           :0
+#           *$ ! From:.*$VALID
+#           *$ ! ^FROM_DAEMON
+#           {
+#               JA_COOKIE_SEND  = "yes"         # Activate it
+#               INCLUDERC       = $RC_COOKIE
+#
+#               :0 :
+#               * ! ERROR ?? known-user
+#               $UBE_SPOOL
+#
+#               #  ... Past this point: it was user in whitelist, so the
+#               #  recipes after this block will take care of it
+#           }
+#
+#   Example usage for subscriptions
+#
+#           $RC_COOKIE   = $PMSRC/pm-jacookie.rc
+#
+#           ...Mailing lists handled here...
+#           ...Your work messages filed here..
+#
+#           TO            = `formail -rt -zxTo:`  # We need this elswhere
+#           JA_COOKIE_TO  = $TO
+#
+#           #   For List-X all subscribe requests must
+#           #   be confirmaed
+#
+#           * ^TO_()list-x
+#           * ^Subject: +subscribe\>
+#           {
+#               JA_COOKIE_SEND  = "no"
+#               INCLUDERC       = $RC_COOKIE
+#
+#               :0
+#               * ERROR ?? known-user
+#               {
+#                   #   User sent the subsribe request again, allow joining
+#                   #   immediately.
+#               }
+#               :0 E
+#               {
+#                   # Because the Send was set to "no"; we're in charge
+#                   # to send a reply to the user.
+#                   # ...generate suitable message with formail -rt
+#               }
+#
+#           }
+#
+#           #  End of example
+#
+#   Change Log: (none)
+
+# ............................................................ &init ...
+
+dummy = "
+======================================================================
+pm-jacookie.rc: init:
+"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+:0
+*$ ! YYYY ?? ^^$d$d$d$d^^
+{
+    INCLUDERC = $PMSRC/pm-jadate.rc
+}
+
+JA_COOKIE_SEND       = ${JA_COOKIE_SEND:-"yes"}
+JA_COOKIE_AUTO_KEY   = ${JA_COOKIE_AUTO_KEY:-"yes"}
+
+JA_COOKIE_CACHE      = ${JA_COOKIE_CACHE:-$HOME/.cookie-cache-new-user}
+JA_COOKIE_CACHE_SIZE = ${JA_COOKIE_CACHE_SIZE:-8192}
+JA_COOKIE_KEYS       = ${JA_COOKIE_KEYS:-$HOME/.cookie-cache-keys}
+JA_COOKIE_WHITELIST  = ${JA_COOKIE_WHITELIST:-$HOME/.cookie-cache-whitelist}
+
+JA_COOKIE_RC         = ${JA_COOKIE_RC:-$PMSRC/pm-jacookie1.rc}
+
+JA_COOKIE_XLOOP      = ${JA_COOKIE_XLOOP:-"\
+Procmail Authentication service (PAS)"}
+
+JA_COOKIE_SUBJECT_TAG= ${JA_COOKIE_SUBJECT_TAG:-"PAS-cookie-"}
+JA_COOKIE_HEADER     = ${JA_COOKIE_HEADER:-"X-PAS-Auth-Key:"}
+cookie = ""
+
+JA_COOKIE_MSG        = ${JA_COOKIE_MSG:-"\
+Your message need to be authenticated. Include the authentication key
+at the end of Subject header and resend your message."}
+
+# - If not set, set the variable. We use `r' instead of `rt'
+#   because of `-rD' later.
+# - User can preset the JA_COOKIE to his liking if the "to" field's
+#   string is not enough to generate a unique cookie from it.
+
+JA_COOKIE_FROM = ${JA_COOKIE_FROM:-`$FORMAIL -r -zxTo:`}
+
+# - Should non-authenticated messages be saved? Change this
+#   to mailbox name as needed.
+
+JA_COOKIE_DEVNULL = ${JA_COOKIE_DEVNULL:-/dev/null}
+
+# ..................................................... &read-cookie ...
+
+jaCookieData = ""
+jaCookieKey  = ""
+
+:0
+*$ $SUPREME^0 H ?? ^Subject:()\/.* +$JA_COOKIE_SUBJECT_TAG[0-9]+
+*$ $SUPREME^0 B ?? ^Subject:()\/.* +$JA_COOKIE_SUBJECT_TAG[0-9]+
+{
+    jaCookieSubject = $MATCH
+
+    :0
+    * ^FROM_DAEMON
+    {
+        #   The sender is not there, drop this message
+
+        :0 h
+        * JA_COOKIE_DEVNULL ?? /dev
+        $JA_COOKIE_DEVNULL
+
+        #   For mailbox, use lock
+
+        :0 :
+        $JA_COOKIE_DEVNULL
+    }
+
+    :0
+    *$ jaCookieSubject ?? $JA_COOKIE_SUBJECT_TAG\/[0-9]+
+    {
+        jaCookieData = $MATCH
+    }
+
+    #   Remove cookie from subject
+
+    :0
+    *$ jaCookieSubject  ?? ^()\/.* +$JA_COOKIE_SUBJECT_TAG
+    *$ MATCH            ?? ^()\/.*[ ]
+    *$ MATCH            ?? ^()\/.*[^ ]
+    {
+	jaCookieSubject = $MATCH
+    }
+}
+
+#   No cookie was in the subject
+
+:0 E
+* ^Subject: \/.*
+{
+    jaCookieSubject = $MATCH
+}
+
+# ....................................................... &whitelist ...
+
+#   Is this user in whitelist already?
+
+ERROR             = ""
+jaCookieWhitelist = ""
+
+:0
+* jaCookieData ?? ^^^^
+* ? $GREP '\<$JA_COOKIE_FROM\>' $JA_COOKIE_WHITELIST
+{
+    jaCookieWhitelist = "yes"
+    ERROR             = "known-user"
+}
+
+# ........................................................... &do-it ...
+
+jaCookieNewUser     = "yes"
+jaCookieDate        = $YYYY-$MM-$DD
+
+#   - Mail arrived, check cache. Use regional lock because formail
+#     is in the condition line.
+#   - If user was there already, formail returns success
+#   - Options -rD cause adding the email to the cache.
+
+LOCKFILE    = ${JA_COOKIE_CACHE}.lock
+dummy       = "pm-jacookie.rc: Testing new user"
+
+:0
+* jaCookieWhitelist ?? ^^^^
+* ? $FORMAIL -rD $JA_COOKIE_CACHE_SIZE $JA_COOKIE_CACHE
+{
+    jaCookieNewUser = "no"
+}
+
+LOCKFILE
+mail = ""
+
+#   He is not in whitelist (ERROR="") and he did not return
+#   the cookie (cookie="")
+
+dummy ="pm-jacookie.rc: Check if white [$jaCookieWhitelist] ERROR [$ERROR] cookie [$cookie]"
+
+:0
+* jaCookieWhitelist ?? ^^^^
+* jaCookieNewUser   ?? no
+{
+    dummy = "pm-jacookie.rc: Old user, did he return a cookie [$jaCookieData]"
+
+    :0
+    * jaCookieData ?? [0-9]
+    {
+	#  This user has returned confirmation. Check that it is correct
+
+        dummy = "pm-jacookie.rc: confirming the cookie"
+
+	:0
+	*$ ? $GREP ".*$JA_COOKIE_FROM.+$jaCookieData" $JA_COOKIE_KEYS
+	{
+	    dummy = "pm-jacookie.rc: Adding to whitelist"
+            msg   = "$JA_COOKIE_FROM"
+
+	    :0 hwc : $JA_COOKIE_WHITELIST$LOCKEXT
+	    | echo "$msg" >> $JA_COOKIE_WHITELIST
+
+	    ERROR = "known-user"
+	}
+
+	:0 E
+	{
+	    #   Ask to send again
+
+	    ERROR         = "cookie-error"
+	    jaCookieKey   = $jaCookieData
+	    jaCookieMail  = "yes"
+	}
+    }
+
+    :0 E
+    {
+	dummy   = "pm-jacookie.rc: Unknown user. Generate new key"
+        jaCookieNewUser = "yes"
+    }
+}
+
+:0
+* jaCookieNewUser ?? yes
+{
+    saved = $ERROR
+
+        INPUT       = $JA_COOKIE_FROM
+        INCLUDERC   = $JA_COOKIE_RC
+        jaCookieKey = $OUTPUT
+
+    ERROR         = $saved  #  restore value that got changed in subroutine
+
+    jaCookieMail  = "yes"
+    jaCookieMsg   = "$jaCookieDate $JA_COOKIE_FROM $jaCookieKey"
+    dummy         = `echo "$jaCookieMsg" >> $JA_COOKIE_KEYS`
+}
+
+dummy = "pm-jacookie.rc: If new user/mismatched key, maybe send mail [$jaCookieMail]"
+
+:0
+*     jaCookieMail              ?? yes
+*     jaCookieWhitelist         ?? ^^^^
+*     JA_COOKIE_SEND            ?? yes
+*  !  jaCookieKey               ?? ^^^^
+*$ ! ^X-Loop:.*$JA_COOKIE_XLOOP
+*$ !  $JA_FROM_DAEMON
+{
+    dummy = "pm-jacookie.rc: Request authentication $JA_COOKIE_FROM"
+
+    #   - If auto-mode is "on"; then put the key in the subject
+    #   - Sender only has to reply to message.
+
+    jaCookieKey = "$JA_COOKIE_SUBJECT_TAG$jaCookieKey"
+
+    :0 fhw
+    *  JA_COOKIE_AUTO_KEY ?? yes
+    | $FORMAIL -I "Subject: $jaCookieSubject $jaCookieKey"
+
+    #   Add extra header as well to message that go past the next one
+
+    :0 fhw
+    | $FORMAIL -A "$JA_COOKIE_HEADER $jaCookieKey"
+
+    :0 hbw c: $JA_COOKIE_CACHE$LOCKEXT
+    | ( $FORMAIL -rk -b                                                     \
+        -A "X-Loop: $JA_COOKIE_XLOOP";                                      \
+        echo "You Authentication key is: $jaCookieKey";                     \
+        echo "$JA_COOKIE_MSG";                                              \
+        ) | $SENDMAIL $SENDMAIL_FLAGS
+
+}
+
+dummy = "pm-jacookie.rc: end: $ERROR"
+
+# pm-store.rc ends here

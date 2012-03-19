@@ -1,0 +1,8 @@
+# get-date.rc
+#
+# See date.rc for Copyright info.
+#
+# $Id: get-date.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+DATE
+INCLUDERC=date.rc

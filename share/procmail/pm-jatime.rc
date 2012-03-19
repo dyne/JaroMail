@@ -1,0 +1,127 @@
+# pm-jatime.rc -- "hh:mm:ss" time parser from variable INPUT
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	This includerc parses date from variable INPUT which has string
+#
+#           "hh:mm:ss"
+#
+#       Example input
+#
+#           "Thu, 13 Nov 1997 11:43:23 +0200"
+#
+#       Returned values
+#
+#           hh      = 2 digits
+#           mm	    = 2 digits
+#           ss      = 2 digits
+#
+#	Variable ERROR is set to "yes" if it couldn't recognize the INPUT
+#	and couldn't parse all hh, mm, ss variables.
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include pm-javar.rc from there.
+#
+#   Call arguments (variables to set before calling)
+#
+#           INPUT = string-to-parse
+#
+#       The INPUT can be anything as long as it contains NN:NN:NN
+#
+#   Usage example
+#
+#	Get the time of received message. The From_ header will always
+#	have the standard time stamp.
+#
+#	    PMSRC	    = $HOME/pm
+#	    RC_DATE_TIME    = $PMSRC/pm-jatime.rc
+#
+#           :0 c
+#           *  ^From +\/.*
+#           {
+#               INPUT = $MATCH
+#               #  Turn off the logging while executing this part
+#
+#               VERBOSE=off   INCLUDERC = $RC_DATE_TIME   VERBOSE=on
+#
+#               :0
+#               * ERROR ?? yes
+#               {
+#		   # Should not ever happen, you have broken From_
+#		}
+#           }
+#
+#   Change Log (none)
+
+# .................................................... &initializing ...
+
+id    = "pm-jatime.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ..................................................... &output-vars ...
+# output variables
+#
+hh mm ss
+ERROR = "yes"		# set default value
+
+# ........................................................... &do-it ...
+#	Check that input is something like: Thu, 13 Nov 1997
+#
+dummy = "$id: Parse date like [Tue, 31 Dec 1997}"
+dummy = "$id: INPUT = $INPUT"
+
+:0
+*$ INPUT ?? $s*\/$d$d:$d$d:$d$d
+{
+
+    INPUT = $MATCH
+
+    *$ INPUT ?? ^\/$d$d
+    {
+	hh = $MATCH
+    }
+
+    :0
+    *$ INPUT ?? ^$d$d:\/$d$d
+    {
+	mm = $MATCH
+    }
+
+
+    :0
+    *$ INPUT ?? ^$d$d:$d$d:\/$d$d
+    {
+	ss	= $MATCH
+	ERROR	= "no"
+    }
+}
+
+dummy = "$id: end:"
+
+# end of file pm-jadate.rc

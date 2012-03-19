@@ -1,0 +1,118 @@
+# pm-jasrv-daemon.rc -- server request check, subroutine for File Server
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This subroutine is part of the MPFS file server.
+#       Handle BOUNCES to mail server messages, eg if delivery failed
+#       due to maximum byte limit.
+#
+#           552 <foo@site.com>... Message is too large; 100000 bytes max
+#
+#   Input
+#
+#       (none) This recipe examines headers and body to see if it's daemon
+#       bounce.
+#
+#   Output
+#
+#       o   stat, set to "daemon" if message was handled.
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+
+id    = "pm-jasrv-daemon.rc"
+dummy = "
+========================================================================
+$id: init: Check if this is bounced server message.
+"
+
+stat    = ""
+msg     = ""
+subject = ""
+to      = ""
+
+
+#   Hm, We wouldn't even need the FROM_DAEMON test, because
+#   X-Loop is supposed to be unique. Because we expect to see bounce
+#   message the original message is included in the body, that's by "B ??"
+#   search.
+#
+#   Handle only some daemon messages, notify the recipient about an error.
+
+dummy = "$id: The pm-javar.rc daemon status is: $JA_FROM_DAEMON"
+
+:0
+*$ $JA_FROM_DAEMON
+*$ B ?? ^X-Loop: $JA_SRV_XLOOP
+{
+    :0
+    * B ?? ^Subject:\/.*
+    {
+        subject = $MATCH;
+    }
+
+    :0
+    * B ?? ^To:\/.*
+    {
+        to = $MATCH
+    }
+
+    :0
+    *$ B ?? ()\/^$d+ .*Message is too large.*
+    {
+        msg = $MATCH
+    }
+
+    :0
+    * msg ?? [a-z]
+    {
+        stat = "daemon";
+
+        #   Add new header telling that this bouce was auto-notified back
+        #   to original reqeastor.
+
+        :0 fhw
+        | $FORMAIL -I "X-Mpfs-daemon: [notified $to] $msg"
+
+
+        #   make sure To has "@" character, otherwise picking of
+        #   "To" from the body failed.
+
+        :0 wc
+        * to ?? @
+        |  ( $FORMAIL                                                       \
+             -rtk -p "    >"                                                \
+             -I "To: $to"                                                   \
+             -I "X-Loop: $JA_SRV_XLOOP "                                    \
+             -I "Subject: $msg"                                             \
+             ;                                                              \
+echo "Your account didn't accept the requested file. " ;                    \
+echo "Get server help file with 'send help' and see conversion types etc."; \
+echo "Or notify the File Server admin";                                     \
+            ) | $SENDMAIL;                                                  \
+            echo "    [ja-srv; daemon $to; $msg;]"  >> $JA_SRV_LOG;
+
+    }
+
+}
+
+dummy = "$id: end: STATUS = $stat"
+
+
+# End of pm-jasrv-daemon.rc

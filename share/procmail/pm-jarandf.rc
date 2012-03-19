@@ -1,0 +1,128 @@
+# pm-jarandf.rc -- pick (rand)om line from (f)ile
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       Return random line or a line from a file. This subroutine uses
+#       shell command `awk' and possibly `wc' to be as small burden to the
+#       system as possible.
+#
+#   Required settings
+#
+#       You must have awk that supports VAR=value assignment syntax outside
+#       the code block: that is, in the input line. I know no awk that
+#       would not have this feature, but at least you know now what it takes.
+#
+#	    % awk '{print VAR; exit;}' VAR=1 /etc/passwd
+#
+#       Try using GNU awk, if your standard awk didn't print 1 in above
+#       test. (Put this line to the top of your .procmailrc)
+#
+#           AWK = "gawk"
+#
+#   Call arguments (variables to set before calling)
+#
+#	If intend to call this subroutine many times, then please calculate
+#	the number of lines beforehand and pass it to this subroutine. If
+#	the MAX is not set, then `wc' is called every time to find your the
+#	line count.
+#
+#       o   FILE, from what file to select. Make sure this exists; existence
+#           is not checked here.
+#	o   [MAX] optional, number of lines in the FILE.
+#
+#   Returned value
+#
+#       variable LINE
+#
+#   Example usage
+#
+#           # Select random line from a file
+#
+#           $RC_RANDF = $PMSRC/pm-jarand.rc
+#           $COOKIE   = $HOME/txt/cookie.lst
+#
+#	    ...somewhere..
+#	    MAX=20 FILE=$COOKIE    INCLUDERC=$RC_RANDF
+#
+#           #  LINE contains randomly read line
+#
+#   Change Log: (none)
+
+# ............................................................ &init ...
+
+id    = "pm-jarandf.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+
+# ........................................................... &input ...
+
+# FILE; MAX; defined by user
+
+# ..................................................... &output-vars ...
+# output variables
+
+LINE
+
+# ........................................................... &do-it ...
+# Prevent calling sh -c here. Speeds up procmail.
+
+jarandfShellmetas = $SHELLMETAS
+SHELLMETAS
+
+:0
+* FILE ?? [a-z]
+{
+
+    #   If max is not set beforehand
+
+    :0
+    * ! MAX ?? ^^[0-9]+^^
+    {
+        #   Awk can't know how many lines are in the file in advance,
+        #   we must find it out.
+
+        MAX = `wc -l $FILE`
+    }
+
+    #   It works like this:
+    #   - When line number(NR) is 1, calculate random line
+    #   - calculated line is same as current line number, print and exit.
+
+    LINE = `$AWK                                                            \
+        '                                                                   \
+            function GetRand(i, j)                                          \
+            {                                                               \
+                srand();                                                    \
+                return (i + int ( rand()*j ));                              \
+            }                                                               \
+            {                                                               \
+                if ( NR == 1    ) { line = GetRand(1, max); }               \
+                if ( NR == line ) { print; exit; }                          \
+            }                                                               \
+        ' max=$MAX $FILE `
+
+}
+
+SHELLMETAS = $jarandfShellmetas
+
+dummy = "$id: end:"
+
+# pm-store.rc ends here

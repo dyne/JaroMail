@@ -1,0 +1,25 @@
+# pf-chkto.rc
+#
+# $Id: pf-chkto.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+# Procmail recipe file to check a To: address ADDR for Mail folder
+# filing.  If the address matches, append DEST to PF_DEST.
+#
+# After all checks are complete, invoke pf-save.rc to save the
+# message into the appropriate folders.  See its comments for details.
+#
+# Set these variables before invoking:
+#
+# ADDR	Address to which addressed mail will be filed
+#	into the named folder.
+#
+# DEST	Destination into which addressed mail will be
+#	dropped.
+#
+# INCLUDERC=pf-chkto.rc
+
+:0
+* ADDR ?? .
+* DEST ?? .
+* $ ^TO$ADDR
+{ PF_DEST="$PF_DEST $DEST" }

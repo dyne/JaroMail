@@ -1,0 +1,423 @@
+# pm-jadaemon.rc -- Handle DAEMON messages by changing subject
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#	<http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       When you send a message to a address that had delivery troubles,
+#       you get a DAEMON message back explaining the error problem. I
+#       usually want to save these daemon mesaages to a different folder
+#       and check the folder from time to time. A typical daemon message
+#       is like this (shortened)
+#
+#           From: Mail Delivery Subsystem <MAILER-DAEMON@my.domain.com>
+#           Subject: Warning: could not send message for past 4 hours
+#
+#           The original message was received at...
+#           ----- Transcript of session follows -----
+#           Deferred: Connection timed out
+#           ----- Original message follows -----
+#           [YOUR MESSAGE AS YOU SENT IT WITH HEADERS]
+#
+#       Well, when I read the subjects, I do not like the standard error
+#       messages, but I also like to know to which address the delivery
+#       failed and what was the original subject. This small recipe changes
+#       the daemon message's Subject to
+#
+#           Subject BRIEF-ERROR-REASON, SENT-TO-ADDRESS, ORIGINAL-SUBJECT
+#
+#       and from that you can immediately tell if you should be worried Eg.
+#       if SENT-TO-ADDRESS was your friend's, then you want to take actions
+#       immediately, but if it were your complaint to UBE message to
+#       postmaster, you don't want to bother reading that daemon message.
+#       Here are some real examples:
+#
+#           fatal errors,postmaster,ABUSE (Was: Super Cool Site!)
+#           Host unknown,postmaster,ABUSE (Was: A-Credit Information)
+#           undeliverable,postmaster,Could you investigate this spam
+#           Warning-Returned,friend,Have you looked at this
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       needs scrips
+#
+#       o   pm-javar.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   `JA_DAEMON_SAVE'. This is by default `yes' which causes the
+#           original subject to be saved under header field `X-Old-Daemon-Subject'.
+#           If you don't want that extra header generated, set this variable to `no'
+#       o   `JA_DAEMON_REGEXP', which messages to trigger
+#
+#   Return values
+#
+#       o   Variable ERROR will be set to "yes" if daemon message was handled
+#           otherwise; value is "no"
+#
+#   Usage example
+#
+#       Just add this recipe somewhere in your .procmailrc. The place where
+#       you would put this daemon message trapper subroutine is crucial:
+#       think carefylly how you order your recipes. One suggested order
+#       could be: backup important messages, cron-subroutine,
+#       handle duplicates, DAEMON MESSAGES, plus addressed message,
+#       server message (file server, ping responder...), MAILING LISTS,
+#       send possible vacation  replies only after all above, apply
+#       kill file, detect mime, save private messages and las FILTER UBE.
+#
+#
+#           PMSRC           = $HOME/pm
+#           RC_DAEMON       = $PMSRC/pm-jadaemon.rc
+#           DAEMON_MBOX     = $HOME/Mail/junk.daemon.mbox
+#
+#           ...
+#
+#           INCLUDERC       = $RC_DAEMON
+#
+#           :0 :            # If that was a daemon message, save it
+#           * ERROR ?? yes
+#           $DAEMON_MBOX
+#
+#   Change Log: (none)
+
+dummy = "
+========================================================================
+pm-jadaemon.rc: init:"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ........................................................... &input ...
+
+JA_DAEMON_SAVE = ${JA_DAEMON_SAVE:-"yes"}
+
+# ----- The following addresses had permanent fatal errors -----
+# <joe@example.com>
+#
+# ----- Transcript of session follows -----
+# ... while talking to 168.231.153.98:
+# 550 5.1.2 <joe@example.com>... Host unknown (Name server: host not found)
+# <<< 501 healy!me@example.com... Refused
+#
+#   ----- The following addresses had transient non-fatal errors -----
+# <nobody@mail14.example.com>
+# <<< 550 5.1.1 unknown or illegal alias: email.jdoe@example.com
+# 550 <email.jdoe@example.com>... User unknown
+
+JA_DAEMON_REGEXP = ${JA_DAEMON_REGEXP:-"\
+^From.*(MAILER-DAEMON|abuse@|postmaster@|daemon@)\
+|(Transcript of session follows\
+|permanent fatal errors\
+|MAILBOX NOT FOUND\
+|Invalid recipient\
+|Service unavailable\
+|Message is too large\
+|550.*User unknown\
+|550.*illegal alias\
+|message was not delivered\
+|blocked using.*spamcop\
+|quota exceed\
+|501.*refused\
+|Domain blacklisted\
+|transient non-fatal errors\
+|user.*doesn't exist\
+|Deferred: Connection timed out\
+)\
+"
+# ......................................................... &output ...
+
+ERROR = "no"
+
+# ........................................................... &do-it ...
+
+errTo   = ""
+charset = "[^ @(){}<>]"
+daemon  = !
+
+# Novell Mercury MTA send Broken message headers, The "From " is all wrong.
+#
+#       From mmokrejs  Wed Aug 14 16:48:53 2002
+#       Received: from SpoolDir by OKBDELL (Mercury 1.44); 14 Aug 02 16:33:29 +0100 (MET)
+#               14 Aug 02 16:33:51 +0100 (MET)
+#       From: Mail Delivery System <postmaster.mustela@lfmotol.cuni.cz>
+#       Subject: Delivery failure notification
+#       Message-ID: <5C4D0D00E16@mustela.lfmotol.cuni.cz>
+#       X-Diagnostic: Possible loopback problem
+#       X-Envelope-To: montana-request
+
+:0
+*$ ()\/^From:$s+Mail Delivery System.*
+* ^X-Diagnostic:
+{
+    daemon = "yes"
+}
+
+#   If you wonder why ()\/ and non-sensical ".*" at the end is used,
+#   it is only for logging purposes. It's easier if you can look from log file
+#   what the regexp actually matched.
+
+:0
+*$ ()\/$JA_DAEMON_REGEXP.*
+{
+    daemon = "yes"
+}
+
+dummy = "Check for DAEMON status [$daemon]"
+
+:0
+*$ daemon ?? ^^yes^^
+{
+    errText     # Kill variable
+
+    # Read the reason from MAIL DAEMON (subject field)
+
+    :0
+    * B ?? THIS IS A WARNING MESSAGE
+    {
+        errText = "Warn-Returned,"
+
+        #   ----- The following addresses had transient non-fatal errors -----
+        #   <foo@d255f016.mch.sni.de>
+
+        :0
+        * B ?? The following addresses.*($)\/.*@
+        {
+            match = $MATCH
+        }
+    }
+
+    # ......................................... sendmail-error-codes ...
+
+    :0 E
+    * B ?? ()\/550.*User unknown
+    {
+        errText = "Err-Unknown,"
+        match   = $MATCH
+    }
+
+    :0 E
+    *  B ?? ()\/554.*Mail loop detected
+    {
+        errText = "Err-Loop,"
+        match   = $MATCH
+    }
+
+    #   TO: foo@bar [552 Requested mail
+    #   operation aborted: Cannot be routed.]
+
+    :0 E
+    *  B ?? ()\/.*552 .*mail operation.*
+    {
+        errText = "Err-Unknown,"
+        match   = $MATCH
+    }
+
+    :0 E
+    *$ $SUPREME^0   B ?? following addresses have delivery notifications
+    *$ $SUPREME^0   B ?? has encountered a delivery problem.
+    *$ $SUPREME^0   B ?? Mailbox disk quota exceeded
+    *$ $SUPREME^0   B ?? did not reach the following recipient
+    *$ $SUPREME^0   B ?? Your message was refused by recipient
+    *$ $SUPREME^0   B ?? was not delivered to:
+    *$ $SUPREME^0   B ?? Delivery of the email was stopped
+    *$ $SUPREME^0   B ?? User mailbox exceed
+    *$ $SUPREME^0   B ?? Mailbox full
+    *$ $SUPREME^0   B ?? Our virus detector
+    {
+        errText = "Warn-Delivery,"
+    }
+
+    :0 E
+    * B ?? ()\/(not.*delivered.*($).*after.*hours\
+          |still undelivered after.*(hours|days)\
+          ).*
+    {
+        errText = "Warn-Returned,"
+    }
+
+    # ...................................................... unknown ...
+
+    :0 E
+    *$ $SUPREME^0 H ?? ^Subject:.*(could not send|returned)
+    *$ $SUPREME^0 B ?? ()\/(message.*undeliverable\
+                    |could not be delivered\
+                    |no longer a valid address\
+                    |addresses had permanent fatal errors\
+                    | User unknown\
+                    ).*
+    {
+        #   The message that you sent was undeliverable to the following:
+        #           postmaster (user not found)
+
+        # This e-mail address, `abc', is no longer a valid address.  You can
+        # reach Mr Foo at his new email address:
+        #
+        #   foo@bar.com
+        #
+        #   <ORIGINAL MESSAGE FOLLOWS>
+
+        #   Subject:  Returned mail: Cannot send message
+        #   The following addresses had permanent fatal errors
+
+        errText = "err-Unknown,"
+    }
+
+    # ........................................................ other ...
+
+    :0 E
+    * ^Subject:.*\/Host unknown
+    {
+        errText = "$MATCH,"
+
+        :0
+        * B ?? THIS IS A WARNING
+        {
+            errText = "Warn-$errText"
+        }
+    }
+
+    :0 E
+    * ^Subject:.*\/Too many hops
+    {
+        errText = "MaxHops,"
+    }
+
+    :0 E B
+    * Connection to.*failed
+    {
+        errText = "Err-connection,"
+    }
+
+    # ........................................................ qmail ...
+
+    #   Hi. This is the qmail-send program at master.debian.org.
+    #   I'm afraid I wasn't able to deliver your message to the ...
+    #   This is a permanent error; I've given up. Sorry it didn't work out.
+    #
+    #   <address>:
+    #   Sorry, no mailbox here by that name. (#5.1.1)
+
+    :0 E
+    * B ?? wasn't able to deliver your message to.*addresse
+    {
+        errText = "err-Unknown,"
+
+        :0
+        * B ?? it didn't work out.($)+\/.*
+        {
+            match = $MATCH
+        }
+    }
+
+    # ................................................... Novel MTA ...
+
+    :0 E
+    *$ ^X-Diagnostic:$s+\/.*
+    {
+        errText = "err-Unknown,"
+        match   = $MATCH
+    }
+
+    # .................................... daemon message known now? ...
+    #   If the previous recipes didn't set errText,
+    #   then this message was from a postmaster that sent it to
+    #   the spam-l or to some other mailing list where it's okay
+    #   to post copies of UBE.
+
+    :0
+    * ! errText ?? ^^^^
+    {
+        #  Read the old subject from body of original message
+
+        :0 B
+        *$  $SUPREME^0 ^Subject: \/.*
+        *$  $SUPREME^0 The subject of the message is: \/.*
+        {
+            errSubj = $MATCH
+        }
+
+        #   Hm, no copy in the body of message? Look at headers then.
+
+        :0 E
+        *$ $SUPREME^0  match ?? $a
+        {
+            errSubj = $match
+        }
+
+        #   Nothing matched, so take subject
+
+        :0 E
+        * ^Subject:()\/.*
+        {
+            errSubj = $MATCH
+        }
+
+        #   To whom we tried to mail the message. Find it out
+        #
+        #       login@site.com
+        #       |
+        #       This part will be derived, there must be leading space
+
+        :0
+        *  errTo ?? ^^^^
+        {
+            :0
+            *$ match ?? [<]()\/$charset+
+            {
+                errTo   = "$MATCH,"
+            }
+
+            :0 E B
+            *$ ^To:.*\/$charset+@
+            *$  MATCH ?? ()\/$charset+
+            *$  MATCH ?? ^^\/[^@]+
+            {
+                errTo = "$MATCH,"
+            }
+
+            :0 E B
+            *$ ()\/$charset+@
+            *$  MATCH ?? ^^\/[^@]+
+            {
+                errTo = "$MATCH,"
+            }
+        }
+
+        dummy = "$NLpm-jadaemon.rc: recognized message: $errText ($errSubj)"
+
+        # Now make new, combined, subject:
+        # --> short error reason + original subject
+
+        :0 fhw
+        * JA_DAEMON_SAVE ?? yes
+        * ^Subject: \/.*
+        | ${FORMAIL:-formail} -I "X-Old-Daemon-Subject: $MATCH"
+
+        :0 fhw
+        | ${FORMAIL:-formail} -I"Subject: ${errText}${errTo}${errSubj}"
+
+        ERROR = "yes"       # Raise the flag
+    }
+}
+
+dummy = "pm-jadaemon.rc: end: (DAEMON detect status = $ERROR)"
+
+# end of file pm-jadaemon.rc

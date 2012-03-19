@@ -1,0 +1,81 @@
+# pm-jacookie1.rc -- Generate unique id from INPUT variable.
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       When given a string, this subroutine returns a unique number
+#       representing a string, a cookie.
+#
+#   Required settings
+#
+#       (none)
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   INPUT, String from which the magic-cookie is calculated
+#       o   JA_COOKIE_CMD: shell command to read INPUT and return decimal
+#           or hex cookie string as one continuous block of characters.
+#           It decaults to HP-UX `cksum', but your system may have `md5'
+#           or `chksum'
+#
+#   Return values
+#
+#       o   Variable OUTPUT will contain the cookie.
+#
+#   Example usage
+#
+#           INPUT           = "foo@site.com"
+#           JA_COOKIE_CMD   = "md5"     # or chksum
+#           INCLUDERC       = $PMSRC/pm-jacookie1.rc
+#           cookie          = $OUTPUT
+#
+#   Change Log: (none)
+
+
+id    = "pm-jacookie1.rc"
+dummy = "
+======================================================================
+$id: init:
+"
+
+
+# ........................................................... &input ...
+
+#   This is standard CRC 32
+
+JA_COOKIE_CMD        = ${JA_COOKIE_CMD:-"cksum"}
+
+# ........................................................... &do-it ...
+
+#   Generate new key for this new user
+
+OUTPUT = `echo $INPUT | $JA_COOKIE_CMD`
+
+
+#   - At least HP-UX cksum produces two values: CRC DATA-LEN
+#   - We're only interested in the CRC part
+#
+:0
+* OUTPUT ?? ^^\/[0-9a-f]+
+{
+    OUTPUT = $MATCH
+}
+
+dummy = "$id: end:"
+
+
+# pm-store.rc ends here

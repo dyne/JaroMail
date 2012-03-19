@@ -1,0 +1,48 @@
+# guess-mua.rc
+#
+# Guess the Mail User Agent and set MUA
+#
+# $Id: guess-mua.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+#    Copyright (C) 1995  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+# First, let's check for MH
+
+# Make sure it's not already defined
+:0
+* MUA ?? !.+
+{
+    # See if mhpath works
+    MHPATH=`mhpath + 2>/dev/null`
+
+    :0
+    * MHPATH ?? .+
+    { MUA=mh }
+
+    # Else, see if ~/.pinerc works
+    :0 E
+    * test -f $HOME/.pinerc
+    { MUA=pine }
+
+    # Else, check for ~/.mailrc (for BSD/mail)
+    :0 E
+    * test -f $HOME/.mailrc
+    { MUA=mail }
+
+    # Add others as they are needed..
+}

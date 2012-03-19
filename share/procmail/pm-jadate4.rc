@@ -1,0 +1,125 @@
+# pm-jadate4.rc -- make RFC 'Mon, 1 Dec 1997 17:41:09' and parse values
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	This subroutine calls shell command date once and prses the values.
+#	This should be your last resort if you haven't got the date values
+#	by any other means. This subroutine assumes that the DATE command
+#	knows the following % specifier formats (HP-UX)
+#
+#	    Y   NNNN    year
+#	    h   MON     month
+#	    d   NN      day
+#	    a   WEEK    Like "Mon"
+#	    H   NN      hour
+#	    M   NN      min
+#	    S   NN      sec
+#
+#	Returned values
+#
+#           DATE    = RFC date in format "Mon, 1 Dec 1997 17:41:09"
+#		      This is same as what you would see in From_
+#
+#	    YYYY    = 4 digits
+#	    YY	    = 2 digits
+#	    MON	    = 3 characters
+#	    MM	    = 2 digits
+#	    DAY	    = 3 characters
+#	    DD	    = 2 digits
+#	    hh	    = 2 digits
+#	    mm	    = 2 digits
+#	    ss	    = 2 sigits
+#
+#	Variable ERROR is set to "yes" if values couldn't be set
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-jadate1.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       (none)
+#
+#   Usage example
+#
+#	The First Received line will tell when the message was received by
+#	the MDA. If thata fails, then get date from the system. If you send
+#	test messages to # yourself, you don't usually put From_ header in
+#	it and thus there is # no date information in 'dry run' tests.
+#
+#           # Get time from first eader, which is always same in my system
+#           # Received: ... ; Thu, 13 Nov 1997 11:43:50 +0200
+#
+#           INCLUDERC   = $PMSRC/pm-javar.rc    # to get $s $d definitions
+#           TODAY       # Clear it
+#
+#           :0
+#           *$ ^Received:.*;$s+\/...,$s+$d.*
+#           {
+#               INPUT     = $MATCH
+#               INCLUDERC = $PMSRC/pm-jadate1.rc
+#               TODAY     = "$YYYY-$MM-$DD"
+#           }
+#
+#           #   Check that variable did get set, if not then we have to call
+#           #   another date subroutine: Call shell then to find out date
+#           #
+#           #   You could also do this with ':0 E', but this is more
+#           #   educational
+#
+#           :0
+#           *$ ! $TODAY^0
+#           {
+#               INCLUDERC = $PMSRC/pm-jadate4.rc    # Get date from Shell then
+#               TODAY     = $YYYY-$MM-$DD
+#           }
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+
+
+id    = "pm-jadat4.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+# ..................................................... &output-vars ...
+# output variables, these actually come from the another subroutine,
+# but let's mention them here too
+
+# DATE YYYY MM MON DD DAY hh mm ss
+
+# ........................................................... &do-it ...
+#	Check that input is something like: Thu, 13 Nov 1997
+
+dummy = "$id: Calling shell to get date"
+
+date        = `$DATE "+%a, %d %h %Y %H:%M:%S"`
+INPUT       = $date
+
+INCLUDERC   = $RC_DATE1      # ...And parse into return variables
+
+dummy = "$id: end:"
+
+# end of file pm-jadate4.rc

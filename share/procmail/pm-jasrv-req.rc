@@ -1,0 +1,85 @@
+# pm-jasrv-req.rc -- server request check, subroutine for File Server
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This subroutine is part of the MPFS file server.
+#       Check if file server request is on the JA_SRV_SUBJECT and
+#       do case or incasensitive check.
+#
+#	To Dry run this module use following skeleton. Substitute keywods
+#	as needed to reflect your system setup:
+#
+#           % procmail DEFAULT=/dev/null VERBOSE=on LOGABSTRACT=all     \
+#             PMSRC=$HOME/txt JA_SRV_CMD_STRING=send                    \
+#             JA_SRV_SUBJECT="send newbie_article.rtf noconv"		\
+#             txt/pm-jasrv-req.rc < ~/test.mail
+#
+#   Input
+#
+#       o   JA_SRV_F_CMD_CASE_SENSITIVE; if "yes" then server request
+#           is case sensitive.
+#       o   JA_SRV_FORMAIL_FROM. the email From field
+#
+#   Output
+#
+#       o   stat, set to "ok" if request is accepted
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+# - no leading periods(.) are accepted in the filename
+# - Invalid filename access "../" is tested later
+
+id    = "pm-jasrv-req.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+
+regexp  = "^^$s*$JA_SRV_CMD_STRING$s+$NSPC+"
+subj	= $JA_SRV_SUBJECT
+stat    = ""
+
+
+dummy = "$NL$id: do we use case sensitive request keyword?$NL"
+
+:0
+*  JA_SRV_F_CMD_CASE_SENSITIVE ?? yes
+{
+    flags = "D"
+}
+
+dummy = "$NL$is: check if this is request $NL"
+
+:0 $flags
+*$ subj ?? $regexp
+{
+    stat = "ok"
+}
+
+dummy = "$id: end:"
+
+
+# Enf of pm-jasrv-req.rc

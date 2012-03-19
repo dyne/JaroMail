@@ -1,0 +1,1575 @@
+# pm-jaube.rc -- Unsolicited Bulk Email (UBE) filter.
+#
+# {{{ Documentation
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Warning
+#
+#       Put all your UBE (aka spam) filters towards the _end_ of your
+#       ~/.procmailrc. The idea is that valid messages are filed
+#       first (mailing lists, your work and private mail, bounces) and only
+#       the uncategorized messages are checked.
+#
+#   Are you sure you want to use procmail for UBE?
+#
+#       If you think you can put this recipe as a first line of defence to
+#       your mail, you will disappoint. Checking UBE with procmail's
+#       rule based means does not work that way. The good messages
+#       must be sorted first (like your mailing lists and your
+#       important work or friend message) and only then what's left to
+#       process can be scanned by static rule based tools, like this
+#       procmail module. There are much more better tools that are
+#       based on statistical analysis of messages. You really should
+#       consider using one or combination of Bayesian tools:
+#       *Spamassassin*, *bogofilter*, *spamprobe*, *Bayesian* *Mail*
+#       *Filter*, *ifile* etc.
+#
+#       _Repeat:_ procmail rules are not the tool to UBE control. The
+#       pattern matching rules can never keep up with the spammers. That
+#       said, if you:
+#
+#       o   Can bare a 70-80 % UBE detection rate.
+#       o   Can bare 10 % false hits; you need to check you UBE folder
+#           regularly for messaged that did not belong there.
+#       o   Have an account that does not get large number of UBE messages.
+#       o   Or if procmail is all you have in the system.
+#
+#       only then consider this module or any other procmail based
+#       spam filters in that respect. So, please don't set your
+#       expectations high. Spend good time with the configuration
+#       variables and check there returned result in variable `ERROR'
+#       carefully. Good luck.
+#
+#   Overview of features
+#
+#       o   Requires procmail 3.11pre7+
+#       o   You don't need external files: site block lists, the
+#           heuristics nail most of the UBE messages. Just plug in this
+#           module and you have UBE shield active.
+#       o   Header based filtering: Minimum headers, Pegasus bulk mail,
+#           X-uidl validity check, bogus From-To combination,
+#       o   Address based filtering: Numeric address, Invalid address (eg.
+#           me@myMarketing.global), UBE-like(friend,remove request.)
+#       o   Text filtering: no html accepted, common advertising slogans,
+#           unnecessary many capitalized words, HTML message body detection,
+#       o   And many more check that just not were listed here.
+#
+#       Remember: this is not 100% and there will always be some mishits, so
+#       don't just junk messages to `/dev/null'.
+#
+#   Description
+#
+#       Originally Daniel Smith posted his spam.rc, where he had gathered
+#       many tips and heuristics to filter UBE email. This filter here
+#       expresses work of many procmail users.  Original filters were
+#       modified, some rules were left out that catched false email
+#       messages and made the package look a bit more general so that it
+#       could be included via `INCLUDERC' in the standard way.
+#
+#       Thanks to Daniel and others, the UBE bomb days can be reduced,
+#       when this filter is active. Some UBE messages may still lurk
+#       into the mailbox, but that's the problem with all static rule
+#       based tools.
+#
+#   Logging the events
+#
+#       A good strategy to follow incoming mail is to log the vital parts
+#       like Date, From, Subect to some log file and then a reason what
+#       happened to a message. The `~/Mail/mail.log' might look like:
+#
+#           1997-12-08 work@example.com  Extra Holiday $$$$$
+#               [jaube; Marketing-Big-ExitCode; LEGAL, MONEY-MAKING PHENOMENON]
+#           1997-12-09 Denizen <logger@example.com>  [RePol] hiding
+#           1997-12-09 david X <dx@example.com>  Re: Send list to incoming folder
+#           1997-12-09 david X <dx@example.com>  Re: Send list to incoming folder
+#           1997-12-09 OMC manager <omcman@example.fi> "Environments updated"
+#               [my; work-localenv]
+#           1997-12-09 doodle@example.org  Re: Gnus (Emacs Newsreader) FAQ
+#               [my; emacs;   Re: Gnus (Emacs Newsreader) FAQ ]
+#
+#       First a UBE message that was identified and saved
+#       to folder. Next 3 messages were filed to mailing-list folders and
+#       there was no [] action displayed for them (left out due to high
+#       volume of these messages). Second Last was internal work
+#       message. Lastly someone asked somthign about Emacs.
+#
+#       The basic incoming message log recipe could be like this.
+#       Variable `TODAY' is `$YYYY-$MM-$DD' whose values are set after
+#       calling `pm-jadate.rc'. The `LISTS' is user set variable to exclude
+#       mailing lists whose activity is not important. Variables `FROM' and
+#       `SUBJECT' are fields read the message's headers.
+#
+#           BIFF      = $HOME/Mail/mail.log
+#	    INCLUDERC = $PMSRC/pm-jadate.rc
+#	    ...
+#
+#           :0 hwic:
+#           *$ ! $LISTS
+#           |echo "$TODAY $FROM $FSUBJECT" >> $BIFF
+#
+#       Here is small perl script to print summary of trapped UBE
+#       messages from a log like above. It gives nice overview which recipes
+#       catch most of the UBE messages.
+#
+#           perl -ne '/jaube; (\S+)/; $s{$1}++;                         \
+#                END {  $s = (map{$x += $_; $_= $x} values %s)[-1];     \
+#                       $i = int $s{$_}/$s *100;                        \
+#                       for (keys %s) { printf "$s{$_} $i $_\n" }       \
+#                    }'                                                 \
+#                mail.log |                                             \
+#                sort -nr
+#
+#       Here is sample results during two month period There are total of
+#       3248 UBE messages catched.
+#
+#           count  %  type
+#           ------------------------------------------
+#             554 17  Marketing-CountBigLetterWords
+#             457 14  Marketing
+#             422 12  Marketing-SelectedBigLetterWords
+#             349 10  AddrBogus-ToFrom
+#             263  8  FromReceived-Mismatch
+#             223  6  NoDirectAddress-ToCc
+#             216  6  HdrForgedPegasus
+#             164  5  AddrBogus-To
+#             151  4  MessageId
+#             102  3  BodyHtml
+#             73   2  Received-IPError
+#             63   1  Identical-FromTo
+#             53   1  AddrInvalid
+#             15   0  From-nslookup
+#             9    0  HdrReceivedTime
+#             7    0  HdrX-UIDL
+#             4    0  Marketing-headers
+#
+#   About bouncing message back
+#
+#       The general consensus is, that you should not send bounces. The UBE
+#       sender is not there, because the address is usually forged. Do not
+#       increase the network traffic. Instead save the messages to folders
+#       and periodically check their contents. It's not nice to be forced to
+#       apologize if you bounced message to a wrong destination. DON'T
+#       BOUNCE. Forget all recipe examples that use HOST and EXITCODE and
+#       be a good Net citizen.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This
+#       recipe file will include
+#
+#       o   pm-javar.rc
+#       o   pm-janslookup.rc
+#       o   pm-jaaddr.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       Only handful of the most important variables are described here.
+#       You really should read all the comments placed in the "user configured
+#       section" in this procmail module's code. Most of the defaults
+#       should work out of the box.
+#
+#       o   `JA_UBE_VALID_ADDR', your email addresses or other
+#           valid from addresses that will say "this is mail addressed
+#           directly to you".
+#       o   `JA_UBE_HDR', If non-empty, a new header is added which tells which
+#           recipe was triggered. The header is not added to message, if
+#           there is nothing to report; i.e. message passed all tests.
+#       o   Various flags: Some of the ube detecting recipes give more
+#           false hits than nail real ube. Experiment with yourself and turn
+#           on or off the recipes that work for the kind of ube messages
+#           you receive.
+#       o   `JA_UBE_MAX_BIG_WORDS', the maximum count of big letter words in the
+#           message that is tolerated. The current count 5 is rather
+#           conservative and it is suggested you to increase it to prevent
+#           trapping too many false hits. Alternatively update JA_UBE_CAPS_OK
+#           to include accepted words.
+#       o   `JA_UBE_APPARENTLY_TO_MAX', how many Apparently-To headers are
+#           tolerated. Default is 3.
+#       o   `JA_UBE_MAX_HTML_TAGS', maximum count of html tags allowed in the
+#           body.
+#       o   `JA_UBE_ATTACHMENT_ILLEGAL_KILL', if set to "yes" (default), then
+#           illegal attachment from body is ripped off. This is brute way
+#           to truncate the message abruptly to save mailbox space. You still
+#           see the headers for tracking, but the body is gone. The regexp
+#           to test is set in `JA_UBE_ATTACHMENT_ILLEGAL_REGEXP'.
+#       o   `JA_UBE_ATTACHMENT_SUSPECT_KILL', if set to "yes" (default "no"),
+#           kill suspectible characters in attachement filename. The regexp
+#           to test is set in `JA_UBE_ATTACHMENT_SUSPECT_NAME_REGEXP'.
+#       o   JA_UBE_CHARSET_LEGAL, if set, accept only these character. The
+#           default value detect messages with 7bit only (english speaking.
+#           For foreign language you may want to set this something like
+#           `$CHAR_7BIT_SET$CHAR_LIST_FINLAD'
+#           for Finnish. See `pm-javar.rc' for available character sets.
+#
+#   Return values
+#
+#       o   `ERROR_STATUS', status word of checks. Value "Good" or "Bad"
+#       o   `ERROR,' is set to short ube trigger recipe reason
+#       o   `ERROR_MATCH', is set to some MATCH that happened while triggering
+#           UBE message.
+#
+#       Alternatively you check content of header `JA_UBE_HDR' which contains
+#       results of the above variables. Possible values for `ERROR' are:
+#
+#           AddrAOLinvalid
+#           AddrBogus-From
+#           AddrInvalid-From
+#           AddrInvalid-To
+#           AddrNumeric
+#           AddrNumericDomain
+#           AddrUbeLike
+#           BodyAttachment-FileIllegalAdditional
+#           BodyAttachment-FileIllegalMatch
+#           BodyAttachment-FileIllegalOther
+#           BodyAttachment-FileSuspect
+#           BodyCharacters-Illegal
+#           BodyHtml-NonMime
+#           BodyHtml-script
+#           BodyHtmlBase64
+#           BodyHtmlImage
+#           BodyHtmlTags
+#           BodyMimeCharset-Illegal
+#           EnvelopeFrom-Invalid
+#           From-nslookup
+#           FromReceived-Mismatch
+#           HdrForgedPegasus
+#           HdrReceived
+#           HdrReceivedTime
+#           HdrX-Distribution
+#           HdrX-UIDL
+#           Header-ApparentlyTo
+#           HeaderCharacters-Illegal
+#           HeaderMimeCharset-Illegal
+#           Html-base64
+#           Identical-FromTo
+#           Marketing-Body
+#           Marketing-CountBigLetterWords
+#           Marketing-SelectedBigLetterWords
+#           Marketing-Subject
+#           Marketing-SubjectGreeting
+#           MegaSpammer
+#           MessageId-Invalid
+#           MessageId-Empty
+#           NoDirectAddress-ToCc
+#           NotEnoughHeaders
+#           Received-IPError
+#           VirusBody
+#           VirusHeader
+#
+#   Usage example
+#
+#           # - All legimate messages should already been handled and
+#               saved before this recipe.
+#           # - Activate the filter only for messages that are not from
+#           #   daemon and not from valid senders: like from "my" domain
+#           #   and mailing lists and from somewhere else.
+#
+#           VALID_FROM = "(my@address.example.com|word@here.example.com)"
+#
+#           :0
+#           *$ ! ^From:.*$VALID_FROM
+#           *$ ! FROM_DAEMON
+#           {
+#
+#               #   Do not add extra headers. This saves external shell call
+#               #   (formail). Also do not try to kill the message content,
+#               #   again saving one external call (awk). With these, the
+#               #   recipe is faster and more CPU friendly.
+#
+#               PM_JA_UBE_HDR                  = ""
+#               JA_UBE_ATTACHMENT_ILLEGAL_KILL = "no"
+#
+#               INCLUDERC = $PMSRC/pm-jaube.rc
+#
+#               #   Variable "ERROR" is set if message was UBE, record error
+#               #   to log file with "()\/"
+#
+#               :0 :
+#               * ERROR ?? ()\/[a-z].*
+#               {
+#                   #  Don't save those *.exe, *.zip UBE attachements
+#                   :0
+#                   *  ERROR ?? attacment.*file
+#                   /dev/null
+#
+#                   :0 :
+#                   spam.mbox
+#               }
+#           }
+#
+#       There may be UBE messages that fool `FROM_DAEMON' test, so
+#       you could also use something more finer check. The standard daemon
+#       error message almost always has sentence "Transcript of session
+#       follows" in the body. This recipe says: "Unless proven otherwise,
+#       I don't believe this is daemon message even if it looked like that".
+#       Add More "2^1" checks to raise score for other valid daemon cases.
+#
+#           *   -1^0       ^FROM_DAEMON
+#           * !  2^1  B ?? Transcript of session follows
+#           {
+#               # ... Now call UBE checker
+#           }
+#
+#   File layout
+#
+#       The layout of this file is managed by Emacs packages tinyprocmal.el
+#       and tinytab.el for the 4 tab text placement.
+#       See project http://freshmeat.net/projects/emacs-tiny-tools/
+#
+#   Change Log
+#
+#       2004-09-10 Restructural changes and many improvements with added
+#       checks. This module no longer saves messages - it only checks if
+#       message is UBE or not.
+#
+#       1998-08-24 Gregory Sutter sent update to his recipe.
+#
+#       1998-02-27 <bochmann@TUDURZ.urz.tu-dresden.de> (Henryk Bochmann)
+#       reported that the ReceivedFrom test triggered all htmail messages.
+#       Now Fixed.
+#
+# }}}
+# {{{ Variables
+
+# ............................................................ &init ...
+
+dummy = "
+========================================================================
+pm-jaube.rc: init:"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+
+    :0                  # This is extremely critical, so flag error
+    * !  WSPC ?? [ ]
+    {
+        LOG = "(pm-jaube.rc) *** FATAL ERROR: couldn't include pm-javar.rc"
+    }
+}
+
+#######################################################################
+#
+#   User configurable variables. Set these, before calling this
+#   module/subroutine.
+#
+#######################################################################
+
+# ............................................... &enabling-features ...
+
+#   Recipe enable flags. Turn off if you think they
+#   give too many false hits. Set to 'yes' or 'no'
+
+JA_UBE_FLAG_IP                 = ${JA_UBE_FLAG_IP:-"yes"}
+JA_UBE_FLAG_MID                = ${JA_UBE_FLAG_MID:-"yes"}
+JA_UBE_FLAG_NUM_ADDR           = ${JA_UBE_FLAG_NUM_ADDR:-"yes"}
+JA_UBE_FLAG_TEXT_MARKET        = ${JA_UBE_FLAG_TEXT_MARKET:-"yes"}
+JA_UBE_FLAG_TEXT_VIRUS         = ${JA_UBE_FLAG_TEXT_VIRUS:-"yes"}
+JA_UBE_FLAG_IDENTICAL_FROM_TO  = ${JA_UBE_FLAG_IDENTICAL_FROM_TO:-"yes"}
+JA_UBE_FLAG_TO_CC              = ${JA_UBE_FLAG_TO_CC:-"yes"}
+JA_UBE_FLAG_BIG_LETTER_WORDS   = ${JA_UBE_FLAG_BIG_LETTER_WORDS:-"yes"}
+
+#       Is there is an attachment (*.exe ...), setting this option to 'yes'
+#       will brutally remove file attached in base64 data thus reducing the
+#       size of the saved message considerably. Warning: the MIME headers
+#       WILL BE INVALID after this brutal operation, so some Mail User
+#       Agents (MUAs) may not be able to read the message properly.
+#
+#       If you have plenty of disk space OR if you plan to send the
+#       message to /dev/null after checking the ERROR variables for
+#       indication of "attachment.*file", please turn this option "off".
+#       Then no external awk process is called and your procmal
+#       process is faster.
+
+JA_UBE_ATTACHMENT_ILLEGAL_KILL = $JA_UBE_ATTACHMENT_ILLEGAL_KILL:-"yes"}
+JA_UBE_ATTACHMENT_SUSPECT_KILL = $JA_UBE_ATTACHMENT_SUSPECT_KILL:-"no"}
+
+#       Should the From: addresses domain be validated with nslookup?
+#       Turning this option on may slow down UBE filter for first 200
+#       mails. After that the nslookup cache starts playing well.
+
+JA_UBE_FLAG_FROM_NSLOOKUP   = ${JA_UBE_FLAG_FROM_NSLOOKUP:-"yes"}
+
+# ....................................................... &variables ...
+
+JA_UBE_HDR  = ${JA_UBE_HDR:-"X-Spam-Jaube"}  # No trailing colon!
+
+#   Define this variable to match _all_ valid From and To addresses that
+#   are yours. Put your regexp inside prenthesis.
+#
+#   This defualts to "(logname|email@foo.com)" or "(logname|xyzabc)"
+#   if EMAIL is not defined.
+
+JA_UBE_VALID_ADDR = ${JA_UBE_VALID_ADDR:-\
+(${LOGNAME:-$USERNAME}|${EMAIL:-xyzabc})}
+
+#  A Macro
+
+JA_UBE_FROM = ${JA_UBE_FROM:-\
+"(^(Apparently-|Resent-)*(From|Reply-To|Sender):|^From$NSPC+)"}
+
+#   If message comes from these address, check that From addresses domain
+#   is found from Received header. If not, then it's forged.
+#
+#   This regexps must not include @ character because the matched string
+#   is used later "as is" and included @ will confuse the algorithm.
+#
+#   1998-10-05 Jacques Gauthier <jacques_g@yahoo.com> informed that
+#   rocketmail was merged with lycosmail, but that rocketmail still exists.
+
+
+JA_UBE_FROM_QUESTIONABLE = ${JA_UBE_FROM_QUESTIONABLE:-"\
+@.*(compuserve\
+|aol\.\
+|microsoft\
+|yahoo
+|juno\.\
+|netcom\
+|earthlink\
+|prodigy\
+|freeyellow\
+|hotmail\
+|rocketmail\
+|lycosmail\
+|wowmail\
+)"}
+
+
+# This list is _not_ meant to be comprehensive. Just some words that are
+# likely to be used in Computer related communication.
+#
+# ootb  = out of the box oob = out of box
+# fyi   = for your information
+# fwiw  =
+# itp   = intent to package
+# eof   = end of file
+# esmtp = If message headers have been attached thre will be ESMTP Mail server
+#         Received: lines
+# dst,cest = timezone values
+
+JA_UBE_CAPS_OK_DEFAULT = ${JA_UBE_CAPS_OK:-\
+"\<(\
+\<AM\>\
+|ASAP\
+|API\
+|BEGIN\
+|BLOCK\
+|\<CEST\>\
+|CVS\
+|CYGWIN\
+|DHCP\
+|\<DIR\
+|\<DSA\>\
+|\<DST\>\
+|\<IP\>\
+|\<EET\>\
+|EMACS\
+|ENCRYPTED\
+|\<END\>\
+|E?SMTP\
+|EXIT\
+|\<EOF\>\
+|FAQ\
+|\<FSF\>\
+|FWIW\
+|GNOME\
+|\<GCC\
+|\<GNU\>\
+|GPG\
+|GPL\
+|\<FYI\>\
+|GIF\
+|GSM\
+|HOME\
+|HP-?UX\
+|HTTP\
+|\<ITP\>\
+|JPG\
+|\<KB\>\
+|KDE\
+|\<KEY\
+|LANG\
+|LC_ALL\
+|LC_CTYPE\
+|MESSAGE\
+|MIME\
+|NOTE\
+|OOB\
+|OOTB\
+|\<PART\>\
+|PATH\
+|\<PID\>\
+|PCX\
+|PGP\
+|<\ORACLE\>\
+|POSIX\
+|PUBLIC\
+|PXE\
+|README\
+|RSA\
+|\<SIGN(ED)?\>\
+|SSH\
+|TEXT/PLAIN\
+|\<UID\>\
+|\<URL\>\
+|US-ASCII\
+|\<UTC\>\
+|WWW\
+|XEMACS\
+)\>"}
+
+#   Allowed words that are all caps.
+#   If message contains too many capitalized words, it's certainly UBE.
+#
+#   If you want caps checking, set
+#
+#       JA_UBE_CAPS_OK = $JA_UBE_CAPS_OK_DEFAULT
+
+JA_UBE_CAPS_OK = ""   # Disabled by default
+
+#   If you'tr english speankin and to not want any messages that
+#   contains exotic character, this default is fine. If you speak
+#   some other language, you should define this variable to list
+#   of characters allowed. It will be later converted into [ ... ]
+#   class regexp.
+
+JA_UBE_CHARSET_LEGAL = ${JA_UBE_CHARSET_LEGAL:-\
+"$CHAR_7BIT_SET$CHAR_7BIT_CONTROL"}
+
+#   Check for header of body for these MIME content types
+
+JA_UBE_MIME_CHARSET_ILLEGAL = ${JA_UBE_MIME_CHARSET_ILLEGAL:-\
+"\<(ks_\
+|euc-kr\
+|ISO-.*2022\
+|big-?5\
+|gb[0-9]\
+|koi[0-9]\
+|kr\>\
+|cs\>\
+|jis\>\
+|jp\>\
+|Windows-1251\
+)"}
+
+
+#  Any regexp than can match the full attachment file name.
+#  *.scr is audio/x-wav
+
+JA_UBE_ATTACHMENT_ILLEGAL_REGEXP = ${JA_UBE_ATTACHMENT_ILLEGAL_REGEXP:-\
+"\.(\
+ba[st]\
+|bin\
+|chm\
+|cmd\
+|com\
+|cpl\
+|dll\
+|exe\
+|hta\
+|inf\
+|jar\
+|ms[cit]\
+|mp3\
+|pcd\
+|pif\
+|ram\
+|reg\
+|sc[rt]\
+|swf\
+|vb[es]?\
+|wav\
+|ws[cfh]\
+)"}
+
+#  In addition to JA_UBE_ATTACHMENT_ILLEGAL_REGEXP, this regexp is tried.
+#  So, if you want to retain the default (*.exe) checks, do not touch
+#  JA_UBE_ATTACHMENT_ILLEGAL_REGEXP, but set
+#  JA_UBE_ATTACHMENT_ILLEGAL_REGEXP_ADDITIONAL
+#
+#  You could include \.(bmp|jpe?g|gif|png)
+
+JA_UBE_ATTACHMENT_ILLEGAL_REGEXP_ADDITIONAL = \
+${JA_UBE_ATTACHMENT_ILLEGAL_REGEXP_ADDITIONAL:-""}
+
+#   If this regexp matches the attachement filename, then it is
+#   suspect. Some spammers send files named after the email address,
+#   so this regexp catches those. An example:
+#
+#       name="j.doe@example.net"
+#
+#   Set this variable to an empty string "" to disable checking.
+
+JA_UBE_ATTACHMENT_SUSPECT_NAME_REGEXP = \
+${JA_UBE_ATTACHMENT_SUSPECT_NAME_REGEXP:-\
+"[@&%!?#|;:<>{}\[\]\'$]"}
+
+#       Subject field words to classify as "Greeting"
+
+JA_UBE_SUBJECT_GREETING = ${JA_UBE_SUBJECT_GREETING:-\
+"\<(hi|hey|greeting|hello|help)\>"}
+
+# ...................................................... &thresholds ...
+
+JA_UBE_MAX_APPRENTLY_TO     = ${JA_UBE_MAX_APPRENTLY_TO:-3}
+JA_UBE_MAX_BIG_WORDS        = ${JA_UBE_MAX_BIG_WORDS:-5}
+JA_UBE_MAX_HTML_TAGS        = ${JA_UBE_MAX_HTML_TAGS:-4}
+
+# ........................................................... &other ...
+#   Define DEGUG = "yes"  to get the headers into the LOGFILE
+
+:0
+* DEBUG ?? on
+{
+    LOG  = "$NL$NL ######## head-begin $NL"
+    HEADER = `sed /^$/q`
+    LOG  = "$NL ######## head-end $NL"
+}
+
+#######################################################################
+#
+#   Private variables. Do not touch
+#
+#######################################################################
+
+jaubePGPmessage = "no"               # set initial value for flag
+
+:0
+* B ?? BEGIN PGP (SIGNED )?MESSAGE
+{
+   jaubePGPmessage = "yes"
+}
+
+jaubeHTML = "no"               # set initial value for flag
+
+:0
+*$ HB ?? ^Content-Type:.*html
+{
+   jaubeHTML = "yes"
+}
+
+# .......................................................... &output ...
+
+# The status of this message. Changed to "Bad" if ERROR is set here.
+
+ERROR_STATUS = "Good"
+
+#   - Kill these variables.
+#   - The UBE catch reason is stored into ERROR.
+#   - If something was matched while detecting UBE, te second
+#     will hold the match.
+
+ERROR
+ERROR_MATCH
+
+# }}}
+
+# ............................................................ &misc ...
+
+money1="[0-9]+([,.][0-9]+)*$WSPC+(dollars?|euros?)"
+
+money = "(\
+\$[0-9]\
+|[0-9]$WSPC*%\
+|$money1
+)"
+
+
+# {{{ Body: Attachments
+
+# ............................................................ &text ...
+
+dummy="pm-jaube.rc: Check attachements"
+
+# These are some clever attachement names like:
+# name="this.doc    .pif"
+# name="this.doc
+#          .pif"
+
+:0
+*  ERROR  ??  ^^^^
+*  HB     ??  Content-Type:.*(application|octet-stream|multipart|alternative)
+*$  B     ??  name=\/.+$SPCL+[^\"']+
+{
+    jaubeFile = $MATCH
+
+    #  Remove leading quote mark
+
+    :0
+    *$  jaubeFile ??  ^^[\"']+\/.+$SPCL+[^\"']+
+    {
+	jaubeFile = $MATCH
+    }
+
+    :0
+    *  ! JA_UBE_ATTACHMENT_ILLEGAL_REGEXP ?? ^^^^
+    *$ $SUPREME^0 jaubeFile ?? ()\/$JA_UBE_ATTACHMENT_ILLEGAL_REGEXP
+    {
+        ERROR       = "BodyAttachment-FileIllegalMatch"
+        ERROR_MATCH = "$jaubeFile ($MATCH)"
+    }
+
+    :0
+    *  ! JA_UBE_ATTACHMENT_ILLEGAL_REGEXP_ADDITIONAL ?? ^^^^
+    *$ $SUPREME^0 jaubeFile ?? ()\/$JA_UBE_ATTACHMENT_ILLEGAL_REGEXP_ADDITIONAL
+    {
+        ERROR       = "BodyAttachment-FileIllegalAdditional"
+        ERROR_MATCH = "$jaubeFile ($MATCH)"
+    }
+}
+
+:0
+*  ERROR    ??  ^^^^
+*  HB       ??  Content-Type:\/.*(audio|video)
+{
+    ERROR       = "BodyAttachment-FileIllegalOther"
+    ERROR_MATCH = "$MATCH"
+}
+
+:0
+*    ERROR                                 ??  ^^^^
+*  ! JA_UBE_ATTACHMENT_SUSPECT_NAME_REGEXP ??  ^^^^
+*    B                                     ?? base64
+*    B                                     ?? name=\/.*
+*    MATCH                                 ??  ()\/[^\"\' ]+
+{
+    jaubeFile = $MATCH
+
+    :0
+    *$ jaubeFile ??  $JA_UBE_ATTACHMENT_SUSPECT_NAME_REGEXP
+    {
+        ERROR       = "BodyAttachment-FileSuspect"
+        ERROR_MATCH = "$jaubeFile"
+    }
+}
+
+# }}}
+# {{{ Invalid IP and domains, or From_
+
+:0
+*    ERROR ?? ^^^^
+*    JA_UBE_FLAG_IP ?? yes
+*$  ^Received.*()\/\[[0-9\.]*([03-9]$d$d|2[6-9]$d|25[6-9])
+{
+    ERROR       = "Received-IPError"
+    ERROR_MATCH = $MATCH
+}
+
+#       1998-05-26 By <dattier@wwa.com> (David W. Tamkin) in
+#       procmail mailing list. Message-ID: <m0ye6in-001HOsC@tekka.wwa.com>
+#
+#       Valid envelope From_ address looks like and anything different from
+#       that is probably spam.
+#
+#               From foo@bar.com  Tue May 26 02:46:33 1998
+
+:0
+*    ERROR ?? ^^^^
+*$ ! ^From$WSPC+$NSPC+$WSCPC+.*$weekdays
+*$    From+s+\/.*
+{
+    ERROR       = "EnvelopeFrom-Invalid"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Invalid message id
+
+#   By era eriksson <era@iki.fi>
+#
+#   Invalid Message-Id:s are likely UBE
+#   Careful, this seems to give false hits sometimes(and one is enough!)
+#   You may want to disable this permanently.
+#
+#   There is software out there that breaks
+#   RFC822 in that they don't include an "@" in the Message-Id. I don't
+#   care too much since I see them in my spam tank but if you send stuff
+#   to /dev/null, you'll probably want to take out the @ part.
+#
+#   RFC822 says (4.1):
+#
+#     msg-id      =  "<" addr-spec ">"
+#     addr-spec   =  local-part "@" domain        ; global address
+#     local-part  =  word *("." word)
+#     domain      =  sub-domain *("." sub-domain)
+#     =>
+#     Message-Id: word *("." word) "@" sub-domain *("." sub-domain),
+#
+#   where (3.3):
+#
+#     word = atom / quoted-string
+#     atom = 1*<any CHAR except specials, SPACE and CTLs>; efectively ascii 33-127.
+#
+#   Example invalid: <winATT-3.01-userid-999>
+#   Example valid  : <v03130307b0b2fc185d0b@[206.109.113.133]>
+#
+#   Below, it is required that domain is like "this.com", and not just "localhost".
+
+:0
+*     ERROR             ?? ^^^^
+*     JA_UBE_FLAG_MID   ?? yes
+*    ^Message-Id:\/.*
+*$ ! ^Message-Id:[$WSPC]+<[^$WSPC<>@]+@([a-zA-Z0-9-]+\.)+[a-zA-Z]+>
+{
+    ERROR       = "MessageId-Invalid"
+    ERROR_MATCH = $MATCH
+}
+
+# Empty Message-ID should never be generated by a real mail program
+
+:0
+*    ERROR ?? ^^^^
+*$ ^Message-Id:.*<$WSPC*>
+{
+    ERROR       = "MessageId-Empty"
+    # ERROR_MATCH       = $MATCH
+}
+
+# }}}
+
+# .......................................................... &header ...
+
+# {{{ Header: Required minimum
+
+:0
+* ^From:
+* ^(Apparently-|Delivered-|Envelope-)?To:
+* ^Date:
+{ }
+:0 E
+*    ERROR ?? ^^^^
+{
+    ERROR         = "NotEnoughHeaders"
+    # ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Header: X-distribution
+
+#   Pegasus mail uses this
+
+:0
+*    ERROR ?? ^^^^
+*$  ^X-Distribution:$WSPC*\/(moderate|bulk|mass)
+{
+    ERROR       = "HdrX-Distribution"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Header: Illegal character sets
+
+#  This section is special. We always run the character test set,
+#  No matter if the previous check would have found another
+#  error (and ERROR is set)
+
+dummy   = "pm-jaube.rc: Check illegal character sets"
+charset = $JA_UBE_MIME_CHARSET_ILLEGAL
+
+:0
+*  ! JA_UBE_CHARSET_LEGAL ?? ^^^^
+{
+    dummy = "Charset test: $JA_UBE_CHARSET_LEGAL"
+
+    :0
+    *$ ^(Subject|From|To):.*()\/[^$JA_UBE_CHARSET_LEGAL]
+    {
+        ERROR       = "${ERROR}${ERROR+:}HeaderCharacters-Illegal"
+        ERROR_MATCH = $MATCH
+    }
+
+    :0 E
+    *$ B ?? ()\/[^$JA_UBE_CHARSET_LEGAL]
+    {
+        ERROR       = "${ERROR}${ERROR+:}BodyCharacters-Illegal"
+        ERROR_MATCH = $MATCH
+    }
+}
+
+:0
+*$ $SUPREME^0 ^Content-Type:.*\/$charset[^ \"'<>]*
+*$ $SUPREME^0 ^Subject:.*=[?]\/$charset[^ '\"<>]*
+{
+    ERROR       = "${ERROR}${ERROR+:}HeaderMimeCharset-Illegal"
+    ERROR_MATCH = "$MATCH"
+}
+
+:0
+*$ B     ?? charset=.*\/$charset[^ '\"<>]*
+{
+    ERROR       = "${ERROR}${ERROR+:}BodyMimeCharset-Illegal"
+    ERROR_MATCH = "$MATCH"
+}
+
+# }}}
+# {{{ Header: Apparently-To
+
+#   One typical UBE is where there is multiple apparently-to headers
+#
+#   Apparently-To:
+#   Apparently-To:
+#   Apparently-To:
+#   Apparently-To:
+#   Apparently-To:
+
+:0
+*    ERROR ?? ^^^^
+*$  -$JA_UBE_MAX_APPRENTLY_TO^0
+*    1^1 ^Apparently-To:
+{
+    ERROR       = "Header-ApparentlyTo"
+    ERROR_MATCH = "$= too many"
+}
+
+# }}}
+# {{{ Header: X-uidl
+
+# Headers that shouldn't exist in "real" mail
+#
+# Might need to be a little more particular here;
+# Philip Guenther <guenther@gac.edu>: If a message comes into your
+# mailbox that has the X-UIDL: header, and doesn't have your address in
+# the header, then I would have strong doubts about it's legitimacy.
+#
+# Edward J. Sabol <sabol@alderaan.gsfc.nasa.gov>: E-mails with
+# X-UIDL: headers are almost definitely spam unless they've been
+# Resent-To: me by someone. Also, valid X-UIDL: headers have 32 hexadecimal
+# digits exactly.
+
+hex8 = "$h$h$h$h$h$h$h$h"
+
+:0
+*    ERROR ?? ^^^^
+*    ^X-UIDL:
+*$ ! ^X-UIDL:$WSPC*\/$hex8$hex8$hex8$hex8$WSPC*$
+*  ! ^Resent-To:
+{
+    ERROR       = "HdrX-UIDL"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Header: bogus Pegasus
+
+#   1998-08-24 Gregory kindly sent update to this filter. Thank you.
+#
+#       Pegasus mailer is the only mailer which legitimately generates
+#       "Comments: Authenticated sender is ..." so kill anything else.
+#       --Gregory S. Sutter <foo@xample.com>
+#
+# Pegasus mailer is the only mailer which legitimately generates
+# "Comments: Authenticated sender is ..." so kill anything else.
+# This works for Pegasus versions 2.54 and below only, 2.55 and
+# above don't generate the Authenticated Sender header.
+
+:0
+*    ERROR ?? ^^^^
+*    ^Comments:.*Authenticated sender
+* !  ^X-Mailer:.*Pegasus Mail
+* !  ^Resent-To:
+* !  ^Return-Path:.*owner-
+{
+    ERROR       = "HdrForgedPegasus"
+    # ERROR_MATCH       = $MATCH            # what should be saved here?
+}
+
+# }}}
+# {{{ Header: Received
+
+# ........................................................ &received ...
+
+# Spamford's "Cyber-Bomber" generates "CLOAKED!" headers.
+# The following also catches bogus IP addresses
+
+:0
+*   ERROR ?? ^^^^
+*   ^Received: \/.*(CLOAKED|\[(0)+\.(0)+\.(0)+\.(0)+\]).*
+{
+    ERROR       = "HdrReceived $MATCH"
+    ERROR_MATCH = $MATCH
+}
+
+# Stealth Mailer bogus timestamp
+
+:0
+*   ERROR ?? ^^^^
+*   ^Received: \/.*-0[67]00 \(E[SD]T\)
+{
+    ERROR       = "HdrReceivedTime"
+    ERROR_MATCH = $MATCH
+}
+
+#   by wwgrol@sparc01.fw.hac.com (W. Wesley Groleau x4923)
+#   Check that suspicious From site is mentioned in the Received headers
+
+:0
+*     ERROR              ?? ^^^^
+*$ ! ^(From|To|Cc):.*$JA_UBE_VALID_ADDR
+*    ^Received:
+*$   ^From:.*\/$JA_UBE_FROM_QUESTIONABLE
+*$ ! ^Received:.*\/$MATCH
+{
+    ERROR       = "FromReceived-Mismatch"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+
+# ......................................................... &Address ...
+
+# {{{ Address: Numeric
+
+:0
+*    ERROR ?? ^^^^
+*   JA_UBE_FLAG_NUM_ADDR ?? yes
+*$ ^From:\/$WSPC*$d+@.*
+{
+    ERROR       = "AddrNumeric"
+    ERROR_MATCH = $MATCH
+}
+
+# Bogus, all-numeric domain names:
+
+:0
+*   ERROR ?? ^^^^
+*   ^(From|To|Reply-To): \/.*@[0-9]+\..*
+{
+    ERROR       = "AddrNumericDomain"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Address: Invalid AOL
+
+#   By John Gianni <jjg@cadence.com>
+#
+#   From Postmaster@aol.com: Valid AOL address can not:
+#
+#   - be shorter than 3 or longer than 10 characters
+#   - begin with numerals
+#   - contain periods, underscores, dashes or other punctuation
+#
+#   Valid AOL mail will have a short, verifiable Received path directly
+#   from a resolvable host within AOL.COM to your mail host. Valid AOL
+#   address are 10 characters or less and also has to begin with a
+#   letter and not a number also.
+#
+#   If AOL address starts with anything else but A-Z; then it must be bogus.
+
+:0
+*    ERROR ?? ^^^^
+*   ^From: \/.*@aol\.com
+* ! ^From: *([^a-z]|.+[^0-9a-z]|............).*@
+{
+    ERROR       = "AddrAOLinvalid"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Address: Bogus
+
+:0
+* ERROR ?? ^^^^
+{
+
+    # Originally by Daniel Smith
+
+    word    = "[a-z0-9][-a-z0-9_.+]*"
+    word2   = "[-a-z0-9]"
+
+    #  See "Top Level Domains (gTLDs)" http://www.icann.org/tlds/
+
+    tld = "(\
+aero\
+|arpa\
+|biz\
+|com\
+|coop\
+|edu\
+|gov\
+|info\
+|int\
+|mil\
+|museum\
+|name\
+|net\
+|org\
+|pro\
+|[a-z][a-z]\
+)"
+
+}
+
+:0
+*    ERROR ?? ^^^^
+*$ ! ^From:\/.*$word@($word2+\.)+$tld
+{
+    ERROR         = "AddrBogus-From"
+    ERROR_MATCH   = $MATCH
+}
+
+:0
+*     ERROR      ?? ^^^^
+*$ !  $SUPREME^0    (To|Cc):.*$JA_UBE_VALID_ADDR
+*$ !  $SUPREME^0    (To|Cc):.*$word@($word2+\.)+$tld
+{
+    :0
+    *           (To|Cc):\/.*
+    *$ MATCH ?? $NSPC.+$NSPC
+    { }
+
+    ERROR         = "AddrInvalid-To"
+    ERROR_MATCH   = $MATCH
+}
+
+#       If the From: line contains a @ but no . after it, it's suspect
+#       By Era eriksson
+
+:0
+*    ERROR ?? ^^^^
+*    ^From:\/.*@[^ >]+>?
+*$ ! ^From:.*@[^.]+\.
+{
+    ERROR       = "AddrInvalid-From"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Address: UBE-like
+
+:0
+*   ERROR ?? ^^^^
+*$  ()\/(${JA_UBE_FROM}|^TO)(remove|delete|\<free\>|friend@)
+{
+    ERROR       = "AddrUbeLike"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Header: From-To, To-Cc
+
+#   By Era Eriksson, Sun, 08 Feb 1998 in procmail mailing list
+#   The lone "To" is purely for logging purposes to record MATCH
+
+:0
+*    ERROR                              ?? ^^^^
+*    JA_UBE_FLAG_IDENTICAL_FROM_TO      ?? yes
+*$ ! ^(From|To|Cc):.*$JA_UBE_VALID_ADDR
+*    ^To: \/.*
+* $  ^\/(From|Reply-To): $\MATCH
+{
+    ERROR       = "Identical-FromTo"
+    ERROR_MATCH = $MATCH
+}
+
+#   If the message is not directly addressed to ME, then It's suspect.
+#   Be sure to handle mailing lists before you call this file !!
+
+:0
+*    ERROR ?? ^^^^
+*    JA_UBE_FLAG_TO_CC ?? yes
+*  ! FROM_DAEMON
+*    ^(To|Cc):\/.*
+*$ ! ^(To|Cc):.*$JA_UBE_VALID_ADDR
+{
+    ERROR       = "NoDirectAddress-ToCc"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ Text: Marketing slogans
+
+# ....................................................... &marketing ...
+# Notice that the MATCH is set to text line that triggered the UBE
+
+dummy = "pm-jaube.rc: Marketing-CaseSensitive"
+
+#       Case sensitive tests
+
+:0 D
+*   ERROR ?? ^^^^
+*   JA_UBE_FLAG_TEXT_MARKET ?? yes
+*   HB ?? ()\/\<(\
+	GUARANTEED|OFFER|BONUS|CREDIT\
+    	|LEGAL(LY)?|SECRET|\<CLICK\>\
+    	|NO RISK|MAKE.*MONEY\
+    	|MILLION|THOUSEND\
+    	).*
+{
+    ERROR       = "Marketing-SelectedBigLetterWords"
+    ERROR_MATCH = $MATCH
+}
+
+dummy = "pm-jaube.rc: Marketing-Headers"
+
+#       If there is a dollar in header(subject), this is ube.
+
+:0
+*     ERROR ?? ^^^^
+*     JA_UBE_FLAG_TEXT_MARKET ?? yes
+*$   ^Subject:.*()\/(\$[0-9]|[0-9]$WSPC*%|\<Free\>|!!+)
+*  !  SUBJECT ?? Returned mail
+{
+    ERROR       = "Marketing-Subject"
+    ERROR_MATCH = $MATCH
+}
+
+dummy = "pm-jaube.rc: Simple headers, dollar body"
+
+:0
+*       ERROR ?? ^^^^
+*       JA_UBE_FLAG_TEXT_MARKET ?? yes
+*$      ^Subject:$WSPC*((fwd|re):)*$WSPC*$JA_UBE_SUBJECT_GREETING
+*$      ^Subject:()\/.*
+*$ B ?? $money
+{
+    ERROR       = "Marketing-SubjectGreeting"
+    ERROR_MATCH = $MATCH
+}
+
+dummy = "pm-jaube.rc: Marketing body"
+
+#       "Earn" must not match "learn"
+#       Some marketing people try to be clever, they send
+#
+#           for just $19.95, for incredible $19.95, for the sum 19.195
+#           for 19.95
+#
+#       So we match anything that has "for" and NN+.N+. There must not be
+#       dollar in from, because the marketing could also use English pounds
+#       or some other currency.
+#
+#           \<for\>.*\<[0-9][0-9.]*\>
+
+:0
+*   ERROR                     ?? ^^^^
+*   JA_UBE_FLAG_TEXT_MARKET   ?? yes
+*$  B ?? ()\/\
+    \<(naked|women|girls|nude)\>\
+    |\<(babe|chick|blonde|brunette|cash|sex|hardcore|viagra)\>\
+    |\<(promote|earn|porn|drug\
+    |make.*money\
+    |Money making\
+    |Make \$[0-9]\
+    |(Low|fair|these) +price\
+    |price.*\<range\
+    |want to buy\
+    |bulk email\
+    |No Credit Check\
+    |this is your chance\
+    |The most incredible stuff\
+    |You have nothing to lo*se\
+    |weight control\
+    |lifetime membership\
+    |Internet Business\
+    |order(ing)? (now|form)\
+    |are.*you.*looking for\
+    |global.*Advertis\
+    |marketing resource\
+    |Don't waste.*(dollars|money)\
+    |bring to your attention\
+    |limited.*(trial|time)\
+    |our.*offerings\
+    |We.*(guarantee|seek)\
+    |\<(for|cost)\>.*$[0-9][0-9.]\
+    |This offer\
+    |FREE.*(offer|bonus|sample)\
+    |as low as.*$[0-9]\
+    |$money1\
+    |send \$.* to\
+    |save up.*to.*%\
+    |save as much as.*[$%]\
+    |sav(e|ing).*money\
+    |Delete if not interested\
+    |wish to be (excluded|removed)\
+    |to our remove list\
+    |Remov(al|e) instruction\
+    |to be removed from.*list\
+    |to reply to remov\
+    |you were.*selected\
+    |life style\
+    |phone card\
+    |long distance\
+    |Life Insurance\
+    |forgive the intrusion\
+    |Your.*(bonus|marker)\
+    |(visit|Welcome).*our.*Web ?site\
+    |(CALL|visit).*\<(us|today)\>\
+    |webcam\
+    |Response +needed\
+    )$S*$WSPC*$S*
+*$   MATCH ?? $NSPC
+{
+    ERROR       = "Marketing-Body"
+    ERROR_MATCH = $MATCH
+}
+
+dummy = "pm-jaube.rc: Virus message"
+
+:0
+* ERROR ?? ^^^^
+{
+    regexpBody =  "\
+Attenzione Virus\
+|Returned due to virus\
+|[]{<(]virus[]})>]\
+|InterScan NT Alert\
+|Message quarantined\
+|Filter incident\
+|Symantec AVF detected\
+|banned filename .*in mail from you\
+|File blocked - ScanMail for Lotus\
+|MDaemon Notification -- Attachment Removed\
+|SAV detected a violation in a document\
+|MailMarshal has detected a suspect attachment\
+|Security Alert - ScanMail for Lotus Notes\
+|Skynet Mail Protection scan results\
+|Vexira ALERT\
+|You sent potentially unsafe content\
+"
+
+    # These are too general to appear in Body.
+
+    regexpHeader = "\
+virus(es|ii)?.*\<(alert|warn|detect|remov|found|infect|notif|scan|mail)\
+|\<(alert|warn|detect|remov|found|infect|notif|scan|mail|sen[dt]).*virus\
+|\<(contained).*virus\
+|\<anti-?vir(us)?\>\
+|virus.*(gefunden|encontrado|enviado|correo)\
+|$regexpBody\
+"
+
+}
+
+:0
+*   ERROR                     ?? ^^^^
+*   JA_UBE_FLAG_TEXT_VIRUS    ?? yes
+*$  ()\/($regexpHeader)$S*$WSPC*$S*
+{
+    ERROR       = "VirusHeader"
+    ERROR_MATCH = $MATCH
+}
+
+:0
+*   ERROR                     ?? ^^^^
+*   JA_UBE_FLAG_TEXT_VIRUS    ?? yes
+*$  B                         ?? ()\/($regexpBody)$S*$WSPC*$S*
+{
+    ERROR       = "VirusBody"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ score: big letters
+
+#   Count full words whose all letters have been capitalized
+#   - If must not be uuencoded message,
+#   - Ignore some commond words like: IP AM SMTP
+#   - Word must have at least 3 big letters
+
+dummy = "pm-jaube.rc: CHECK BigLetterWords"
+
+:0 D
+*     ERROR             ?? ^^^^
+*     jaubeHTML         ?? no
+*     jaubePGPmessage   ?? no
+*$ !  JA_UBE_CAPS_OK    ?? ^^^^
+*$       -$JA_UBE_MAX_BIG_WORDS^0
+*$ B ??  -1^1 ()$JA_UBE_CAPS_OK
+*  B ??   1^1 ()\/\<[A-Z][A-Z][A-Z]+\>
+{
+    ERROR       = "Marketing-CountBigLetterWords"
+    ERROR_MATCH = "$= too many"
+}
+
+# }}}
+# {{{ text: html
+
+#       Raw HTML, but missing MIME definition headers.
+#       Or you could match B ?? ()<(body[^<>]*|html)>
+
+:0
+*    ERROR ?? ^^^^
+*$   B     ?? ^^$SPCL*<html>
+*  ! H     ?? ^(Mime-Version\\|Content-Type):
+{
+    ERROR       = "BodyHtml-NonMime"
+    ERROR_MATCH = $MATCH
+}
+
+:0
+* ERROR ?? ^^^^
+* HB    ?? ^Content-Type:.*/html
+* HB    ?? ^Content-Transfer-Encoding:.*base64
+* HB    ?? ^\/Subject:.*
+{
+    ERROR       = "Html-base64"
+}
+
+#       The Javascript, VBscript
+
+:0
+*  ERROR ?? ^^^^
+*  B     ?? ()<html>
+*  B     ?? ()\/<$SPC*script$SPC*(lang.+)?>
+*  B     ?? </$SPC*script$SPC*>
+{
+    ERROR        = "BodyHtml-script"
+    ERROR_MATCH  = $MATCH
+}
+
+:0
+*    ERROR ?? ^^^^
+*$  -$JA_UBE_MAX_HTML_TAGS^0
+*  B ?? 1^1 ()\/</?(body|html|ul|ol|dl|dd|dt|li|br|p|pre|font\
+              |h[123456]|table|tr|td)>
+{
+    ERROR        = "BodyHtmlTags"
+    ERROR_MATCH  = "$= too many"
+}
+
+:0
+*   ERROR ?? ^^^^
+*   B     ?? ^Content-Type:.*text/html
+*   B     ?? ^Content-Transfer-Encoding:.*base64
+{
+    ERROR          = "BodyHtmlBase64"
+    # ERROR_MATCH  = $MATCH
+}
+
+:0
+*   ERROR ?? ^^^^
+*$  B     ?? ()<img$WSPC+src$WSPC*=.*http
+{
+    ERROR          = "BodyHtmlImage"
+    # ERROR_MATCH  = $MATCH
+}
+
+#   Known MEGA Spammers
+#
+#   They send 20Million spams a day! Try this (and we'll count
+#   lines, not strings, just in case "cyberpromo.com" occurs twice in
+#   the subject: for example, a legitimate letter from a friend has a
+#   subject of "I'm sick of cyberpromo.com! Damn cyberpromo.com to
+#   hell!").
+#
+#       1^1 ^.*\<cyberpromo\.com\>
+#       * -1^1 ^Subject:(.*\<)?cyberpromo.com\>
+#
+#   While less "perfect", I can never remember the scoring rules, and I'd
+#   likely use something like the following; plus, it's probably faster:
+#   This catches "cyberpromo.com" in any header not starting with "S", and
+#   it happens that none of the ones we need to catch it in start with "S",
+#   so it probably works the same on "real-life" mail headers. The
+#   condition can be modified to check for headers not starting with "Su"
+#   by changing it to:
+#
+#     * ^([^S]|S[^u]).*\<cyberpromo\.com\>
+#
+#   if needed; further extensions should be obvious.)
+
+:0
+*    ERROR ?? ^^^^
+*   ^[^S].*\/\<cyberpromo\.com\>
+{
+    ERROR       = "MegaSpammer"
+    ERROR_MATCH = $MATCH
+}
+
+# }}}
+# {{{ nslookup
+
+dummy = "pm-jaube.rc: Check nslooup"
+
+#   Check if From address has valid domain. We can't check address, but this
+#   is closest we get. This check must be at the end so that faster "text"
+#   test are applied first.
+
+:0
+*  ERROR                         ?? ^^^^
+*  JA_UBE_FLAG_FROM_NSLOOKUP     ?? yes
+* ^From:\/.*
+{
+    INPUT       = $MATCH
+    INCLUDERC   = $PMSRC/pm-jaaddr.rc   # explode address string
+    ERROR
+
+    :0
+    *$ SITE ?? $a
+    {
+        INPUT       = $SITE
+        INCLUDERC   = $PMSRC/pm-janslookup.rc
+
+        :0
+        * ERROR ?? yes
+        {
+            ERROR_MATCH = "From $SITE nslookup fail/$ERROR_MATCH"
+            ERROR       = "From-nslookup"
+        }
+        :0 E
+        {
+            ERROR  # Clear variable
+        }
+    }
+}
+
+# }}}
+
+# ..................................................... &final-check ...
+
+:0
+* ! ERROR ?? ^^^^
+{
+    ERROR_STATUS = "Bad"
+
+    :0
+    * ! JA_UBE_HDR ?? ^^^^
+    {
+        jaubeHeader = "$JA_UBE_HDR: $ERROR_STATUS $ERROR $ERROR_MATCH"
+
+        #  Check if ERROR_MATCH is not set (empty)
+
+        :0
+        * ERROR_MATCH ?? ^^^^
+        {
+            jaubeHeader = "$JA_UBE_HDR: $ERROR_STATUS $ERROR"
+        }
+
+        :0 fhw
+        | ${FORMAIL:-"formail"} -I "$jaubeHeader"
+    }
+
+    #  If AWK fails, then we see "Rescue of unfiltered data succeeded"
+    #  This might be due to message being too big
+
+    :0 fbiw
+    * ERROR                          ??  Attachment.*FileSuspect
+    * JA_UBE_ATTACHMENT_SUSPECT_KILL ??  yes
+    * B                              ??  base64
+    | $AWK '/[bB]ase64|BASE64/ { exit } { print }'
+
+    :0 E fbiw
+    * ERROR                          ??  Attachment.*FileIllegal
+    * JA_UBE_ATTACHMENT_ILLEGAL_KILL ??  yes
+    * B                              ??  base64
+    | $AWK '/[bB]ase64|BASE64/ { exit } { print }'
+}
+
+dummy = "pm-jaube.rc: end: $ERROR"
+
+# pm-jaube.rc ends here

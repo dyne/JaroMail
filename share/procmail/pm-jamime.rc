@@ -1,0 +1,245 @@
+# pm-jamime.rc -- subroutine to read mime boundary etc. variables
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Documentation
+#
+#       This includerc reads MIME boundary string from the message
+#	if it exists. The boundary string is typically found from
+#	Content-Type header.
+#
+#	    Mime-Version: 1.0
+#	    Content-Type: multipart/mixed; boundary=9i9nmIyA2yEADZbW
+#
+#	In addition it will define few other mime variables. See the
+#	returned values. You use these variables later in your MIME
+#	message processing.
+#
+#   Mime Notes
+#
+#       1998-07-28 Brett Glass <brett@lariat.org> reported in PM-L that
+#       there was security exploit in long attachment filenames:
+#       http://www.xray.mpe.mpg.de/mailing-lists/procmail/1998-07/msg00248.html
+#
+#       And here is the url to the matter:
+#
+#       http://www.sjmercury.com/business/microsoft/docs/security0728.htm
+#
+#
+#       When you use this module to detect mime messages, you can check the
+#       filename length with recipe:
+#
+#           #  Recipe after calling $RC_MIME, this module,
+#
+#           re       = ".........."     # regexp with 10 matches
+#           too_long = "$re$re$re$re"   # allow 40 characters maximum
+#
+#           :0
+#           *$ $SUPREME^0  MIME_H_ATTACHMENT ?? $re
+#           *$ $SUPREME^0  MIME_B_ATTACHMENT ?? $re
+#           {
+#               dummy = "** Dangerously long mime attachment filename"
+#               dummy = "** $MIME_H_ATTACHMENT $MIME_B_ATTACHMENT"
+#
+#               :0 :
+#               /var/spool/mail/MimeDanger
+#           }
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#	(none)
+#
+#   Return values
+#
+#	o   Variable MIME is set to "yes" or "no" if messages has mime version
+#	    string
+#	o   MIME_VER contains the mime version string from the header.
+#	o   MIME_TYPE contains the Content-Type from the header.
+#	o   MIME_CTE contains Content-Transfer-Encoding from the header.
+#       o   MIME_H_QP is "yes" if Content-Transfer-Encoding: quoted-printable
+#	    is in the header.
+#	o   MIME_B_QP is "yes" if Content-Transfer-Encoding: quoted-printable
+#	    is found from the body.
+#       o   MIME_BOUNDARY contains the boundary string, which is used to
+#	    differentiate mime sections in the body.
+#	o   MIME_BOUNDARY_COUNT is the number of boundary strings found
+#	    from the body. The value is 3 if there is two mime sections,
+#	    and 4 if 3 etc. MIME_BOUNDARY_COUNT -1 = count of sections.
+#	o   MIME_H_ATTACHMENT, contains the filename if there was attachement
+#	    filename in the header. Content-Disposition: attachment;
+#	    filename="..."
+#	o   MIME_B_ATTACHMENT. `body' file attachment. Note however that
+#	    this is the match of first string in the body. There may be
+#	    several attachments. MIME_B_ATTACHMENT_FILE_COUNT tells you
+#	    how many filenames are in the body.
+#
+#   Usage example
+#
+#	INCLUDERC = $PMSRC/pm-jamime.rc
+#
+#   Change Log (none)
+
+# ............................................................ &code ...
+
+
+dummy = "
+========================================================================
+pm-jamime.rc: init:"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ..................................................... &output-vars ...
+# output variables
+
+MIME        = "no"           # set default value
+MIME_H_QP   = "no"
+MIME_B_QP   = "no"
+
+MIME_VER
+MIME_CTE
+MIME_TYPE
+MIME_BOUNDARY
+MIME_BOUNDARY_COUNT
+
+# ........................................................... &do-it ...
+#   The WSPC ?? ( ) is there just double checking that we REALLY read
+#   the pm-javar.rc. We must not set any MIME variables if that wasn't
+#   read.
+
+:0
+* ^Mime-Version: *\/[0-9.]+
+* WSPC ?? [ ]
+{
+    MIME        = "yes"
+    MIME_VER    = $MATCH
+
+    :0
+    * ^Content-Type: +\/.*
+    {
+	MIME_TYPE = $MATCH
+    }
+
+    :0
+    *$ ^Content-Transfer-Encoding:$s+\/.*
+    {
+	MIME_CTE = $MATCH
+
+	:0
+	* MIME_CTE ?? quoted-printable
+	{
+	    MIME_H_QP = "yes"
+	}
+    }
+
+    :0
+    *$ B ?? ^Content-Transfer-Encoding:$s+quoted-printable
+    {
+        MIME_B_QP = "yes"
+    }
+
+    #	What is the MIME tag in this message?
+    #
+    #	Content-Type: multipart/mixed;
+    #	    boundary="---- =_NextPart_000_01BD04D4.A5AC6B00"
+    #
+    #	Note that in the text, this string may not be excatly like this,
+    #	Eg. in my messages there was "--" prepended to the tag.
+    #
+
+    :0
+    * boundary *= *\"\/[^\";]+
+    {
+        MIME_BOUNDARY = $MATCH
+    }
+
+    #   Hm, the boundary string was not surrounded by double quotes.
+    #   Search this kind of boundary string then:
+    #
+    #       Content-Type: multipart/mixed; boundary=9i9nmIyA2yEADZbW
+
+    :0 E
+    * boundary *= *\/[^\";]+
+    {
+        #   "    Don't mind this, a dummy double quote to help Emacs
+        #        to end starting quote below. Otherwise syntax colour
+        #        highlighting would go beserk.
+
+        MIME_BOUNDARY = $MATCH
+    }
+
+    dummy = "pm-jamime.rc: Do we have the boundary string?"
+
+    :0
+    *! MIME_BOUNDARY ?? ^^^^
+    {
+        #   Count how many mime sections there are in the message.
+        #   MIME_BOUNDARY_COUNT -1 = count of mime sections.
+
+        :0
+        *$ B ?? 1^1  $\MIME_BOUNDARY
+        { }
+
+        MIME_BOUNDARY_COUNT = $=
+    }
+
+    #	Mime-Version: 1.0 (generated by tm-edit 7.106)
+    #	Content-Type: application/octet-stream
+    #	Content-Disposition: attachment; filename="file.txt"
+    #	Content-Transfer-Encoding: 7bit
+    #
+    #	Note: the second regexp assumes "filename=file.txt"
+
+    mimeAttachementRegexp1 = "filename$s*=$s*[\"']\/[^\"\']+"
+    mimeAttachementRegexp2 = "filename$s*=$s*\/.*"
+
+    :0
+    *$                H ?? ^Content-Disposition:.*attachment$s*;$s*\/.*
+    *$ $SUPREME^0 MATCH ??  $mimeAttachementRegexp1
+    *$ $SUPREME^0 MATCH ??  $mimeAttachementRegexp2
+    {
+	MIME_H_ATTACHMENT = $MATCH
+    }
+
+    :0 E
+    *$                B ??  ^Content-Disposition:.*attachment$s*;$s*\/.*
+    *$ $SUPREME^0 MATCH ??  $mimeAttachementRegexp1
+    *$ $SUPREME^0 MATCH ??  $mimeAttachementRegexp2
+    {
+	MIME_B_ATTACHMENT = $MATCH
+
+        :0
+        *$ B ?? 1^1  ^Content-Disposition:.*attachment.*filename
+        { }
+
+        MIME_B_ATTACHMENT_FILE_COUNT = $=
+
+    }
+}
+
+dummy = "pm-jamime.rc: end:"
+
+# pm-jamime-tag.rc ends here

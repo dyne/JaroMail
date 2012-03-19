@@ -1,0 +1,192 @@
+# pm-jaube-prg-spamprobe.rc -- Interface to Spamprobe program
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Warning
+#
+#       Put all your Unsolicited Bulk Emacil (aka spam) filters towards the
+#       end of your `~/.procmailrc'. The idea is that valid messages are filed
+#       first (mailing lists, your work and private mail, bounces) and only
+#       the uncategorized messages are checked last.
+#
+#       YOU CANNOT USE THIS PROCMAIL SUBROUTINE UNLESS YOU HAVE TRAINED THE
+#       BAYESIAN PROGRAM FIRST!
+#
+#       To train:
+#
+#           $ spamprobe -8 good good.msg ...
+#           $ spamprobe -8 spam spam.msg ...
+#
+#	Make sure there are no stale lock files, or the spamprobe and this
+#	subroutine will hang infinitely:
+#
+#	    $ rm -f ~/.spamprobe/lock
+#
+#   Overview of features
+#
+#       o   Implements interface to http://freshmeat.net/projects/spamprobe/
+#           project.
+#       o   variable `ERROR' is set if the message was UBE.
+#       o   Results are available by default in header
+#           `X-Spam-Spamprobe-Status'.
+#
+#   Description
+#
+#       There are several Bayesian based statistical analysis programs that
+#       study the message's tokens and then classify it into two categories:
+#       good or bad, or if you like, ham and spam. All the Bayesian programs
+#       are not the same, so if you want to achive magic 99.99% probability
+#       the only methodology to do that is to chain several programs in
+#       serially. There is no single program that can solve the UBE detection.
+#       This procmail subroutine implements call interface to program
+#       `spamprobe', which must already have been installed.
+#
+#   About bouncing message back
+#
+#       The general consensus is, that you should not send bounces. The UBE
+#       sender is not there, because the address forged. Do not increase
+#       the network traffic; you will not do any good to anybody by
+#       bouncing messgas -- you just increase mail traffic even more.
+#       Instead save the messages to folders and periodically periodically
+#       check their contents.
+#
+#   Required settings
+#
+#       If `spamprobe' program is available, define this variable in your
+#       `~/.procmailrc'. Use absolute path to make the external shell
+#       quick; it'll save server load considerably.
+#
+#           JA_UBE_SPAMPROBE_PRG = /usr/bin/spamprobe
+#
+#       If you _do_ _not_ have program installed, do not leave the
+#       variable lying aroung, because it will keep this subroutine active.
+#       Calling a non existing program is not a good idea, so it better to
+#       empty the variable if the program is not available.
+#
+#   Required settings
+#
+#       None. No dependencies to other procmail modules.
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   `JA_UBE_SPAMPROBE_PRG', path to the program.
+#       o   `JA_UBE_SPAMPROBE_HEADER', the header name where the results
+#           are put. If not defined, no header is added.
+#           Defaults to *X-Spam-Spamprobe-Status*
+#       o   `JA_UBE_SPAMPROBE_FORCE', if set to _yes_ then call program
+#           no matter what. Normally if there already is
+#           *X-Spam-Spamprobe-Status* header, it is assumed that the
+#           message has already been checked and no new checking is
+#           needed.
+#
+#   Return values
+#
+#       o   `ERROR', is set to the return value of `spamprobe' program.
+#
+#   Usage example
+#
+#           PMSRC                  = $HOME/procmail # procmail recipe dir
+#
+#           <other checks, mailing lists, work mail etc.>
+#
+#           JA_UBE_SPAMPROBE_PRG   = "/usr/bin/nice -n 5 /usr/bin/spamprobe"
+#           INCLUDERC              = $PMSRC/pm-jaube-prg-spamprobe.rc
+#
+#           #   The ERROR will contains word "yes" if message was spam
+#
+#           :0 :
+#           * ERROR ?? yes
+#           junk.mbox
+#
+#   File layout
+#
+#       The layout of this file is managed by Emacs packages tinyprocmail.el
+#       and tinytab.el for the 4 tab text placement.
+#       See project http://freshmeat.net/projects/emacs-tiny-tools/
+#
+#   Change Log
+#
+#       None
+
+dummy = "
+========================================================================
+pm-jaube-prg-spamprobe.rc: init:"
+
+# ................................................... User variables ...
+
+#   You must define program path, because we don't know
+#   if it has been installed in this system or not
+
+JA_UBE_SPAMPROBE_PRG           = ${JA_UBE_SPAMPROBE_PRG:-""}
+
+#   Command "score" examines the message
+#   You could use command "train" is you have good database.
+
+JA_UBE_SPAMPROBE_PRG_OPT       = ${JA_UBE_SPAMPROBE_PRG_OPT:-"score"}
+
+#   The header name with no colon at the end. If this variable
+#   is empty, then external formail call is saved - results can still
+#   be checked from variable ERROR. There is no trailing colon in this
+#   variable.
+
+JA_UBE_SPAMPROBE_HEADER = ${JA_UBE_SPAMPROBE_HEADER:-"\
+X-Spam-Spamprobe-Status"}
+
+# Should we check even if there already was header
+# JA_UBE_SPAMPROBE_HEADER
+
+JA_UBE_SPAMPROBE_FORCE = ${JA_UBE_SPAMPROBE_FORCE:-"no"}
+
+# ............................................................ do it ...
+
+ERROR   # Kill variable
+
+:0
+*                   JA_UBE_SPAMPROBE_PRG     ??  [a-z]
+*$ ! 9876543210^0  ^$JA_UBE_SPAMPROBE_HEADER
+*    9876543210^0   JA_UBE_SPAMPROBE_FORCE   ?? yes
+{
+    jaubeSpamprobeScore # Kill variable
+
+    :0 w # : spamprobe$LOCKEXT
+    jaubeSpamprobeScore=|$JA_UBE_SPAMPROBE_PRG ${SPAMPROBE_OPT:-"score"}
+
+    #   Check for failures; require (A)and condition
+    #
+    #   procmail: Executing "/usr/bin/spamprobe,score"
+    #   error: unable to open database ....spamprobe/sp_words:
+    #   Cannot allocate memory
+    #   warning: berkeley db reported error: env close: Invalid argument (22)
+    #   caught runtime exception: unable to open words database
+    #   caught signal 11: cleaning up
+
+    :0 A
+    * jaubeSpamprobeScore ?? [a-z]
+    {
+        ERROR = $jaubeSpamprobeScore
+
+        # X-Spam-Spamprobe-Status: GOOD 0.0000273 e5af974acad8028bea8a10f1f08b966e
+        # X-Spam-Spamprobe-Status: SPAM 0.9742932 07a3b71c9c96968641bbfa497a458d8e
+        :0 fw
+        * ! JA_UBE_SPAMPROBE_HEADER ?? ^^^^
+        | ${FORMAIL:-formail} \
+          -I "$JA_UBE_SPAMPROBE_HEADER: $jaubeSpamprobeScore"
+    }
+}
+
+dummy = "pm-jaube-prg-spamprobe.rc: end: $ERROR"
+
+# End of file

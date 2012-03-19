@@ -1,0 +1,101 @@
+# pm-jasrv-err.rc -- send message, subroutine for File Server
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This module is part of the MPFS file server.
+#       Ssnd error notice: file didn't exist.
+#
+#   Input
+#
+#       o   FILE, file or command that did ot exist.
+#
+#   Output
+#
+#	o   fld, additional field to be added to the saved mbox log message
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+
+id    = "pm-jasrv-err.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+# File didn't exist, send notice.
+
+stat    = "error-NotExist $FILE"
+
+
+# ....................................................... record-log ...
+# Theese are no-op. We just want to leave trace to the log file TO whom
+# the message was sent.
+
+:0
+* ^To:\/.*
+{ }
+
+:0
+* ^From\/.*
+{ }
+
+# ................................................... Subject-notify ...
+
+header
+
+:0
+* JA_SRV_F_SUBJ_NOTIFY ?? yes
+{
+    header = "-ISubject: Re: $JA_SRV_SUBJECT [$stat]"
+}
+
+
+# ............................................................. send ...
+#	We use "c" to copy this request to out log mbox
+
+
+dummy = "$id: HEADER: $header"
+
+:0 fbw
+* header ?? [a-z]
+| $FORMAIL ${header+"$header"}
+
+
+:0 hwic:
+| (                                                                         \
+    $CAT - | $FORMAIL -I "From ";                                           \
+    echo "[srv-err] file `$FILE' does not exist.";                          \
+    echo "The file may have been renamed or removed.";                      \
+    echo "Please use 'send help'";                                          \
+  ) |                                                                       \
+  $SENDMAIL  ;                                                              \
+  echo "    [ja-srv; $stat; $to;]"                                          \
+  >> $JA_SRV_LOG;
+
+# ....................................................... extra-info ...
+# We don't want user to see this because here is directory info
+# This information is for ourself only.
+
+fld = "-A$JA_SRV_X_HEADER: $stat; $file; $JA_SRV_FROM"
+
+
+dummy = "$id: end:"
+
+
+# Enf of pm-jasrv-err.rc

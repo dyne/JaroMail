@@ -1,0 +1,100 @@
+# procmail rc to define patterns to recognize the headers
+#
+# $Id: headers.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+#    Copyright (C) 1995  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+# Use these is recipes like this:
+#
+#  # If mail is from john or mary, then file in "+urgent"
+#  :0
+#  * $ $FROM(john|mary)@
+#  urgent/.
+#
+#  # if the mail is directly to me, then file it
+#  :0
+#  * $ $TO($USER)@
+#  mymail/.
+#
+#  # See which list this mail is from:
+#  :0
+#  * $ $FROM_LIST_MAILER
+#  { LISTADDR=$MATCH }
+
+
+    # These patterns span any comment text before and after email addresses
+    # Use PRE_ADDR_SPAN before any names; it will span a string of non-address
+    # characters up to the beginning of a valid email address.
+
+PRE_ADDR_SPAN='(.*[^-(.%@a-zA-Z0-9])?'
+
+    # Use POST_ADDR_SPAN after any names; it will span a string of non-address
+    # characters up to the a comma "," or the end of the line
+
+POST_ADDR_SPAN='(([^),.!:a-zA-Z0-9].*)?(,|$[^>]))'
+
+    # These are to match RFC822 style addresses (not including UUCP addresses)
+    # Use $USERADDR to match a user name part of an email address
+
+USERADDR='[-a-zA-Z0-9_:.+=/]+'
+
+    # Use $HOSTADDR to match the FQDN hostname part of an address
+
+HOSTADDR='[-a-zA-Z0-9_:.+=/]+'
+
+    # Use $HOSTNAME to match the "plain" hostname (not include any domains)
+
+HOSTNAME='[-a-zA-Z0-9_:+=/]+'
+
+    # Use $ADDR to match either an RFC 822 or UUCP email address
+
+ADDRESS="<?($USERADDR(@$HOSTADDR)?|($HOSTADDR!)+$USERADDR)>?"
+
+    # Use $FROM to match mail from someone
+
+FROM="(^((Reply-To|(Resent-)?(From|Sender)|X-Envelope-From):|>?From )\
+$PRE_ADDR_SPAN)"
+
+    # Use $TO to match mail to someone (but only "To:", not "Cc:")
+
+TO="(^((Original-)?(Resent-)?To|(X-Envelope|Apparently(-Resent)?)-To):\
+$PRE_ADDR_SPAN)"
+
+    # Use $CC to match mail to someone (but only "Cc:", not "To")
+
+CC="(^((Original-)?(Resent-)?Cc|(X-Envelope|Apparently(-Resent)?)-Cc):\
+$PRE_ADDR_SPAN)"
+
+    # For completeness, this should be roughly equivalent to ^TO
+
+TOCC="($TO|$CC)"
+
+    # Pattern to recognize lists by precedence
+
+LIST_PRECEDENCE='(^Precedence:.*(junk|bulk|list))'
+
+    # Names of common list mailers
+    # List the more specific mailers first, with generic names later
+
+LIST_MAILERS="(LISTSERV|ListProc|${USERADDR}-(l(ist)?|request|own[er]r)|\
+owner-${USERADDR}|Majordomo?|Mailagent|mmdf|news|n?uucp|\
+Post(mast(er)?|-?office)|procmail|SmartList|(Mailer-)?daemon|root)"
+
+    # Pattern to put them all together, just to detect mail from a list
+
+FROM_LIST="($LIST_PRECEDENCE|$FROM$LIST_MAILERS$POST_ADDR_SPAN)"

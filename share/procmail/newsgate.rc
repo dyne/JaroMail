@@ -1,0 +1,46 @@
+# news-gate procmail recipe file
+#
+# Take mail and post it as a piece of news, after possibly
+# inserting either a header or a trailer to the mail.
+#
+# The header or trailer only get added if the source address is from
+# outside of the SGI domain.
+#
+# This file should be installed into /etc/procmailrcs, and the
+# ownership set to the uid of the login by which the news postings
+# will be accomplished.
+#
+
+MAILDIR=/etc/procmailrcs	# make this the current directory
+
+INEWS=/usr/local/bin/inews	# or whatever program you have to insert news
+
+NEWSGROUP=$1			# the argument is the list name
+
+#LOGFILE=log			# uncomment these for debugging
+#VERBOSE=yes
+#LOGABSTRACT=all
+
+FROM=`formail -rtzxTo:`		# get who the mail is from
+USER="[0-9a-zA-Z_.-]+"
+HOST="[0-9a-zA-Z_-]+"
+DOMS="(corp|engr|asd|nsd|esd|wcs|csd)"
+
+:0				# is this user not from SGI?
+* $! FROM ?? ^^($USER|$USER@$HOST|$USER@($HOST)?$DOMS(\.sgi\.com)?|$USER@sgi\.com)^^
+{
+    :0 fh			# if header defined, prepend it
+    * ? test $LIST.header
+    | cat $LIST.header -
+
+    :0 fh			# if trailer defined, append it
+    * ? test $LIST.trailer
+    | cat - $LIST.trailer
+}
+
+:0 fh				# now do the header manipulation
+| formail -R To: Originally-To: -INewsgroups: $NEWSGROUP
+
+:0				# now post the mail
+| $INEWS
+

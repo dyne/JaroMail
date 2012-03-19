@@ -1,0 +1,44 @@
+    SPAMSITES='(spam.com|foo.org|blah.com)'	# sites to check
+    MAXFROM=10			# more than 10 mails/day from
+    :0				# check for mail from a spam site
+    * $ ^(From|Sender:|Reply-To:).*@.*$SPAMSITES
+    { # ok -- mail is from a possible spam site -- check # of occurances
+      FROM=`formail -rtzxTo:`	# get the best from
+      DATE=`date +%Y%m%d`		# get YYYYMMDD
+      SUBJ=`formail -zxSubject:`	# get the subject
+      FROMLOG=from.log		# logfile of FROM addresses
+      :0ci:			# log this message
+      | echo "$FROM $DATE : $SUBJ" >>$FROMLOG
+      # Find out how many message have been received today
+      COUNT=`fgrep -c "$FROM $DATE" $FROMLOG`
+      :0			# see if we've received too many
+      * $ -$MAXFROM^0
+      * $  $COUNT^0
+      { # count was exceeded - generate a reply
+	:0 			# clean up the subject
+	* SUBJ ?? Re: *\/[^ ].*
+	{ SUBJ=$MATCH }
+	:0 fh			# generate a reply header
+        * $ !^X-Loop: *$LOGNAME@$HOST
+	| formail -rt	-I"From: ($LOGNAME's Mail-Agent) $LOGNAME" \
+			-I"Subject: Re: $SUBJ" \
+			-I"Precedence: junk" \
+			-I"X-Loop: $LOGNAME@$HOST"
+	:0 afb			# generate a reply body
+	| echo "Your message is being returned because you've sent me" ; \
+	  echo "too many message today. Your original message follows:" ; \
+	  cat -
+	:0 a			# send it off
+	! -t
+	:0 E			# no reply generated
+	error.log		# keep an error log
+      }
+      # mail count is okay, forge on
+    }
+    # normal mail processing follows
+
+The recipe works by keeping a log of all recieved mail, with a
+single line of "$FROM $DATE : $SUBJ" being appended to the log file.
+Then, if the number of lines with the "$FROM $DATE" string exceeds
+a threshold, a reply is generated.  If any error in the reply, or
+if a mail loop is detected, file the mail to "error.log".

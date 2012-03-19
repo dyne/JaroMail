@@ -1,0 +1,49 @@
+# pf-check.rc
+#
+# $Id: pf-check.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+# Procmail recipe file to check if an address is from a given
+# address or, if it is from me, if it is *to* that same address.
+#
+# If the address matches, append DEST to PF_DEST.
+#
+# After all checks are complete, invoke pf-save.rc to save the
+# message into the appropriate folders.  See its comments for details.
+#
+# Clear these variables before invoking the first time:
+#
+# PF_DEST  The destination of all filed mail.
+# PF_FROM  The derived FROM address.
+#
+# Set these variables before invoking:
+#
+# ADDR	Address to which addressed mail will be filed
+#	into the named folder.
+#
+# DEST	Destination into which addressed mail will be
+#	dropped.
+#
+# INCLUDERC=pf-check.rc
+
+:0
+* ADDR ?? .
+* DEST ?? .
+{
+  # Figure out who this mail is from
+  :0
+  * ! PF_FROM ?? .
+  { PF_FROM=`formail -rtzxTo:` }
+
+  # is this mail from the given $ADDR?
+  # if so, prefile it
+  :0
+  * $ PF_FROM ?? $ADDR
+  { PF_DEST="$PF_DEST $DEST" }
+
+  # if not directly from the address, see if it is from me,
+  # and to the address.
+  :0 E
+  * $ PF_FROM ?? ${USER:-$LOGNAME}
+  * $ ^TO$ADDR
+  { PF_DEST="$PF_DEST $DEST" }
+}

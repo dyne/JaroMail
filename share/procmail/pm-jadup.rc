@@ -1,0 +1,138 @@
+# pm-jadup.rc -- Procmail: Handle duplicates; store to separate folder
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This recipe stores duplicate messages to separate folder
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-jastore.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   JA_ID_CACHE, Where to keep the Message-Id cache.
+#       o   JA_ID_CACHE_SIZE, how big cache, defualt is 8192
+#       o   JA_ID_MBOX, where to store duplicate messages
+#           when delivering message to duplicate mbox.
+#       o   JA_ID_IGNORE, if set to "yes", then ignore duplicate check
+#
+#   Return values
+#
+#       o   Variable ERROR is set to "yes" if duplicate message was trapped,
+#           otherwise value is "no"
+#
+#   Usage Example
+#
+#       For simple usage, just put this somewhere after backup recipes
+#
+#               RC_DUP      = $PMSRC/pm-jadup.rc
+#               ...
+#               INCLUDERC   = $RC_DUP
+#
+#       When you are testing messages, you send them over and over to
+#       .procmailrc; which means that same message should not be trapped by
+#       duplicate check. You can call `procmail' with option "-a test" which will
+#       set pseudo variable `$1'. The recipe below sets flag `JA_ID_IGNORE'
+#       to "yes" if test is on going and the duplicate filter should be
+#       bypassed.
+#
+#           RC_DUP  = $PMSRC/pm-jadup.rc
+#           ARG     = $1        # Copy pseudo variable to $ARG
+#
+#           :0
+#           * ARG ?? test
+#           {
+#               JA_ID_IGNORE = "yes"
+#           }
+#
+#           #   Some microsoft product is known to send same message ids
+#           #   over and over. If we detect one, tunr off the duplicate test,
+#           #   because it would trash every message.
+#           #   <MAPI.Id.0016.00666479202020203030303430303034@MAPI.to.RFC822>
+#
+#           :0
+#           * ! ^X-msmail
+#           * ! ^Message-ID: *<MAPI.*@MAPI.to.RFC822>
+#           {
+#               JA_ID_IGNORE = "yes"
+#           }
+#
+#           #   Run this command every time a duplicate message is found.
+#           #   It writes a small log entry to MY_LOG
+#
+#           INCLUDERC    = $RC_DUP
+#
+#           :0 hwic:
+#           * ERROR ?? yes
+#           | echo "    [duplicate]" >> $BIFF
+#
+#   Change Log: (none)
+
+# ............................................................ &code ...
+
+
+id    = "pm-jadup.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ..................................................... &output-vars ...
+# output variables
+
+ERROR = "no"
+
+# .......................................................... &public ...
+
+JA_ID_CACHE	    = ${JA_ID_CACHE:-"$HOME/pm-msgid.cache"}
+JA_ID_CACHE_SIZE    = ${JA_ID_CACHE_SIZE:-8192}
+JA_ID_MBOX          = ${JA_ID_MBOX:-"junk.duplicates"}
+JA_ID_IGNORE        = ${JA_ID_IGNORE:-"no"}
+
+# ........................................................... &do-it ...
+
+#   We need regional lock, because `formail' is run in condition statement.
+
+jaDupLOCKFILE	    = $LOCKFILE	            # save old lockfile
+LOCKFILE            = ${JA_ID_CACHE}.lock
+
+:0
+*   ^Message-Id:
+*    JA_ID_IGNORE ?? no
+* ? $FORMAIL -D $JA_ID_CACHE_SIZE $JA_ID_CACHE
+{
+    ERROR       = "yes"                     # Flag duplicate to caller
+    MBOX        = $JA_ID_MBOX
+    INCLUDERC   = $PMSRC/pm-jastore.rc
+}
+
+LOCKFILE        = $jaDupLOCKFILE            # restore value
+
+dummy = "$id: end: (DUPLICATE status = $ERROR)"
+
+# end of file

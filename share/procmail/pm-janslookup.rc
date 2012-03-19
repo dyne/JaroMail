@@ -1,0 +1,395 @@
+# pm-janslookup.rc -- run nslookup on variable INPUT
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This subroutine runs `nslookup' on given INPUT address. This may be
+#       an effective way to test if the address is known to Internet. You
+#       could use this information to determine if some automated reply to
+#       a address can be sent. The know truth is that you can't validate
+#       whole email address
+#
+#               to_someone@foo.com
+#
+#       but you can validate "foo.com"; that's the closest you get.
+#
+#       [Warning: If you don't use cache feature...]
+#
+#       Do not however use this module to regularly check _all_ incoming
+#       from addresses with this subroutine for possible bogus UBE
+#       addresses, because calling nslookup
+#
+#       o   may be slow, building to connection and querying the results
+#           may take several seconds. (some times, usually it's quote fast)
+#       o   consumes quite a lot resources.
+#
+#       You can however check _some_ messages that are likely UBE to verify
+#       your doubts.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-jaaddr.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   INPUT, the address (only strict domain part) which is checked.
+#           Eg. "this.domain.com". See examples for more.
+#           If this string contains "@" character, then additional
+#           subroutine pm-jaaddr.rc is called to extraxt the domain name
+#           INPUT = "John Doe <foo@site.com>" --> INPUT = "site.com"
+#       o   JA_NSLOOKUP_CACHE, filename. If exists, cache is used and updated.
+#       o   JA_NSLOOKUP_FORCE, if "yes", then cache is not used but a forced
+#           nslookup is performed.
+#       o   JA_NSLOOKUP_OPT, is currently empty, but you could see if you
+#           you want to use "-querytype=MX". However this option may give
+#           you response: "No mail exchanger (MX) records available",
+#           which is flagged as nslookup failure.
+#       o   JA_NSLOOKUP_SERVER, optional, the server to user for nslookup
+#
+#       If the cache file can be read:
+#
+#       o   Each entry has format "address.com ns-error". The error
+#           indication is added to the line if the nslookup failed when
+#           address was checked. Otherwise line contains "address.com".
+#       o   The cache is always checked first. If there is no entry matching
+#           the current address, only then is nslookup called and new entry
+#           added to cache.
+#
+#   Return values
+#
+#       o   Variable ERROR will be set to "yes" if nslookup failed or
+#           to "no" if nslookup succeeded. It can also contain "maybe" if
+#           nslookup returned "No address (A) records available"
+#       o   ERROR_MATCH contains one line lookup failure reason.
+#
+#       Following conditions trigger "maybe" and no "ns-error" is written
+#       into the cache.
+#
+#       o   "No address (A) records available for xxx"
+#
+#   Usage example
+#
+#       If you are going to check some header field, like From:, please
+#       explode the content with pm-jaaddr.rc first. Suppose you have
+#       string:
+#
+#           "From: foo@ingrid.sps.mot.com (Yoshiaki foo)"
+#
+#       You have to derive the address from string and pass the site name:
+#       Read From: field and address from it.
+#
+#           PMSRC       = $HOME/pm
+#           RC_NSLOOKUP = $PMSRC/pm-janslookup.rc   # name the subroutine
+#
+#           :0
+#           * MAYBE_UBE ?? yes
+#           * ^From:\/.*
+#           {
+#               INPUT       = $MATCH
+#               INCLUDERC   = $RC_NSLOOKUP  #   to nslookup
+#
+#               :0
+#               * ERROR ?? yes
+#               {
+#                   #   Hm, nslookup failed, can't send anything back to this
+#                   #   address
+#               }
+#           }
+#
+#       Second example, check if the address is reachable before sending reply
+#
+#           INPUT       = `$FORMAIL -rt -x To:`
+#           INCLUDERC   = $RC_NSLOOKUP
+#
+#           :0
+#           *    ERROR ?? no
+#           {
+#               # okay, at least site address seems to be reachable
+#           }
+#
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+
+
+dummy = "
+========================================================================
+pm-janslookup.rc: init: INPUT = $INPUT"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+#   If user gave string that had Email, explode it automatically
+#   INPUT = "John doe <foo@site.com>" --> "site.com"
+
+:0
+* INPUT ?? @
+{
+    INCLUDERC   = $PMSRC/pm-jaaddr.rc   # - explode INPUT string
+    INPUT       = $SITE                 # - the address is only fed
+}
+
+# ...................................................... &input-vars ...
+#   o   INPUT contains the address to check
+#   o   JA_NSLOOKUP_CACHE is optional
+
+#       Set to empty "" if you don't wan't to use cache in some particular
+#       cases
+
+JA_NSLOOKUP_CACHE   = ${JA_NSLOOKUP_CACHE:-"$HOME/.nslookup.cache"}
+
+#   other options
+
+JA_NSLOOKUP_FORCE   = ${JA_NSLOOKUP_FORCE:-"no"}
+JA_NSLOOKUP_OPT     = ${JA_NSLOOKUP_OPT:-"-querytype=MX"}
+JA_NSLOOKUP_SERVER  = ${JA_NSLOOKUP_SERVER:-""}
+
+NSLOOKUP            = ${NSLOOKUP:-"nslookup"} # Add `-silent' in Linux
+TOUCH               = ${TOUCH:-"touch"}       # binary to create cache file
+
+# ..................................................... &output-vars ...
+#   output variables
+
+ERROR = "yes"
+ERROR_MATCH
+
+# ........................................................... &do-it ...
+#   ErrorWord is not really ment for user configurable, but
+#   as you can see, it is coded that way in case you would like to
+#   use some other error word.
+
+ErrorWord = ${ErrorWord:-"nlookup-error"}
+dummy     = "pm-janslookup.rc: do the work"
+
+#   The string must have one dot somewhere, otherwise it is not a domain
+
+:0
+*$ INPUT ?? $NSPC+\.$NSPC+
+{
+    topDomain   = "xxx-dummy-regexp"
+    cache       = "no"
+    entry       = "no"
+
+    :0
+    * INPUT ?? ()\/[^.]+\.[^.]+^^
+    {
+        topDomain = $MATCH                      # xxx.foo.com --> foo.com
+    }
+
+    #   If variable is not empty, suppose that user wants to use cache
+
+    :0
+    * ! JA_NSLOOKUP_CACHE ?? ^^^^
+    *   JA_NSLOOKUP_FORCE ?? no
+    {
+        cache = "yes"
+
+        :0 hwic                         # Create file if it doesn't exist.
+        * ! ? $IS_EXIST $JA_NSLOOKUP_CACHE
+        | $TOUCH $JA_NSLOOKUP_CACHE
+    }
+
+    dummy = "pm-janslookup.rc: Test if cache is in use"
+
+    :0
+    *    cache ?? yes
+    *$ ? $IS_READABLE $JA_NSLOOKUP_CACHE
+    {
+        #   Convert regexp to "safe" format, escapeping regexp
+        #   metacharacters. See pm-tips.txt
+
+        regexp = "$\INPUT"
+
+        :0                              # kill leading "()"
+        * regexp ?? ^^\(\)\/.*
+        {
+            regexp = "$MATCH"
+        }
+
+	#  b) search hostname and SPACE like in: "this.site.com nlookup-error"
+	#  a) or "this.site.com"
+
+        line = `$EGREP "^$regexp( | *$)" $JA_NSLOOKUP_CACHE`
+
+        :0                              # was this address in cache?
+        *$ line ?? $INPUT
+        {
+            entry = "yes"
+        }
+
+        dummy = "pm-janslookup.rc: Test if cache line does _not_ include $ErrorWord"
+
+        :0
+        *    entry ?? yes
+        *$ ! line  ?? $ErrorWord
+        {
+            ERROR = "no"
+        }
+    }
+
+    #   Cache is not used OR there was no line in the cache
+
+    dummy = "pm-janslookup.rc: Test if we call nslookup"
+
+    :0
+    * entry ?? no
+    {
+        stat = `$NSLOOKUP $JA_NSLOOKUP_OPT "$INPUT" $JA_NSLOOKUP_SERVER`
+
+        #       If nslookup succeeds, at least HP-UX 9/10, ULTRIX and SUN
+        #       return some of these choices upon success:
+        #
+        #           Non-authoritative answer:
+        #           Name:    uta.fi
+        #
+        #       Or
+        #
+        #           Non-authoritative answer:
+        #           geocities.com   preference = 0, mail exchanger = ...
+        #
+        #       Or
+        #
+        #           Name:    foo.com
+        #           Address:  209.54.94.60
+        #
+        #       Or
+        #
+        #           Authoritative answers can be found from:
+        #           foo.com
+        #           origin = xx.foo.com
+        #
+        #       Or
+        #           Non-authoritative answer:
+        #           foo.com mail exchanger = 0 mx1.foo.com.
+        #
+        #       Or ^($)$topDomain
+        #
+        #       This needs some explaining. When procmail captures
+        #       the `nslookup' command it does it wrong for some unknown reason
+        #       for some mail hosts. The captured output is:
+        #
+        #           procmail: Assigning "stat=Name Server:  zeus.tele.nokia.fi
+        #           Address:  131.228.134.50
+        #
+        #           umd.umich.edu
+        #           origin = tiamat.umd.umich.edu
+        #           mail addr = hostmaster.tiamat.umd.umich.edu
+        #           serial = 970727
+        #           refresh = 28800 (8 hours)
+        #           retry   = 14400 (4 hours)
+        #           expire  = 2419200 (28 days)
+        #           minimum ttl = 14400 (4 hours)"
+        #
+        #       notice? The line "Authoritative answers can be found from:"
+        #       is not there while it is if I run the same command is
+        #       run from command line.
+
+        # |Authoritative answers can be found from:($).*
+
+        :0
+        * stat ?? ()\/No +address.*available.*
+        {
+            #   *** No address information is available for ...
+            ERROR_MATCH = $MATCH
+            ERROR       = "yes"
+        }
+
+        :0 E
+        *$ stat ?? ()\/answer:($)(Name:)? *$INPUT\
+                   |(Name: *$INPUT)|from:($) +$topDomain\
+                   |($) *$topDomain
+        {
+            ERROR = "no"
+        }
+
+        # ............................................. Linux/Cygwin ...
+        # Win32/Cygwin nslookup returns this answer
+
+        # prompt> nslookup -querytype=MX cs2.tpu.fi
+        #
+        # Non-authoritative answer:
+        # Server:  nsX.koti.tpo.fi
+        # Address:  212.63.10.250
+        #
+        # cs2.tpu.fi      MX preference = 0, mail exchanger = xxx.tpu.fi
+        # cs2.tpu.fi      MX preference = 10, mail exchanger = yyy.tpu.fi
+        # cs2.tpu.fi      MX preference = 20, mail exchanger = zzz.funet.fi
+        #
+        # fi      nameserver = HYDRA.HELSINKI.fi
+        # fi      nameserver = NS-SE.ELISA.NET
+        # fi      nameserver = PRIFI.FICORA.fi
+        # fi      nameserver = NS1-FIN.GLOBAL.SONERA.fi
+        # fi      nameserver = T.NS.VERIO.NET
+        # fi      nameserver = NS.UU.NET
+        # xxx.tpu.fi      internet address = 193.167.70.45
+        # yyy.tpu.fi      internet address = 193.167.70.20
+        # mail.funet.fi   internet address = 193.166.0.98
+        # mail.funet.fi   internet address = 193.166.0.97
+        # HYDRA.HELSINKI.fi       internet address = 128.214.4.29
+        # PRIFI.FICORA.fi internet address = 193.229.4.44
+
+        dummy="Win32/Cygwin nslookup check"
+
+        :0
+        *$ stat ?? internet address = .*$topDomain
+        {
+            ERROR = "no"
+        }
+
+        # .................................................. message ...
+
+        msg = ""
+
+        :0
+        * ERROR ?? yes
+        {
+            msg = $ErrorWord
+        }
+
+        :0
+        * ERROR ?? maybe
+        {
+            msg = "maybe"
+        }
+
+        # .............................................. write cache ...
+
+        dummy = "pm-janslookup.rc: Test if '$INPUT' should be added to cache"
+
+        :0 hwic:
+        * cache ?? yes
+        | echo "$INPUT $msg" >> $JA_NSLOOKUP_CACHE
+
+    }
+}
+
+:0 E
+{
+    dummy = "pm-janslookup.rc: $JA_MSG_ERROR invalid INPUT"
+}
+
+dummy = "pm-janslookup.rc: end: input: $INPUT error: $ERROR"
+
+# end of file pm-janslokup.rc

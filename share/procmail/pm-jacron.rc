@@ -1,0 +1,210 @@
+# pm-jacron.rc -- Procmail: Run cron once a day
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>
+#
+#   Description
+#
+#       Framework for all cron tasks that can be run once a day.
+#       This is a wrapper recipe to your cron task list: when the day changes,
+#       you cron includerc is called.
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This recipe
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-jadate.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   JA_CRON_RUN_FLAG, You _must_ define this flag file.
+#       o   JA_CRON_DATE_FILE, File where the date information, last cron run,
+#           is kept. Defaults to $HOME/.yymmdd
+#       o   JA_CRON_RC, your includerc which is run when cron triggers.
+#
+#       A file `JA_CRON_RUN_FLAG' which defaults to ~/.yymmdd.run is created
+#       when your includerc, that contains list of cron tasks, is run. If new
+#       mail arrives while your cron recipes are still running, you should
+#       prevent invoking the cron again by checking if this file exists.
+#       When all the cron tasks have been run, this flag file is removed.
+#       Remember to use "w" flag in your cron recipes where necessary
+#       to serialize the work.
+#
+#   Return values
+#
+#       (none)
+#
+#   Usage example
+#
+#       Save backups to separate directory, but do cleaning only once a day
+#       We do not keep backups from mailing list messages
+#
+#           LISTS          = "(procmail|list-1|list-2)"
+#           BACKUP_DIR     = "$HOME/Mail/backup/."
+#
+#           #   Store backups: separate files to directory
+#
+#           :0 c:
+#           *$ ! $LISTS
+#           $BACKUP_DIR
+#
+#           #   Run JA_CRON_RC once a day. It contains all daily cron tasks
+#
+#           CRON_RC             = $PMSRC/pm-jacron.rc   # the framework
+#           JA_CRON_RC          = $PMSRC/pm-mycron.rc   # the tasks to do
+#           JA_CRON_RUN_FLAG    = $HOME/.cron-running   # define this!
+#
+#           #   Do not enter here if message arrived at the same day when
+#           #   the cron is already running. The CRON_RC takes care
+#           #   of deleting the file when cron has finished.
+#
+#           :0
+#           *$ ! ? $IS_EXIST $JA_CRON_RUN_FLAG
+#           {
+#               INCLUDERC = $CRON_RC
+#           }
+#
+#       The *pm-jacron.rc* file may contain anything. For example to clean
+#       the backup directory; you add these statements there
+#
+#           #   rm dummy: if ls doesn't return files, make sure rm has
+#           #   at least one argument.
+#           #
+#           #   ls -t: list files; newest first
+#           #
+#           #   sed: chop $max newest files from the listing, leaving the
+#           #   old ones
+#
+#           max = 32
+#
+#           :0 hwic
+#           | cd $BACKUP_DIR && $RM -f dummy `ls -t msg.* | $SED -e 1,${max}d`
+#
+#           # End of file pm-mycron.rc
+#
+#   Change log (none)
+
+# ............................................................ &init ...
+
+
+id    = "pm-jacron.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+# .......................................................... &public ...
+
+JA_CRON_DATE_FILE   = ${JA_CRON_DATE_FILE:-$HOME/.yymmdd}
+JA_CRON_RC          = ${JA_CRON_RC:-""}
+JA_CRON_RUN_FLAG    = ${JA_CRON_RUN_FLAG:-${JA_CRON_DATE_FILE}.cron-running}
+
+# ........................................................ &settings ...
+
+:0
+*$ ! ? $IS_EXIST $JA_CRON_RUN_FLAG
+{
+
+
+    :0
+    * !  WSPC ?? ( )
+    {
+        INCLUDERC = $PMSRC/pm-javar.rc
+    }
+
+    dummy = "$id: Define date variables if not yet set"
+
+    :0
+    *$ ! YYYY ?? ^^[0-9]+^^
+    {
+        INCLUDERC = $PMSRC/pm-jadate.rc
+
+    }
+
+
+    error = "no"
+
+    :0
+    *$ ! YYYY ?? ^^[0-9]+^^
+    {
+        error = "$id: $JA_MSG_ERROR_FATAL Loading of pm-jadate.rc failed."
+    }
+
+    # ......................................................... &private ...
+
+    yymmdd = $YYYY-$MM-$DD      # ISO 18
+
+    #   Create initial .yymmdd file if it doesn't exist.
+
+    :0
+    *$ ! ? $IS_EXIST $JA_CRON_DATE_FILE
+    *      error ?? no
+    {
+
+        :0 hwic: $JA_CRON_DATE_FILE$LOCKEXT
+        | echo $yymmdd > $JA_CRON_DATE_FILE
+    }
+
+
+    #   Read previously saved value
+
+    yymmdd_prev = ""
+
+    :0 hwic
+    *  error ?? no
+    yymmdd_prev=| $CAT $JA_CRON_DATE_FILE
+
+
+    # ............................................................ do-it ...
+
+    dummy = "$id: test if it is time to run cron?"
+
+    #   - If RC file is defined
+    #   - if different date then enter this block
+    #   - If cron flag is not up: another procmail instance is not
+    #     already running this cron recipe.
+
+    :0
+    *$   JA_CRON_RC   ?? [a-z]
+    *$ ! yymmdd       ?? ^^$yymmdd_prev^^
+    *    error        ?? no
+    *$ ! ? $IS_EXIST $JA_CRON_RUN_FLAG
+    {
+        dummy = "$id: CRON-TRIGGERED"
+
+        #   Update timestamp to tell that we're running cron job now.
+
+        :0 hwic: $JA_CRON_DATE_FILE$LOCKEXT
+        | echo $yymmdd > $JA_CRON_DATE_FILE
+
+        :0 hwic
+        | $TOUCH $JA_CRON_RUN_FLAG
+
+        INCLUDERC = $JA_CRON_RC   # The user's task list for this day
+
+        #   Free the cron flag. Cron ended
+
+        :0 hwic
+        *$ ? $IS_EXIST $JA_CRON_RUN_FLAG
+        | $RM -f $JA_CRON_RUN_FLAG
+
+    }
+}
+
+dummy = "$id: end:"
+
+# end of file

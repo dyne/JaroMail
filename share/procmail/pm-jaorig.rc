@@ -1,0 +1,273 @@
+# pm-jaorig.rc -- Extract embedded original message (simple recipe)
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Documentation
+#
+#       This subroutine digs embedded message from the body and replaces
+#       current message with it. Copy the message to folder before calling
+#       this subroutine if you need original.
+#
+#       NOTE: This is _simple_ tool and the sole purpose is to derive
+#       simple embedded messages. Write full fledged perl script if you
+#       want better extracting features. The used AWK inside this procmail
+#       recipe will fail to find 30% of the cases, mostly due to non-standard
+#       way of including the message. The recognized formats are as follows.
+#       Anything that differs from these are ignored or incorrectly parsed.
+#
+#       o   Message is embedded left flushed "as is". With full headers or
+#           Minimum of `From:' `Subject' `Received'
+#       o   The embedded message is quoted with `>' with optional _one_
+#           space.
+#
+#   Where you would use this module
+#
+#       If you're subscribed to mailing lists that regularly sent copies of
+#       original message to the list, like forwarding spam to SPAM-L
+#       mailing list at http://bounce.to/dmuth, then you'd like to
+#       extract the original embedded message which you can then feed to
+#       your UBE filter to test if the shield holds.
+#
+#           <spam-l-request@peach.ease.lsoft.com>
+#           subscribe SPAM-L <First name> <Last name>
+#
+#       This recipe takes simplistic approach and tries it's best to
+#       extract embedded message. Idea for this recipe comes from Era
+#       Eriksson's posting "recipe to turn list postings back into original
+#       spam" 1998-06-25 in Procmail mailing list.
+#
+#       o   Body must contain headers
+#       o   Remove all `>' quotations.
+#       o   extract everything to the end of message. (There are no means
+#           to get rid of the attached signatures that ot forwarding poster
+#           or list server may have attached.
+#
+#   How the message is extracted
+#
+#       When this recipe ends, the current message has been modified so that
+#       it _is_ _the_ _original_ _message_. Like if you would receive:
+#
+#           HEADER-1        # The poster
+#           body-1          # his comments
+#           HEADER-2        # The original embedded message
+#           body-2
+#           body-1          # And poster's signature or mailing list footer
+#
+#       The message now looks like
+#
+#           HEADER-2
+#           body-2
+#           body-1
+#
+#       And you can save this as original message or feed it to your
+#       UBE filter and test if it detects it.
+#
+#   Code note: procmail or awk core dump
+#
+#       For some reason procmail kept dumping core I write the code in
+#       more nicer format like below, but if I made it compact, then it
+#       didn't dump core. Go figure. I'm not pleased that I had to sacrafice
+#       clarity, but there was no other way.
+#
+#           [The good style]            [The forced compact style]
+#           if ()                       if () { statement }
+#           {
+#               statement
+#           }
+#
+#       I have no explanation why this
+#       happens, the same AWK code would work just fine most of the cases and
+#       then came this message `x' and caused dumping the code, if I feed
+#       some other message, I didn't get core dump. Total mystery to me.
+#       Don't let the log message fool you, this had nothing to do
+#       regexp  "^[> ]*From:.*[a-zA-Z]". If I deletd one line from AWK
+#       script, it worked ok, if I added it back the core dump happened with
+#       that message `x'
+#
+#           procmail: Assigning "pfx=[> ]*"
+#           procmail: No match on "^[> ]*From:.*[a-zA-Z]"
+#           Segmentation fault (core dumped)
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail includerc code.
+#       This subroutine needs module(s):
+#
+#       o   pm-javar.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       (none)
+#
+#   Usage Example
+#
+#       Let's assume that you want to feed all forwarded UBE that is
+#       posted to spam-l mailing list to your filter and see if it needs
+#       improving by checking the logs later. The forwarded UBE to the list
+#       is labelled "SPAM:" in the subject line.
+#
+#           $RC_LIST = $PMSRC/pm-jalist.rc   # mailing list detector
+#           $RC_ORIG = $PMSRC/pm-jaorig.rc   # extract original
+#           $RC_UBE  = $PMSRC/pm-jaube.rc    # UBE filter
+#
+#           ...
+#
+#           INCLUDERC = $RC_LIST            # defines variable `LIST'
+#
+#           :0
+#           * ! LIST ^^^^
+#           {
+#               :0                          # spam-l mailing list
+#               * LIST ?? spam
+#               * Subject: +SPAM:
+#               {
+#                   INCLUDERC = $RC_ORIG    # Change it to UBE message
+#
+#                   #   Ok, next feed it to filter, set some variables first
+#                   #   Log = Short log; What filters were applied to message
+#                   #   mbx = If message was trapped, save it here
+#
+#                   JA_UBE_LOG      = "$PMSRC/pm-ube.log"
+#                   JA_UBE_MBOX     = "junk.ube.ok.mbox"
+#
+#                   INCLUDERC = $RC_UBE
+#
+#                   :0 :            # If comes here, filter failed
+#                   junk.ube.nok.mbx
+#               }
+#
+#               :0 :                    # save normal list messages
+#               list.$LIST
+#           }
+#
+#
+#
+#   Change Log (none)
+
+
+# ............................................................ &init ...
+
+
+id    = "pm-jaorig.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# .......................................................... &detect ...
+
+pfx = "[> ]*"
+
+:0
+*$  B ?? ^${pfx}From:.*$a
+*$  B ?? ^${pfx}Subject:.*$a
+*$  B ?? ^${pfx}Received: +from
+{
+
+    #   Remove all original headers from the message,
+    #   AWK will shift up the headers in the body
+
+    :0 fhw
+    | echo ""
+
+
+    :0              # make sure LINEBUF has value or procmail dumps core
+    *$ ! LINEBUF ?? $d
+    {
+        LINEBUF = 8192
+    }
+
+    #   Set bigger LINEBUF. Otherwise procmail/awk may dump core when
+    #   a big message is handled.
+
+    savedLinebuf = $LINEBUF
+    LINEBUF      = 524280
+
+    savedShell   = $SHELLMETAS
+    SHELLMETAS
+
+    #   How it works:
+    #
+    #   *)  Because AWK can't do multi line matches, we have to use two flags:
+    #       `prevHead' is set to 1 as soon as header line is detected.
+    #       _BUT_ in order to start header, it must follow with next
+    #       header immediately. The `head' is set to 1 only if previous
+    #       line was header.
+    #
+    #       --> when `head' is raised, then main starts printing the message
+    #
+    #   *)  do case insensitive match and filter out certain lines.
+    #
+    #   *)  `Received:' Header is immediate indication of message.
+    #
+    #   *)  Remove `>' quotation
+    #
+    #   *)  Print embedded message
+    #
+    #       variable `end' is set as soon as there is end of headers.
+    #       we fix continued non-header start lines by preceding them
+    #       with two spaces. (Forwarded message to spam-l was all left
+    #       flushed, thus breaking the proper RFC header continuation)
+    #       Var `end' tells when we must not fix lines any more.
+    #
+
+    :0 fhbw
+    | $AWK                                                                  \
+      '                                                                     \
+        /^[>]* ?([A-Z][-a-zA-Z]+:|^From )/                                  \
+        {  if( prevHead && !head) {print prev; head=1}  }                   \
+                                                                            \
+        {                                                                   \
+            str = tolower($0);                                              \
+            if ( match(str, "forwarded message") > 0)          { next }     \
+            if ( match(str, "received: +from|return-path:")>0) { head = 1 } \
+                                                                            \
+            if ( head == 1 )                                                \
+            {                                                               \
+                sub("^[>]","");                                             \
+                if ( match($0,"^[ ]*$") )           { end = 1 }             \
+                if ( !end )                         { sub("^ +","")}        \
+                if ( !end && match($0,"[A-Z][-a-zA-Z]+:|^From ") < 1)       \
+                {  $0 = "  " $0; }                                          \
+                print;                                                      \
+            }                                                               \
+                                                                            \
+            prevHead = 0;                                                   \
+            if ( match($0, "^[>]* ?([A-Z][-a-zA-Z]+:|^From )") > 0 )        \
+            { prevHead = 1; prev = $0; }                                    \
+        }                                                                   \
+      '
+
+    LINEBUF     = $savedLinebuf
+    SHELLMETAS  = $savedShell
+
+    #   Add a From_ line if it doesn't have one.
+
+    :0 fhw
+    *$ ! ^^From$s+
+    | $FORMAIL
+
+}
+
+dummy = "$id: end:"
+
+# End of file pm-jaorig.rc

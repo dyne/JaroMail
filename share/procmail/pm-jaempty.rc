@@ -1,0 +1,86 @@
+# pm-jaempty.rc -- check if message body is empty
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       This simple includerc will define variable BODY_EMPTY to "yes" or
+#       "no" when called like this You can file empty messages to separate
+#       folder based on this value
+#
+#           INCLUDERC = $PMSRC/pm-jaempty.rc
+#
+#           :0
+#           * BODY_EMPTY ?? yes
+#           the-empty-mail-folder
+#
+#       This is more designed to be part of other modules. If you just want
+#       to check for empty message, a simpler recipe like this might be
+#       better:
+#
+#           INCLUDERC = $PMSRC/pm-javar.rc
+#
+#           :0 B:         # if body has only whitespace characters
+#           *$ ! $NSPC
+#           the-empty-mail-folder
+#
+#   Required settings
+#
+#       (none)
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+
+
+id    = "pm-jaempty.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ........................................................... &do-it ...
+
+BODY_EMPTY = "yes"
+
+#   Every empty line or signarure start is a -1
+#
+#   Every non-empty line that has characters is +10
+#
+:0
+*$  B ?? -1^1 ^$s*$|^--
+*   B ?? 10^1 ^.*[a-z]
+{
+    # no-op. We just count the score value.
+}
+
+SCORE = $=
+
+:0
+*$ ${SCORE}^0
+{
+    BODY_EMPTY = "no"
+}
+
+dummy = "$id: end:"
+
+# end of file pm-jaempty.rc

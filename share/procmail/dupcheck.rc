@@ -1,0 +1,222 @@
+# dupcheck.rc
+#
+#    Copyright (C) 1997  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+# Usage:
+#
+#    INCLUDERC=dupcheck.rc
+#
+# If the current mail has a "Message-Id:" header,  run the
+# mail through "formail -D", causing duplicate messages to
+# be dropped.
+#
+# If the mail does not have a "Message-Id", or if the variable
+# "dupcheck_use_md5" is set, then run the body through MD5SUM (defaults
+# to "md5sum"), causing duplicate messages to be dropped.  However,
+# even if "dupcheck_use_md5" is set, the "formail -D" filter will
+# still be applied if a Message-Id: exists.
+#
+# Currently, the only way to use *only* an "md5sum" duplicate check
+# is to remove the Message-Id: before invoking this recipe file.
+# Something like this:
+#
+#	:0fh		# remove the Message-Id:
+#	| formail -IMessage-Id:
+#	INCLUDERC=dupcheck.rc
+#
+# In my opinion, however, an MD5 checksum should be used in addition to using
+# the Message-Id:, not instead of.  The MD5 checksums can be used to
+# detect and avoid redistributed or resent messages.
+#
+# The variable MD5SUM can be set to the program to perform the checksum
+# on the message body.  By default, it is set to "md5sum".
+#
+# This recipe has been enhanced with a "fail-safe" algorithm to avoid
+# losing mail which has been "soft-failed" by some later part of the
+# user's recipe file.  This algorithm is only applied if the variable
+# "dupcheck_failsafe" has been set to the number 1 or 2.
+#
+# There are two methods available to accomplish this, and selected by
+# the variable "dupcheck_failsafe".
+#
+# 1.  the simple way: remove the checksum files when procmail exits with
+#     an exitcode of 75.  This is done by using a TRAP command.
+#
+#     The disadvantage is that when any mail "soft fails" for any
+#     reason, duplicate mail arriving after the soft-failure for mail
+#     originally received before the soft-failure will not be detected.
+#
+#     An advantage of this method is its simplicity.  The worst case is
+#     that a few duplicates may not be detected.
+#
+# 2. the hard way: using an additional "pending" log file, when a new
+#    mail arrives and passes the checksum filters the first time, add it
+#    to the "pending" file.  Using a TRAP command, remove the processed
+#    mail from the "pending" file, unless the exitcode was 75
+#    (EX_TEMPFAIL).  If the mail fails the checksum commands, but is
+#    still in the pending file, then do NOT drop the mail as a
+#    duplicate, and leave it in the pending file.  Eventually, when the
+#    mail is finally delivered (by any means), it will be removed from
+#    the "pending" file.
+#
+#    The disadvantage with this method is its complexity: an additional
+#    "pending" file is needed, and there is a small performance hit for
+#    each mail, in order to maintain the pending file.
+#
+#    The advantage of this method is its completeness: all duplicates
+#    will still be detected and dropped.
+#
+# Both methods require the use of the TRAP command; they set additional
+# commands into the TRAP variable.  If the TRAP command has already been
+# set, the new commands are added to the list of commands.
+#
+# *** Warning: if the user sets the TRAP command in a later recipe, care
+# should be taken to avoid losing the commands installed by this recipe.
+# The way to set TRAP with a new command, without losing the existing
+# ones, if any is:
+#
+#   TRAP="${TRAP:+${TRAP}; }new-command args ..."
+#
+# All the default filenames used by this recipe are relative to the
+# current directory, $MAILDIR.
+
+msgids=.msgids			# where we keep the message id's
+md5sums=.md5sums		# where the md5 checksums go
+pendingids=.pendingids		# pending mail cache
+
+dupcheck_failsafe=${dupcheck_failsafe:-2}
+				# set to 1, 2, or anything else,
+				# to indicate which method is
+				# preferred. Defaults to 2.
+				# If unset or not 1 or 2, then *no
+				# failsafe* method is applied.
+
+OLDCOMSAT=${COMSAT:-off}	# Don't tell COMSAT anything
+COMSAT=off
+
+# To keep the complexity of this recipe down, we'll separate the
+# failsafe methods
+
+:0				# methods 1 or 0 (none)
+* !dupcheck_failsafe ?? ^^2^^
+{
+  :0 Wh: $msgids.lock		# is there a Message-Id:?
+  * ^Message-Id: *\/[^ ].*
+  | formail -D 16384 $msgids
+  				# mail is not a duplicate..
+  :0 e				# passed formail's check; failsafe it?
+  * dupcheck_failsafe ?? 1
+  { TRAP="${TRAP:+${TRAP}; }test \$EXITCODE -eq 75 && rm -f $msgids" }
+
+  :0				# derive a checksum if needed or requested
+  * 1^0 !^Message-Id:
+  * 1^0 dupcheck_use_md5 ?? .
+  { :0 b			# scan only the body
+    MD5SUM=|${MD5SUM:-md5sum}	# compute md5sum on the body
+
+    LOCKFILE=$md5sums.lock	# lock $md5sums
+    :0 aWhi			# see if this is a duplicate message
+    |fgrep -s "$MD5SUM" $md5sums # if fgrep succeeds, we've tossed the mail
+				# Hurray! The mail is not a duplicate!
+    :0 echi			# add the new checksum to the file
+    |echo "$MD5SUM" >>$md5sums
+    LOCKFILE			# unlock $md5sums
+
+    :0 				# see if the msg already has a header
+    * ^X-MD5-Checksum: \/[^ ].*
+    * $? test "$MD5SUM" != "$MATCH"
+    { insert_opt='i' }		# save the old flags on mismatch
+    :0 fh			# insert (or replace) current checksum
+    |formail -${insert_opt:-'I'}"X-MD5-Checksum: $MD5SUM"
+    :0				# any failsafe?
+    * dupcheck_failsafe ?? 1
+    { TRAP="${TRAP:+${TRAP}; }test \$EXITCODE -eq 75 && rm -f $md5sums" }
+  }
+}
+:0 E				# fail-safe method 2:
+* dupcheck_failsafe ?? ^^2^^
+{ # With method 2, we must maintain a file of "pending" mail using this
+  # recipe and a command in the TRAP variable.
+
+  :0 chi:$pendingids.lock	# ensure that the pending cache is writable
+  * !?test -w $pendingids
+  | rm -f $pendingids ; touch $pendingids
+
+  pending			# clear var
+  LOCKFILE=$pendingids.lock	# lock $pendingids
+  # If there's a Message-Id and the mail is not pending
+  :0				# is there a message-id?
+  * ^Message-Id: *[^ ]\/.*
+  { MSGID=$MATCH		# save for later
+    :0				# see if pending
+    * $!?fgrep -s '$MATCH' $pendingids
+    { :0 Wh:$msgids.lock	# see if the mail is a duplicate
+      |formail -D 16384 $msgids
+
+      :0 chi			# it's not; update the pending cache
+      |echo "$MSGID" >>$pendingids
+
+    }
+    :0 E			# it is a pending mail
+    { pending=y }		#  mark it so
+    # Update the TRAP command list to remove the msgid from the
+    # pending cache on normal exits
+    TRAP="${TRAP:+${TRAP}; }\
+	  if test \$EXITCODE -ne 75 ; then \
+	    fgrep -v '$MSGID' $pendingids >$pendingids.new ; \
+	    mv $pendingids.new $pendingids ; \
+	  fi"
+  }
+  LOCKFILE			# unlock $pendingids
+
+  # if not already pending, derive a checksum if needed or requested
+  :0
+  * 1^0 !^Message-Id:
+  * 1^0 dupcheck_use_md5 ?? .
+  { :0 b			# checksum the desired headers and body
+    MD5SUM=|${MD5SUM:-md5sum}	# see if this is a duplicate message
+    LOCKFILE=$pendingids.lock # check the pending cache
+    :0				# make sure it's not pending
+    * ! pending ?? y
+    * $!?fgrep -s '$MD5SUM' $pendingids
+    { :0 Whi:$md5sums.lock	# see if mail is an MD5 duplicate
+      |fgrep -s "$MD5SUM" $md5sums
+				# Hurray! the mail is not a duplicate
+      :0 chi:			# add the new checksum to the file
+      |echo "$MD5SUM" >>$md5sums
+      :0 achi			# update the pending cache
+      |echo "$MD5SUM" >>$pendingids
+    }
+    LOCKFILE			# maybe pending now
+    # Either we've updated the pending file, or the checksum was
+    # already in it.  So, now we update the TRAP command list to
+    # remove the checksum on normal exits.
+    TRAP="${TRAP:+${TRAP}; }\
+	  if test \$EXITCODE -ne 75 ; then \
+	    fgrep -v '$MD5SUM' $pendingids >$pendingids.new ; \
+	    mv $pendingids.new $pendingids ; \
+	  fi"
+    :0 				# see if the msg already has a header
+    * ^X-MD5-Checksum: \/[^ ].*
+    * $? test "$MD5SUM" != "$MATCH"
+    { insert_opt='i' }		# save old headers on mismatch
+    :0 fh			# in any case, set the new checksum
+    |formail -${insert_opt:-'I'}"X-MD5-Checksum: $MD5SUM"
+  }				# end md5 check
+}
+COMSAT=$OLDCOMSAT		# set COMSAT back to original value
+OLDCOMSAT

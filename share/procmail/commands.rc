@@ -1,0 +1,366 @@
+# commands.rc			-*- text -*-
+#
+# procmailrc file to check for commands in the subject line
+#
+# $Id: commands.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+#    Copyright (C) 1995  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+# Usage:
+#
+#	HELPFILE=commands.help		[optional]
+#	INFOFILE=commands.info		[optional]
+#       PROCMAILINFO=procmail.info	[optional]
+#	COMMANDLOG=commands.log		[optional]
+#	NOACKFILE=noacks		[optional]
+#
+#	INCLUDERC=commands.rc
+#
+# Notes:
+#
+# * This recipe consumes the input if it successfully matches.
+#   Processing does not continue unless the subject is not a
+#   command.
+#
+# * HELPFILE should contain general help, and be relatively short.
+#
+# * INFOFILE should contain more detailed information on the
+#   supported commands.
+#
+# * All default filenames are relative to $MAILDIR.
+#
+# * NOACKFILE is used by "ackmail.rc", with the same default.
+#
+# * Processed commands are logged in $COMMANDLOG.  The format of the
+#   logged information is:
+#
+#	date : address : command
+#
+# * To debug your configuration, touch $MAILDIR/commands.rc.log and
+#   watch its contents for logged information.  Remove this file when
+#   you no longer wish to have a detailed debug log.
+#
+# * This recipe file uses "comm-reply-file.rc" (which is part of the
+#   procmail library).
+#
+# Current commands are:
+#
+#	(send | get) help
+#	(send | get) info(rmation)?
+#	(send | get) pgp key
+#	(send | get) procmail info
+#	(send | get) procmail lib(rary)
+#	(send | get) smartlist lib(rary)
+#	(send | get) emacs setup
+#	(send | get) procmailrc
+#	(en|dis)able (auto *)ack(nowledgments)
+#
+# Author: Alan K. Stebbens
+#
+# Check for any of the commands
+
+:0
+* ? test -f commands.rc.log
+{ OLDCMDLOGFILE=$LOGFILE
+  LOGFILE=commands.rc.log
+  LOGABSTRACT=all
+  VERBOSE=yes
+}
+
+:0
+* ^Subject: *['"]?\/\
+	((send|get) +(help|info(rmation)?|\
+		     procmailrc|\
+		     (procmail|smartlist) *(- *)?info(rmation)?|\
+	 	     (procmail|smartlist) *(- *)?lib(rary)?|\
+	 	     emacs(-| *)setup|\
+	 	     pgp *key)|\
+	(en|dis)able +(auto *)?ack(nowledge?ment)?s?)
+* ! ^FROM_DAEMON
+* $ ! ^X-Loop: $MY_ADDR
+{
+    # We're forking at this point -- so shutup procmail
+    COMSAT=off
+
+    # Tell sendmail we've got control
+    DELIVERED=yes
+
+    # Save a copy just in case (in log mode)
+    :0 c:
+    * LOGFILE ?? commands\.rc\.log
+    commands.requests
+
+    # Get the trigger subject
+    SUBJ=$MATCH
+
+    # Get the best reply address (used for logging)
+    :0
+    * ! ^Reply-to: *\/[^ ].*
+    * ! ^From: *\/[^ ].*
+    * ! ^Sender: *\/[^ ].*
+    * ! ^From *\/[^ ]+
+    { FROM=nobody }
+    :0E
+    { FROM=$MATCH }
+
+    # Just in case these aren't defined
+    FROMSIG="${FROMSIG:-\"The Mailer-Daemon of $USER\" <$USER>}"
+    MY_ADDR="${MY_ADDR:-<$USER>}"
+
+    # The log file
+    COMMANDLOG=${COMMANDLOG:-commands.log}
+
+    # The basic processing works like this:
+    # Now that we've captured the important information from the
+    # incoming mail, we replace the headers portion with an
+    # autoreply header.
+    #
+    # Then, as part of recognizing the SUBJECT command, we
+    # replace the body portion with the response
+    #
+    # After testing for all the possible subject commands,
+    # we then submit the mail unless it is empty.
+
+    # Generate a reply header, and replace the headers
+    :0 fhw
+    | formail  -rI"From:       $FROMSIG" \
+	        -I"Reply-To:   $MY_ADDR" \
+	        -I"Subject:    Re: $SUBJ" \
+		-I"Precedence: junk" \
+		-I"X-Loop:     $MY_ADDR"
+
+    # Now, start a new message body
+    :0 fbw
+    | echo "This message was sent automatically in reponse to your recent" ; \
+      echo "mail with the subject: \"$SUBJ\"." ; \
+      echo ""
+
+    # Now process each command
+
+    ##### 	send procmailrc
+    #####	send procmail lib
+    :0
+    * SUBJ ?? procmail(rc| *(- *)?lib(rary)?)
+    {
+	# **** This is very site specific ****
+	PROCMAILDIR=$HOME/src/mail/procmail/procmail-lib
+	:0
+	* SUBJ ?? procmailrc
+	{
+	    REPLYFILE=$PROCMAILDIR/procmailrc-example
+	    INCLUDERC=comm-reply-file.rc
+	}
+	:0 E
+	{
+	    REPLYFILE=$PROCMAILDIR/procmail-lib.shar
+	    INCLUDERC=comm-reply-file.rc
+	}
+    }
+
+    ####	send procmail info
+    :0 E
+    * SUBJ ?? (procmail|smartlist) *(- *)?info
+    {
+	PROCMAILINFO=${PROCMAILINFO:-procmail.info}
+	REPLYFILE=$PROCMAILINFO
+	INCLUDERC=comm-reply-file.rc
+    }
+
+    #####	send smartlist library
+    :0 E
+    * SUBJ ?? smartlist *(- *)?lib(rary)?
+    {
+	# **** This is very site specific ****
+	REPLYFILE=$HOME/src/mail/procmail/smartlist-lib/smartlist-lib.shar
+	INCLUDERC=comm-reply-file.rc
+    }
+
+    #####	send information
+    :0 E
+    * SUBJ ?? info(rmation)?
+    {
+	# The information file with a suitable default
+	INFOFILE=${INFOFILE:-commands.info}
+	REPLYFILE=$INFOFILE
+	INCLUDERC=comm-reply-file.rc
+    }
+
+    #####	send emacs setup
+    :0 E
+    * SUBJ ?? emacs(-| *)setup
+    {
+	# Send emacs setup (shar archive is several files)
+	EMACSSETUP="$HOME/emacs/site-setup.shar*"
+	count=`echo $EMACSSETUP | wc -w`
+
+	# For this command, we are responding with several mails
+	# so we cannot use procmail to "hold" them all at the
+	# same time.  So, we generate several sendmail invocations
+	# and leave the current mail buffer empty by filtering it
+	# with /dev/null
+
+	:0 fw:tmp.reply.lock
+	* $ ? test -f $EMACSSETUP
+	| cat - > tmp.reply ; \
+	  i=1 ; \
+	  for file in $EMACSSETUP ; do \
+	      cat tmp.reply $file \
+	      | formail -I "Subject: Re: $SUBJ [part $i/$count]" \
+	      | $SENDMAIL -oi -t ; \
+	      i=`expr $i + 1` ; \
+          done ; \
+	  cat /dev/null
+
+	:0 Efbw
+	| cat - ; \
+	  echo "Sorry, the emacs setup archive file is not currently available."
+    }
+
+    #####	send pgp key
+    :0 E
+    * SUBJ ?? pgp *key
+    {
+	# Add some more headers
+	:0 fhw
+	| formail -I"Mime-Version: 1.0" \
+		   -I"Content-Type: application/pgp; format=keys-only" \
+		   -I"Content-Description: PGP key of $MY_ADDR" \
+		   -I"Content-Transfer-Encoding: 7bit"
+
+	# get the text for the body
+	:0 fbw
+	| cat - ; \
+	  sh -c "pgp -kxaf $MY_ADDR 2>/dev/null"
+
+	# If PGP failed somehow, leave a nice return message
+	:0 efbw
+	| cat - ; \
+	  echo "Sorry, my PGP key is not available at the moment."
+    }
+
+    #####	(disable|enable) ack(nowledgements)
+    :0 E
+    * SUBJ ?? (dis|en)able
+    {
+	# Be sure NOACKFILE is defined
+	NOACKFILE=${NOACKFILE:-noacks}
+
+	# remove this address from NOACKS
+	WHO=`formail -zxTo:`
+
+	# The content of NOACKS are regexps, so we must carefully convert
+	# the address into a regexp which *matches* a regexp.
+	REWHO=`echo "$WHO" | sed -e 's/[.]/\\\\\\\\\\\\./g'`
+
+	# See if the user is currently in the list of NO-ACKs
+	LOCKFILE=$NOACKFILE.lock
+
+	:0
+	* ? grep -s "^$REWHO" $NOACKFILE
+	{
+	    # It is -- If "enable", remove it.
+	    :0
+	    * SUBJ ?? enable
+	    {
+		JUNK=`grep -v "^$REWHO" $NOACKFILE > $NOACKFILE.new ;
+	    	      mv $NOACKFILE.new $NOACKFILE`
+	    }
+
+	    :0 Afbw
+	    | cat - ; \
+	      echo "Future mail from $WHO will be auto-acknowledged." ; \
+	      echo "" ; \
+	      echo "If you wish to disable auto-acknowledgements, please" ; \
+	      echo "send me an email message with the subject: \"disable autoacks\"."
+
+	    :0 Efbw
+	    | cat - ; \
+	      echo "Mail from $WHO is already not being auto-acknowledged."
+	}
+
+	# Else, $WHO is not in the $NOACKs
+	:0 E
+	{
+	    # If the command was disable, add it to the file
+	    # We must convert the address to a regexp as part of adding it
+	    # to the file.
+	    :0
+	    * SUBJ ?? disable
+	    { JUNK=`echo "$WHO" | sed -e 's/[.]/\\\\./g' >> $NOACKFILE` }
+
+	    :0 Afbw
+	    | cat - ; \
+	      echo "Future mail from $WHO will not be acknowledged." ; \
+	      echo "" ; \
+	      echo "If you wish to enable auto-acknowledgements, please" ; \
+	      echo "send me an email message with the subject: \"enable autoacks\"."
+
+	    :0 Efbw
+	    | cat - ; \
+	      echo "Mail from $WHO is already being acknowledged."
+	}
+
+	# Remove the global lockfile
+	LOCKFILE
+    }
+
+    #####	send help (explicitly or because of some other request)
+    :0 E
+    {
+	# This is a combined recipe -- both the "send help" recipe
+	# and the "unknown" command recipes result in the sending
+	# of the helpfile.
+
+	# If an unknown subject, append an error message
+	:0 fbw
+	* ! SUBJ ?? help
+	| cat - ; \
+	  echo 'Sorry, I don't know how to do this request.' ; \
+	  echo ''
+
+	# The help file with a suitable default
+	HELPFILE=${HELPFILE:-commands.help}
+	REPLYFILE=$HELPFILE
+	INCLUDERC=comm-reply-file.rc
+    }
+
+    # Okay, procmail should be "holding" some headers and some body
+    # text.  Send it (if it is not an empty mail)
+
+    :0 cw
+    * > 1
+    ! -oi -t
+
+    # Don't log anything else
+    LOGABSTRACT=off
+
+    # Log this request (and mark the mail as "delivered")
+    :0 hw: $COMMANDLOG$LOCKEXT
+    | echo "`date` : $FROM : $SUBJ" >> $COMMANDLOG
+
+    HOST=end_of_processing
+}
+
+:0
+* LOGFILE ?? commands\.rc\.log
+{ LOGFILE=$OLDCMDLOGFILE
+  LOGABSTRACT=yes
+  VERBOSE=no
+}
+
+# End of commands.rc

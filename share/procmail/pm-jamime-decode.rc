@@ -1,0 +1,290 @@
+# pm-jamime-decode.rc -- decode MIME body contents; quoted-printable, base64
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Documentation
+#
+#       The original father of the decoding scheme used here was
+#       presented by Peter Galbraith <galbraith@mixing.qc.dfo.ca> in
+#       procmail mailing list somewhere at the end of 1997.
+#
+#       This subroutine supposes that the header has MIME header
+#       Content-Type: text/plain and performs quoted-printable or
+#       base64 decoding on the whole message. Note, that if you
+#       receive messages that have many mime attachments, then this
+#       recipe is not suitable for it.
+#
+#       Procmail is *not* designed to handle mime attachments and this
+#       recipe only applies to whole _body_.
+#
+#       The `pm-jamime-*.rc' is really stretching the limits and any
+#       serious work should be delegated to other tools. Alternatives:
+#
+#       o   A Perl MIME module which will allow you to manipulate MIME
+#           body parts rather elegantly. See
+#           http://www.perl.com/CPAN-local/authors/Eryq/ for MIME-tools.
+#       o   mimedecode at ftp://ftp.dde.dk/pub/mimedecode.c
+#
+#   Notes
+#
+#       Perl or Python is not used, because both are CPU intensive. It
+#       would be too expansive for accounts or environments receiving
+#       hundreds of mails per day (like from several mailing lists).
+#
+#       RFC 2047 gives possiblity to use MIME iso-8859-1 extensions
+#       for mail headers.
+#
+#           Subject: Re: [PIC]: RSA =?iso-8859-1?Q?encryption=B7=B7?=
+#           Subject: =?iso-8859-1?Q?=5BEE=5D:TV_&_video_IC=B4s_!!?=
+#
+#       There is also base64 possibility (although rare):
+#
+#           Subject: =?iso-8859-1?B?zvLi5fI6ICAgICAgTVBMQUIzLjQw?=
+#
+#       In worst possible case there is even multiple ISO encoded
+#       strings in subject. Yes, this is valid, the continued line
+#       includes spaces at front to keep it with original just like
+#       in `Received:' headers. This subroutine will not touch headers
+#       that have multiple ISO tags - procmail is too limited for that.
+#
+#           Subject: AW: Re: AW: neue =3D?ISO-8859-1?Q?M=3DF6glichkeiten_=3D28was_=3D=C4hn?=3D
+#              =3D?ISO-8859-1?Q?lichkeiten_von_=3DDCbungen=3D29?=3D
+#
+#   Required settings
+#
+#       Variable `PMSRC' must point to source directory of procmail code.
+#       This subroutine will include
+#
+#       o   pm-javar.rc, pm-jamime.rc
+#       o   Programs `$MIME_BIN', `$MIME_BIN_QP' and `$MIME_BIN_64'
+#           must have been installed (see pm-javar.rc).
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   `JA_MIME_DECODE_TREAT_SUBJECT', default "yes". Decode
+#           Subject header by removing mime.
+#       o   `JA_MIME_DECODE_TREAT_FROM', default "no". Decode
+#           From header by removing mime.
+#       o   `JA_MIME_DECODE_TREAT_BODY', default "no". Decode
+#           body of message by removing quoted-printable from a
+#           message that contains only one part. Messages with multiple
+#           parts are not handled.
+#
+#   Return values
+#
+#       o    `PM_JAMIME_COMPLEX_SUBJECT' is set to "yes".
+#            This flag is set to indicate that some other program
+#            should handle the message. If Subject header contains ISO
+#            encoding several times, it cannot be handled by this module.
+#
+#   Examples
+#
+#       Instead of testing the existence of text/plain in the body,
+#       you can force decoding by settings JA_MIME_DECODE_REGEXP to
+#       ".*".
+#
+#           RC_MIME_DECODE = $PMSRC/pm-jamime-decode.rc
+#
+#           :0
+#           * condition
+#           {
+#               JA_MIME_DECODE_REGEXP = ".*"
+#           }
+#
+#           INCLUDERC = $RC_MIME_DECODE     # call subroutine.
+#
+#
+#   Change Log (none)
+
+
+dummy = "
+========================================================================
+pm-jamime-decode.rc: init:
+"
+
+:0
+* !  WSPC ?? [ ]
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+:0
+* !  MIME_VER ?? [0-9]
+{
+    INCLUDERC = $PMSRC/pm-jamime.rc
+}
+
+# .......................................................... &public ...
+# User configurable sections
+
+JA_MIME_DECODE_TREAT_SUBJECT = "yes"   # Set to "no"  to disable
+JA_MIME_DECODE_TREAT_FROM    = "no"    # Set to "yes" to enable
+JA_MIME_DECODE_TREAT_BODY    = "no"    # Set to "yes" to enable
+
+JA_MIME_DECODE_REGEXP = ${JA_MIME_DECODE_REGEXP:-\
+"^Content-Type: *text/plain"}
+
+# ........................................................... &do-it ...
+#   Run conversion if it was quoted printable.
+#   Also reflect correct MIME header
+
+JA_MIME_DECODE_HEADER = ${JA_MIME_DECODE_HEADER:-\
+"X-Mime-Header-Decoded"}
+
+dummy = "pm-jamime-decode.rc: handle quoted printable"
+
+PM_JAMIME_COMPLEX_SUBJECT       # Return value if too complex subject
+
+jamimeHandledSubject = "no"
+
+#  Kill variables
+jamimeSubject
+jamimeSubjectRest
+
+:0
+*  JA_MIME_DECODE_TREAT_SUBJECT ?? yes
+* ^Subject: \/.*
+{
+    jamimeSubject = $MATCH
+    jamimeISO     = "\?iso-8859-[1-9]\?[QB]\?.+\?="
+
+    :0
+    *$ jamimeSubject ?? $jamimeISO()\/.*
+    {
+        #  ".*" is actually minimum match. See pm-doc.sf.net
+        jamimeSubjectRest = $MATCH
+    }
+
+    :0
+    *$ jamimeSubjectRest ?? $jamimeISO()
+    {
+        #  This Subejct line contains ISO encoding several times.
+        #  This is out of our league. Can't hanle it, so quit.
+
+        jamimeSubject
+        JAMIME_COMPLEX_SUBJECT = "yes"
+    }
+}
+
+:0
+* ! jamimeSubject ?? ^^^^
+{
+    str     = $jamimeSubject
+    decoder = $MIME_BIN_QP
+    type    = "quoted-printable"
+
+    :0
+    * ^Subject:.*\?B\?
+    {
+        type    = "base64"
+        decoder = $MIME_BIN_64
+    }
+
+   #   NOTE "?" is not wildcard "as is" in sed.
+
+    clean =                                                         \
+    `   echo "$str"                                                 \
+        | $SED                                                      \
+          -e 's/^\(.*\)?\(iso\|ISO\)-\{0,1\}8859-[1-9]?[QB]?\(.*[^?]\)?=/\1\2/g'   \
+          -e 's/=0D//g'                                             \
+          -e 's/=0A//g'                                             \
+          -e 's/=B7//g'                                             \
+          -e 's/_/ /g'                                              \
+        | $decoder
+    `
+
+    handledSubject = "yes"
+
+    :0 fhw
+    * ! clean ?? ^^^^
+    | $FORMAIL                                                      \
+        -i "Subject: $clean"                                        \
+        -I "${JA_MIME_DECODE_HEADER}-Subject: $type"
+}
+
+#  Too bad Procmail does not have subroutines. This recipe is
+#  identical to "Subject" check above.
+#
+#  Note, that 'From' header is different from the 'Subject' header
+#  in respect to the ISO encoding. Look closely where '?=' ends:
+#
+#    Subject: =?ISO-8859-1?Q?=C4hnlichkeiten_von_=DCbungen?=
+#    From: =?ISO-8859-1?Q?Holger_Hoffst=E4tte?= <holger@example.com>
+
+jamimeHandledFrom = "no"
+
+:0
+*  JA_MIME_DECODE_TREAT_FROM ?? yes
+*$ ^From: +()\/=\?iso-8859-[1-9]\?[QB]\?.+\?=.*
+*$ ^From: +()\/.*=\?.+[>]
+{
+    str     = $MATCH
+    decoder = $MIME_BIN_QP
+    type    = "quoted-printable"
+
+    :0
+    * ^Subject:.*\?B\?
+    {
+        type    = "base64"
+        decoder = $MIME_BIN_64
+    }
+
+    clean =                                                         \
+    `   echo "$str"                                                 \
+        | $SED                                                      \
+          -e 's/=?\(iso\|ISO\)-\{0,1\}8859-[1-9]?[QB]?\(.*[^?]\)?=/\2/g'   \
+          -e 's/=0D//g'                                             \
+          -e 's/=0A//g'                                             \
+          -e 's/=B7//g'                                             \
+        | $decoder
+    `
+
+    jamimeHandledFrom = "yes"
+
+    #  Make sure there is <send@example.com> before replacing anything
+
+    :0 fhw
+    * clean ?? [>]
+    | $FORMAIL							    \
+	-i "From: $clean"					    \
+	-i "${JA_MIME_DECODE_HEADER}-From: $type"
+}
+
+# Touch only real mime messages and text/plain
+# $MIME_BIN_QP does not handle separate MIME sections
+
+:0
+*    JA_MIME_DECODE_TREAT_BODY  ?? yes
+*$   $JA_MIME_DECODE_REGEXP
+{
+    :0 fbw
+    * ^Content-Transfer-Encoding: *quoted-printable
+    | $MIME_BIN_QP
+
+        :0 A fhw
+        | $FORMAIL -I "Content-Transfer-Encoding: 8bit"
+
+    :0 fbw
+    * ^Content-Transfer-Encoding: *base64
+    | $MIME_BIN_64
+
+        :0 A fhw
+        | $FORMAIL -I "Content-Transfer-Encoding: 8bit"
+}
+
+dummy = "pm-jamime-decode.rc: end:"
+
+# End of file pm-jamime-decode.rc

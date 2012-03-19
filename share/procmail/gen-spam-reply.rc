@@ -1,0 +1,94 @@
+# gen-spam-reply.rc
+#
+#    Copyright (C) 1997  Alan K. Stebbens <aks@sgi.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+# $Id: gen-spam-reply.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+# This is a sample procmail rc file which can be used
+# to generate an automatic response to mail which has
+# somehow been identified as being a source of spam.
+#
+# If the variables ADDR, TOADDR, or REGEXP match, then
+# current message, then a response is generated to the
+# originator of the message, stating that something about
+# the message had been identified as a source of spam.
+# The original message is returned as part of the response.
+#
+#
+# This recipe file does not set the policy by which a
+# "spam site" is selected, it merely implements whatever
+# policy the user has chosen.
+#
+# Use this "subroutine" recipe file as follows:
+#
+#  Set one or more of the following variables:
+#
+#  	ADDR=some-spam-source-address
+#	TOADDR=some-noisy-mailing-list
+#	REGEXP=a-regexp-which-matches-a-spam-mail
+#	INCLUDERC=gen-spam-reply.rc
+#
+#
+# Our handy FROM_DOMAIN variable.  If you *know* that this recipe will
+# always have FROM_DOMAIN defined already, then you don't need to define
+# it again.  But, I've put it here, so that the recipe file can stand
+# on its own and is more understandable.
+#
+# See "headers.rc" for a collection of header regexps.
+#
+:0			# pull in handy headers file, if needed
+* ! HEADERS_RC ?? .
+{ INCLUDERC=headers.rc }
+
+# See if the mail came by any source address from $ADDR
+spam		# flag to maybe set
+:0 		# ADDR set and matches?
+* ADDR ?? .
+* $${FROM_DOMAIN}${ADDR}\>
+{ spam=1 }
+:0		# TOADDR set and matches?
+* TOADDR ?? .
+* $^TO$TOADDR
+{ spam=1 }
+:0		# REGEXP set and matches?
+* REGEXP ?? .
+* $$REGEXP
+{ spam=1 }
+:0		# is the mail spam?
+* spam ?? .
+{		# yes, generate a reply header
+    SUBJ=`formail -zXSubject: | tr -d '"'`	# get the subject (without quotes)
+
+    :0 fhw			# generate a reply header
+    | formail -rt   -I"Subject: Re: $SUBJ" \
+		    -I"Precedence: junk" \
+		    -I"X-Loop: $LOGNAME@$HOST"
+    :0 afb			# form the reply body
+    | echo "\
+Email from your site is being shunned because something about\n\
+it has been identified as a source of spam. If your mail\n\
+was, in fact, not spam, please resend it using the\n\
+keyword 'not-spam' in the subject.  Unsolicited commercial\n\
+use of this mailbox will be billed at $500 per incident.\n\
+\n\
+Your original email follows:\n\
+----------------------------------------------------------" ; \
+      cat -
+
+    :0 a	# now feed the reply to sendmail
+    ! -oi -t
+}

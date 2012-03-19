@@ -1,0 +1,162 @@
+# pm-jadate2.rc -- 'YYYY-MM-DD' ISO date parser from variable INPUT
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	This includerc parses date in format "YYYY-MM-DD hh:mm:ss"
+#	like `1997-12-01' and sets following variables whenever called
+#
+#		YYYY	= 4 digits
+#		YY	= 2 digits
+#		MON	= 3 characters
+#		MM	= 2 digits
+#		DD	= 2 digits
+#		hh      = 2 digits  If avaliable
+#		mm      = 2 digits  If avaliable
+#		ss      = 2 digits  If avaliable
+#
+#	Variable ERROR is set to `yes' if it couldn't recognize the INPUT
+#	and couldn't parse the basic YYYY, YY, MM, DD variables.
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include pm-javar.rc from there.
+#
+#   Call arguments (variables to set before calling)
+#
+#           INPUT = string-to-parse
+#
+#       Last string in INPUT that matches number sequence `NNNN-NN-NN' is
+#       parsed.
+#
+#   Usage example
+#
+#	    PMSRC	   = $HOME/pm
+#	    RC_DATE_ISO    = $PMSRC/pm-jadate2.rc # ISO date parser
+#
+#           INPUT = "This is 1800-10-11, a very old date"
+#
+#           #  Turn off the logging while executing this part
+#
+#           VERBOSE="off"  INCLUDERC=$RC_DATE_ISO  VERBOSE="on"
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+
+
+id    = "pm-jadate2.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ..................................................... &output-vars ...
+# output variables
+
+YYYY MM MON DD hh mm ss
+ERROR = "yes"
+
+# ........................................................... &do-it ...
+
+dummy = "$id: Parsing date like [YYYY-MM-DD]"
+dummy = $INPUT		# show what we try to match
+
+:0
+* INPUT ?? $ ().*\/$d$d$d$d-$d$d-$d$d.*
+{
+    INPUT = $MATCH
+
+    :0
+    * INPUT ?? ^\/....
+    {
+        YYYY = $MATCH
+    }
+
+    :0
+    * INPUT ?? ^..\/..
+    {
+        YY = $MATCH
+    }
+
+    :0
+    * INPUT ?? ^....-\/..
+    {
+        MM = $MATCH
+    }
+
+    :0
+    * INPUT ?? ^....-..-\/..
+    {
+        DD = $MATCH
+    }
+
+
+    # ........................................................ &time ...
+    # Change INPUT
+
+    in = $INPUT     # this is no-op, but now we see the value in the logfile
+    :0
+    *$ INPUT ?? ^....-..-..$s+\/.*
+    {
+        INPUT = $MATCH
+    }
+
+    :0
+    *$ INPUT ?? ^\/$d$d
+    {
+        hh = $MATCH
+    }
+
+    :0
+    *$ INPUT ?? ^$d$d:\/$d$d
+    {
+        mm = $MATCH
+    }
+
+
+    :0
+    *$ INPUT ?? ^$d$d:$d$d:\/$d$d
+    {
+        ss = $MATCH
+    }
+
+    # .................................................. &month-name ...
+
+    #   If user gave invalid YYYY-MM-DD spec, then the next recipe will
+    #   not match: eg 1111-22-33
+
+    :0
+    * $ nbr2mm ?? $MM\/...
+    {
+        MON   = $MATCH
+        ERROR = "no"
+    }
+
+}
+
+
+dummy = "$id: end:"
+
+# end of file pm-jadate2.rc

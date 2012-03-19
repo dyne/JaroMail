@@ -1,0 +1,298 @@
+# ackmail.rc -- procmail rc to acknowledge mail (with either a
+#		vacation message, or an acknowledgement)
+#
+# $Id: ackmail.rc,v 1.1 2002/01/01 22:25:33 jaalto Exp $
+#
+#   Copyright (C) 1995  Alan K. Stebbens <aks@sgi.com>
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+# Usage:
+#
+#   After setting the variables below appropriately, add the following
+#   to your .procmailrc:
+#
+#      INCLUDERC=ackmail.rc
+#
+# Features:
+#
+#  If the file $VACAMSG exists, it is assumed that the user is in
+#  "vacation mode", and mail will be acknowledged with the contents of
+#  the $VACAMSG file, with the subject line appended with "[on
+#  vacation]".
+#
+#  If $VACAMSG doesn't exist, and $ACKMSG does, mail will be
+#  acknowledged with the contents of $ACKMSG with the subject line
+#  appended with "[acknowledgment]".
+#
+#  If neither the file $ACKMSG nor $VACAMSG exists, this recipe does
+#  nothing.
+#
+#  Mail from any daemon or the usual set of mailing lists will not be
+#  acknowledged (uses ^FROM_DAEMON).
+#
+#  Mail from any of a set of configured users ($NOACKS) will not be
+#  acknowledged (be default, this includes the user).
+#
+#  Mail from any user will only be acknowledged once per day.
+#
+#  Regardless of whether or not "ackmail.rc" acknowledges the mail, any
+#  recipes following the INCLUDERC will continue to filter the incoming
+#  mail (that is, it is not considered to be delivered).
+#
+# Before including the "ackmail.rc" file, be sure to setup the following
+# variables:
+#
+# MY_ADDR	- preferred email address for the user
+#
+# MY_NAMES	- regex matcing personal names & alternatives;
+#		  ultimately, only mail addressed to $MY_NAMES
+#		  will be acknowledged; defaults to the
+#		  contents of $SIGNATURE or $HOME/.signature, in
+#		  that order.
+#
+# NOACKS	- regex matching people from whom to NOT
+#		  acknowledge mail; defaults to $MY_ADDR
+#
+# NOACKFILE	- path to a file containing regexps of addresses to not
+#		  acknowledge
+#
+# ACKS		- file containing the acknowledgment cache;
+#		  defaults to $MAILDIR/.acks.cache
+#
+# ACKMSG	- file containing the message to reply with;
+#		  defaults to ackmsg
+#
+# VACAMSG	- file containing the message to reply with;
+#		  defaults to vacation.msg
+#
+# FROMSIG	- From: header to use in the auto-ack; defaults
+#		  to "Mailer-Daemon of $USER"
+#
+# MUA		- define as one of the keywords below to tell the
+#		  recipe on how to calculate the unread mail:
+#  MUA=default	- your unread mail sits in $DEFAULT (you don't filter
+#		  mail into folders)
+#  MUA=mh	- your mail is filtered into the MH +inbox; tries to
+#		  use any Unseen-Sequence, or calculates it from the
+#		  output of "folders +inbox".
+#  MUA=XXXXX    - causes a recipe named "unread-XXXXX.rc" to be
+#		  invoked (if it exists) to calculate the number
+#		  of unread messages and returned in $UNREAD.
+#
+#
+# And be sure PATH includes the directory containing "formail".
+
+# If the mail is directly to me, and not an auto-reply itself
+# then do the auto-ack
+
+MY_NAMES=${MY_NAMES:-${SIGNATURE:-`cat $HOME/.signature 2>/dev/null`}}
+ACKS=${ACKS:-ackmail.cache}
+ACKMSG=${ACKMSG:-ackmsg}
+VACAMSG=${VACAMSG:-vacation.msg}
+FROMSIG=${FROMSIG:-"Mailer-Daemon of $USER"}
+NOACKS=${NOACKS:-$MY_ADDR}
+NOACKFILE=${NOACKFILE:-''}
+
+# Handy regexp patterns (taken from "headers.rc")
+PRE_ADDR_SPAN='(.*[^-(.%@a-zA-Z0-9])?'
+POST_ADDR_SPAN='(([^),.!:a-zA-Z0-9].*)?(,|$[^>]))'
+FROMHDR="(^(((Resent-)?(From|Sender)|X-Envelope-From):|>?From )$PRE_ADDR_SPAN)"
+
+# Begin the tests
+# 1. Is it addressed to me (using any of my names)?
+# 2. Is there an acknowledgement file or vacation message file?
+# 3. Is the mail NOT from any kind of daemon
+# 4. Is the mail NOT from a mailing list manager which procmail doesn't know
+# 5. Does the subject NOT have any text indicating some kind of automatic
+#    reply mechanism has already taken place?
+# 6. Is this NOT a message we generated (a bounce, maybe)?
+# 7. Is the message NOT from anyone on our "noack" list?
+
+# If you need to debug your configuration of ackmail.rc, just "touch
+# ackmail.log" and the recipe below will log the ackmail.rc activity to
+# ackmail.log.  When you are satisfied with your configuration, simply
+# remove ackmail.log and logging will stop.
+
+:0
+* ? test -f ackmail.rc.log
+{
+  OLDACKLOGFILE=$LOGFILE
+  LOGFILE=ackmail.rc.log
+  LOGABSTRACT=all
+  VERBOSE=on
+}
+
+# Get the best return address without names & comments.
+# This will be the same address we respond to.
+SENDER=`formail -rtzx To:`
+
+# Define a list of well-known list mailer addresses
+LIST_MAILERS='((Mail(er)?-?)?daemon|root|LISTSERV|ListProc|\
+[a-zA-Z0-9-]+-(list|request|owner)|(owner-)?list-[a-zA-Z0-9-]+|\
+Majordomo|Mailagent|Postmaster|mmdf|news|n?uucp)'
+
+# This is the major condition by which we decide to respond
+# or not.
+
+:0ch
+* $ ^TO($USER|$MY_ADDR|$MY_NAMES)
+*  ? test -f $ACKMSG -o -f $VACAMSG
+*  !^FROM_DAEMON
+* $! SENDER ?? $LIST_MAILERS
+* $! $FROMHDR(Majordomo|Listserv)
+*  !^Subject: .*(\[(ack(nowledge?ment)?|on vacation)\]|\
+		auto(matic)[- ]reply|\
+		away from mail|\
+		out of town|\
+		can ?not (reply|answer)|\
+		(on |via )vacation( program)?)
+* $!^X-Loop: *$MY_ADDR
+* $!$FROMHDR($NOACKS)$POST_ADDR_SPAN
+{
+    # Okay -- we're doing to do the auto-ack or vacation mail
+    #
+    # We're forking for the auto-ack, shut up comsat, and assume that,
+    # in this process, the mail is delivered
+    DELIVERED=yes
+    COMSAT=off
+
+    # Don't output logfile info; the user can query $ACKS to see which
+    # users have been acknowledged.  This only affects the child
+    # process.
+    LOGABSTRACT=no
+
+    # Check for a NOACKFILE; if it exists, and if the sender matches one
+    # of the regexps within the NOACKFILE, then do not ack this mail
+    :0h
+    * ? test -n "$NOACKFILE" -a -f "$NOACKFILE"
+    * ? echo "$SENDER" | egrep -s -f "$NOACKFILE"
+    { HOST=_do_not_ack_this_user }
+
+    # Check the mail to see if we have replied recently, and if so, if
+    # we should reply again
+    DATE=`date +'%D'`
+
+    # Get the subject
+    :0 ch
+    SUBJ=| formail -zX'Subject:' | sed -e 's/["~]//g' -e 's/^ *[Rr]e: *//g'
+    SUBJ="${SUBJ:-'(no subject)'}"
+
+    # Get which file: "vacation.msg" has precedence over "ackmsg"
+    :0
+    * ? test -f $VACAMSG
+    { ACKFILE=$VACAMSG	ACKM='on vacation' }
+    :0 E
+    { ACKFILE=$ACKMSG	ACKM='acknowledgment' }
+
+    # Check the cache for a recent ack (a successful grep "delivers" the
+    # mail)
+    LOCKFILE=$ACKS.lock
+    :0 Wh
+    | fgrep -i -s "$SENDER $DATE" $ACKS
+
+    # Not in the $ACKS file; add it
+    JUNK=`(fgrep -i -v "$SENDER" $ACKS ; echo "$SENDER $DATE" ) >$ACKS.new ;
+	  rm -f $ACKS ; mv $ACKS.new $ACKS `
+
+    # Release the lock
+    LOCKFILE
+
+    # Replace the headers with a reply
+
+    # (Note: do not use -k here; "h" recipes include the blank
+    # line in the headers, and formail -r generates a blank line
+    # also.  If you use '-k', then the original blank line will
+    # be kept, and the additional will be added, resulting
+    # in two blank lines).
+
+    :0 fhw
+    | formail -rtI"From:       $FROMSIG" \
+		-I"Reply-To:   $MY_ADDR" \
+		-I"Precedence: junk" \
+		-I"Subject:    Re: $SUBJ [$ACKM]" \
+		-I"X-Loop:     $MY_ADDR" \
+		-I"References:"
+
+    # If formail failed, it is because it couldn't be found
+    # avoid acks in this case
+    :0 e
+    { LOG="****Error: Formail failed in ackmail.rc at `date`
+"
+      HOST=_stop_processing_now
+    }
+
+    # Replace the body with the ack message
+    :0 fbw
+    | cat $ACKFILE
+
+    # If the cat $ACKFILE failed, it is probably because ackfile can't
+    # be read; in this case, create a reasonable reply
+    :0 efb
+    | echo "Your mail concerning '$SUBJECT' was received." ; \
+      echo "I'll reply to it as soon as I can."
+
+    # Now maybe do some substitutions, depending upon whether or not the
+    # particular strings exist.
+    :0 fBb
+    * $SUBJECT
+    | sed -e "s~\$SUBJECT~$SUBJ~g"
+
+    :0 fBb
+    * $SENDER
+    | sed -e "s~\$SENDER~$SENDER~g"
+
+    # If the string $UNREAD is in the message, then figure out
+    # how many unread messages and substitute it
+    :0 B
+    * $UNREAD
+    {
+      UNREAD=no			# by default
+
+      # Define the MUA if it isn't defined already
+      :0
+      * MUA ?? !.+
+      * ? test -f guess-mua.rc
+      { INCLUDERC=guess-mua.rc }
+
+      # For any MUA keyword, there should be a corresponding
+      # unread-$MUA.rc file.
+      :0
+      * MUA ?? .+
+      * ? test -f unread-$MUA.rc
+      { INCLUDERC=unread-$MUA.rc }
+
+      # Finally, substitute UNREAD into the current body
+      :0 fb
+      | sed -e "s~\$UNREAD~$UNREAD~g"
+    }
+
+    # Finally, deliver it
+    :0 w
+    ! -oi -t
+
+    HOST=end_of_processing	# just in case sendmail failed
+}
+
+# Undo any debug logging
+:0
+* LOGFILE ?? ackmail\.rc\.log
+{
+  VERBOSE=no
+  LOGABSTRACT=yes
+  LOGFILE=$OLDACKLOGFILE
+  OLDACKLOGFILE
+}

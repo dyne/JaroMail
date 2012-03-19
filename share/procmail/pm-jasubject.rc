@@ -1,0 +1,573 @@
+# pm-jasubject.rc -- Subject field cleaner and canonicalizer (Re:)
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	_NOTE:_ If you receive RFC 2047 encoded Subject headers like
+#	"Subject: =?ISO-8859-1?Q?=C4hnlichkeiten_von_=DCbungen?=", you
+#	must first decode it before using this subroutine. Feed the
+#	message to `pm-jamime-decode.rc' first.
+#
+#       There are many different Email programs out there that add their
+#       own `reply' characters to the subject field. The most sad programs
+#       come usually from PC platform. Eg. Microsoft has gained a lot of
+#       bad reputation due to it's own standards.
+#
+#       o   MS Explorer can use localized reply strings,
+#           Eg `Vs:' or `vast:'  seems to be Finnish `Vastaus'.
+#       o   MS product Outlook (??) can be configured similarly.
+#           I have received swedish `Sv:' `-Svar' for `Svaring' (eng: reply)
+#       o   MS mail uses `FW:' in forwarded mails.
+#       o   Intelligent MUAs try to keep count of replies with
+#           `Re2:' or `Re[2]'
+#       o   Japanese MUA Denshin 8 Go V321.1b7 has sent Re^2:
+#       o   Some mua uses `Re>'
+#       o   Lotus notes (in French version) uses `Ref:'
+#       o   Some MS product sends `UQ:'
+#       o   XXX uses `-reply'
+#       o   Forwarding schemes: (fwd) [fwd] <fwd> fw:  [FWD:  [FWD:]]
+#       o   Subject references: -subj subj- subj:
+#
+#       There already is a de facto standard where message should contain
+#       only single `Re:' if message has been replied to (no matter how
+#       many times). This makes it possible to do efficient message
+#       threading by only using Subject and date fields. And grepping same
+#       subjects is lot easier than from this horrible mess. Note that
+#       all text is on one line, the subject has been broken only
+#       for visual reasons:
+#
+#           Subject: re- Re^2: Re[32]: FW: Re: Re(15) Sv: Re[9]: -reply
+#                    (fwd) [fwd] <fwd> fw: [FWD:  [FWD:]]
+#                    -subj subj: subj: subj-
+#                    test
+#
+#       This recipe standardizes any subject (like above) that has been
+#       replied to, to de facto format below. That is: "Any number of 'Re:'
+#       will be converted to *single* 'Re:' and any number of 'Fwd:' will be
+#       converted to *single* 'Fwd:'"
+#
+#            Subject: Re: test (fwd)
+#
+#   About In-Reply-To header
+#
+#       If there is `In-Reply-to' header in the message, but there is
+#       not *Re:* in the subject line, one is added automatically.
+#       Some broken Mailers forget to add the *Re:* to the Subject
+#       line.
+#
+#   Variable JA_SUBJECT_SAVE
+#
+#       This is by default `yes' which causes the original subject to
+#       be saved under header field `X-Old-Subject'. If you don't want
+#       that extra header generated, set this variable to `no'
+#
+#   Variable JA_SUBJECT_FWD_KILL
+#
+#       This is by default `yes', which will kill extra forwarding
+#       indication words like (fwd) [fwd] <fwd> <f>. If you set this
+#       to `no', then all the forwarding words are preserved. The de
+#       facto forward format is:
+#
+#           Subject: This subject (fwd)
+#
+#   Code note
+#
+#       This subroutine's intention is to make Subject more expressive
+#       by deleting redundant information. A simplistic approach has
+#       been taken where Subject consists of list of *words* whose
+#       each attribute can be either `ok' or `delete'. No attempt has
+#       been made to determine the structure of the Subject. You can
+#       see the algorithm better
+#       from an example:
+#
+#           Re: New subject (was Re: Old subject)
+#
+#       That should be treated syntactically like "New subject" and
+#       forgetting anything between parenthesis. This is however not
+#       respected and not even tried. The rule applied here is "One
+#       Re: is tolerated", so the subject won't change. It doesn't
+#       matter where "Re:" is.
+#
+#       But here the subject is changed. The rule applied is: Delete
+#       all unwanted _words_ and then add one Re: to the beginning if OLD
+#       content had any Reply indications
+#
+#               Re: New subject (was Re: Old subject)
+#           --> Re: New subject (was Old subject)
+#
+#   IMPORTANT notice
+#
+#       Please check that your `SHELL' variable setting in `~/procmailrc'
+#       is `sh' derivate, /bin/sh or /bin/bash. This module won't work with
+#       other shells.
+#
+#   Awk usage note
+#
+#       `awk' is a small, effective and much smaller than perl for little
+#       tasks. See the verbose log and make sure your awk understands
+#       VAR="value" passing syntax. Change it to `nawk' or `gawk' if they
+#       work better than your standard awk.
+#
+#           AWK = "gawk"        # you may need this, try also gawk
+#
+#   Customizations
+#
+#       Let's say Polish M$Outlook uses `ODP:' instead of
+#       standard `re:' and you want to handle that too: Then set:
+#
+#           JA_SUBJECT_KILL = "odp:"            # NOTE: all lowercase
+#           JA_SUBJECT_SAVE = "no"
+#           INCLUDERC       = $PMSRC/pm-jasubject.rc
+#
+#       You ca use `JA_SUBJECT_KILL' to delete any additional words from the
+#       subject line. E.g. if you have good news-reader, you don't need the
+#       mailing list prefixes that some mailing lists add to the beginning
+#
+#           Subject: [LIST-xxx] the subject here
+#
+#       to remove that list prefix, you simply match it
+#
+#           JA_SUBJECT_KILL = "(list-xxx|list-yyy)"
+#
+#       Important: The regexp must be _all_ lowercase, because when match
+#       happens, the words have been converted to lowercase.
+#
+#   Example usage
+#
+#       You need nothing special, just include this recipe
+#       before you save message to folder.
+#
+#           INCLUDERC = $PMSRC/pm-jasubject.rc
+#
+#   Debugging
+#
+#       You can dry-run test this module with following command and watching
+#       output. Substitute variables as they are in your system. You feed
+#       the content of entire example mail where the Subject that needs
+#       correction is found.
+#
+#           % procmail SHELL=/bin/sh AWK=gawk VERBOSE=on LOGABSTRACT=all \
+#             DEFAULT=/dev/null LOGFILE=$(tty) \
+#             JA_SUBJECT_KILL="(ace-users)" \
+#             PMSRC=/path/to/install/dir \
+#             /path/to/pm-jasubject.rc  \
+#             < ~/test.mail
+#
+#   Thank you
+#
+#       Thanks to <Tony.Lam@Eng.Sun.Com> for his creative
+#       improvement suggestions and sending code that this
+#       recipe didn't catch at first.
+#
+#   Change Log (none)
+
+dummy = "
+========================================================================
+pm-jasubject.rc: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# .......................................................... &public ...
+
+#   --  Put your own reply customization here: regexp is merged to
+#       default values.
+#   --  The regexp must be _all_ lowercase, because the matched
+#       word in the line is converted to lowercase before
+#       matching takes place.
+
+JA_SUBJECT_KILL     = ${JA_SUBJECT_KILL:-""}
+
+#   Set to "no" if you don't want to see `X-Old-Subject:'
+
+JA_SUBJECT_SAVE     = ${JA_SUBJECT_SAVE:-"yes"}
+JA_SUBJECT_FWD_KILL = ${JA_SUBJECT_FWD_KILL:-"yes"}
+
+# ........................................................... &check ...
+#   If the pm-javar.rc module was not loaded, then it would be
+#   disaster to call awk block. Make sure the $a and $AWK variables
+#   exist before doing anything.
+
+error = "no"
+
+:0
+* a     ?? [a-z]
+* AWK   ?? [a-z]
+{ }
+:0 E                # Else
+{
+    dummy = "pm-jasubject.rc: $JA_MSG_ERROR CONFIGURATION IS NOT CORRECT"
+    error = "yes"
+}
+
+# .......................................................... &private ...
+
+subject =   # Kill variable
+
+:0
+* ^Subject: *\/.*
+{
+    originalSubject = $MATCH
+    subject         = $MATCH
+}
+
+#   These variables are not all caps, because they are not intended to be
+#   user configurable. Please email the author if this module if they are
+#   not enough for you.
+#
+#   All characters in the regexp must be lowercase, because regexp is
+#   used in awk. Remember: -- Always parenthesize --
+#
+#   Notes:
+#   o   Using regexp "re^[0-9]+:" to kill Re^2: doesn't work. We use
+#       regexp "re.[0-9]+:"
+#   o   re(2)  is matched by re[(][0-9]+[)]. Notice that there is not colon(:)
+#   o   [[(<]fwd?[])>] matches things like (fwd) [fwd] <fwd>
+
+fwd          = ""
+fwdKill      = 0        # AWK needs numeric True/False
+fwdCount     = ""
+forwarded    = "no"
+savedLINEBUF = $LINEBUF
+LINEBUF      = 8192     # Need bigger value than default
+
+#   All letters MUST BE LOWERCASE (for awk). No spaces anywhere in regexp
+
+fwdRegexp = ${fwdRegexp:-"(fwd?):|[[(<]fw?d?[])>]"}
+
+:0
+* JA_SUBJECT_FWD_KILL ?? yes
+{
+    fwd     = $fwdRegexp
+    fwdKill = 1
+
+    :0
+    *$ $fwdRegexp
+    {
+        forwarded = "yes"
+    }
+}
+
+#   All letters MUST BE LOWERCASE (for awk). No spaces anywhere in regexp
+
+replyTypes   = ${replyTypes:-"\
+(re([0-9]+|.[0-9]+.|.[0-9]+):\
+|re[(][0-9]+[)]\
+|re-|re>|-reply|-svar\
+|(vs|vl|aw|fs|vast|sv|rv|ref|uq):\
+|-subj|subj-|subj:\
+)"}
+
+SubjectDoIt      = "no"
+UserRegexp       = ""
+wordKillRegexp   = "$replyTypes"
+dummy            = "pm-jasubject.rc: Possibly adding JA_SUBJECT_KILL"
+
+#   Has user given any additional keywords to kill?
+#   The variable must contains a-z
+
+dummy = "pm-jasubject.rc: :::::::::::::::::::::::::::::: #JA_SUBJECT_KILL"
+
+:0
+*  ! subject ?? ^^^^
+*$ JA_SUBJECT_KILL ?? $a
+{
+    wordKillRegexp = "$replyTypes|$JA_SUBJECT_KILL"
+
+    #   Always remove words that user has defined
+
+    :0
+    *$ subject ?? $JA_SUBJECT_KILL
+    {
+        SubjectDoIt = "yes"
+        UserRegexp  = "yes"
+    }
+}
+
+# ....................................................... &forwarded ...
+
+dummy = "pm-jasubject.rc:           :::::::::::::::::::::::::::::: #FWD"
+
+:0
+*$ fwdRegexp ?? [a-z]
+{
+    wordKillRegexp  = "$wordKillRegexp|$fwdRegexp"
+
+    :0
+    *    SubjectDoIt ?? no
+    *$  subject ?? ($fwdRegexp)\/.*
+    {
+        subject = $MATCH
+        fwdCount   = "1"
+
+        SubjectDoIt = "yes"
+
+        :0
+        *$ subject ?? ()\/($fwdRegexp).*
+        {
+            fwdCount = "2"
+        }
+    }
+}
+
+#   must parenthise, so that ".*" can be added to it
+
+wordKillRegexp       = "($wordKillRegexp)|re:"
+
+# ........................................................ &de-facto ...
+# We count because we want to know if we need to call awk or not.
+# If there is only 1, then there is no point running external shell process,
+# if there is at least two, then we need awk.
+#
+# In any case we need AWK if user has set mailing list kill words, like
+# [this-list]
+
+
+#   *) grab first match. REPLY word count is then 1. In this case there is
+#      nothing more to kill
+#   *) Search second match, REPLY word count is 2
+
+
+dummy      = "pm-jasubject.rc: :::::::::::::::::::::::::::::: #DE-FACTO"
+replyCount = 0
+
+:0
+*$ subject ?? re:\/.*
+{
+    subject     = $MATCH
+    replyCount  = 1
+
+    :0
+    *$ subject ?? ()\/re:.*
+    {
+        replyCount  = 2
+        SubjectDoIt = "yes"
+    }
+}
+
+# .................................................... &non-standard ...
+
+#   Note: The "Re[0-9]+ " is special case. We can't pass it to AWK, because
+#   it doesn't see spaces, it couns only words, which are delimited by
+#   ^...$
+
+dummy = "pm-jasubject.rc: :::::::::::::::::::::::::::::: #REPLY-TYPES "
+
+:0
+*   SubjectDoIt ?? no
+*   subject ?? ()\/.*
+*$  $SUPREME^0 subject ?? ($replyTypes)\/.*
+*$  $SUPREME^0 subject ?? Re[0-9]+ \/.*
+{
+    subject     = $MATCH
+    replyCount  = 1
+
+    SubjectDoIt = "yes"
+
+    :0
+    *$ subject ?? ()\/($replyTypes).*
+    {
+        replyCount = 2
+    }
+}
+
+dummy = "pm-jasubject.rc: ::::::::::::::::::::::::::::: #DO-IT $SubjectDoIt"
+
+#       Many foreign language is usually presented in encoded format
+#       (iso-8859-1). Furthermore, if pm-jamime-decode.rc was used to
+#       "open" the Subject line it will set a flag
+#       `PM_JAMIME_COMPLEX_SUBJECT' for messages that should not be
+#       touched (too complex). In those cases it the procmail's
+#       capabilities were reaached and the Subject line should be left
+#       as is.
+
+:0
+*$ $SUPREME ?? ^Subject:.*\?iso-8859-.\?
+*$ $SUPREME ?? ! PM_JAMIME_COMPLEX_SUBJECT ?? ^^^^
+{
+    SubjectDoIt = "no"
+}
+
+:0
+*    SubjectDoIt ?? no
+{
+    # Remove excess spaces between the "Subject" keyword and subject itself
+
+    :0   fh w
+    *$  subject ?? $s$s+\/$NSPC.*
+    |  $FORMAIL -I "Subject: $MATCH"
+
+    #   Some Emacs VM users reply emails without
+    #   adding "Re: " in front of the subject (as VM default setting).
+    #   Add one if needed.
+
+    :0   fh w
+    *    replyCount  ?? 0
+    *   ^(In-Reply-To|References):
+    *$  subject ?? $s+\/.*
+    |  $FORMAIL -I "Subject: Re: $MATCH"
+
+    #   Some users (of dtmail) forward emails without
+    #   adding "fwd " in front of the subject
+    #   Add one if needed.
+
+    :0 E
+    *    ^Message-ID: \<libSDtMail\..*\>
+    *    fwdCount    ?? 0
+    *    replyCount  ?? 0
+    *    B ?? ^ ---[\-]+ Begin Forwarded Message ---
+    {
+        :0 fh w
+        *$  subject ?? $s+\/.*
+        |  $FORMAIL -I "Subject: $MATCH (fwd)"
+    }
+}
+
+:0
+*   subject     ?? ()\/.+
+*   error       ?? no
+*   SubjectDoIt ?? yes
+{
+    subject = $MATCH
+
+    #   Print log entry to show what regexp we're using.
+    #   Grab the regexp from there for external testing or development.
+
+    dummy = "pm-jasubject.rc: $SHELL $AWK is called with regexp: $NL\
+    $wordKillRegexp $NL     $fwdRegexp"
+
+    # ......................................................... clean ...
+
+    #   The awk works this way:
+    #   - split subject to individual words --> array LIST
+    #   - convert every word to lowercase(str) before doing match
+    #     because AWK is case sensitive
+    #   - Add only valid words to "s" (string) and return "clean" subject.
+    #
+    #   There is a special check in this program. Notice the 'lastpos'.
+    #   It's purpose is to detect cases like this:
+    #
+    #       [Fwd: Re: [jp] J-Pilot 0.99.8-pre2] Real subject here
+    #                              |
+    #                              lastpos
+    #
+    #   The above subject is too complex to be treated like words,
+    #   because it contains inner bracket which ends to lastpos. All
+    #   of them must be removed. The word based match would treat it like:
+    #
+    #       [Fwd: Re: [jp] J-Pilot 0.99.8-pre2]
+    #       1     2   3    4       5
+    #
+    #       1. Looks like forwarding word. Removed
+    #       2. Looks like forwarding word. Removed
+    #       3. Looks good word
+    #       4. Looks good word; the ']' is not special
+    #
+    #    And the result would be:
+    #
+    #       J-Pilot 0.99.8-pre2]
+
+    clean = `echo "$subject" | $AWK                                         \
+    '   {                                                                   \
+            max     = split( $0, list, "[ \t]+" );                          \
+            lastpos = 0;                                                    \
+            s       = "";                                                   \
+            for( i = 1; i <= max; i++)                                      \
+            {                                                               \
+                word = list[i];                                             \
+                str  = tolower( word );                                     \
+                if ( FWD_KILL && match(str,FWD_RE) > 0  )                   \
+                {                                                           \
+                    fwd = 1;                                                \
+                }                                                           \
+                if ( match(str,RE) < 1 && match(str, "^re[0-9]+$") < 1 )    \
+                {                                                           \
+                    if ( s == "" )                                          \
+                    {                                                       \
+                        s = word;                                           \
+                    }                                                       \
+                    else                                                    \
+                    {                                                       \
+                        s = s " " word;                                     \
+                    }                                                       \
+                }                                                           \
+                if ( match(str,"^[^][]+[]]") > 0 )                          \
+                {                                                           \
+                    lastpos = i;                                            \
+                }                                                           \
+            }                                                               \
+            if ( lastpos )                                                  \
+            {                                                               \
+                s = "";                                                     \
+                for( i = lastpos + 1; i <= max; i++)                        \
+                {                                                           \
+                    s = s " " list[i];                                      \
+                }                                                           \
+            }                                                               \
+            if ( match(s, "^ *$")  )                                        \
+            {                                                               \
+                s =  "(none)";                                              \
+            }                                                               \
+            if ( fwd )                                                      \
+            {                                                               \
+                printf "%s (fwd)", s;                                       \
+            }                                                               \
+            else                                                            \
+            {                                                               \
+                print s;                                                    \
+            }                                                               \
+        }                                                                   \
+    ' RE="$wordKillRegexp" FWD_RE="$fwdRegexp" FWD_KILL=$fwdKill `
+
+    # ................................................ update subject ...
+
+    dummy = "pm-jasubject.rc:           :::::::::::::::::::::::::::: #RESULT"
+    word  = ""
+
+    :0
+    *$ replyCount ?? [1-9]
+    {
+        word = "Re: "
+    }
+
+    # it makes sense replacing the Subject only if the word
+    # contains something
+
+    :0
+    * clean ?? [a-z]
+    {
+
+        #   Coording to RFs, all user defined additional fields
+        #   must start with X-
+
+        :0 fh w
+        * JA_SUBJECT_SAVE ?? yes
+        | $FORMAIL -I "X-Old-Subject: $originalSubject"
+
+        :0 fh w
+        | $FORMAIL -I "Subject: $word$clean"
+    }
+}
+
+LINEBUF = $savedLINEBUF
+dummy   = "pm-jasubject.rc: end: $word$clean"
+
+# End of pm-jasubject.rc

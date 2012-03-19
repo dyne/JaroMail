@@ -1,0 +1,484 @@
+# pm-jaaddr.rc -- extract 'foo@some.com' email address from variable INPUT
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#	This includerc extracts the various components of email address
+#	from variable `INPUT'. You can do quite a lot interesting things with
+#	your email address. One of the tricks that you could use if you
+#	don't have sendmail plus addressing capabilities, is that you put
+#	the additional infomation to the RFC comment. Eg. If you read and
+#	followup to posts in usenet games groups, you could use:
+#
+#	    From: <login@site.com> (John Doe+usenet.games)
+#
+#	Or if your email address's localpart (that's characters before @)
+#	already signify your First and surname, you don't need to repeat it
+#	in comment. However, place special marker "+" to mark
+#       additional information part for your procmail recipes:
+#
+#	    From: <first.surname@site.com> (+usenet.games)
+#
+#	The use of RFC comment should work everywhere because RFC requires
+#	that comments are preserved along with the address information.
+#	If you would have sendmail plus addressing capabilities you would
+#	have used:
+#
+#	    From: <login+usenet.games@site.com> (John Doe)
+#
+#	The idea is that the list infomation is readily available from
+#	the email. The following recipe will derive the plus information
+#	and use it directly as a mailbox where to drop the message. If
+#	The Editor: Emacs, means anything to you, you can program it
+#	to generate the appropriate From headers automatically when you
+#	send mail from Gnus Mail/Newsreader MUA. Drop me a message if
+#	you need an example how a piece of Emacs lisp code makes those
+#	magic RFC plus addresses in the background while you compose the
+#	body of the message.
+#
+#	    RC_EMAIL = $PMSRC/pm-jaaddr.rc
+#	    TOME     = "(login1|login2)"
+#
+#	    :0
+#	    *$ ^TO\/.*$TOME.*
+#	    {
+#		INPUT	    = $MATCH
+#		INCLUDERC   = $RC_EMAIL
+#		PLUS	    = $COMMENT_PLUS
+#
+#		#  If COMMENT_PLUS was defined, we found "+"
+#		#  address which contain "usenet.games". Save it to
+#		#  folder.
+#
+#		:0 :
+#		* PLUS ?? [a-z]
+#		$PLUS
+#	    }
+#
+#   Notes
+#
+#	1998-05 David Hunt <dh@west.net> also mentioned that "you need to
+#	remember that some MTAs, (qmail for one, and soon vmail) use a dash
+#	( - ) as the subaddress delimiter. So you'll want to allow for that
+#	in your code". For this reason the email part accepts both
+#	"-" and  "+". The RFC comment however accepts only "+" and "--".
+#
+#   Example input
+#
+#           "From: foo+procmail@this.site.com (Mr. foo)"	traditional
+#           "From: foo-procmail@this.site.com (Mr. foo)"	new styled
+#
+#	NOTE: M$SOFT mailers tend to send idiotic smart quotes "'Mr. foo'"
+#	and this recipe ignores these two quotes ["'] as if message had
+#	only the standard ["]
+#
+#   Returned values
+#
+#           ADDRESS     "foo+procmail@this.site.com"
+#			containing the email address without <>
+#
+#           ACCOUNT     "foo+procmail"
+#			all characters before @
+#
+#           ACCOUNT1	"foo"
+#			characters before plus: account1+account2@site
+#			Note, if there is no "+", this is same as ACCOUNT.
+#
+#           ACCOUNT2	"procmail"
+#			_only_ set if plus found: account1+account2@site
+#
+#           SITE        "this.site.com"
+#			all characters after @
+#
+#           DOMAIN      "site.com"
+#			the main domain, preceding words in site are
+#                       considered subdomain (local) addresses.
+#
+#                           sub.sub.domain.net
+#
+#	    SUB		"this.site"
+#			all the sub-domain names without the NET part.
+#
+#	    SUB1	"site"
+#			The first subdomain counted from the _RIGHT_ after NET
+#
+#	    SUB2	"this"
+#			Second subdomain.
+#
+#	    SUB3	""
+#			Third subdomain.
+#
+#	    SUB4	""
+#			Fourth subdomain.
+#
+#           NET         "com"
+#			last characters after last period ( net,com,edu ...)
+#
+#           COMMENT	Anything unside parenthesis (Mr. Foo) or if no
+#			parentheses found, then anything between quotes
+#			"Mr. Foo"
+#
+#	    COMMENT_PLUS Anything after the "+" in the comment, like
+#			 "Mr Foo+mail.usenet" --> "mail.usenet"
+#
+#			 Note: some MTA's don't allow + character, so use
+#			 alternatively '--':
+#			 "Mr Foo--mail.usenet"  --> "mail.usenet"
+#
+#	Additionally there is variables DOT1 DOT2, which behave like
+#	ACCOUNT1 and ACCOUNT2, but in respect to dotted firstname.surname
+#	type address:
+#
+#		john.doe@site.com
+#
+#		ACCOUNT1    = john.doe
+#		ACCOUNT2    = <empty>
+#		DOT1	    = john
+#		DOT2	    = doe
+#
+#	If there is plus, the ACCOUNT2 is defined
+#
+#		john.doe+foo@site.com
+#
+#		ACCOUNT1    = john.doe
+#		ACCOUNT2    = foo
+#		DOT1	    = john	    (in respect to ACCOUNT1)
+#		DOT2	    = doe	    (in respect to ACCOUNT1)
+#
+#
+#	Variable ERROR is set to "yes" if INPUT wasn't recognized or parsing
+#	the address failed.
+#
+#   Required settings
+#
+#	PMSRC must point to source directory of procmail code. This subroutine
+#       will include pm-javar.rc from there.
+#
+#   Call arguments (variables to set before calling)
+#
+#           INPUT = string-to-parse
+#
+#   Usage example
+#
+#	Read From field and address from it. This is lot faster than using
+#	external `formail' call.
+#
+#	    PMSRC   = $HOME/pm
+#	    RC_ADDR = $PMSRC/pm-jaaddr.rc
+#
+#           :0
+#           *  ^From:\/.*@.*
+#           {
+#               INPUT = $MATCH
+#
+#               #  Turn off the logging while executing this part
+#               VERBOSE="off"   INCLUDERC = $RC_ADDR  VERBOSE="on"
+#
+#               :0
+#               * ERROR ?? yes
+#               {
+#		   # Hmm, no std email address found. Any other ideas?
+#		}
+#           }
+#
+#   Change Log (none)
+
+# .................................................... &initialising ...
+
+
+id    = " pm-jaaddr.rc"
+dummy = "
+======================================================================
+$id: init:
+"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# ..................................................... &output-vars ...
+# output variables. Defining them on their own kills them
+
+ADDRESS
+
+ACCOUNT
+ACCOUNT1
+ACCOUNT2
+DOT1
+DOT2
+
+SITE
+
+DOMAIN
+SUB1
+SUB2
+SUB3
+SUB4
+
+NET
+
+COMMENT
+COMMENT_PLUS
+
+ERROR = "yes"		# set defualt value
+
+# ........................................................... &do-it ...
+#	Check that input is something like: Thu, 13 Nov 1997
+
+dummy   = "$NL$NL$id: start: Parsing $INPUT $NL"
+
+charset_jaaddr = "[^$WSPC@(){}&?,;:<>\"']+"
+
+# ... ... ... ... ... ... ... ... ... ... ... ... ... . catch comment ...
+
+
+dummy = "$NL$id:            :::::::::::::::::::::::: COMMENT $NL"
+
+:0				# Catch anything inside parentheses
+* INPUT ?? [(]()\/[^)]+
+{
+    COMMENT = $MATCH
+}
+
+
+    :0 E  # Else, Try catching "'Mr. Foo'" in Microsoft smart quotes
+    * INPUT   ?? \"'()\/[^\']+
+    {
+	dummy   = "$id: Comment catched from inside Microsoft smart quetes.."
+	COMMENT = $MATCH
+    }
+
+    dummy = "$NL$id: normal quotes $NL "
+
+    :0 E		# Else, Try catching "Mr. Foo" in quotes
+    * INPUT   ?? \"()\/[^\"]+
+    {
+	dummy   = "$id: Comment catched from double quotes.."
+	COMMENT = $MATCH
+    }
+
+
+dummy = "$NL$id:            :::::::::::::::::::::::: COMMENT_PLUS $NL"
+
+:0				# derive plus address, if RFC comment trick
+* COMMENT ?? (\++|--)\/.*
+{
+    COMMENT_PLUS = $MATCH
+}
+
+# ... ... ... ... ... ... ... ... ... ... ... ... ...  catch address  ..
+
+dummy = " $NL$id: Find <login@site.com> $NL "
+
+#      Try strict address first <>
+
+:0
+*$ INPUT ?? $s*<\/$charset_jaaddr@$charset_jaaddr>
+{
+    INPUT = $MATCH
+
+    #   Drop the trailing ">" too
+    #
+    :0
+    *$ INPUT ?? ^\/$charset_jaaddr@$charset_jaaddr
+    {
+	ADDRESS = $MATCH
+    }
+}
+
+dummy = "$NL$id:         :::::::::::::::::::::::: INPUT --> ADDRESS [$INPUT] $NL"
+
+# No joy, then try to locate @ character
+
+:0 E
+*$ INPUT ?? $s*\/$charset_jaaddr@$charset_jaaddr
+{
+    ADDRESS = $MATCH
+}
+
+
+# ... ... ... ... ... ... ... ... ... ... ... ... ... ... .. explode  ..
+#   If we got the address, derive other parts
+
+
+dummy = "$NL$id:          :::::::::::::::::::::::: ADDRESS [$ADDRESS] $NL"
+
+
+:0
+* ADDRESS ?? @\/.*
+{
+    SITE = $MATCH
+
+    :0				    # Get last three characters
+    * SITE ?? (\.)\/...^^
+    {
+	NET = $MATCH
+    }
+    :0 E			    # Nope, it was two (like .us)
+    * SITE ?? \.\/..^^
+    {
+	NET = $MATCH
+    }
+
+
+    #	If next recipe does not match, ie. there is no two components in
+    #	the address. Eg:
+    #
+    #	    foo@a.b.com	    -> DOMAIN = b.com
+    #	    foo@this.com    -> DOMAIN = this.com
+
+    DOMAIN = $SITE
+
+    :0
+    *$ SITE ?? (\.)\/[^.]+\.$NET
+    {
+	DOMAIN = $MATCH
+    }
+
+    #	It's a bit tricky to count backward with procmail, but in this
+    #	case it it possible, because there is "." separating the parts.
+    #
+    #	    this.site.here.com  : Get everything until period, delete period
+    #	    -> SUB this.site.here
+    #
+    #	Next; we repeate following 3 times
+    #
+    #	    this.site.here  : get everything until period, delete period
+    #	    -> this.site    : save this to `tmp'
+    #
+    #	If there is no matches, reset `tmp' to empty to prevent next recipes to
+    #	match. If there is no more matches, the ":0 E" recipe assigns the last
+    #
+    #	    --> this	    : into last SUB
+
+    :0
+    *  SITE  ?? ()\/.*\.
+    *  MATCH ?? ()\/.*[^.]
+    {
+	SUB	= $MATCH
+	SUB1	= $SUB		# suppose only one subdomain. @this.com
+	tmp	= ""
+
+	:0
+	*  SUB ?? .*\.\/[^.]+^^
+	{
+	    SUB1 = $MATCH
+	}
+
+	tmp
+
+	:0
+	*  SUB   ?? ()\/.*\.
+	*  MATCH ?? ()\/.*[^.]
+	{
+	    tmp = $MATCH
+
+	    :0
+	    *  tmp ?? .*\.\/[^.]+^^
+	    {
+		SUB2 = $MATCH
+	    }
+	    :0 E
+	    {
+		SUB2 = $tmp    tmp = ""
+	    }
+	}
+
+	:0
+	*  tmp   ?? ()\/.*\.
+	*  MATCH ?? ()\/.*[^.]
+	{
+	    tmp = $MATCH
+
+	    :0
+	    *  tmp ?? .*\.\/[^.]+^^
+	    {
+		SUB3 = $MATCH
+	    }
+	    :0 E
+	    {
+		SUB3 = $tmp    tmp = ""
+	    }
+	}
+
+	:0
+	*  tmp   ?? ()\/.*\.
+	*  MATCH ?? ()\/.*[^.]
+	{
+	    tmp = $MATCH
+
+	    :0
+	    *  tmp ?? .*\.\/[^.]+^^
+	    {
+		SUB4 = $MATCH
+	    }
+	    :0 E
+	    {
+		SUB4 = $tmp    tmp = ""
+	    }
+	}
+
+
+
+    }
+
+
+    :0
+    * ADDRESS ?? ^^\/[^@]+
+    {
+	ACCOUNT = $MATCH
+
+	#   Handle plus addresses and explode it
+
+	:0
+	* ACCOUNT ?? [-+]\/.*
+	{
+	    ACCOUNT2 = $MATCH
+	}
+
+	:0
+	*   ACCOUNT ?? ()\/[^+]+
+	{
+	    ACCOUNT1 = $MATCH
+	}
+
+
+	#   Handle firstname.surname
+
+	:0
+	* ACCOUNT1 ?? [.]\/.*
+	{
+	    DOT2 = $MATCH
+	}
+
+	:0
+	* ! DOT2 ?? ^^^^
+	*   ACCOUNT1 ?? ()\/[^.]+
+	{
+	    DOT1 = $MATCH
+	}
+
+
+    }
+
+}
+
+dummy = "$NL$NL$id: end: $ERROR $NL"
+
+# end of file pm-jaaddr.rc

@@ -1,0 +1,280 @@
+# pm-jaube-prg-runall.rc -- Interface to all Bayesian filter programs
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Overview of features
+#
+#       o   To detect spam reliably, run all Bayesian programs one by one
+#           to see if any of them classifies the message as spam.
+#       o   Programs supported: bogofilter, spamprobe, Bayesian Mail
+#           Filter, Annoyance Filter, Bsfilter, Spamoracle and Spamassassin.
+#
+#   Description
+#
+#       There are several bayesian based statistical analysis programs that
+#       study the message's tokens and then classify it into two categories:
+#       good or bad, or if you like, ham and spam. This module is a
+#       _meta_ _package_ which will call all other individual modules
+#       that interface to these Bayesian programs. The use is simple: define
+#       programs that are available in your system and which you have
+#       trained (Bayesian programs need to be trained before use), and this
+#       this module will query how those programs would classify the message.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-jaube-prg-spamprobe.rc
+#       o   pm-jaube-prg-spamoracle.rc
+#       o   pm-jaube-prg-annoyance-filter.rc
+#       o   pm-jaube-prg-bsfilter.rc
+#       o   pm-jaube-prg-bmf.rc
+#
+#   Call arguments (variables to set before calling)
+#
+#       To activate Bayesian program(s), define path to them. Default
+#       value for all these variables is "" i.e. is is supposed that
+#       no programs have been installed or trained.
+#
+#       o   `JA_UBE_BOGOFILTER_PRG', path to *bogofilter* program.
+#       o   `JA_UBE_SPAMPROBE_PRG', Path to *spamprobe* program
+#       o   `JA_UBE_BMF_PRG', Path to Bayesian Mail Filter *bmf* program.
+#       o   `JA_UBE_SPAMASSASSIN_PRG', path to *spamassassin* program.
+#           If daemon version is available, set this to *spamc* program.
+#       o   `JA_UBE_SPAMORACLE_PRG', path to *spamoracle* program.
+#       o   `JA_UBE_ANNOYANCE_PRG', path to *annoyance-filter* program.
+#           You must also set `JA_UBE_ANNOYANCE_SPAM_DB' to fast
+#           dictionary database location.
+#       o   `JA_UBE_BSFILTER_PRG', path to *bsfilter* program.
+#
+#       Optional variables to set:
+#
+#       o    `JA_UBE_BOGOFILTER_OPT'. Default is "-p" passthrough.
+#            Option "-e" will report exit code to procmail.
+#       o    `JA_UBE_SPAMASSASSIN_OPT'. Default is "".
+#       o    `JA_UBE_SPAMASSASSIN_MAX_SIZE'. Default is 256000 (256k).
+#            Spamassassin is a Perl program, which is slow at startup,
+#            so checking e.g. long attachements consumes lot of resources.
+#            Keep this value relatively small.
+#
+#   Important notes
+#
+#       All headers are canonicalized to *X-Spam-<PROGRAM>-* so e.g.
+#       in bogofilter's case, the default *X-Bogocity* header is
+#       changed to value *X-Spam-Bogofilter-Status* and so on.
+#       Summaries like below can then be generated:
+#
+#           $ egrep -i '(Subject|From|^X-Spam.*Status)' *.mbox
+#
+#   Return values
+#
+#       o   `ERROR' variable's first word is set to program that classified
+#           the spam: *bogofilter*, *bmf* (Bayesian Mail Filter),
+#           *spamassassin* etc. It is followed by semicolon ";" and
+#           detailed return status from the program.
+#       o   `ERROR_INFO' is set only in bogofilter's case if it thinks
+#           the message is neither spam nor ham ("Unsure").
+#
+#   Usage example
+#
+#           PMSRC                 = $HOME/procmail # procmail recipe dir
+#
+#           # ... other checks, mailing lists, work mail etc.
+#
+#           #   bogofilter and Bayesian Mail Filter available and trained. Use them.
+#
+#           JA_UBE_BOGOFILTER_PRG = "/bin/nice -n 5 /bin/bogofilter"
+#           JA_UBE_BMF_PRG        = "/bin/nice -n 5 /bin/bmf"
+#
+#           #   Call the "umbrella" module, which will take care of
+#           #   all the details.
+#
+#           INCLUDERC             = $PMSRC/pm-jaube-prg-runall.rc
+#
+#           #   ERROR is set if message was spam. The "()\/" logs reason.
+#
+#           :0 :
+#           * ERROR ?? ^()\/.+
+#           junk.mbox
+#
+#   File layout
+#
+#       The layout of this file is managed by Emacs packages tinyprocmail.el
+#       and tinytab.el for the 4 tab text placement.
+#       See project http://freshmeat.net/projects/emacs-tiny-tools/
+#
+#   Change Log
+#
+#       None
+
+dummy = "
+========================================================================
+pm-jaube-prg-runall.rc: init:"
+
+# Kill variables
+
+ERROR
+ERROR_INFO
+
+dummy = "pm-jaube-prg-runall: Run Bogofilter"
+
+:0
+* ERROR                 ?? ^^^^
+* JA_UBE_BOGOFILTER_PRG ?? [a-z]
+{
+    INCLUDERC = $RC_UBE_BOGOFILTER
+
+    :0
+    * ERROR ?? ^()\/spam.*
+    {
+        ERROR = "bogofilter; $MATCH"
+    }
+
+    :0 E
+    {
+        ERROR # Kill variable
+    }
+}
+
+dummy = "pm-jaube-prg-runall: Run Spamprobe"
+
+:0
+* ERROR                 ?? ^^^^
+* JA_UBE_SPAMPROBE_PRG  ?? [a-z]
+{
+    INCLUDERC = $RC_UBE_SPAMPROBE
+
+    :0
+    * ERROR ?? ^()\/spam.*
+    {
+        ERROR = "spamprobe; $MATCH"
+    }
+
+    :0 E
+    {
+        ERROR
+    }
+}
+
+dummy = "pm-jaube-prg-runall: Run Annoyance filter"
+
+:0
+* ERROR                  ?? ^^^^
+* JA_UBE_ANNOYANCE_PRG  ?? [a-z]
+{
+    INCLUDERC = $RC_UBE_ANNOYANCE
+
+    :0
+    * ERROR ?? yes
+    {
+        ERROR = "annoyance-filter; $MATCH"
+    }
+
+    :0 E
+    {
+        ERROR
+    }
+}
+
+dummy = "pm-jaube-prg-runall: Run Bayesian Mail Filter"
+
+:0
+* ERROR                 ?? ^^^^
+* JA_UBE_BMF_PRG        ?? [a-z]
+{
+    INCLUDERC = $RC_UBE_BMF
+
+    :0
+    * ERROR ?? ^()\/yes.*
+    {
+        ERROR = "bmf; $MATCH"
+    }
+
+    :0 E
+    {
+        ERROR
+    }
+}
+
+dummy = "pm-jaube-prg-runall: Run Spamassassin"
+
+:0
+* ERROR                    ?? ^^^^
+* JA_UBE_SPAMASSASSIN_PRG  ?? [a-z]
+{
+    INCLUDERC = $RC_UBE_SPAMASSASSIN
+
+    :0
+    * ERROR ?? yes
+    {
+        ERROR = "spamassassin; $MATCH"
+    }
+
+    :0 E
+    {
+        ERROR
+    }
+}
+
+dummy = "pm-jaube-prg-runall: Run Bsfilter"
+
+:0
+* ERROR                  ?? ^^^^
+* JA_UBE_BSFILTER_PRG  ?? [a-z]
+{
+    INCLUDERC = $RC_UBE_BSFILTER
+
+    :0
+    * ERROR ?? yes
+    {
+        ERROR = "bsfilter; $MATCH"
+    }
+
+    :0 E
+    {
+        ERROR
+    }
+}
+
+dummy = "pm-jaube-prg-runall: Run Spamoracle"
+
+:0
+* ERROR                  ?? ^^^^
+* JA_UBE_SPAMORACLE_PRG  ?? [a-z]
+{
+    #   We must run spamoracle last, because it lacks the ability
+    #   to read message from stdin. Due to this many shell calls
+    #   are needed. See the RC file for more information.
+
+    INCLUDERC = $RC_UBE_SPAMORACLE
+
+    :0
+    * ERROR ?? yes
+    {
+        ERROR = "spamoracle; $MATCH"
+    }
+
+    :0 E
+    {
+        ERROR
+    }
+}
+
+dummy = "pm-jaube-prg-runall.rc: end: $ERROR"
+
+# pm-jaube-prg-bmf.rc ends here

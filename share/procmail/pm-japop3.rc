@@ -1,0 +1,415 @@
+# pm-japop3.rc -- Remotedly download messages by mail command request
+#
+#   File id
+#
+#       Copyright (C) 1997-2010 Jari Aalto
+#
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License as
+#       published by the Free Software Foundation; either version 2 of the
+#       License, or (at your option) any later version
+#
+#       This program is distributed in the hope that it will be useful, but
+#       WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#       General Public License for more details at
+#       <http://www.gnu.org/copyleft/gpl.html>.
+#
+#   Description
+#
+#       Ahem, that `pop3' is just to draw your attention. This module has
+#       nothing to do with pop3. The idea may resemble it though. This
+#       module listens pop3 requests, and when it gets one, it sends
+#       the whole mailbox content as separate forwarded messages to the
+#       account from where you sent the request.
+#
+#       This is kinda "empty my mailbox in account X and send the messages
+#       to account Y"
+#
+#       You might have permanent forwarding on in account X, but if that
+#       is your secondary account, you can ask what messages has been arrived
+#       there with this recipe.
+#
+#       After you have configured your magic pop3 command, which is your
+#       password, simply send a message to account X, and this module
+#       initiates emptying the mailbox. Here is an example:
+#
+#           Subject: pOp3-send [mailbox] [kill]
+#
+#       o   `mailbox', is optional folder name which you want to process.
+#           it is $DEFAULT if not given in subject. Use *absolute* path if
+#           you specify one.
+#       o   if word `kill' is found, the mailbox will be emptied after
+#           forwarding. If the word is not found, messages are preserved.
+#
+#   Required settings
+#
+#       PMSRC must point to source directory of procmail code. This subroutine
+#       will include
+#
+#       o   pm-javar.rc
+#       o   pm-japop3.rc            # Phew! We include ourself, we are recursive.
+#
+#   Call arguments (variables to set before calling)
+#
+#       o   `JA_POP3_SUBJECT_CMD' is your personal access command string.
+#           If this is the first word in the subject line, forwarding starts.
+#           This string is case sensitive.
+#       o   `JA_POP3_TMP' is the file where mailbox is moved before starting
+#           to forward the messages. Do not put to point to your $HOME,
+#           becaus that may exceed the quota.
+#	o   `JA_POP3_TO_MUST_MATCH' must contain regexp that match the email
+#	    addresses where the pop3 messages are allowed to send. BE SURE
+#	    TO DEFINE this. If you have account X,Y,Z where you want to receive
+#	    pop3 messages, set this regexp to match those site's email addresses.
+#	o   `JA_POP3_LOGFILE' is the log where you can see how the forked
+#	    procmail processes send each pop3 mail. You may want to set this
+#	    to different location than your default `$LOGFILE'.
+#
+#   Return value
+#
+#       `STATUS' will contain mailbox name if valid pop3 request was received.
+#       You may wish to save the pop3 requests to separate folder. See example
+#       below.
+#
+#   Example usage
+#
+#       You install this same setup for each site where you have account. This
+#       is the account X, from where you want to empty the mailboxes.
+#
+#           RC_POP3             = $PMSRC/pm-japop3.rc
+#
+#           .. somewhere in your .procmailrc ..
+#
+#	    JA_POP3_SUBJECT_CMD = myPoPcmd
+#	    INCLUDERC           = $RC_POP3
+#
+#           #   Save all pop3 requests to folder
+#
+#           :0 :
+#           * STATUS ?? [a-z]
+#           mail.pop3-req.mbox
+#
+#
+#   In account Y, from where you send the pop3 requests. Following code stores
+#   the received messages to separate folder
+#
+#	    #   The MATCH will contain the host name from where the messages
+#	    #   were moved
+#
+#	    :0 :
+#	    *$ X-Loop-Fwd:.*\.rc +\/$NSPC+
+#           mail.fwd.$MATCH.mbox
+#
+#   Change Log (none)
+
+# ............................................................ &init ...
+
+id    = "pm-japop3.rc"
+dummy = "
+========================================================================
+$id: init:
+"
+
+dummy = "$id: FORKED PROCESS: $JA_POP3_CHILD $JA_POP3_FWD_TO
+DEFAULT [$DEFAULT] $NL$NL"
+
+:0
+* !  WSPC ?? ( )
+{
+    INCLUDERC = $PMSRC/pm-javar.rc
+}
+
+# .......................................................... &public ...
+
+JA_POP3_TMP		= ${JA_POP3_TMP:-"$TMPDIR/$LOGNAME.pop3"}
+JA_POP3_SUBJECT_CMD	= ${JA_POP3_SUBJECT_CMD:-"XyZ-yourPop3-cmd"}
+JA_POP3_TO_MUST_MATCH	= ${JA_POP3_TO_MUST_MATCH:-"Allowed-address-regexp"}
+JA_POP3_LOGFILE		= ${JA_POP3_LOGFILE:-"$LOGFILE"}
+
+
+#   Do not set this to "sendmail -oi -t"
+
+JA_POP3_SENDMAIL	= ${JA_POP3_SENDMAIL:-"sendmail"} # /usr/lib/
+
+#   Script to call to handle each piece of forwarded mail.
+
+JA_POP3_RC		= ${JA_POP3_RC:-"$PMSRC/pm-japop3.rc"}  # don't touch
+
+# ......................................................... &private ...
+
+#  Don't change or define these variables anywhere! These are passed
+#  to child process from this module when forking new procmail copy.
+
+JA_POP3_CHILD		= ${JA_POP3_CHILD:-"not-child"}
+JA_POP3_FWD_TO		= ${JA_POP3_FWD_TO:-""}
+
+# ..................................................... &output-vars ...
+
+STATUS
+
+# .............................................. start-pop3-transfer ...
+
+:0 D
+*   JA_POP3_CHILD                 ?? not-child
+*$ ^Subject: $JA_POP3_SUBJECT_CMD\/.*
+{
+    subject = $MATCH
+
+
+    # Set default values
+
+    error   = ""
+    kill    = ""
+    mbox    = ""
+
+    mailbox = $DEFAULT
+    keyword = "forwarded to"
+    address = `$FORMAIL -rt -x To:`
+
+    #   - mark each message forwardable by adding X-Loop header.
+
+    xloop   = "X-Loop: $keyword $address from $HOST"
+
+    # ................................................... &kill-flag ...
+
+    :0
+    * ^Subject:.* kill\>
+    {
+	kill = "yes"
+    }
+
+    # ............................................... &other-mailbox ...
+
+    dummy = "$id: Check /mailbox/ keyword in subject line"
+
+    :0
+    *$  subject ?? ()\/$NSPC+
+    {
+	mailbox = $MATCH
+    }
+
+    # ................................................. check-access ...
+
+    :0
+    *$ ! address ?? $JA_POP3_TO_MUST_MATCH
+    {
+	error = "Invalid destination [$address]"
+    }
+
+
+    # ............................................... &check-mailbox ...
+
+    :0
+    *	  error		?? ^^^^
+    *	  mailbox	??  [a-z]
+    *$ ?  $IS_READABLE $mailbox
+    {
+	mbox  = $mailbox
+    }
+
+	:0 e
+	{
+	    error = "mailbox is not readable"
+	}
+
+    # ............................................... &check-formail ...
+
+    :0 fh w			#  Just check that formail is working ok
+    *  error ?? ^^^^
+    | $FORMAIL -I"X-Dummy-Test: xyz"
+
+	:0 e
+	{
+	    error = "formail [$FORMAIL] not working right"
+	}
+
+    # ................................................. &check-child ...
+
+    :0
+    *	   error ?? ^^^^
+    *$ ! ? $IS_EXIST $JA_POP3_RC
+    {
+	error = "child module does not exist"
+    }
+
+    # ............................................. &prepare-mailbox ...
+
+    japop3LOCKFILE  = $LOCKFILE
+    lockFile	    = $JA_POP3_TMP$LOCKEXT
+
+
+    # ~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~ &protect .~.
+    # We must not allow another request to arirve during this period
+    # for this same mailbox. Any new try must be ignored
+
+    :0
+    *$ ! $IS_EXIST $lockFile
+    {
+
+	#   Activate regional lockfile. no other file locks are needed
+	#   from now on.
+
+	LOCKFILE	    = $lockFile
+
+
+	:0 hwic				# copy to temporary place
+	*  error ?? ^^^^
+	*  mbox  ?? [a-z]
+	|  $CP $mbox $JA_POP3_TMP
+
+	    :0 e
+	    {
+		error = "cp [$CP] failure"
+	    }
+
+
+	:0 hwic				# protect mailbox
+	*  error ?? ^^^^
+	|  $CHMOD 600 $JA_POP3_TMP
+
+	    :0 e
+	    {
+		error = "chmod [$CHMOD] protection failure"
+	    }
+
+	# ....................................................... &do-it ...
+
+	dummy = "$id: Check if pop3 should be initiated."
+
+	:0
+	*    error  ?? ^^^^
+	*    CP	    ?? [a-z]
+	*    CAT    ?? [a-z]
+	*$ ! ^$xloop
+	{
+	    STATUS  = $mbox
+
+	    :0
+	    *$ ? $IS_READABLE $mbox
+	    {
+
+		dummy   = "$id:	child: $TIMEOUT $HOST $JA_POP3_RC"
+		dummy   = "$id:	SH       [$SHELL]"
+		dummy   = "$id:	SENDMAIL [$SENDMAIL]"
+		dummy   = "$id:	FORMAIL  [$FORMAIL]"
+		dummy   = "$id:	PROCMAIL [$PROCMAIL]"
+		dummy   = "$id:	HOME     [$HOME]"
+		dummy   = "$id:	PATH     [$PATH]"
+
+
+		#   This may take some time, give enough rope
+		#   16 minutes maximum to process the mailbox
+
+		japop3TIMEOUT	= $TIMEOUT
+		TIMEOUT		= 960
+
+		#   - we're calling ourself, so we must pass the envinronment
+		#     variables too so that called JA_POP3_RC script inherits
+		#     the environment.
+		#
+		#   - DEFAULT is set to /dev/null so that any failure in
+		#     child won't put messages back to our mailbox.
+		#
+		#   - FORMAIL options are: (-n 5), maximum 5 parallel processes
+		#     (-d), ignore Content-Length header, (-s), split
+		#     mailbox -- must be the last option.
+		#
+
+		:0 a hwic
+		| $CAT $JA_POP3_TMP |                                       \
+		    $FORMAIL                                                \
+		      -A"$xloop"                                            \
+		      -n5                                                   \
+		      -d                                                    \
+		      -s                                                    \
+		    $PROCMAIL                                               \
+		      VERBOSE="on"                                          \
+		      LOGABSTRACT="all"                                     \
+		      LOGFILE="$JA_POP3_LOGFILE"                            \
+		      DEFAULT="/dev/null"                                   \
+		      SHELL="$SHELL"                                        \
+		      HOME="$HOME"                                          \
+		      PATH="$PATH"                                          \
+		      PMSRC="$PMSRC"                                        \
+		      FORMAIL="$FORMAIL"                                    \
+		      SENDMAIL="$SENDMAIL"                                  \
+		      JA_POP3_CHILD="child"                                 \
+		      JA_POP3_FWD_TO="$address"                             \
+		      JA_POP3_TO_MUST_MATCH="$JA_POP3_TO_MUST_MATCH"        \
+		      $JA_POP3_RC
+
+		TIMEOUT	    = $japop3TIMEOUT
+
+		:0 e	    # failed; cancel killing the mailbox
+		{
+		    kill = ""
+
+		    :0 hwc
+		    | ( $FORMAIL                                            \
+			    -rt                                             \
+			     -A "X-Loop: Error"                             \
+			| echo "Sorry,  $FORMAIL -s failed"                 \
+		      ) | $SENDMAIL
+
+		}
+
+
+		:0 hwic:                # Truncate the file
+		*  kill ?? yes
+		| $CAT /dev/null > $mbox
+
+	    }
+	    :0 E  # ***************** else invalid request
+	    {
+		:0 hwc
+		| ( $FORMAIL                                                \
+			-rt                                                 \
+			-A "X-Loop: Error"                                  \
+		    | echo "[$mbox] does not exist"                         \
+		  ) | $SENDMAIL
+
+	    }
+	}
+
+	dummy = "$id: POP3 request handled."
+
+	LOCKFILE    = $japop3LOCKFILE
+    }
+    # ~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~.~ &protect .~.
+
+
+}
+
+# ........................................................ the-child ...
+
+# The individual messages are mailed back to this script, this
+# is the "receiver" and handles forwarding, unless message is
+# already forwarded.
+
+
+dummy = "$id: Check if we're forwarding (pop3) messages: $JA_POP3_CHILD"
+dummy = "$id: $JA_POP3_FWD_TO ?? $JA_POP3_TO_MUST_MATCH"
+
+:0
+*    JA_POP3_CHILD  ?? ^^child^^
+*$   JA_POP3_FWD_TO ?? $JA_POP3_TO_MUST_MATCH
+{
+
+    :0 fhw                              # mark this message "forwarded"
+    | $FORMAIL -A "X-Loop-Fwd: pm-japop3.rc $HOST"
+
+    #   You can also only test the recipe if you set
+    #
+    #   SENDMAIL = "tee -a $HOME/tmp/sent.mail"
+
+    :0
+    ! $JA_POP3_FWD_TO
+
+}
+
+
+
+dummy = "$id: end: STATUS = $STATUS"
+
+# End of pm-japop3.rc
