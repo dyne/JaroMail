@@ -1,0 +1,80 @@
+#! @SH@
+#
+# -*-sh-mode-*-
+#
+#     Copyright (C) 1998  Thomas Roessler <roessler@guug.de>
+#     Copyright (C) 1999-2006  Roland Rosenfeld <roland@spinnaker.de>
+# 
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+# $Id: lbdb_lib.sh.in,v 1.7 2006-08-13 08:53:21 roland Exp $
+
+
+#
+# library routines
+#
+
+lbdb_hn_sendmail()
+{
+	sendmail_cf="NONE"
+	for p in /etc /etc/mail /etc/sendmail ; do
+		if test -r $p/sendmail.cf ; then
+			sendmail_cf=$p/sendmail.cf
+		 	break;
+		fi
+	done
+	
+	if test "x$sendmail_cf" != "xNONE" ; then
+		hn="`sed -n -e 's/^DM\(.*\)$/\1/p' $sendmail_cf`"
+		if test "x$hn" = x ; then
+			hn="`sed -n -e 's/^Dj\(.*\)$/\1/p' $sendmail_cf`"
+		fi
+	fi
+	if test "x$hn" = x ; then
+		echo "NONE"
+	else
+		echo "$hn"
+	fi
+}
+
+
+lbdb_hostname()
+{
+	if test "x$MAIL_DOMAIN_NAME" != "x" ; then
+		hn=$MAIL_DOMAIN_NAME
+	elif test -f /etc/mailname; then
+		hn=`cat /etc/mailname`
+	else
+		hn=""
+		if test -r /etc/resolv.conf ; then
+			hn="`sed -n -e 's/^[ 	]*domain[ 	]\{1,\}\([^ ]*\)/\1/p' /etc/resolv.conf`"
+			if test "x$hn" = "x" ; then
+				hn="`sed -n -e 's/^[ 	]*search[ 	]\{1,\}\([^ ]*\)/\1/p' /etc/resolv.conf`"
+			fi
+		fi
+		if test "x$hn" = "x" ; then
+			hn=`lbdb_hn_sendmail`
+			if test "x$hn" = "xNONE" ; then
+				for i in /etc/HOSTNAME /etc/hostname ; do
+					if test -f $i ; then
+						hn="`cat $i`"
+						break;
+					fi
+				done
+			fi
+		fi
+	fi
+	echo "$hn"
+}

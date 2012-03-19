@@ -1,0 +1,122 @@
+.\" -*- nroff -*-
+.\" Copyright (c) 1998-2005  Roland Rosenfeld <roland@spinnaker.de>
+.\"               
+.\" This program is free software; you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation; either version 2 of the License, or
+.\" (at your option) any later version.
+.\" 
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\" 
+.\" You should have received a copy of the GNU General Public License
+.\" along with this program; if not, write to the Free Software Foundation,
+.\" Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+.\"
+.TH LBDB-FETCHADDR 1 "October 2005" "Unix" "User Manuals"
+.SH NAME
+lbdb-fetchaddr \- grab addresses from mails add append them to lbdb database
+.SH SYNOPSIS
+.B lbdb-fetchaddr
+.RB [ -d 
+.IR dateformat ]
+.RB [ -x
+.IR headerfieldlist ]
+.RB [ -c
+.IR charset ]
+.RB [ -a ]
+.br
+.B lbdb-fetchaddr
+.RB [ -v | -h ]
+.SH DESCRIPTION
+.B lbdb-fetchaddr
+is a shell script which reads a mail on stdin. It extracts the
+contents of some header fields (default:
+.RB ` From: ', 
+.RB ` To: ', 
+.RB ` Cc: ', 
+.RB ` Resent-From: ', 
+and
+.RB ` Resent-To: ')
+from the mail header (only addresses with a real name) and appends
+them to 
+.IR $HOME/.lbdb/m_inmail.list .
+For performance issues 
+.B lbdb-fetchaddr
+appends new addresses to this file without removing duplicates. To get
+rid of duplicates, the program
+.B lbdb-munge
+exists, which is run by
+.B m_inmail
+if needed and removes duplicates.
+.PP
+To use this program, put the following lines into your 
+.I $HOME/.procmailrc:
+.nf  
+     :0hc
+     | lbdb-fetchaddr
+.fi 
+.PP
+.B lbdb-fetchaddr
+writes the actual date to the third column of the database by using
+.BR strftime (3).
+It uses "%Y-%m-%d %H:%M" as the default date format (e.g. "1999-04-29
+14:33"). You can change this by using the 
+.B -d
+option to select a different date format string as parameter of
+lbdb-fetchaddr command like
+.nf  
+     :0hc
+     | lbdb-fetchaddr \-d "%y-%m-%d"
+.fi
+which results in e.g. "99-04-29".
+.SH OPTIONS
+.TP
+.B -v
+Print version number of lbdb-fetchaddr.
+.TP
+.B -h
+Print short help of lbdb-fetchaddr.
+.TP
+.BI -d " dateformat"
+Use the given date format using 
+.BR strftime (3)
+syntax.
+.TP
+.BI -x " headerfields"
+A colon separated list of header fields, which should be searched for
+mail addresses.  If this option isn't given, we fall back to
+.RB ` from:to:cc:resent-from:resent-to '.
+.TP
+.BI -c " charset"
+The charset which will be used to write the database. This should be
+the charset which the application expects (normally the one from your
+current locale).  If this option isn't given, we fall back to
+.RB ` iso-8859-15 '.
+.TP
+.B -a
+Also grab addresses without a real name.  Use the local part of the
+mail address as real name.
+.SH FILES
+.I $HOME/.lbdb/m_inmail.list
+.br
+.I @libdir@/fetchaddr
+.br
+.I @libdir@/m_inmail
+.SH "SEE ALSO"
+.BR lbdbq (1),
+.BR @dotlock@ (1),
+.BR procmail (1),
+.BR procmailrc (5),
+.BR strftime (3).
+.SH CREDITS
+Most of the really interesting code of this program (namely, the RFC
+822 address parser used by lbdb-fetchaddr) was stolen from Michael
+Elkins' mutt mail user agent. Additional credits go to Brandon Long
+for putting the query functionality into mutt.
+.SH AUTHOR
+The lbdb package was written by Thomas Roessler <roessler@guug.de> and
+is now maintained and extended by Roland Rosenfeld
+<roland@spinnaker.de>.

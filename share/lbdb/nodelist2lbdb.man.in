@@ -1,0 +1,44 @@
+.\" -*-nroff-*-
+.\" Copyright (c) 1999-2005  Roland Rosenfeld <roland@debian.org>
+.\"               
+.\" This manual page is free software; you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation; either version 2 of the License, or
+.\" (at your option) any later version.
+.\" 
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\" 
+.\" You should have received a copy of the GNU General Public License
+.\" along with this program; if not, write to the Free Software Foundation,
+.\" Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+.\"
+.TH NODELIST2LBDB 1 "October 2005" Unix "User Manuals"
+.SH NAME
+nodelist2lbdb \- convert Fido nodelist and pointlist to lbdb format
+.SH SYNOPSIS
+.B nodelist2lbdb
+.BI nodelist. XXX
+.BI [point24. XXX ]
+.SH DESCRIPTION
+This little script reads in a Fido named 
+.BI nodelist. XXX
+and optionally a Fido point list named 
+.BI points24. YYY
+and generates a list with the lbdb format:
+.nf
+    <mailaddress> TAB <realname> TAB <comment>
+.fi
+This file is written to
+.I $HOME/.lbdb/nodelist
+.SH FILES
+.I $HOME/.lbdb/nodelist
+.br
+.I @libdir@/m_fido
+.SH "SEE ALSO"
+.BR lbdbq (1)
+.SH AUTHORS
+.B nodelist2lbdb
+is written by Roland Rosenfeld <roland@spinnaker.de>.

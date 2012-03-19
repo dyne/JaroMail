@@ -1,0 +1,132 @@
+#! @SH@
+#
+# -*-sh-*-
+#
+#     Copyright (C) 2000  Gabor Fleischer <flocsy@mtesz.hu>
+# 
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+# $Id: m_pine.sh.in,v 1.10 2005-10-29 14:48:10 roland Exp $
+
+# m_pine for lbdb v0.9 by Gabor Fleischer <flocsy@mtesz.hu>
+#
+# Two variabled can be set in lbdbrc: PINERC, PINE_ADDRESSBOOKS
+# Here comes the explanation what are they for:
+# 1. First I look for $PINERC. If not set, then I use my defaults:
+#    PINERC="/etc/pine.conf /etc/pine.conf.fixed .pinerc"
+#    If you don't want me to look in the default PINERCs, then set PINERC=no
+# 2. I make a list of all the addressbooks in the PINERCs.
+# 3. Then the $PINE_ADDRESSBOOKS are added to this list.
+# 4. And if this list is still empty then add the default addressbooks:
+#    PINE_ADDRESSBOOKS="/etc/addressbook .addressbook"
+# 5. Make the query in the listed addressbooks
+#
+# Changelog:
+# 0.9: Convert Quoted-Printable in the real names into plain 8bit.
+# 0.8: When the 'real name' is missing, put " " there, so mutt works fine.
+# 0.7: Fixed bugs:
+#	* Search was case sensitive. Now it's insensitive.
+#	* Lines with missing fields (i.e."nick<tab><tab>addr") were broken.
+#	* Default didn't work if address-books in pinercs were "".
+# 0.6: The .addressbook format's multi-line addresses are supported.
+# 0.5: Initial release.
+#
+
+AWK=@AWK@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+qpto8bit=@libdir@/qpto8bit
+
+m_pine_query()
+{
+    addressbooks=
+    if [ x$PINERC != xno ] ; then
+	for pinerc in ${PINERC:-/etc/pine.conf /etc/pine.conf.fixed .pinerc}
+	do
+	    if [ $pinerc = ${pinerc#/} ] ; then
+	        pinerc=$HOME/$pinerc
+	    fi
+	    if [ -f $pinerc ] ; then
+		addressbook=`\
+		    $AWK 'BEGIN {SPACE="";} \
+		    /^(global-)?address-book[ 	]*=/ { \
+			sub("^(global-)?address-book[ 	]*=",""); \
+			while (/[ 	]*[^ 	]+[ 	]+([^ ,	]+)[ 	]*,/) { \
+			    sub("[ 	]*[^ 	]+[ 	]+",""); \
+			    sub("[ ,	].*",""); \
+			    printf("%s%s",SPACE,$0); \
+			    SPACE=" "; \
+			    getline; \
+			} \
+			sub("[ 	]*[^ 	]+[ 	]+",""); \
+			sub("[ 	].*",""); \
+			printf("%s%s",SPACE,$0); \
+			SPACE=" "; \
+		    }' < $pinerc`
+	    fi
+	    addressbooks="${addressbook# } ${addressbooks# }"
+        done
+    fi
+    addressbooks="${PINE_ADDRESSBOOKS} ${addressbooks# }"
+    addressbooks=${addressbooks# }
+    for file in ${addressbooks:=/etc/addressbook .addressbook} ; do
+	if [ $file = ${file#/} ] ; then
+	    file=$HOME/$file
+	fi
+	if [ -f $file ]
+	then
+	    cat $file | $qpto8bit | $AWK -v find="$@" '\
+	    function out() { \
+		if (match(tolower(line),low_find)) {
+		    #order: nick full addr fcc comm \
+		    R[1] = "^[^	]*"; \
+		    R[2] = "^[^	]*	[^	]*"; \
+		    R[3] = "^[^	]*	[^	]*	\\(?[^	]*\\)?"; \
+		    R[4] = "^[^	]*	[^	]*	[^	]*	[^	]*"; \
+		    R[5] = "^[^	]*	[^	]*	[^	]*	[^	]*	[^	]*"; \
+		    beg = 1; \
+		    for (i=1;i<=5;i++) { \
+			match(line,R[i]); \
+			A[i] = substr(line,beg,RLENGTH-beg+1); \
+			beg = RLENGTH+2; \
+		    } \
+		    if (A[2] == "") {A[2] = " "} \
+		    if (match(A[3],/\(.*\)/)) {A[3] = substr(A[3],2,length(A[3])-2)} \
+		    if (A[5] != "") {A[5] = " [" A[5] "]"} \
+		    printf "%s	%s	%s%s (pine)\n",A[3],A[2],A[1],A[5]; \
+		} \
+	    } \
+	    BEGIN { \
+		FS="	"; \
+		low_find = tolower(find); \
+		getline; \
+		while (/^#DELETED/) {getline} ; \
+		line = $0 \
+	    } \
+	    $0 !~ /^#DELETED/ { \
+		if (/^   /) { \
+		    gsub("   ",""); \
+		    line = line $0; \
+		} else { \
+		    out(); \
+		    line = $0; \
+		} \
+	    } \
+	    END { \
+		out() \
+	    }'
+	fi
+    done
+}

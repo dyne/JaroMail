@@ -1,0 +1,44 @@
+#! @SH@
+#
+#     Copyright (C) 2005  Brendan Cully <brendan@kublai.com>
+#     Copyright (C) 2011  Jamey Sharp <jamey@minilop.net>
+# 
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+# $Id: m_vcf.sh.in,v 1.5 2011-06-25 14:22:09 roland Exp $
+
+m_vcf_query()
+{
+  VCQ=@libdir@/vcquery
+
+  QUERY="$1"
+
+  for file in $VCF_FILES
+  do
+    if test -r $file.cache -a $file.cache -nt $file
+    then
+      cmd="cat $file.cache"
+    else
+      if $VCQ $file > $file.cache
+      then
+        cmd="cat $file.cache"
+      else
+        cmd="$VCQ $file"
+      fi
+    fi
+
+    $cmd | grep -ie "$QUERY" | sed 's/(null)$/ /; s/	$/	(VCF)/'
+  done
+}

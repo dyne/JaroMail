@@ -1,0 +1,68 @@
+#! @SH@
+#
+# -*-sh-mode-*-
+#
+#     Copyright (c) 2001  Utz-Uwe Haus <haus@uuhaus.de> 2001
+#     Copyright (c) 2003  Aaron Kaplan <kaplan@cs.rochester.edu> 
+#     Copyright (c) 2005  Roland Rosenfeld <roland@spinnaker.de>
+#
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+# $Id: m_bbdb.sh.in,v 1.9 2009-06-11 10:56:22 roland Exp $
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+
+m_bbdb_query()
+{
+    if [ -f ${LBDB_BBDB_SCRIPT:=$libdir/lbdb_bbdb_query.el} ]
+    then
+	form="(progn (require (quote lbdb-bbdb-query) 
+		              \"$LBDB_BBDB_SCRIPT\") 
+                     (lbdb-bbdb-query \"$@\"))"
+	if [ -z "$GNUCLIENT" ]
+	then
+	    if type gnuclient >/dev/null 2>&1; then
+		GNUCLIENT=gnuclient
+	    fi
+        fi
+	if [ "$GNUCLIENT" = "no" ]; then
+	    GNUCLIENT=
+	fi
+
+
+	success=0
+	if [ -n "$GNUCLIENT" ] ; then
+	   if $GNUCLIENT -batch -eval "$form" 2> /dev/null; then
+	       success=1
+	   fi
+        fi
+	if [ $success = 0 ]; then
+	    if [ -z "$EMACS" ]
+	    then
+		if type emacs >/dev/null 2>&1; then
+		    EMACS=emacs
+		elif type xemacs >/dev/null 2>&1; then
+		    EMACS=xemacs
+		fi
+	    fi
+	    if [ -n "$EMACS" ] ; then
+		$EMACS -nw --no-site-file --no-init-file -batch \
+		    --eval "$form"  2>/dev/null
+	    fi
+	fi
+    fi |  grep -va '^$' || :
+}

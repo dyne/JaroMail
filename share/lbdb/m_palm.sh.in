@@ -1,0 +1,34 @@
+#! @SH@
+#
+# -*-sh-*-
+#
+#     m_palm - Palm address database module for lbdb
+#     Copyright (C) 2000 Dave Pearson <davep@davep.org>
+#     Copyright (C) 2005 Roland Rosenfeld <roland@spinnaker.de>
+# 
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+# $Id: m_palm.sh.in,v 1.8 2009-06-11 10:56:22 roland Exp $
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+
+m_palm_query ()
+{
+    palmdatabase=${PALM_ADDRESS_DATABASE:-$HOME/.jpilot/AddressDB.pdb}
+    test -f $palmdatabase || return
+    $libdir/palm_lsaddr $palmdatabase | grep -ia "$@" || :
+}

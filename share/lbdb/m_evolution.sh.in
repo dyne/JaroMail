@@ -1,0 +1,83 @@
+#! @SH@
+#
+# -*-sh-*-
+#
+#     m_evolution - Evolution Address book module for lbdb
+#     Copyright (C) 2004 Guido Guenther <agx@sigxcpu.org>
+#     Copyright (C) 2004-2011 Roland Rosenfeld <roland@spinnaker.de>
+#     Copyright (C) 2008 brian m. carlson <sandals@crustytoothpaste.ath.cx>
+#     Copyright (C) 2009 Jan Larres <jan@majutsushi.net>
+#
+#     loosely based on m_gnomecard
+#
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+
+m_evolution_query ()
+{
+    AWK=@AWK@
+    EVOLUTION_ADDRESSBOOK_EXPORT=@EVOLUTION_ADDRESSBOOK_EXPORT@
+
+    if [ "$EVOLUTION_ADDRESSBOOK_EXPORT" = "auto" ]; then
+	for e in /usr/lib/evolution/*/evolution-addressbook-export
+	do
+	    if [ -x $e ]; then
+		EVOLUTION_ADDRESSBOOK_EXPORT=$e
+	    fi
+	done
+    fi
+
+    if [ -x $EVOLUTION_ADDRESSBOOK_EXPORT ]; then
+        $EVOLUTION_ADDRESSBOOK_EXPORT 2>/dev/null \
+        | $AWK 'BEGIN {
+                    FS = ":"
+                    RS = "\r\n"
+                    name = ""
+                    emails = ""
+                    last_email = 0
+                }
+                /^END:VCARD/ {
+                    if ((name != "" || fileas != "") && emails != "") {
+                        sub("^#", "", emails)
+                        split(emails, emails_arr, "#")
+                        for (email in emails_arr)
+                            printf("%s\t%s\tEV:%s\n",emails_arr[email],name,fileas)
+                    }
+                    name = ""; fileas = ""; emails = ""
+                }
+                /^FN:/ {
+                    name = $2
+                }
+                /^X-EVOLUTION-FILE-AS:/ {
+                    fileas = $2
+                    gsub("\\\\", "", fileas)
+                }
+                # DEST-EMAIL is needed to skip addresses in list contacts
+                /^EMAIL[;:]/ && ! /X-EVOLUTION-DEST-EMAIL/ {
+                    emails = emails "#" $2
+                    last_email = 1
+                }
+                # only join email lines for performance reasons
+                /^ [^ ]/ && last_email == 1 {
+                    cont = $1
+                    sub("^ ", "", cont)
+                    emails = emails cont
+                }
+                ! /^EMAIL[;:]/ && ! /^ [^ ]/ {
+                    last_email = 0
+                }' \
+        | grep -ia "$@" || :
+    fi
+}

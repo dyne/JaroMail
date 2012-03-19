@@ -1,0 +1,42 @@
+#! @SH@
+#
+# -*-sh-*-
+#
+#     Copyright (C) 1998-2005  Roland Rosenfeld <roland@spinnaker.de>
+# 
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+# $Id: m_gpg.sh.in,v 1.26 2009-06-11 10:56:22 roland Exp $
+#
+
+m_gpg_query()
+{
+    GPG=@GPG@
+
+    if [ -x "$GPG" ]
+    then
+	$GPG --list-keys --with-colons "$@" 2>/dev/null \
+	| grep -a '^\(pub\|uid\):[^re]:\([^:]*:\)\{7,7\}[^<>:]* <[^<>@: ]*@[^<>@: ]*>[^<>@:]*:' \
+	| sed -e 's/^\([^:]*:\)\{9,9\}\([^<:]*\) <\([^>:]*\)>.*:.*$/\3	\2	(GnuPG)/' \
+	| sed -e 's/	\([^	]\{27,27\}\)[^	]*	/	\1...	/' \
+        | grep -ia "$@" || :
+
+#	$GPG --list-keys --no-greeting "$@" 2>/dev/null \
+#	| grep -a '^\(pub\|uid\)  .\{25,25\} [^<>]* <[^<>@ ]*@[^<>@ ]*>' \
+#	| sed -e 's/^.\{24,31\}\([^<]*\) <\([^>]*\)>.*$/\2	\1	(GnuPG)/' \
+#	| sed -e 's/	\([^	]\{27,27\}\)[^	]*	/	\1...	/' \
+#	| grep -ia "$@"
+    fi
+}

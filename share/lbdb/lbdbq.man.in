@@ -1,0 +1,378 @@
+.\" -*- nroff -*-
+.\" Copyright (c) 1998-2007  Roland Rosenfeld <roland@spinnaker.de>
+.\"               
+.\" This program is free software; you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation; either version 2 of the License, or
+.\" (at your option) any later version.
+.\" 
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\" 
+.\" You should have received a copy of the GNU General Public License
+.\" along with this program; if not, write to the Free Software Foundation,
+.\" Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+.\"
+.\" $Id: lbdbq.man.in,v 1.49 2010-05-18 17:51:02 roland Exp $
+.\"
+.TH LBDBQ 1 "September 2007" "Unix" "User Manuals"
+.SH NAME
+lbdbq \- query program for the little brother's database
+.SH SYNOPSIS
+.B lbdbq
+.I something
+.br
+.B lbdbq
+.RB [ -v | --version | -h | --help ]
+.SH DESCRIPTION
+.B lbdbq
+is the client program for the little brother's database. It will
+attempt to invoke various modules to gather information about persons
+matching
+.IR something .
+E.g., it may look at a list of addresses from which you have received
+mail, it may look at YP maps, or it may try to finger
+.IR something @ "<various hosts>" .
+.PP
+The behavior is configurable: Upon startup, 
+.B lbdbq
+will source the shell scripts:
+.RS
+.I @sysconfdir@/lbdb.rc
+.br
+.I $HOME/.lbdbrc
+.br
+.I $HOME/.lbdb/lbdbrc
+.br
+.I $HOME/.lbdb/rc
+.RE
+if they exist.
+.PP
+They can be used to set the following global variables:
+.TP
+.B MODULES_PATH
+a space separated list of directories, where 
+.B lbdbq
+should look for modules.
+.TP
+.B METHODS
+a space separated list of the modules to use.
+.TP
+.B SORT_OUTPUT
+If you set this to 
+.I false
+or 
+.IR no ,
+lbdbq won't sort the addresses but returns them in reverse order
+(which means that the most recent address in m_inmail database is
+first). If you set this to 
+.IR name ,
+lbdbq sorts the output by real name.  If you set this to 
+.IR comment ,
+it sort the output by the comment (for example the date in 
+.BR m_inmail ).
+.I reverse_comment
+realizes the same as 
+.IR comment ,
+but in reverse order, so the most recent timestamp of m_inmail may be
+on top. If you set SORT_OUTPUT to
+.IR address ,
+lbdbq sorts the output by addresses (that's the default).
+.TP
+.B KEEP_DUPES
+If you set this to
+.I true
+or
+.IR yes ,
+lbdbq won't remove duplicate addresses with different real name
+comment fields.
+.PP
+Note that there 
+.I are
+defaults, so you should most
+probably modify these variables using constructs like this:
+.nf
+       MODULES_PATH="$MODULES_PATH $HOME/lbdb_modules"
+.fi
+.PP
+Additionally, modules may have configuration variables of
+their own.
+.SH MODULES
+Currently, the following modules are supplied with lbdb:
+.TP
+.B m_finger
+This module will use finger to find out something more about a person.
+The list of hosts do be asked is configurable; use the 
+.B M_FINGER_HOSTS
+variable. Note that "localhost" will mean an invocation of your local
+.BR finger (1)
+binary, and should thus work even if you don't provide the finger
+service to the network.
+.B m_finger
+tries to find out the machines mail domain name in
+.IR /etc/mailname ,
+by parsing a
+.I sendmail.cf
+file (if it finds one) and by reading
+.I /etc/hostname
+and
+.IR /etc/HOSTNAME .
+If you know that this fails on your machine, or you want to force lbdbq
+to consider some other name to be the local mail domain name (misconfigured
+SUNs come to mind here), you can specify a name using the
+.B MAIL_DOMAIN_NAME
+variable. If this variable is set by you, no probing will be done by
+.BR lbdbq .
+.TP
+.B m_inmail
+This module will look up user name fragments in a list of mail
+addresses created by
+.BR lbdb-fetchaddr (1).
+.TP
+.B m_passwd
+This module searches for matching entries in your local /etc/passwd
+file. It evaluates the local machine mail domain in the same way 
+.B m_finger
+does.  If you set
+.BR PASSWD_IGNORESYS=true ,
+this module ignores all system accounts and only finds UIDs between
+1000 and 29999 (all other UIDs are reserved on a Debian system).
+.TP
+.B m_yppasswd
+This module searches for matching entries in the NIS password database
+using the command ``ypcat passwd''.
+.TP
+.B m_nispasswd
+This module searches for matching entries in the NIS+ password database
+using the command ``niscat passwd.org_dir''.
+.TP
+.B m_getent
+This module searches for matching entries in whatever password
+database is configured using the command ``getent passwd''.
+.TP
+.BR m_pgp2 ", " m_pgp5 ", " m_gpg
+These modules scan your PGP 2.*, PGP 5.* or GnuPG public key ring for
+data. They use the programs
+.BR pgp (1),
+.BR pgpk (1),
+or
+.BR gpg (1)
+to get the data.
+.TP
+.BR m_fido
+This module searches your Fido nodelist, stored in
+.I $HOME/.lbdb/nodelist
+created by
+.BR nodelist2lbdb (1).
+.TP
+.BR m_abook
+This module uses the program
+.BR abook (1),
+a text based address book application to search for addresses.  You
+can define multiple abook address books by setting the variable
+.B ABOOK_FILES
+to a space separated list.
+.TP
+.BR m_addr_email
+This module uses the program
+.BR addr-email (1),
+a text based frontend to the Tk 
+.BR addressbook (1)
+application.
+.TP
+.BR m_muttalias
+This module searches the variable
+.B MUTTALIAS_FILES
+(a space separated list) of files in 
+.B MUTT_DIRECTORY
+that contain mutt aliases.  File names without leading slash will have
+.B MUTT_DIRECTORY
+(defaults to 
+.BI $HOME /.mutt
+or
+.BR $HOME ,
+if
+.BI $HOME /.mutt
+does not exist) prepended before the file name.  Absolute file names
+(beginning with 
+.IR / )
+will be taken direct.
+.TP
+.BR m_pine
+This module searches
+.BR pine (1)
+addressbook files for aliases.  To realize this it first inspects the
+variable
+.BR PINERC .
+If it isn't set, the default 
+.RI ` "/etc/pine.conf /etc/pine.conf.fixed .pinerc" '
+is used.  To suppress inspecting the
+.B PINERC
+variable, set it to
+.IR no .
+It than takes all 
+.B address-book
+and
+.B global-address-book
+entries from these pinerc files and adds the contents of the variable
+.B PINE_ADDRESSBOOKS
+to the list, which defaults to
+.RI ` "/etc/addressbook .addressbook" '.
+Then these addressbooks are searched for aliases.  All filenames
+without leading slash are searched in
+.BR $HOME .
+.TP
+.BR m_palm
+This module searches the Palm address database using the 
+.BR Palm::PDB (3pm)
+and
+.BR Palm::Address (3pm)
+Perl modules from CPAN.
+It searches in the variable
+.B PALM_ADDRESS_DATABASE
+or if this isn't set in 
+.IR $HOME/.jpilot/AddressDB.pdb .
+.TP
+.BR m_gnomecard
+This module searches for addresses in your GnomeCard database files.
+The variable 
+.B GNOMECARD_FILES
+is a whitespace separated list of GnomeCard data files.  If this
+variable isn't defined, the module searches in
+.BI $HOME /.gnome/GnomeCard
+for the GnomeCard database or at least falls back to
+.BI $HOME /.gnome/GnomeCard.gcrd\fR.
+If a filename does not start with a slash, it is prefixed with
+.BR $HOME/ .
+.TP
+.BR m_bbdb
+This module searches for addresses in your (X)Emacs BBDB (big brother
+database).  It doesn't access ~/.bbdb directly (yet) but calls
+.BR emacs (1)
+or
+.BR xemacs (1)
+with a special mode to get the information (so don't expect too much
+performance in this module).  You can configure the
+.B EMACS
+variable to tell this module which emacsen to use.  Otherwise it will
+fall back to 
+.B emacs
+or
+.BR xemacs.
+.TP
+.BR m_ldap
+This module queries an LDAP server using the 
+.BR Net::LDAP (3pm)
+Perl modules from CPAN.  It can be configured using an external
+resource file 
+.I @sysconfdir@/lbdb_ldap.rc
+You can explicity define a LDAP query in this file or you can use one
+or more of the predefined queries from the 
+.B %ldap_server_db
+in this file.  For this you have to define a space separated list of
+nicknames from entries in the variable
+.BR LDAP_NICKS .
+.TP
+.BR m_wanderlust
+This module searches for addresses stored in your
+.I $WANDERLUST_ADDRESSES 
+(or by default in 
+.IR $HOME/.addresses )
+file, an addressbook of
+.BR WanderLust .
+.TP
+.BR m_osx_addressbook
+This module queries the OS X AddressBook.  It is only available on OS
+X systems.
+.TP
+.BR m_evolution
+This module queries the Ximian Evolution address book.  It depends on
+the program
+.BR evolution-addressbook-export ,
+which is shipped with evolution.
+.TP
+.BR m_vcf
+This module uses libvformat to search for addresses from the
+space\-separated set of vCard files defined in
+.IR $VCF_FILES .
+.PP
+Feel free to create your own modules to query other database resources,
+YP maps, and the like.
+.B m_finger
+should be a good example of how to do it.
+.PP
+If you create your own modules or have other changes and feel that
+they could be helpful for others, don't hesitate to submit them to the 
+author for inclusion in later releases.
+.PP
+Finally, to use
+.B lbdbq
+from mutt, add the following line to your
+.I $HOME/.muttrc:
+.nf
+    set query_command="lbdbq %s"
+.fi
+.SH OPTIONS
+.IP "-v | --version"
+Print version number of lbdbq.
+.IP "-h | --help"
+Print short help of lbdbq.
+.SH FILES
+.I @sysconfdir@/lbdb.rc
+.br
+.I $HOME/.lbdbrc
+.br
+.I $HOME/.lbdb/lbdbrc
+.br
+.I $HOME/.lbdb/rc
+.br
+.I @libdir@/*
+.br
+.I $HOME/.lbdb/m_inmail.list
+.br
+.I $HOME/.lbdb/nodelist
+.SH "SEE ALSO"
+.BR finger (1),
+.BR ypcat (1),
+.BR niscat (1),
+.BR getent (1),
+.BR pgp (1),
+.BR pgpk (1),
+.BR gpg (1),
+.BR lbdb-fetchaddr (1),
+.BR nodelist2lbdb (1),
+.BR mutt_ldap_query (1),
+.BR abook (1),
+.BR addr-email (1),
+.BR addressbook (1),
+.BR mutt (1),
+.BR pine (1),
+.BR emacs (1),
+.BR xemacs (1),
+.BR Palm::PDB (3pm),
+.BR Palm::Address (3pm),
+.BR Net::LDAP (3pm).
+.SH CREDITS
+Most of the really interesting code of this program (namely, the RFC
+822 address parser used by lbdb-fetchaddr) was stolen from Michael
+Elkins' mutt mail user agent. Additional credits go to Brandon Long
+for putting the query functionality into mutt.
+.PP
+Many thanks to the authors of the several modules and extensions:
+Ross Campbell <rcampbel@us.oracle.com> (m_abook, m_yppasswd),
+Marc de Courville <marc@courville.org> (m_ldap, mutt_ldap_query),
+Brendan Cully <brendan@kublai.com> (m_osx_addressbook, m_vcf),
+Gabor Fleischer <flocsy@mtesz.hu> (m_pine),
+Rick Frankel <rick@rickster.com> (m_gnomecard),
+Utz-Uwe Haus <haus@uuhaus.de> (m_bbdb, m_nispasswd),
+Torsten Jerzembeck <toje@nightingale.ms.sub.org> (m_addr_email),
+Adrian Likins <alikins@redhat.com> (m_getent),
+Gergely Nagy <algernon@debian.org> (m_wanderlust),
+Dave Pearson <davep@davep.org> (m_palm, lbdb.el), and
+Brian Salter-Duke <b_duke@bigpond.net.au> (m_muttalias).
+.SH AUTHOR
+The lbdb package was initially written by Thomas Roessler
+<roessler@guug.de> and is now maintained and heavily extended by
+Roland Rosenfeld <roland@spinnaker.de>.

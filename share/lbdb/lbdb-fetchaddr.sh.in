@@ -1,0 +1,127 @@
+#! @SH@
+#
+# -*-sh-*-
+#     Copyright (C) 1998-2000  Thomas Roessler <roessler@guug.de>
+#                   1999-2005  Roland Rosenfeld <roland@spinnaker.de>
+# 
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+# $Id: lbdb-fetchaddr.sh.in,v 1.20 2007-10-28 16:33:36 roland Exp $
+
+LBDB_VERSION=@LBDB_VERSION@
+
+umask 077
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+dotlock=@DOTLOCK@
+fetchaddr=@libdir@/fetchaddr
+db=$HOME/.lbdb/m_inmail.list
+
+datefmt='%Y-%m-%d %H:%M'
+additional_param=""
+
+usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo "       dig addresses from stdin with formatted timestamp"
+    echo "Options:"
+    echo "       -v                 print version of lbdbq"
+    echo "       -h                 this short help"
+    echo "       -d 'dateformat'    select date format using strftime(3)"
+    echo "       -x 'from:to:cc'    colon separated list of header fields"
+    echo "       -c 'charset'       charset for the database storage"
+    echo "       -a                 also grep addresses without realname"
+}
+
+while [ $# -gt 0 ]
+do
+    case "$1" in
+    -v) 
+	echo "lbdb-fetchaddr version $LBDB_VERSION"
+	exit 0
+	;;
+    -h) 
+	usage
+	exit 0
+	;;
+    -d)
+	if [ $# -gt 1 ]
+	then
+	    shift
+	    datefmt="$1"
+	fi
+	;;
+    -x)
+	if [ $# -gt 1 ]
+	then
+	    shift
+	    hdrlist="-x $1"
+	fi
+	;;
+    -c)
+	if [ $# -gt 1 ]
+	then
+	    shift
+	    charset="-c $1"
+	fi
+	;;
+    -a)
+	additional_param="$additional_param $1"
+	;;
+    *)
+	if [ $# -eq 1 ]
+	then
+	    # backward compatibility:
+	    # only one parameter means, that this is the selected datefmt
+	    datefmt="$1"
+	else
+	    echo "Wrong number of parameters!"
+	    usage
+	    exit 1
+	fi
+	;;
+    esac
+    shift
+done
+
+if [ ! -f $db ]; then
+  dbdir=`dirname $db`
+  if [ ! -d $dbdir ]; then
+    mkdir -p $dbdir
+    if [ ! -d $dbdir ]; then
+      echo "Can't create $dbdir" >&2
+      exit 1
+    fi
+  fi
+  touch $db
+  if [ ! -f $db ]; then
+    echo "Can't create $db" >&2
+    exit 1
+  fi
+fi
+
+if $dotlock -r 10 -f $db
+then
+  : # okay, do nothing
+else
+  echo "Can't lock $db [dotlock returned $rv]." >&2
+  exit 1
+fi
+
+if $fetchaddr $additional_param -d "$datefmt" $hdrlist $charset >> $db ; then
+  touch $db.dirty
+fi
+
+$dotlock -u $db

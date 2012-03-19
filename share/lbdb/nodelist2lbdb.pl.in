@@ -1,0 +1,124 @@
+#! @PERL@
+#
+# -*-perl-*-
+#
+# $Id: nodelist2lbdb.pl.in,v 1.3 2005-10-29 14:48:11 roland Exp $
+#
+# This little script reads Fido nodelist.XXX (and points24.YYY) in and
+# generates a list with the following format from it: 
+# <mailaddress> TAB <realname> TAB <comment>
+# To reduce the size of the generated list, only Region 24 of the
+# nodelist is used.
+#
+# The generated list can be used in combination of Thomas Roessler's
+# lbdb for the Mutt mailreader.
+#
+##########################################################################
+#
+#   Copyright (C) 1998-2005  Roland Rosenfeld <roland@spinnaker.de>
+#
+#   This program is free software; you can redistribute it and/or
+#   modify it under the terms of the GNU General Public License as
+#   published by the Free Software Foundation; either version 2 of
+#   the License, or (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#   General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, write to the Free Software Foundation,
+#   Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+##########################################################################
+
+$database="$ENV{HOME}/.lbdb/nodelist";
+
+if (@ARGV == 0 || @ARGV >2 
+    || !($ARGV[0] =~ /nodelist\.\d\d\d$/i) 
+    || ((@ARGV == 2) && !($ARGV[1] =~ /points24\.\d\d\d$/i ))) {
+  die "Usage: $0 nodelist.XXX [points24.YYY]\n";
+}
+
+open (DB, ">$database") || die "Cannot open $database for writing";
+
+#
+# Process Nodelist:
+#
+
+$zone=2;
+$net=0;
+$node=0;
+
+open (NODELIST, "<$ARGV[0]") || die "Cannot open $ARGV[0]";
+while (<NODELIST>) {
+  next if /^;/;
+  ($special,$number,$bbs,$city,$name) = split(/,/);
+
+  if ($special =~ /Zone/) {
+    $zone=$number;
+    $net=$number;
+    $node=0;
+  } elsif ($special =~ /Region/) {
+    $net=$number;
+    $node=0;
+  } elsif ($special =~ /Host/) {
+    $net=$number;
+    $node=0;
+  } elsif ($special =~ /Down|Hold/) {
+    next;
+  } else {
+    $node = $number;
+  }
+
+  $address = "$name\@f$node.n$net.z$zone.fidonet.org";
+  $name =~ s/_/ /g;
+  $bbs =~ s/_/ /g;
+
+  #
+  # Restrict to Region 24:
+  #
+#  if ($zone =~ /^2$/ && $net =~ /^24/ ) {
+    print DB "$address\t$name\t$bbs\n";
+#  }
+}
+close NODELIST;
+
+
+#
+# Process Pointlist:
+#
+
+$zone=2;
+$net=0;
+$node=0;
+$point=0;
+
+open (POINTLIST, "<$ARGV[1]") || die "Cannot open $ARGV[1]";
+while (<POINTLIST>) {
+  next if /^;/;
+  ($special,$number,$bbs,$city,$name) = split(/,/);
+
+  if ($special =~ /Region/) {
+    next;
+  } elsif ($special =~ /Host/) {
+    ($net,$node) = split(/\//, $bbs);
+    next;
+  } elsif ($special =~ /Down|Hold/) {
+    next;
+  } else {
+    $point = $number;
+  }
+
+  $address = "$name\@p$point.f$node.n$net.z$zone.fidonet.org";
+  $name =~ s/_/ /g;
+  $city =~ s/_/ /g;
+
+  print DB "$address\t$name\t$city\n";
+
+}
+close NODELIST;
+
+
+close DB;

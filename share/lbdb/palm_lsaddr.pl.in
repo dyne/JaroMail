@@ -1,0 +1,63 @@
+#! @PERL@
+#
+#     palm_lsaddr - Palm address database helper utility for lbdb
+#     Copyright (C) 2000 Dave Pearson <davep@davep.org>
+#               (C) 2003 Nikolaus Rath <Nikolaus@rath.org>
+#
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+#
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+
+use Palm::PDB;
+use Palm::Address;
+
+if ( $#ARGV > -1 )
+{
+    my $pdb = new Palm::PDB;
+
+    if ( $pdb )
+    {
+        $pdb->Load( $ARGV[ 0 ] );
+
+        my $record;
+
+        for ( $i = 0, $record = $pdb->{records}[ $i ]; $record; $i++, $record = $pdb->{records}[ $i ] )
+        {
+            my $name = $record->{fields}{firstName} . " " . $record->{fields}{name};
+
+            # Remove leading and trailing whitespace.
+            $name =~ s/\s+$//;
+            $name =~ s/^\s+//;
+
+            # If the name is empty, use the company name instead.
+            $name = $record->{fields}{company} unless ( length( $name ) > 0 );
+
+            if ( length( $name ) > 0 )
+            {
+                my $entry;
+
+                # Find fields containing e-mail addresses
+                for($entry=1; $entry <= 5; $entry++)
+                {
+                    # 0 = Work, 1 = Home, 2 = Fax, 3 = Other, 4 = email,
+                    # 5 = Main, 6 = Pager, 7 = Mobile
+                    if($record->{phoneLabel}{"phone${entry}"} == 4) {
+                        # A field can also contain multiple lines.
+                        print map "$_\t$name\t(Palm)\n",
+                            split(/\n/, $record->{fields}{"phone${entry}"});
+                    }
+                }
+            }
+        }
+    }
+}

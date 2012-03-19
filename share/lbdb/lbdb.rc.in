@@ -1,0 +1,190 @@
+#
+# This is the main configuration file of the little brothers database lbdb
+#
+# Everything you configure here can be overridden by the users config
+# file which can be found at
+# ~/.lbdbrc
+# ~/.lbdb/lbdbrc
+# ~/.lbdb/rc
+# (evaluated with ascending priority!)
+# 
+# (c) 1999-2006 Roland Rosenfeld <roland@spinnaker.de>
+#
+# $Id: lbdb.rc.in,v 1.18 2006-10-14 12:10:42 roland Exp $
+#
+
+#
+# Select which methods you want to use in which order (ascending priority):
+# (a space separated list)
+#
+# - m_inmail	 search the database created by lbdb-fetchaddr(1)
+# - m_finger	 finger some hosts defined in variable M_FINGER_HOSTS
+# - m_passwd	 search the local /etc/passwd file.
+# - m_yppasswd	 search the NIS password database.
+# - m_nispasswd	 search the NIS+ password database.
+# - m_getent	 search the password database (whatever is configured).
+# - m_pgp2	 search your PGP 2.* keyring
+# - m_pgp5	 search your PGP 5.* keyring
+# - m_gpg	 search your GnuPG keyring
+# - m_fido	 search the Fido nodelist converted by nodelist2lbdb(1)
+# - m_abook	 query abook(1), the text based address book application.
+# - m_addr_email query addr-email(1) from addressbook Tk-program.
+# - m_muttalias  search $MUTTALIAS_FILES for aliases.
+# - m_pine	 search pine(1) addressbook files for aliases.
+# - m_palm	 search your Palm addressbook file.
+# - m_gnomecard	 search your GnomeCard address database files.
+# - m_bbdb	 search your BBDB (big brother database).
+# - m_ldap       query an LDAP server 
+# - m_wanderlust search your wanderlust ~/.addresses file.
+# - m_osx_addressbook  search the OS X addressbook (only available on OS X).
+# - m_evolution  search in the Ximan Evolution addressbook.
+# - m_vcf        search a vcard (according to RFC2426) file.
+
+METHODS="m_inmail m_passwd m_finger"
+
+
+#
+# If you want m_finger to ask other host then localhost, create a list here:
+# (a space separated list):
+#
+#M_FINGER_HOSTS="master.debian.org va.debian.org localhost"
+
+#
+# If it isn't possible to find out the correct mail domain name of
+# your system in /etc/mailname, by reading sendmail.cf, /etc/hostname
+# or /etc/HOSTNAME, you can specify it in the variable
+# MAIL_DOMAIN_NAME. This overrides all other mechanisms.
+#
+#MAIL_DOMAIN_NAME=does-not-exist.org
+
+# - m_muttalias      query set of mutt alias files:
+#
+# Set MUTTALIAS_FILES below to list of files in MUTT_DIRECTORY that
+# contain mutt aliases. File names without leading slash will have
+# $MUTT_DIRECTORY (defaults to $HOME/.mutt or $HOME, if ~/.mutt does
+# not exist) prepended before the file name. Absolute file names
+# (beginning with /) will be taken direct.
+#
+#MUTT_DIRECTORY="$HOME/.mutt"
+#MUTTALIAS_FILES=".muttrc .mail_aliases muttrc aliases"
+
+
+# - m_pine	search pine addressbook files for aliases:
+#
+# This module first inspects the variable PINERC. If it isn't set, the
+# default `/etc/pine.conf /etc/pine.conf.fixed .pinerc' is used. To
+# suppress inspecting the PINERC variable, set it to "no". It than
+# takes all address-book and global-address-book entries from these
+# pinerc files and adds the contents of the variable PINE_ADDRESSBOOKS
+# to the list, which defaults to `/etc/addressbook .addressbook'. Then
+# these addressbooks are searched for aliases. All filenames without
+# leading slash are searched in $HOME.
+#
+#PINERC="/etc/pine.conf /etc/pine.conf.fixed .pinerc"
+#PINE_ADDRESSBOOKS="/etc/addressbook .addressbook"
+
+
+# - m_wanderlust      search your WanderLust addresses files:
+#
+# Set WANDERLUST_ADDRESSES below to point to your WanderLust address
+# book.  If you don't set this variable, the default
+# ($HOME/.addresses) is used.
+#
+#WANDERLUST_ADDRESSES="$HOME/.addresses"
+
+
+# - m_palm	search your Palm addressbook file:
+#
+# This module searches the Palm address database using the Palm::PDB
+# and Palm::Address Perl modules from CPAN. It searches in the
+# variable PALM_ADDRESS_DATABASE or if this isn't set in
+# $HOME/.jpilot/AddressDB.pdb.
+#
+#PALM_ADDRESS_DATABASE="$HOME/.jpilot/AddressDB.pdb"
+
+
+# - m_gnomecard	 search your GnomeCard address database files.
+#
+# This module searches for addresses in your GnomeCard database files.
+# The variable GNOMECARD_FILES is a whitespace separated list of
+# GnomeCard data files. If this variable isn't defined, the module
+# searches in $HOME/.gnome/GnomeCard for the GnomeCard database or at
+# least falls back to $HOME/.gnome/GnomeCard.gcrd. If a filename does
+# not start with a slash, it is prefixed with $HOME/.
+#
+#GNOMECARD_FILES="$HOME/.gnome/GnomeCard.gcrd"
+
+
+# - m_bbdb  search your BBDB (big brother database).
+#
+# This module searches for addresses in your (X)Emacs BBDB (big
+# brother database). It doesn't access ~/.bbdb directly (yet) but
+# calls emacs(1) or xemacs(1) with a special mode to get the
+# information (so don't expect too much performance in this module).
+# You can configure the EMACS variable to tell this module which
+# emacsen to use. Otherwise it will fall back to emacs or xemacs.
+#
+#EMACS="emacs"
+
+
+# - m_ldap  query an LDAP server.
+#
+# This module queries an LDAP server using the Net::LDAP Perl modules
+# from CPAN. It can be configured using an external resource file. You
+# can explicity define a LDAP query in this file or you can use one or
+# more of the predefined queries from the %ldap_server_db in this
+# file. For this you have to define the selected enties as a space
+# separated list in the the variable LDAP_NICKS.
+#
+#LDAP_NICKS="debian bigfoot"
+
+
+# - m_abook query the abook(1) programm
+#
+# if you have more than one abook addressbook, use the ABOOK_FILES
+# variable. It contains a space separated list of all your files. 
+# Default is $HOME/.abook/addressbook $HOME/.abook.addressbook
+# ABOOK_FILES="$HOME/.abook/friends $HOME/.abook/work"
+
+
+# - m_passwd search in /etc/passwd
+#
+# On a Debian system only the UIDs 1000-29999 are used for normal
+# users.  Setting PASSWD_IGNORESYS to "true" implies that lbdbq
+# ignores and UID, which isn't in that range:
+#PASSWD_IGNORESYS=true
+
+
+# - m_vcf search in vcard files
+#
+# You have to define the vcard files space separated in $VCF_FILES to
+# make this module work:
+#VCF_FILES=$HOME/my.vcf
+
+
+#
+# If you want to use private modules set the MODULES_PATH to find them:
+# (a space separated list):
+#
+#MODULES_PATH="/usr/lib/lbdb $HOME/.lbdb/modules"
+
+
+#
+# Do you want the output to be sorted?
+# If you set this to "false" or "no", lbdbq won't sort the addresses
+# but returns them in reverse order (which means that the most recent
+# address in m_inmail database is first).
+# If you set this to "name", lbdbq sorts the output by real name.
+# If you set this to "comment", lbdbq sorts the output by comment (column 3).
+# If you set this to "reverse_comment", lbdbq sorts the output by comment 
+#                                       but with reverse order (column 3).
+# If you set this to "address", lbdbq sorts the output by addresses
+# (that's the default).
+#
+#SORT_OUTPUT=address
+
+#
+# Do you want to see duplicate mail addresses (with multiple real
+# names or different comment fields)?  Default is "no".
+#
+#KEEP_DUPES=no

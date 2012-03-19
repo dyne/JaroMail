@@ -1,0 +1,79 @@
+%define ver      @LBDB_VERSION@
+%define rel      2
+%define prefix   /usr
+
+Summary: The Little Brother's Database
+Name: lbdb
+Version: %ver
+Release: %rel
+Copyright: GNU General Public Licence
+URL: http://www.spinnaker.de/lbdb/
+Packager: Horms <horms@vergenet.net>
+Vendor: Horms
+Group: Applications/Databases
+Source: http://www.spinnaker.de/debian/lbdb_%{ver}.tar.gz
+NoSource: 0
+BuildRoot: /var/tmp/lbdb-%{PACKAGE_VERSION}-root
+Docdir: %{prefix}/doc
+
+%description
+This package was inspired by the Big Brother Database package available for
+various Emacs mailers, and by Brandon Long's "external query" patch for the
+Mutt mail user agent. (Note that this patch has been incorporated into the
+main-line mutt versions as of mutt 0.93.)
+
+The package doesn't use any formal database libraries or languages,
+although it should be quite easy to extend it to use, e.g., an installed
+PostgreSQL server as it's back end.
+
+%prep
+%setup -q
+
+%build
+%configure 2>&1 | tee -a Configurings-`date +%Y.%m.%d`
+
+#Funky NPROC code to speed things up courtesy of Red Hat's kernel rpm
+if [ -x /usr/bin/getconf ] ; then
+    NRPROC=$(/usr/bin/getconf _NPROCESSORS_ONLN)
+    if [ $NRPROC -eq 0 ] ; then
+        NRPROC=1
+    fi
+else
+    NRPROC=1
+fi
+NRPROC=`expr $NRPROC + $NRPROC`
+
+make -j $NRPROC  2>&1 | tee -a Makings-`date +%Y.%m.%d`
+
+%install
+rm -rf $RPM_BUILD_ROOT
+mkdir -p ${RPM_BUILD_ROOT}/%{prefix}/etc
+
+make install_prefix=${RPM_BUILD_ROOT} install 2>&1 \
+    | tee -a Makings-Install-`date +%Y.%m.%d`
+
+%clean
+rm -rf ${RPM_BUILD_DIR}/lbdb-%{ver}
+rm -rf ${RPM_BUILD_ROOT}
+
+%files
+%defattr(-,root,root)
+%doc README COPYING
+# Keep copies of the configure, build, install reports in the
+# documentation of the package.
+%doc Makings-Install-`date +%Y.%m.%d`
+%doc Makings-`date +%Y.%m.%d`
+%doc Configurings-`date +%Y.%m.%d`
+%{prefix}
+
+%changelog
+* Sat Dec 30 2000 Rob Payne <rnspayne@adelphia.net>
+- Changed to fit version 0.22
+- Change installation process to include RPM_BUILD_ROOT
+- Removed auto-generated files list that did not take into account RPM
+  4's automatic compression of the man pages *after* the
+  auto-generation was running.
+- Removed the empty post, postun, preun scripts.
+
+* Mon Apr 10 2000 Horms <horms@vergenet.net>
+- created for version 0.18.5

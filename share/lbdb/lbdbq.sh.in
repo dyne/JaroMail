@@ -1,0 +1,116 @@
+#! @SH@
+#
+#     Copyright (C) 1998-2000  Thomas Roessler <roessler@guug.de>
+#                   1998-2007  Roland Rosenfeld <roland@spinnaker.de>
+# 
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program; if not, write to the Free Software Foundation,
+#     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+#
+# $Id: lbdbq.sh.in,v 1.27 2007-05-20 13:00:44 roland Exp $
+
+LBDB_VERSION=@LBDB_VERSION@
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+sysconfdir=@sysconfdir@
+
+METHODS="@MODULES@"
+MODULES_PATH=@libdir@
+TAC=@TAC@
+
+case "$1" in
+    -v|--version)
+	echo "lbdbq version $LBDB_VERSION"
+	exit 0
+	break;;
+    -h|--help)
+	PROG=`basename $0`
+	echo "Usage: $PROG 'something'   search addresses matching 'something'"
+	echo "       $PROG -v|--version  print version of lbdbq"
+	echo "       $PROG -h|--help     this short help"
+	exit 0
+	break;;
+esac
+
+. $libdir/lbdb_lib
+
+tmpdir=${TMPDIR-/tmp}/query.`hostname`.$$
+mkdir $tmpdir || exit 1
+trap "rm -rf $tmpdir ; trap '' 0; exit 1" 0 1 2 3 15
+trap "rm -rf $tmpdir ; trap '' 0" 0
+collection=$tmpdir/coll
+
+for conffile in $sysconfdir/lbdb.rc $HOME/.lbdbrc \
+	$HOME/.lbdb/lbdbrc $HOME/.lbdb/rc ; do
+	
+  if test -f $conffile ; then
+    . $conffile
+  fi
+
+done
+
+for method in $METHODS ; do
+  for CURRENT_MODULE_DIR in $MODULES_PATH ; do
+    if test -f $CURRENT_MODULE_DIR/$method ; then
+      . $CURRENT_MODULE_DIR/$method
+      break
+    fi
+  done
+done
+
+for method in $METHODS ; do
+  eval ${method}_query \""$@"\" >> $collection || true
+done
+
+case "${KEEP_DUPES:-}" in
+    true|yes)
+	MUNGE=cat
+	MUNGE_KEEPORDER=cat
+	;;
+    *)
+	MUNGE=$libdir/munge
+	MUNGE_KEEPORDER=$libdir/munge-keeporder
+	;;
+esac
+
+case "${SORT_OUTPUT:-}" in
+    false|no)
+	$MUNGE_KEEPORDER $collection | $TAC > $collection.uniq
+	;;
+    *name)
+	$MUNGE $collection | sort -f -k2 > $collection.uniq
+	;;
+    reverse_comment)
+        $MUNGE $collection | sort -f -k3 -t'	' -r > $collection.uniq
+	;;
+    comment)
+        $MUNGE $collection | sort -f -k3 -t'	' > $collection.uniq
+	;;
+    *)
+	$MUNGE $collection | sort -f > $collection.uniq
+	;;
+esac
+
+lines=`wc -l $collection.uniq | awk '{print $1}'`
+
+if [ $lines = "0" ]
+then
+    echo "lbdbq: no matches"
+    exit 1
+else
+    echo "lbdbq: $lines matches"
+fi
+
+cat $collection.uniq
