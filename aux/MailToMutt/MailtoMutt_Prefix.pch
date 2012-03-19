@@ -1,0 +1,15 @@
+//
+// Prefix header for all source files of the 'MailtoMutt' target in the 'MailtoMutt' project
+//
+
+#ifdef __OBJC__
+    #import <Cocoa/Cocoa.h>
+#endif
+
+
+#ifdef VERBOSE_DEBUG_OUTPUT
+	#warning Debugging output enabled
+	#define NSDebug(x, ...) NSLog([ NSString stringWithFormat:@"%s: %@", __PRETTY_FUNCTION__, x], ## __VA_ARGS__ )
+#else
+	#define NSDebug(x, ...) /* x, ## __VA_ARGS__ */
+#endif
