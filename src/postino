@@ -21,7 +21,7 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 VERSION=0.6
-DATE=March/2011
+DATE=March/2012
 POSTINOEXEC=$0
 typeset -a OLDARGS
 for arg in ${argv}; do OLDARGS+=($arg); done
@@ -32,7 +32,9 @@ for arg in ${argv}; do OLDARGS+=($arg); done
 QUIET=0
 DEBUG=1
 
-# default config dir
+source $HOME/Mail/Configuration.txt
+
+# default working dir
 if [ -z $POSTINO_DIR ]; then
     WORKDIR=$HOME/.postino
 else
@@ -94,8 +96,8 @@ ask_password() {
     cat <<EOF | GTK2_RC_FILES=${GTK2_RC} pinentry 2>/dev/null | awk '/^D / { sub(/^D /, ""); print }'
 OPTION ttyname=$TTY
 OPTION lc-ctype=$LANG
-SETTITLE Insert tomb password
-SETDESC Open tomb: $1
+SETTITLE Type your password
+SETDESC Open mail: $1
 SETPROMPT Password:
 GETPIN
 EOF
@@ -148,16 +150,16 @@ queue() {
     local msmtpfile;
 
     # add mails to the sendout queue
-    mkdir -p $MAILDIRS/queue
+    mkdir -p $MAILDIRS/outbox
     umask 077
-    cd $MAILDIRS/queue || return 1
+    cd $MAILDIRS/outbox || return 1
     # Create new unique filenames of the form
     # MAILFILE:  ccyy-mm-dd-hh.mm.ss[-x].mail
     # MSMTPFILE: ccyy-mm-dd-hh.mm.ss[-x].msmtp
     # where x is a consecutive number only appended if you send more than one 
     # mail per second.
     base="`date +%Y-%m-%d-%H.%M.%S`"
-    echo "[$base] queue called with params: ${PARAM[@]}" > $WORKDIR/queue.log
+    func "[$base] queue called with params: ${PARAM[@]}"
 
     if [ -f "$base.mail" -o -f "$base.msmtp" ]; then
 	tmp="$base"
@@ -176,6 +178,30 @@ queue() {
     return 0
 }
 
+
+###########
+# FETCHMAIL
+fetch() {
+    # this function generates a fetchmail configuration and downloads emails
+    local -aU imap_set # behave like a set
+    imap_set="${IMAP_LOGIN};${IMAP_ADDRESS}"
+    for i in ${(f)imap_set}; do
+	ilogin="${i[(ws:;:)1]}"
+	ihost="${i[(ws:;:)2]}"
+	func "IMAP: $ilogin $ihost"
+    done
+    pass=`ask_password`
+    cat <<EOF > /tmp/fetch
+poll $ihost with proto IMAP user "$ilogin" there with password "$pass"
+fetchall and keep
+ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
+antispam 571 550 501 554
+EOF
+    chmod 700 /tmp/fetch
+    fetchmail -f /tmp/fetch
+    srm -m /tmp/fetch
+    return 0
+}
 
 ######
 # SMTP
@@ -199,19 +225,14 @@ send() {
 peek() {
     # this function will open the MTA to the imap server without fetching mails locally
     local -aU imap_set #behave like a set; that is, an array with unique elements
-    imap_set="${IMAP_LOGIN};${IMAP_ADDRESS};${IMAP_PORT}"
+    imap_set="${IMAP_LOGIN};${IMAP_ADDRESS}"
     for i in ${(f)imap_set}; do
 	ilogin="${i[(ws:;:)1]}"
 	ihost="${i[(ws:;:)2]}"
-	iport="${i[(ws:;:)3]}"
-	func "IMAP: $ilogin $ihost:$iport"
-	# if there is a selection, check if its the one
-	if [ $1 ] && [ "$1" == "$iname" ]; then break;
-	elif ! [ $1 ]; then break; fi # no selection: take first as default
+	func "IMAP: $ilogin $ihost"
     done
     # escape at sign in login
     mutt -f imaps://`echo $ilogin | sed 's/@/\\@/'`@${ihost}
-    return 0
 }
 
 sync() {
@@ -234,6 +255,7 @@ sync() {
     maildirmake $MAILDIRS/priv
     maildirmake $MAILDIRS/postponed
     maildirmake $MAILDIRS/unsorted
+    mkdir -p $MAILDIRS/outbox
     
     ######
     # MUTT
@@ -271,7 +293,7 @@ EOF
 
         # just the header, will be completed later in procmail loop
 	rm -f $WORKDIR/mutt/mboxes
-	echo -n "mailboxes +priv" > $WORKDIR/mutt/mboxes
+	echo -n "mailboxes +priv" > $MUTTDIR/mboxes
     fi
     
     ##########
@@ -289,7 +311,7 @@ SHELL       = /bin/sh       # VERY IMPORTANT
 UMASK       = 007           # James Bond :-)
 LINEBUF     = 8192          # avoid procmail choke
 #  Using Procmail Module Library http://sf.net/projects/pm-lib
-PMSRC  = /usr/share/procmail-lib
+PMSRC  = $PROCMAILDIR
 #  Load the central initial startup code.
 INCLUDERC = $PMSRC/pm-javar.rc
 PF_DEST = ""			# clear these vars
@@ -330,7 +352,7 @@ EOF
     mv $WORKDIR/tmp/mboxes $MUTTDIR/mboxes
     rm -f $WORKDIR/tmp/mboxes
 
-    cat <<EOF >> $WORKDIR/procmail/rc
+    cat <<EOF >> $PROCMAILDIR/rc
 }
 
 # save the mails
@@ -378,7 +400,6 @@ main()
     subcommands_opts[send]=""
     subcommands_opts[peek]=""    
     subcommands_opts[sync]=""
-    subcommands_opts[conf]=""
     subcommands_opts[list]=""
     subcommands_opts[source]=""
 #    subcommands_opts[mount]=${subcommands_opts[open]}
@@ -444,11 +465,10 @@ main()
         
     case "$subcommand" in
 	queue) queue ${PARAM} ;;
-	fetch) ;;
+	fetch) fetch ;;
 	send) ;;
 	peek) peek ;;
 	sync) sync ;;
-	conf) ;;
 	'source')   return 0 ;;
 	__default) ;;
 	*) error "command \"$subcommand\" not recognized"
