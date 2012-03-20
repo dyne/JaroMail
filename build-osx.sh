@@ -15,11 +15,13 @@
 
 # and local natives: fetchmail, procmail...
 
+source src/postino source
+
 mkdir -p build/osx/dylib
 
 copydeps() {
 	# copy a binary and all dependencies until 3rd level
-	echo "+ $1"
+	act "`basename $1`"
 
 	tmp="/tmp/build_`basename $1`";
 	rm -f $tmp; touch $tmp
@@ -51,7 +53,7 @@ copydeps() {
 	for d in `cat $tmp | sort | uniq`; do
 		if ! [ -r build/osx/dylib/`basename $d` ]; then
 			cp $d build/osx/dylib/
-			echo "  `basename $d`"
+			act "`basename $d`"
 		fi
 	done
 	if ! [ -r build/osx/`basename $1` ]; then
@@ -66,10 +68,18 @@ EOF
 	fi
 }
 
+notice "Building Postino binary stash for Apple/OSX"
+
+act "lbdb address book module"
+cd aux/lbdb-ABQuery
+xcodebuild > /dev/null
+cd -
+cp aux/lbdb-ABQuery/build/Release/lbdb-ABQuery build/osx
+
 copydeps bin/mutt
 copydeps bin/msmtp
 copydeps bin/gpg
 copydeps bin/pinentry
 
-cp -v src/postino build/osx
+cp src/postino build/osx
 
