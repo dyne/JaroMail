@@ -32,6 +32,8 @@ for arg in ${argv}; do OLDARGS+=($arg); done
 QUIET=0
 DEBUG=1
 
+umask 007 # James Bond :^)
+
 source $HOME/Mail/Configuration.txt
 
 # default working dir
@@ -85,23 +87,24 @@ chmod 700 $WORKDIR/tmp $WORKDIR/cache
 # it also conveniently uses the right toolkit
 ask_password() {
 
-    # pinentry has no custom icon setting
-    # so we need to temporary modify the gtk theme
-    if [ -r /usr/local/share/themes/tomb/gtk-2.0-key/gtkrc ]; then
-	GTK2_RC=/usr/local/share/themes/tomb/gtk-2.0-key/gtkrc
-    elif [ -r /usr/share/themes/tomb/gtk-2.0-key/gtkrc ]; then
-	GTK2_RC=/usr/share/themes/tomb/gtk-2.0-key/gtkrc
-    fi
-
-    cat <<EOF | GTK2_RC_FILES=${GTK2_RC} pinentry 2>/dev/null | awk '/^D / { sub(/^D /, ""); print }'
+    func "Looking for password in keyring: $1 @ $2"
+    security find-internet-password -a $1 -s $2 > /dev/null
+    if [ $? != 0 ]; then # its a new password
+    	cat <<EOF | pinentry 2>/dev/null | awk '/^D / { sub(/^D /, ""); print }'
 OPTION ttyname=$TTY
 OPTION lc-ctype=$LANG
 SETTITLE Type your password
-SETDESC Open mail: $1
+SETDESC Type the password for $1 @ $2
 SETPROMPT Password:
 GETPIN
 EOF
-
+	func "Pinentry returns $?"
+	act "New password set for $1 @ $2"
+    else
+	act "Using saved password for $1 @ $2"        
+	export password=`security find-internet-password -a $1 -s $2 -g \
+		2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
+    fi
 }
 
 option_is_set() {
@@ -150,8 +153,8 @@ queue() {
     local msmtpfile;
 
     # add mails to the sendout queue
+    umask 007
     mkdir -p $MAILDIRS/outbox
-    umask 077
     cd $MAILDIRS/outbox || return 1
     # Create new unique filenames of the form
     # MAILFILE:  ccyy-mm-dd-hh.mm.ss[-x].mail
@@ -190,16 +193,23 @@ fetch() {
 	ihost="${i[(ws:;:)2]}"
 	func "IMAP: $ilogin $ihost"
     done
-    pass=`ask_password`
-    cat <<EOF > /tmp/fetch
-poll $ihost with proto IMAP user "$ilogin" there with password "$pass"
+    if ! [ -r $PROCMAILDIR/rc ]; then
+	act "Syncing configuration"
+	sync
+    fi
+    ask_password $ilogin $ihost
+    touch $WORKDIR/tmp/fetch; chmod 600 $WORKDIR/tmp/fetch
+    cat <<EOF > $WORKDIR/tmp/fetch
+poll $ihost with proto IMAP user "$ilogin" there with password "$password"
 fetchall and keep
 ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 antispam 571 550 501 554
 EOF
-    chmod 700 /tmp/fetch
-    fetchmail -f /tmp/fetch
-    srm -m /tmp/fetch
+    unset password
+
+    act "Launching fetchmail"
+    fetchmail -f $WORKDIR/tmp/fetch
+    srm -m $WORKDIR/tmp/fetch
     return 0
 }
 
@@ -321,9 +331,9 @@ PF_RECURSE = yes
 :0
 * ? test pf-chkto.rc
 {
-# filters generated from postino filters.conf
+# filters generated from postino Filters.txt
 EOF
-    for f in `cat $WORKDIR/filters.conf | awk '/^#/ {next} /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
+    for f in `cat $MAILDIR/Filters.txt | awk '/^#/ {next} /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
 	header="${f[(ws:;:)1]}"
 	address="${f[(ws:;:)2]}"
 	action="${f[(ws:;:)3]}"
@@ -338,7 +348,7 @@ EOF
 		    >> $PROCMAILDIR/rc
 		;;
 	    *)
-		error "unsupported in filters.conf: $header (skipped)"
+		error "unsupported filter: $header (skipped)"
 		;;
 	esac
 	# MUTT (generate mailboxes priority this parser)

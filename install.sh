@@ -11,10 +11,12 @@ fi
 WORKDIR=$HOME/.postino
 MAILDIR=$HOME/Mail
 
+umask 007 # James Bond ;^)
+
 if [ $1 ]; then WORKDIR=$1; fi
 # make sure the directory is private
 mkdir -p $WORKDIR
-chmod 700 $WORKDIR
+mkdir -p $MAILDIR
 
 source src/postino
 
@@ -28,7 +30,6 @@ fi
 
 # make sure we have a temp and cache dir
 mkdir -p $WORKDIR/tmp $WORKDIR/cache
-chmod 700 $WORKDIR/tmp $WORKDIR/cache
 
 if ! [ -r $MAILDIR/Configuration.txt ]; then
     cat <<EOF > $MAILDIR/Configuration.txt
@@ -114,7 +115,6 @@ source $MAILDIR/Configuration.txt
 
 # make sure maildirs where to put mails exist
 mkdir -p $MAILDIRS
-chmod 700 $MAILDIRS
 maildirmake $MAILDIRS/known
 maildirmake $MAILDIRS/sent
 maildirmake $MAILDIRS/priv
