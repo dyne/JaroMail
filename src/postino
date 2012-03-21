@@ -79,17 +79,19 @@ fi
 mkdir -p $WORKDIR/tmp $WORKDIR/cache
 chmod 700 $WORKDIR/tmp $WORKDIR/cache
 
-
-
+# make sure tmp is wiped from sensitive data in case of sigINT
+TRAPINT() {
+	error "Caught signal, aborting operations."
+        for f in `ls $WORKDIR/tmp/`; do
+	    srm -fm $f
+	done
+	exit 1
+}
 
 # we use pinentry
 # comes from gpg project and is secure
 # it also conveniently uses the right toolkit
-ask_password() {
-
-    func "Looking for password in keyring: $1 @ $2"
-    security find-internet-password -a $1 -s $2 > /dev/null
-    if [ $? != 0 ]; then # its a new password
+pin_entry() {
     	cat <<EOF | pinentry 2>/dev/null | awk '/^D / { sub(/^D /, ""); print }'
 OPTION ttyname=$TTY
 OPTION lc-ctype=$LANG
@@ -98,8 +100,15 @@ SETDESC Type the password for $1 @ $2
 SETPROMPT Password:
 GETPIN
 EOF
-	func "Pinentry returns $?"
+}
+
+ask_password() {
+    func "Looking for password in keyring: $1 @ $2"
+    security find-internet-password -a $1 -s $2 > /dev/null
+    if [ $? != 0 ]; then # its a new password
+	export password=`pin_entry $1 @ $2`
 	act "New password set for $1 @ $2"
+	security add-internet-password -a $1 -s $2 -w "${password}"
     else
 	act "Using saved password for $1 @ $2"        
 	export password=`security find-internet-password -a $1 -s $2 -g \
@@ -156,6 +165,7 @@ queue() {
     umask 007
     mkdir -p $MAILDIRS/outbox
     cd $MAILDIRS/outbox || return 1
+    notice "Adding mail to the outbox queue"
     # Create new unique filenames of the form
     # MAILFILE:  ccyy-mm-dd-hh.mm.ss[-x].mail
     # MSMTPFILE: ccyy-mm-dd-hh.mm.ss[-x].msmtp
@@ -175,9 +185,10 @@ queue() {
     mailfile="$base.mail"
     msmtpfile="$base.msmtp"
     # Write command line to $MSMTPFILE
-    echo "$@" > "$msmtpfile" || return 1
+    echo "$@" > "$msmtpfile"
     # Write the mail to $MAILFILE
-    cat > "$mailfile" || return 1
+    cat > "$mailfile"
+    cd -
     return 0
 }
 
@@ -185,6 +196,7 @@ queue() {
 ###########
 # FETCHMAIL
 fetch() {
+    notice "Fetching mails from server"
     # this function generates a fetchmail configuration and downloads emails
     local -aU imap_set # behave like a set
     imap_set="${IMAP_LOGIN};${IMAP_ADDRESS}"
@@ -201,15 +213,14 @@ fetch() {
     touch $WORKDIR/tmp/fetch; chmod 600 $WORKDIR/tmp/fetch
     cat <<EOF > $WORKDIR/tmp/fetch
 poll $ihost with proto IMAP user "$ilogin" there with password "$password"
-fetchall and keep
-ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
+keep and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 antispam 571 550 501 554
 EOF
     unset password
 
     act "Launching fetchmail"
     fetchmail -f $WORKDIR/tmp/fetch
-    srm -m $WORKDIR/tmp/fetch
+    srm -fm $WORKDIR/tmp/fetch
     return 0
 }
 
@@ -217,22 +228,61 @@ EOF
 # SMTP
 send() {
     # this function should send all mails in queue
+    notice "Sending out all mails in outbox queue"
  
     local -aU smtp_set #behave like a set; that is, an array with unique elements
-    smtp_set=`awk '!/^#/ { print $1 ";" $2 ";" $3 }' $WORKDIR/send.conf`
+    smtp_set="${SMTP_LOGIN};${SMTP_ADDRESS};${SMTP_PORT}"
     for s in ${(f)smtp_set}; do
-	sname="${s[(ws:;:)1]}"
+	slogin="${s[(ws:;:)1]}"
 	shost="${s[(ws:;:)2]}"
-	slogin="${s[(ws:;:)3]}"
-	func "SMTP: $sname $slogin $shost:$sport"
+	sport="${s[(ws:;:)3]}"
+	func "SMTP: $slogin $shost:$sport"
     done
-    error "TODO"
+    cd ${MAILDIRS}/outbox
+    mailnum=`ls | grep 'mail$' | wc -l`
+    mailnum=${mailnum// /} # trim whitespace
+    if [ "$mailnum" = "0" ]; then
+        act "Outbox is empty, no mails to send."
+        return
+    fi
+    ask_password ${slogin} ${shost}
+    cat <<EOF > $WORKDIR/tmp/send
+account default
+from ${NAME}@${DOMAIN}
+tls on
+host ${SMTP_ADDRESS}
+port ${SMTP_PORT}
+tls_starttls on
+tls_certcheck off
+logfile ${WORKDIR}/msmtp.log
+auth plain
+user ${SMTP_LOGIN}
+password ${password}
+EOF
+    unset password
+    chmod 600 $WORKDIR/tmp/send
+    mailaddr=`cat *.mail | grep '^To:'`
+    notice "${mailnum} mails to send:"
+    for mail in *.mail; do
+       act "`cat ${mail} | grep '^To:'`"
+       smtp=`echo ${mail} | sed -e 's/mail/msmtp/'`
+       msmtp -C $WORKDIR/tmp/send "`cat ${smtp}`" < "${mail}"
+       if [ $? != 0 ]; then
+           error "Error sending mail, skipped"
+       else
+	   act "Mail sent succesfully"
+	   rm -f ${mail} ${smtp}
+       fi
+    done
+    cd -
+    srm -fm ${WORKDIR}/tmp/send
     return 0
 }
 
 ######
 # IMAP
 peek() {
+    notice "Peeking into remote mailbox"
     # this function will open the MTA to the imap server without fetching mails locally
     local -aU imap_set #behave like a set; that is, an array with unique elements
     imap_set="${IMAP_LOGIN};${IMAP_ADDRESS}"
@@ -246,6 +296,7 @@ peek() {
 }
 
 sync() {
+    notice "Updating all configurations and filters"
     # this function should:
     # parse all filters
     # generate procmailrc
@@ -406,10 +457,10 @@ main()
     main_opts=(q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
     subcommands_opts[__default]=""
     subcommands_opts[queue]=""
-    subcommands_opts[fetch]="k -keep=k"
+    subcommands_opts[fetch]=""
     subcommands_opts[send]=""
     subcommands_opts[peek]=""    
-    subcommands_opts[sync]=""
+    subcommands_opts[update]=""
     subcommands_opts[list]=""
     subcommands_opts[source]=""
 #    subcommands_opts[mount]=${subcommands_opts[open]}
@@ -476,9 +527,9 @@ main()
     case "$subcommand" in
 	queue) queue ${PARAM} ;;
 	fetch) fetch ;;
-	send) ;;
+	send) send ;;
 	peek) peek ;;
-	sync) sync ;;
+	update) update ;;
 	'source')   return 0 ;;
 	__default) ;;
 	*) error "command \"$subcommand\" not recognized"

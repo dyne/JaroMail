@@ -28,6 +28,10 @@ if [ $? != 0 ]; then
     exit 1
 fi
 
+# install the main postino script
+mkdir -p ${WORKDIR}/bin
+cp src/postino ${WORKDIR}/bin
+
 # make sure we have a temp and cache dir
 mkdir -p $WORKDIR/tmp $WORKDIR/cache
 
@@ -38,19 +42,15 @@ NAME=user
 # @
 DOMAIN=gmail.com
 
-# SMTP (SEND)
-SMTP_ADDRESS=smtp.gmail.com
-SMTP_LOGIN=\${NAME}@\${DOMAIN}
-SMTP_PASSWORD=my_secret_pass
-SMTP_PORT=25
-# SMTP_CERTIFICATE=gmail.pem
-
 # IMAP (RECEIVE)
 IMAP_ADDRESS=imap.gmail.com
 IMAP_LOGIN=\${NAME}@\${DOMAIN}
-IMAP_PASSWORD=my_secret_pass
-IMAP_PORT=443
 
+# SMTP (SEND)
+SMTP_ADDRESS=smtp.gmail.com
+SMTP_LOGIN=\${NAME}@\${DOMAIN}
+
+# SMTP_CERTIFICATE=gmail.pem
 # LOCAL FILES
 # to change the location of this directory,
 # export POSTINO_DIR as env var
@@ -151,6 +151,7 @@ source $MUTTDIR/general
 EOF
     cp -f share/mutt/* $MUTTDIR/
     touch $MUTTDIR/mboxes
+    touch $MUTTDIR/pass
     ln -sf $MUTTDIR/rc $HOME/.muttrc
     if [ $? != 0 ]; then
 	error "Error setting Postino to handle Mutt's default configuration"
@@ -169,7 +170,6 @@ cp -a share/procmail/* $PROCMAILDIR
 
 case `uname -s` in
 	Darwin)
-		mkdir -p $WORKDIR/bin
 		if [ -r build/osx ]; then
 			cp -a build/osx/* $WORKDIR/bin
 		fi
@@ -189,7 +189,7 @@ EOF
 esac
 	
 notice "Installation completed, now edit your personal settings:"
-act "$MAILDIR/Configuration.conf"
+act "$MAILDIR/Configuration.txt"
 if [ `uname -s` = Darwin ]; then
 	open /Applications/TextEdit.app $MAILDIR/Configuration.txt
 fi
