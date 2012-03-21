@@ -74,7 +74,7 @@ act "lbdb address book module"
 cd aux/lbdb-ABQuery
 xcodebuild > /dev/null
 cd -
-cp aux/lbdb-ABQuery/build/Release/lbdb-ABQuery build/osx
+cp aux/lbdb-ABQuery/build/Release/lbdb-ABQuery build/osx/ABQuery
 
 copydeps bin/mutt
 copydeps bin/msmtp

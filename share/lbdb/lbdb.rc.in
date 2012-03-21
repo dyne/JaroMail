@@ -40,7 +40,7 @@
 # - m_evolution  search in the Ximan Evolution addressbook.
 # - m_vcf        search a vcard (according to RFC2426) file.
 
-METHODS="m_inmail m_passwd m_finger"
+METHODS=(m_inmail m_finger m_gpg m_osx_addressbook m_vcf)
 
 
 #
