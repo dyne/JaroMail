@@ -140,6 +140,7 @@ for sh in lbdb-fetchaddr.sh.in lbdb-munge.sh.in lbdb_lib.sh.in lbdbq.sh.in; do
 	dst=`echo $sh | sed -e 's/.sh.in$//'`
 	cat share/lbdb/$sh \
 	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
+	| sed -e "s&@DOTLOCK@&${WORKDIR}/tmp/.lbdb.lock&g" \
 	| sed -e "s&@LBDB_VERSION@&0.38-postino&g" \
 	| sed -e "s&@prefix@&${WORKDIR}/.lbdb&g" \
 	| sed -e "s&@exec_prefix@&${WORKDIR}/.lbdb&g" \
@@ -162,7 +163,16 @@ done
 chmod +x $WORKDIR/.lbdb/*
 ln -sf $WORKDIR/.lbdb/lbdb-fetchaddr $WORKDIR/bin/
 ln -sf $WORKDIR/.lbdb/lbdbq $WORKDIR/bin/
-cp share/lbdb/lbdb.rc.in ${WORKDIR}/.lbdb/lbdb.rc
+
+case $OS in
+    GNU)
+	echo "METHODS=(m_inmail)" > ${WORKDIR}/.lbdb/lbdb.rc
+	;;
+    MAC)
+	# use ABQuery on mac
+	echo "METHODS=(m_inmail m_osx_addressbook)" > ${WORKDIR}/.lbdb/lbdb.rc
+	;;
+esac
 ln -sf $WORKDIR/.lbdb $HOME/
 ####
 
@@ -171,28 +181,34 @@ ln -sf $WORKDIR/.lbdb $HOME/
 src/postino update
 
 
-case `uname -s` in
-	Darwin)
-		if [ -r build/osx ]; then
-			cp -a build/osx/* $WORKDIR/bin
-		fi
-		touch $HOME/.profile
-		cat $HOME/.profile | grep '^# Postino' > /dev/null
-		if [ $? != 0 ]; then
-			cat <<EOF >> $HOME/.profile
+case $OS in
+	GNU)
+	if [ -r build/osx ]; then
+	    cp -a build/osx/* $WORKDIR/bin
+	fi
+	touch $HOME/.profile
+	cat $HOME/.profile | grep '^# Postino' > /dev/null
+	if [ $? != 0 ]; then
+	    cat <<EOF >> $HOME/.profile
 # Postino Installer addition on `date`
 export PATH=$WORKDIR/bin:\$PATH
 # Finished adapting your PATH
 EOF
-		fi
+	fi
 	;;
-	Linux)
+    MAC)
 		# TODO
 	;;
 esac
 	
 notice "Installation completed, now edit your personal settings:"
 act "$MAILDIRS/Configuration.txt"
-if [ `uname -s` = Darwin ]; then
+case $OS in
+	GNU)
+	;;
+	MAC)
 	open /Applications/TextEdit.app $MAILDIRS/Configuration.txt
-fi
+	;;
+	*)
+	;;
+esac

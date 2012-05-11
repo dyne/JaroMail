@@ -32,8 +32,12 @@ for arg in ${argv}; do OLDARGS+=($arg); done
 QUIET=0
 DEBUG=1
 
+
+
 # which command to use when creating dirs
-mkdir="mkdir -m 700 -p"
+mkdir="`which mkdir` -m 700 -p"
+
+
 ##########################
 
 
@@ -57,6 +61,20 @@ act()    {
 	fi
     fi
 }
+
+# what operating system are we in? use os_detect()
+# simplifying modes of operation: GNU or MAC
+case $(uname) in
+    Linux) OS=GNU
+	act "Running on GNU/Linux"	;;
+
+    Apple) OS=MAC
+	act "Running on Mac/OSX"	;;
+
+    *) OS=GNU # default
+	error "Running on an unknown operating system, assuming GNU" ;;
+esac
+
 
 if ! [ -r $HOME/Mail/Configuration.txt ]; then return; fi
 
@@ -106,6 +124,9 @@ GETPIN
 EOF
 }
 
+# retrieve a password for user @ domain
+# put it in variable password
+# up to the caller to unset it after use
 ask_password() {
     func "Looking for password in keyring: $1 @ $2"
     security find-internet-password -a $1 -s $2 > /dev/null
@@ -152,9 +173,9 @@ maildirmake() {
 	return
     fi
 
-    $mkdir -p ${1}/cur
-    $mkdir -p ${1}/new
-    $mkdir -p ${1}/tmp
+    $mkdir ${1}/cur
+    $mkdir ${1}/new
+    $mkdir ${1}/tmp
 
 }
 
