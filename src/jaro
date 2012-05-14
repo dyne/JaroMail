@@ -142,9 +142,9 @@ check_bin() {
 
     # which wipe command to use
     which wipe > /dev/null
-    if [ $? = 0 ]; then rm="wipe -f -s"
+    if [ $? = 0 ]; then rm="wipe -f -s -q -R /dev/urandom"
     else which srm > /dev/null
-	if [ $? = 0 ]; then rm="srm -f"
+	if [ $? = 0 ]; then rm="srm -f -l"
 	else rm="rm -f"; fi
     fi
 }
