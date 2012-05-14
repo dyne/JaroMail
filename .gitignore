@@ -1,0 +1,4 @@
+*~
+*.o
+dotlock
+fetchaddr

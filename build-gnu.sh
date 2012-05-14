@@ -12,6 +12,7 @@ case $distro in
 	which zsh || sudo apt-get install zsh
 	which mutt || sudo apt-get install mutt
 	which procmail || sudo apt-get install procmail
+	which msmtp || sudo apt-get install msmtp
 	which pinentry || sudo apt-get install pinentry
 	which fetchmail || sudo apt-get install fetchmail
 	which wipe || sudo apt-get install wipe

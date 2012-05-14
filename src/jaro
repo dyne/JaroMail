@@ -20,8 +20,8 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=0.6
-DATE=March/2012
+VERSION=0.1
+DATE=May/2012
 JAROMAILEXEC=$0
 typeset -a OLDARGS
 for arg in ${argv}; do OLDARGS+=($arg); done
@@ -88,11 +88,6 @@ WORKDIR=$MAILDIRS/jaro
 
 ${=mkdir} $MAILDIRS
 ${=mkdir} $WORKDIR
-
-
-if [ -r $WORKDIR/Configuration.txt ]; then
-    source $WORKDIR/Configuration.txt
-fi
 
 # make sure the directory is private
 chmod 700 $WORKDIR
