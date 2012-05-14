@@ -53,15 +53,11 @@ ${=mkdir} $WORKDIR/tmp $WORKDIR/cache
 
 if ! [ -r $WORKDIR/Filters.txt ]; then
     cat <<EOF > $WORKDIR/Filters.txt
-# Example filter configuration for Jaromail
+# Example filter configuration for Jaro Mail
 
-# accepted email addresses
-to	  jaromil@dyne.org	save	priv
-to	  jaromil@kyuzz.org	save	priv
-to	  jaromil@enemy.org	save	priv
-to	  jaromil@montevideo.nl	save	priv
+# mailinglist filters are in order of importance
+# syntax: to <list email> save <folder>
 
-# mailinglist filters, in order of importance
 to	  crypto@lists.dyne	save	dyne.crypto
 to	  dynebolic		save	dyne.dynebolic
 to	  freej			save	dyne.freej
@@ -75,6 +71,9 @@ to	  debian-blends		save	debian.blends
 to	  freedombox-discuss	save	debian.freedombox
 
 # other filters for web 2.0 services
+# using folder names with a prefix. can facilitate
+# folder maintainance.
+
 from      identi.ca	        save	web.identica
 from      Twitter		save	web.twitter
 from      linkedin		save	web.linkedin
@@ -213,10 +212,10 @@ case $OS in
 	    cp -a build/osx/* $WORKDIR/bin
 	fi
 	touch $HOME/.profile
-	cat $HOME/.profile | grep '^# Jaromail' > /dev/null
+	cat $HOME/.profile | grep '^# Jaro Mail' > /dev/null
 	if [ $? != 0 ]; then
 	    cat <<EOF >> $HOME/.profile
-# Jaromail Installer addition on `date`
+# Jaro Mail Installer addition on `date`
 export PATH=$WORKDIR/bin:\$PATH
 # Finished adapting your PATH
 EOF

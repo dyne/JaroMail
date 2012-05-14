@@ -280,6 +280,37 @@ read_account() {
     esac
     return 0
 }
+# read a default account
+# arg: "in" or "out"
+# meaning an account to receive or send emails
+read_default_account() {
+    adir=$WORKDIR/Accounts
+    typeset -al all
+    if [ -z $1 ]; then
+	error "Error: read_default_account called without argument"
+	return 1
+    fi
+    case $1 in
+	"in")
+	    if [ -r $adir/imap.default ]; then
+		read_account imap.default
+	    else
+		for a in `find $adir -name "imap*"`; do all+=($a); done
+		for a in `find $adir -name "pop*"`; do all+=($a); done
+		read_account `basename ${all[1]}` # take the first found
+	    fi
+	    ;;
+	"out")
+	    if [ -r $adir/smtp.default ]; then
+		read_account smtp.default
+	    else
+		for a in `find $adir -name "smtp*"`; do all+=($a); done
+		read_account `basename ${all[1]}` # take the first found
+	    fi
+	    ;;
+    esac
+    return 0
+}
 
 queue() {
     local base;
@@ -523,10 +554,14 @@ source $MUTTDIR/identity
 EOF
 
     
-        # just the header, will be completed later in procmail loop
+    # just the header, will be completed later in procmail loop
     rm -f $MUTTDIR/mboxes
     echo -n "mailboxes +priv" > $MUTTDIR/mboxes
-    
+
+    # update identity with default
+    read_default_account "in"
+    switch_identity
+
     ##########
     # PROCMAIL
     ${=mkdir} $PROCMAILDIR
