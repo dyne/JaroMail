@@ -142,7 +142,7 @@ check_bin() {
 
     # which wipe command to use
     which wipe > /dev/null && rm="wipe -f -s" \
-	|| which srm > /dev/null && rm="srm -fm" \
+	|| which srm > /dev/null && rm="srm -f" \
 	|| rm="rm -f"
 }
 
