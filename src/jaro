@@ -141,9 +141,12 @@ check_bin() {
     done
 
     # which wipe command to use
-    which wipe > /dev/null && rm="wipe -f -s" \
-	|| which srm > /dev/null && rm="srm -f" \
-	|| rm="rm -f"
+    which wipe > /dev/null
+    if [ $? = 0 ]; then rm="wipe -f -s"
+    else which srm > /dev/null
+	if [ $? = 0 ]; then rm="srm -f"
+	else rm="rm -f"; fi
+    fi
 }
 
 # retrieve a password for user @ domain
@@ -464,17 +467,15 @@ EOF
 # PEEK
 # this function will open the MTA to the imap server without fetching mails locally
 peek() {
-    adir=$WORKDIR/Accounts
     if [ -z $1 ]; then
-	error "Peek needs a specific imap account to login."
-	act "List of accounts you have configured:"
-	for i in `find $adir -name "imap*"`; do act "`basename $i`"; done
-	return 1
+	read_default_account in
+    else
+	adir=$WORKDIR/Accounts
+	acct=$1
+	typeset -al all
+	for a in `find $adir -name "imap.$acct*"`; do all+=($a); done
+	read_account `basename ${all[1]}`
     fi
-    acct=$1
-    typeset -al all
-    for a in `find $adir -name "imap.$acct*"`; do all+=($a); done
-    read_account `basename ${all[1]}`
     notice "Peek into remote imap account $name"
     switch_identity
     case $transport in
