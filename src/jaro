@@ -363,7 +363,8 @@ EOF
 }
 
 ######
-# SMTP
+# SEND
+# this function should send all mails in outbox
 send() {
     adir=$WORKDIR/Accounts
     acct=$1
@@ -377,19 +378,23 @@ send() {
         return 0
     fi
 
-    if [ -z $acct ]; then # fetch the first account
-	for a in `find $adir -name "smtp*"`; do all+=($a); done
-    else
-	# fetch a particular account
+    if [ -z $acct ]; then
+	if [ -r $adir/smtp.default ]; then
+	    all+=($adir/smtp.default) # use the default account
+	else # else will use the first one
+	    for a in `find $adir -name "smtp*"`; do all+=($a); done
+	fi
+    else # or if specified, use a particular account
 	for a in `find $adir -name "smtp*$acct*"`; do all+=($a); done
     fi
     read_account `basename ${all[1]}`
-    # this function should send all mails in queue
+
     notice "Sending out ${mailnum} mails via `basename ${all[1]}`"
  
     # defaults
-    if [ -z $auth ]; then auth=plain; fi
-
+    [ -z $auth ] && auth=plain
+    [ -z $port ] && port=25
+    
     touch $WORKDIR/tmp/$host.send
     chmod 600 $WORKDIR/tmp/$host.send
     ask_password $login $host
@@ -666,6 +671,8 @@ main()
     subcommands_opts[queue]=""
     subcommands_opts[fetch]=""
     subcommands_opts[send]=""
+    subcommands_opts[read]=""
+    subcommands_opts[compose]=""
     subcommands_opts[peek]=""    
     subcommands_opts[update]=""
     subcommands_opts[query]=""
@@ -736,6 +743,8 @@ main()
 	fetch) fetch ${PARAM} ;;
 	send) send ${PARAM} ;;
 	peek) peek ${PARAM} ;;
+	read) mutt -F $MUTTDIR/rc ;;
+	compose) mutt -F $MUTTDIR/rc ${PARAM} ;;
 	update) update ;;
 	query) ${WORKDIR}/.lbdb/lbdbq ${PARAM} ;;
 	'source')   return 0 ;;
