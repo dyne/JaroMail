@@ -288,7 +288,6 @@ queue() {
     local msmtpfile;
 
     # add mails to the sendout queue
-    umask 007
     ${=mkdir} $MAILDIRS/outbox
     cd $MAILDIRS/outbox || return 1
     notice "Adding mail to the outbox queue"
@@ -350,7 +349,7 @@ fetch() {
 
 	cat <<EOF > $WORKDIR/tmp/$host.fetch
 poll $host with proto IMAP user "$login" there with password "$password"
-keep fetchall and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
+keep and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 antispam 571 550 501 554
 EOF
 	unset password
@@ -366,55 +365,62 @@ EOF
 ######
 # SMTP
 send() {
-    # this function should send all mails in queue
-    notice "Sending out all mails in outbox queue"
- 
-    local -aU smtp_set #behave like a set; that is, an array with unique elements
-    smtp_set="${SMTP_LOGIN};${SMTP_ADDRESS};${SMTP_PORT}"
-    for s in ${(f)smtp_set}; do
-	slogin="${s[(ws:;:)1]}"
-	shost="${s[(ws:;:)2]}"
-	sport="${s[(ws:;:)3]}"
-	func "SMTP: $slogin $shost:$sport"
-    done
-    cd ${MAILDIRS}/outbox
-    mailnum=`ls | grep 'mail$' | wc -l`
+    adir=$WORKDIR/Accounts
+    acct=$1
+    typeset -al all
+
+    # list mails to send
+    mailnum=`ls ${MAILDIRS}/outbox | grep 'mail$' | wc -l`
     mailnum=${mailnum// /} # trim whitespace
     if [ "$mailnum" = "0" ]; then
         act "Outbox is empty, no mails to send."
-        return
+        return 0
     fi
-    ask_password ${slogin} ${shost}
-    cat <<EOF > $WORKDIR/tmp/send
+
+    if [ -z $acct ]; then # fetch the first account
+	for a in `find $adir -name "smtp*"`; do all+=($a); done
+    else
+	# fetch a particular account
+	for a in `find $adir -name "smtp*$acct*"`; do all+=($a); done
+    fi
+    read_account `basename ${all[1]}`
+    # this function should send all mails in queue
+    notice "Sending out ${mailnum} mails via `basename ${all[1]}`"
+ 
+    # defaults
+    if [ -z $auth ]; then auth=plain; fi
+
+    touch $WORKDIR/tmp/$host.send
+    chmod 600 $WORKDIR/tmp/$host.send
+    ask_password $login $host
+    cat <<EOF > $WORKDIR/tmp/$host.send
 account default
-from ${USER}@${DOMAIN}
+from ${name}
+user ${login}
+host ${host}
+port ${port}
 tls on
-host ${SMTP_ADDRESS}
-port ${SMTP_PORT}
 tls_starttls on
 tls_certcheck off
 logfile ${WORKDIR}/log/msmtp.log
-auth plain
-user ${SMTP_LOGIN}
+auth ${auth}
 password ${password}
 EOF
     unset password
-    chmod 600 $WORKDIR/tmp/send
-    mailaddr=`cat *.mail | grep '^To:'`
-    notice "${mailnum} mails to send:"
-    for mail in *.mail; do
+
+    for mail in `find $MAILDIRS/outbox -name "*.mail"`; do
        act "`cat ${mail} | grep '^To:'`"
        smtp=`echo ${mail} | sed -e 's/mail/msmtp/'`
-       msmtp -C $WORKDIR/tmp/send "`cat ${smtp}`" < "${mail}"
+       msmtp -C $WORKDIR/tmp/$host.send "`cat ${smtp}`" < "${mail}"
        if [ $? != 0 ]; then
            error "Error sending mail, skipped"
        else
 	   act "Mail sent succesfully"
-	   rm -f ${mail} ${smtp}
+	   ${=rm} ${mail} ${smtp}
        fi
     done
     cd -
-    ${=rm} ${WORKDIR}/tmp/send
+    ${=rm} $WORKDIR/tmp/$host.send
     return 0
 }
 
@@ -482,8 +488,8 @@ set spoolfile = $MAILDIRS/known/
 set record = $MAILDIRS/sent/
 set postponed= $MAILDIRS/postponed/
 set tmpdir = $WORKDIR/tmp
-set query_command = "jaro query '%s'"
-set sendmail = "jaro queue"
+set query_command = "$WORKDIR/bin/jaro query '%s'"
+set sendmail = "$WORKDIR/bin/jaro queue"
 set header_cache= $WORKDIR/cache
 set maildir_header_cache_verify=no
 set editor = "$EDITOR"
