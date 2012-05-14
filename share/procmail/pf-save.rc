@@ -53,7 +53,7 @@
     :0 c
     * PF_DEST ?? [^ ]
     * $! DEST ?? $PF_DEST
-    |procmail -pm PF_RECURSE=yes pf-save.rc
+    |procmail -pm PF_RECURSE=yes $PMSRC/pf-save.rc
 
     # If we were recursing, don't file multiple copies into DEFAULT
     :0

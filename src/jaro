@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Postino, your humble and faithful electronic postman
+# Jaro Mail, your humble and faithful electronic postman
 #
 # a tool to easily and privately handle your e-mail communication
 #
@@ -22,7 +22,7 @@
 
 VERSION=0.6
 DATE=March/2012
-POSTINOEXEC=$0
+JAROMAILEXEC=$0
 typeset -a OLDARGS
 for arg in ${argv}; do OLDARGS+=($arg); done
 
@@ -45,6 +45,8 @@ PARAM=()
 typeset -A global_opts
 typeset -A opts
 
+typeset -h name login host protocol port password auth cert
+
 autoload colors; colors
 
 # standard output message routines
@@ -66,48 +68,55 @@ act()    {
 # simplifying modes of operation: GNU or MAC
 case $(uname) in
     Linux) OS=GNU
-	act "Running on GNU/Linux"	;;
+	notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
 
     Apple) OS=MAC
-	act "Running on Mac/OSX"	;;
+	notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
 
     *) OS=GNU # default
 	error "Running on an unknown operating system, assuming GNU" ;;
 esac
 
 
-if ! [ -r $HOME/Mail/Configuration.txt ]; then return; fi
-
-source $HOME/Mail/Configuration.txt
-
-# default working dir
-if [ -z $POSTINO_DIR ]; then
-    export WORKDIR=$HOME/.postino
-else
-    export WORKDIR=$POSTINO_DIR
+if [ -z $MAILDIRS ]; then 
+    MAILDIRS=$HOME/Mail
 fi
 
+
+# default working dir
+WORKDIR=$MAILDIRS/jaro
+
+${=mkdir} $MAILDIRS
+${=mkdir} $WORKDIR
+
+
+if [ -r $WORKDIR/Configuration.txt ]; then
+    source $WORKDIR/Configuration.txt
+fi
 
 # make sure the directory is private
 chmod 700 $WORKDIR
-if [ $? != 0 ]; then
-    error "Postino directory $WORKDIR is not private, set permissions to 700"
-    error "Refusing to proceed."
-    exit 1
-fi
 
 # make sure we have a temp and cache dir
 ${=mkdir} "$WORKDIR/tmp"
 ${=mkdir} "$WORKDIR/cache"
+${=mkdir} "$WORKDIR/log"
 
+PROCMAILDIR=$WORKDIR/.procmail
+MUTTDIR=$WORKDIR/.mutt
 
 # make sure tmp is wiped from sensitive data in case of sigINT
 TRAPINT() {
 	error "Caught signal, aborting operations."
         for f in `ls $WORKDIR/tmp/`; do
-	    srm -fm $f
+	    ${=rm} $f
 	done
-	exit 1
+
+	if [ "$DEBUG" = "1" ]; then
+	    return 1
+	else
+	    exit 1
+	fi
 }
 
 # we use pinentry
@@ -124,22 +133,58 @@ GETPIN
 EOF
 }
 
+
+check_bin() {
+    # check for required programs
+    for req in pinentry fetchmail procmail; do
+	which $req >/dev/null || die "Cannot find $req.  Please install it." 1
+    done
+
+    # which wipe command to use
+    which wipe > /dev/null && rm="wipe -f -s" \
+	|| which srm > /dev/null && rm="srm -fm" \
+	|| rm="rm -f"
+}
+
 # retrieve a password for user @ domain
 # put it in variable password
 # up to the caller to unset it after use
 ask_password() {
-    func "Looking for password in keyring: $1 @ $2"
-    security find-internet-password -a $1 -s $2 > /dev/null
-    if [ $? != 0 ]; then # its a new password
-	export password=`pin_entry $1 @ $2`
-	act "New password set for $1 @ $2"
-	security add-internet-password -a $1 -s $2 -w "${password}"
-    else
-	act "Using saved password for $1 @ $2"        
-	export password=`security find-internet-password -a $1 -s $2 -g \
-		2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
-    fi
+    case $OS in
+	MAC)
+	    func "Looking for password in keyring: $1 @ $2"
+	    security find-internet-password -a $1 -s $2 > /dev/null
+	    if [ $? != 0 ]; then # its a new password
+		password=`pin_entry $1 @ $2`
+		act "New password set for $1 @ $2"
+		security add-internet-password -a $1 -s $2 -w "${password}"
+	    else
+		act "Using saved password for $1 @ $2"        
+		password=`security find-internet-password -a $1 -s $2 -g \
+		    2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
+	    fi
+	    return 0
+	    ;;
+	GNU)
+	    password=`pin_entry $login $host`
+	    return 0
+	    ;;
+	*)
+	    error "Unknown system, can't figure out how to handle passwords"
+	    return 1
+    esac
 }
+
+switch_identity() {
+    act "switch to identity: $name <$login>"
+    rm -f $MUTTDIR/identity
+    cat <<EOF > $MUTTDIR/identity
+set hostname = $host
+set realname = "$name"
+set from = "$name <$login>"
+EOF
+}
+
 
 option_is_set() {
     #First argument, the option (something like "-s")
@@ -177,6 +222,63 @@ maildirmake() {
     ${=mkdir} ${1}/new
     ${=mkdir} ${1}/tmp
 
+}
+# arg 1 : account name, es: imap.gmail
+read_account() {
+    adir=$WORKDIR/Accounts
+    acct=$1
+    type="`echo $1|cut -d. -f1`"
+    # find the file
+    if [ -r $adir/$acct.txt ]; then
+	acct=$adir/$acct.txt
+    elif [ -r $adir/$acct ]; then  # try without .txt
+	acct=$adir/$acct
+    else
+	error "account $acct not found in $adir"
+	return 1
+    fi
+    atmp=$WORKDIR/tmp/$1
+    case $type in
+	imap|smtp)
+	    ttmp=`cat $acct | awk '
+    /^#/ { next }
+    /^name/ { for(i=2;i<=NF;i++) printf "%s ", $i; printf ";" }
+    /^host/ { printf "%s;", $2 }
+    /^login/ { printf "%s;", $2 }
+    /^transport/ { printf "%s;", $2 }
+    /^port/ { printf "%s;", $2 }    
+    /^password/ {printf "%s;", $2 }
+    /^auth/ { printf "%s;", $2 }
+    /^cert/ { printf "%s;", $2 }
+    '`
+	    name=${ttmp[(ws:;:)1]}
+	    host=${ttmp[(ws:;:)2]}
+	    login=${ttmp[(ws:;:)3]}
+	    transport=${ttmp[(ws:;:)4]}
+	    port=${ttmp[(ws:;:)5]}
+	    password=${ttmp[(ws:;:)6]}
+	    auth=${ttmp[(ws:;:)7]}
+	    cert=${ttmp[(ws:;:)8]}
+
+	    # if not present the field is equal to the preceeding one
+	    [ "$cert" = "$auth" ] && unset cert
+	    [ "$auth" = "$password" ] && unset auth
+	    [ "$password" = "$port" ] && unset password
+
+	    func "name: $name"
+	    func "host: $host"
+	    func "login: $login"
+	    func "trans: $transport"
+	    func "port: $port"
+	    func "cert: $cert"
+	    func "auth: $auth"
+	    ;;
+	*)
+	    error "Account type \"$type\" not recognized."
+	    return 1
+	    ;;
+    esac
+    return 0
 }
 
 queue() {
@@ -220,31 +322,44 @@ queue() {
 ###########
 # FETCHMAIL
 fetch() {
-    notice "Fetching mails from server"
-    # this function generates a fetchmail configuration and downloads emails
-    local -aU imap_set # behave like a set
-    imap_set="${IMAP_LOGIN};${IMAP_ADDRESS}"
-    for i in ${(f)imap_set}; do
-	ilogin="${i[(ws:;:)1]}"
-	ihost="${i[(ws:;:)2]}"
-	func "IMAP: $ilogin $ihost"
-    done
-    if ! [ -r $PROCMAILDIR/rc ]; then
-	act "Syncing configuration"
-	sync
+    adir=$WORKDIR/Accounts
+    acct=$1
+    typeset -al all
+    if [ -z $acct ]; then # fetch all accounts
+	for a in `find $adir -name "imap*"`; do all+=($a); done
+	for a in `find $adir -name "pop*"`; do all+=($a); done
+    else
+	# fetch only one account
+	for a in `find $adir -name "$acct*"`; do all+=($a); done
     fi
-    ask_password $ilogin $ihost
-    touch $WORKDIR/tmp/fetch; chmod 600 $WORKDIR/tmp/fetch
-    cat <<EOF > $WORKDIR/tmp/fetch
-poll $ihost with proto IMAP user "$ilogin" there with password "$password"
-keep and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
+    if ! [ -r $PROCMAILDIR/rc ]; then
+	act "updating procmail configuration"
+	update
+    fi
+    for a in ${all}; do
+	read_account `basename $a`
+	notice "Fetching mails from $name"
+	touch $WORKDIR/tmp/$host.fetch
+	chmod 600 $WORKDIR/tmp/$host.fetch
+	ask_password $login $host
+	if [ $? != 0 ]; then
+	    error "Error retrieving password for $login on $host"
+	    unset password all
+	    return 1
+	fi
+
+	cat <<EOF > $WORKDIR/tmp/$host.fetch
+poll $host with proto IMAP user "$login" there with password "$password"
+keep fetchall and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 antispam 571 550 501 554
 EOF
-    unset password
-
-    act "Launching fetchmail"
-    fetchmail -f $WORKDIR/tmp/fetch
-    srm -fm $WORKDIR/tmp/fetch
+	unset password
+    # this function generates a fetchmail configuration and downloads emails
+	act "launching fetchmail"
+	( sleep 2; act "deleting temporary files"
+	    ${=rm} $WORKDIR/tmp/$host.fetch ) &
+	fetchmail -f $WORKDIR/tmp/$host.fetch
+    done
     return 0
 }
 
@@ -278,7 +393,7 @@ host ${SMTP_ADDRESS}
 port ${SMTP_PORT}
 tls_starttls on
 tls_certcheck off
-logfile ${WORKDIR}/msmtp.log
+logfile ${WORKDIR}/log/msmtp.log
 auth plain
 user ${SMTP_LOGIN}
 password ${password}
@@ -299,24 +414,36 @@ EOF
        fi
     done
     cd -
-    srm -fm ${WORKDIR}/tmp/send
+    ${=rm} ${WORKDIR}/tmp/send
     return 0
 }
 
 ######
-# IMAP
+# PEEK
+# this function will open the MTA to the imap server without fetching mails locally
 peek() {
-    notice "Peeking into remote mailbox"
-    # this function will open the MTA to the imap server without fetching mails locally
-    local -aU imap_set #behave like a set; that is, an array with unique elements
-    imap_set="${IMAP_LOGIN};${IMAP_ADDRESS}"
-    for i in ${(f)imap_set}; do
-	ilogin="${i[(ws:;:)1]}"
-	ihost="${i[(ws:;:)2]}"
-	func "IMAP: $ilogin $ihost"
-    done
+    adir=$WORKDIR/Accounts
+    if [ -z $1 ]; then
+	error "Peek needs a specific imap account to login."
+	act "List of accounts you have configured:"
+	for i in `find $adir -name "imap*"`; do act "`basename $i`"; done
+	return 1
+    fi
+    acct=$1
+    typeset -al all
+    for a in `find $adir -name "imap.$acct*"`; do all+=($a); done
+    read_account `basename ${all[1]}`
+    notice "Peek into remote imap account $name"
+    switch_identity
+    case $transport in
+	ssl) iproto="imaps" ;;
+	plain) iproto="imap" ;;
+    esac
     # escape at sign in login
-    mutt -f imaps://`echo $ilogin | sed 's/@/\\@/'`@${ihost}
+    ilogin=`echo $login | sed 's/@/\\@/'`
+    mutt -F $MUTTDIR/rc -f ${iproto}://${ilogin}@${host}
+    # TODO automatic input of password in mutt
+    return $?
 }
 
 update() {
@@ -329,8 +456,10 @@ update() {
     # ...
     
     # debug configuration
-    func "WORKDIR: $WORKDIR"
-    func "MAILDIRS: $MAILDIRS"
+    func "MAILDIRS:    $MAILDIRS"
+    func "WORKDIR:     $WORKDIR"
+    func "MUTTDIR:     $MUTTDIR"
+    func "PROCMAILDIR: $PROCMAILDIR"
 
     # make sure maildirs where to put mails exist
     ${=mkdir} $MAILDIRS
@@ -343,43 +472,49 @@ update() {
     
     ######
     # MUTT
-    if ! [ -z $MUTTDIR ]; then
-	${=mkdir} $MUTTDIR
-	rm -f $MUTTDIR/rc
-	cat<<EOF > $MUTTDIR/rc
-# mutt config generated by postino
+    ${=mkdir} $MUTTDIR
+    rm -f $MUTTDIR/rc
+    cat<<EOF > $MUTTDIR/rc
+# mutt config generated by Jaro Mail
 unset use_domain
-set hostname = $DOMAIN
-set realname = $FULLNAME
-set from = "$FULLNAME <${USER}@${DOMAIN}>"
 set folder = $MAILDIRS
 set spoolfile = $MAILDIRS/known/
 set record = $MAILDIRS/sent/
 set postponed= $MAILDIRS/postponed/
 set tmpdir = $WORKDIR/tmp
-set query_command = "postino query '%s'"
-set sendmail = "postino queue"
-set header_cache= $MUTTDIR/cache
+set query_command = "jaro query '%s'"
+set sendmail = "jaro queue"
+set header_cache= $WORKDIR/cache
 set maildir_header_cache_verify=no
 set editor = "$EDITOR"
 set mailcap_path = "$WORKDIR/mailcap"
-
-# mailboxes in order of priority
-source $MUTTDIR/mboxes
 EOF
 
-	if [ -r $MUTTDIR/general ]; then
-	    echo "# user tweaked configuration" >> $MUTTDIR/rc
-	    echo "source ${MUTTDIR}/general" >> $MUTTDIR/rc
-	fi
-	echo "## end of generated muttrc" >> $MUTTDIR/rc
-	echo "##########################" >> $MUTTDIR/rc
-	echo >> $MUTTDIR/rc
-
-        # just the header, will be completed later in procmail loop
-	rm -f $WORKDIR/mutt/mboxes
-	echo -n "mailboxes +priv" > $MUTTDIR/mboxes
+    if [ -r $MUTTDIR/general ]; then
+	echo "# user tweaked configuration" >> $MUTTDIR/rc
+	echo "source ${MUTTDIR}/general" >> $MUTTDIR/rc
     fi
+
+cat <<EOF >> $MUTTDIR/rc
+# mailboxes in order of priority
+source $MUTTDIR/mboxes
+
+# specific configuration files
+# hardcoded path for now (TODO)
+source $MUTTDIR/crypto
+source $MUTTDIR/colors
+source $MUTTDIR/formats
+source $MUTTDIR/keybindings
+source $MUTTDIR/identity
+## end of Jaro Mail generated muttrc
+####################################
+
+EOF
+
+    
+        # just the header, will be completed later in procmail loop
+    rm -f $MUTTDIR/mboxes
+    echo -n "mailboxes +priv" > $MUTTDIR/mboxes
     
     ##########
     # PROCMAIL
@@ -387,40 +522,50 @@ EOF
     rm -f $PROCMAILDIR/rc
     touch $PROCMAILDIR/rc
     cat<<EOF >> $PROCMAILDIR/rc
-# procmail configuration file generated by postino
+# procmail configuration file generated by Jaro Mail
 MAILDIR=$MAILDIRS
 DEFAULT=unsorted/
 VERBOSE=off
-LOGFILE=$PROCMAILDIR/log
+LOGFILE=$WORKDIR/log/procmail.log
 SHELL       = /bin/sh       # VERY IMPORTANT
 UMASK       = 007           # James Bond :-)
 LINEBUF     = 8192          # avoid procmail choke
-src/postino update
+
 #  Using Procmail Module Library http://sf.net/projects/pm-lib
 PMSRC  = $PROCMAILDIR
 #  Load the central initial startup code.
-INCLUDERC = $PMSRC/pm-javar.rc
+INCLUDERC = \$PMSRC/pm-javar.rc
 PF_DEST = ""			# clear these vars
 PF_FROM = ""
 # don't save multiple copies
 PF_RECURSE = yes
 :0
-* ? test pf-chkto.rc
+* ? test \$PMSRC/pf-chkto.rc
 {
-# filters generated from postino Filters.txt
 EOF
-    for f in `cat $MAILDIRS/Filters.txt | awk '/^#/ {next} /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
+
+    #######
+    echo "# filters generated from Accounts" >> $PROCMAILDIR/rc
+    typeset -al accts
+    for f in `cat $WORKDIR/Accounts/* | awk '/^login/ { print $2 }'`; do
+	echo "ADDR=${f}\tDEST=priv\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
+    done
+
+    #######
+    echo "# filters generated from Filters.txt" >> $PROCMAILDIR/rc
+    
+    for f in `cat $WORKDIR/Filters.txt | awk '/^#/ {next} /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
 	header="${f[(ws:;:)1]}"
 	address="${f[(ws:;:)2]}"
 	action="${f[(ws:;:)3]}"
 	destination="${f[(ws:;:)4]}"
 	case $header in
 	    to)
-		print "ADDR=${address}\tDEST=${destination}\tINCLUDERC=$PMSRC/pf-chkto.rc" \
+		print "ADDR=${address}\tDEST=${destination}\tINCLUDERC=\$PMSRC/pf-chkto.rc" \
 		    >> $PROCMAILDIR/rc
 		;;
 	    from)
-		print "ADDR=${address}\tDEST=${destination}\tINCLUDERC=$PMSRC/pf-check.rc" \
+		print "ADDR=${address}\tDEST=${destination}\tINCLUDERC=\$PMSRC/pf-check.rc" \
 		    >> $PROCMAILDIR/rc
 		;;
 	    *)
@@ -444,12 +589,12 @@ EOF
 # save the mails
 :0
 * PF_DEST ?? .
-* ? test $PMSRC/pf-save.rc
-{ INCLUDERC=$PMSRC/pf-save.rc }
+* ? test \$PMSRC/pf-save.rc
+{ INCLUDERC=\$PMSRC/pf-save.rc }
 
 # if the sender is known (ldbd recognizes it) then put mail in high priority 'known'
 :0 w:
-* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs lbdbq
+* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs jaro query
 known/
 
 # if got here, go to unsorted
@@ -457,11 +602,42 @@ known/
 # save the mails
 :0
 * PF_DEST ?? .
-* ? test $PMSRC/pf-save.rc
-{ INCLUDERC=$PMSRC/pf-save.rc }
+* ? test \$PMSRC/pf-save.rc
+{ INCLUDERC=\$PMSRC/pf-save.rc }
 
 EOF
     return 0
+}
+
+usage() {
+    cat <<EOF
+Jaro Mail $VERSION - your humble and faithful electronic postman
+
+ Copyright (C) 2010-2012 Dyne.org Foundation, License GNU GPL v3+
+ This is free software: you are free to change and redistribute it
+ The latest Tomb sourcecode is published on <http://tomb.dyne.org>
+
+Syntact: jaro command [options] [account]
+
+Commands:
+
+ queue
+ send
+ peek
+ fetch
+ sync
+
+Options:
+
+ -h     print this help
+ -v     version information for this tool
+ -q     run quietly without printing informations
+ -D     print debugging information at runtime
+
+
+For more informations on Jaro Mail read the manual: man jaro
+Please report bugs on <http://bugs.dyne.org>.
+EOF
 }
 
 
@@ -544,18 +720,18 @@ main()
     fi
   ### End parsing command-specific options
 
-    if option_is_set -v; then act "Postino - $VERSION"; fi
-    if option_is_set -h; then error "TODO usage here"; fi
+    if option_is_set -v; then act "Jaro Mail - $VERSION"; fi
+    if option_is_set -h; then usage;  fi
     if option_is_set -q; then QUIET=1; fi
     if option_is_set -D; then func "Debug messages ON"; DEBUG=1; fi
         
     case "$subcommand" in
 	queue) queue ${PARAM} ;;
-	fetch) fetch ;;
-	send) send ;;
-	peek) peek ;;
+	fetch) fetch ${PARAM} ;;
+	send) send ${PARAM} ;;
+	peek) peek ${PARAM} ;;
 	update) update ;;
-	query) lbdbq $@ ;;
+	query) ${WORKDIR}/.lbdb/lbdbq ${PARAM} ;;
 	'source')   return 0 ;;
 	__default) ;;
 	*) error "command \"$subcommand\" not recognized"
@@ -566,4 +742,5 @@ main()
     return 0
 }
 
+check_bin
 main $@

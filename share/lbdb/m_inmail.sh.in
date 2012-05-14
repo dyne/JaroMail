@@ -23,7 +23,7 @@ prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
 
-m_inmail_db=$HOME/.lbdb/m_inmail.list
+m_inmail_db=@libdir@/m_inmail.list
 
 m_inmail_query()
 {

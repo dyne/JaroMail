@@ -1,85 +1,59 @@
 #!/usr/bin/env zsh
 
-# Postino install script
+# jaromail install script
+#
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-if ! [ -r src/postino ]; then
-    echo "Error: this script should be run from inside a postino software distribution"
+if ! [ -r src/jaro ]; then
+    echo "Error: this script should be run from inside a jaromail software distribution"
     exit 1
 fi
 
+if [ $1 ]; then 
+    MAILDIRS=$1;
+else
+    MAILDIRS=$HOME/Mail
+fi
 
-WORKDIR=$HOME/.postino
-MAILDIRS=$HOME/Mail
+WORKDIR=$MAILDIRS/jaro
+PROCMAILDIR=$WORKDIR/.procmail
+MUTTDIR=$WORKDIR/.mutt
 
 umask 007 # James Bond ;^)
 
-if [ $1 ]; then WORKDIR=$1; fi
+
+source src/jaro
+
 # make sure the directory is private
-mkdir -p $WORKDIR
-mkdir -p $MAILDIRS
+${=mkdir} $MAILDIRS
+${=mkdir} $WORKDIR
 
-source src/postino
+notice "Installing Jaromail in $WORKDIR"
 
-notice "Installing Postino in $WORKDIR"
-
-if [ $? != 0 ]; then
-    error "Postino directory $WORKDIR is not private, set its permissions to 700"
-    error "Refusing to proceed."
-    exit 1
-fi
-
-# install the main postino script
-mkdir -p ${WORKDIR}/bin
-cp src/postino ${WORKDIR}/bin
+# install the main jaromail script
+${=mkdir} ${WORKDIR}/bin
+cp src/jaro ${WORKDIR}/bin
 
 # make sure we have a temp and cache dir
-mkdir -p $WORKDIR/tmp $WORKDIR/cache
+${=mkdir} $WORKDIR/tmp $WORKDIR/cache
 
-if ! [ -r $MAILDIRS/Configuration.txt ]; then
-    cat <<EOF > $MAILDIRS/Configuration.txt
-# Name appearing in From: field
-FULLNAME="Anonymous"
-
-# MAIL USER (the left and right parts of an email)
-USER=username
-# @
-DOMAIN=gmail.com
-
-# IMAP (RECEIVE)
-IMAP_ADDRESS=imap.gmail.com
-IMAP_LOGIN=\${USER}@\${DOMAIN}
-
-# SMTP (SEND)
-SMTP_ADDRESS=smtp.gmail.com
-SMTP_LOGIN=\${USER}@\${DOMAIN}
-SMTP_PORT=465
-
-# SMTP_CERTIFICATE=gmail.pem
-# LOCAL FILES
-# to change the location of this directory,
-# export POSTINO_DIR as env var
-# the defaults below should be ok, they place
-# mutt, procmail, mstmp and other confs in ~/.postino
-
-MAILDIRS=$MAILDIRS
-MUTTDIR=$WORKDIR/.mutt
-PROCMAILDIR=$WORKDIR/.procmail
-CERTIFICATES=$HOME/.ssl/certs
-
-# directory of the sieve filter
-# REMOTE_FILTER=/var/mail/...
-EOF
-    act "Default configuration created"
-else
-    error "Existing $MAILDIRS/Configuration.txt skipped"
-fi
-
-# source the default configuration
-source $MAILDIRS/Configuration.txt
-
-if ! [ -r $MAILDIRS/Filters.txt ]; then
-    cat <<EOF > $MAILDIRS/Filters.txt
-# Example filter configuration for Postino
+if ! [ -r $WORKDIR/Filters.txt ]; then
+    cat <<EOF > $WORKDIR/Filters.txt
+# Example filter configuration for Jaromail
 
 # accepted email addresses
 to	  jaromil@dyne.org	save	priv
@@ -112,36 +86,88 @@ from      academia.edu		save	web.academia
 EOF
     act "Default filters created"
 else
-    error "Existing configuration $MAILDIRS/Filters.txt skipped"
+    error "Existing configuration $WORKDIR/Filters.txt skipped"
 fi
 
-source $MAILDIRS/Configuration.txt
+if ! [ -r $WORKDIR/Accounts ]; then
+    ${=mkdir} $WORKDIR/Accounts
+    cat <<EOF > $WORKDIR/Accounts/README.txt
+Directory containing account information
+
+Each file contains a different account: imap, pop or gmail
+each account contains all information needed to connect it
+
+For example a file named imap.gmail.txt should contain:
+
+----8<----8<----8<----8<----8<----8<----8<----8<----8<----
+# Name and values are separated by spaces or tabs
+
+# Name appearing in From: field
+name Anonymous
+
+host imap.gmail.com
+
+login USERNAME@gmail.com
+
+auth plain # or kerberos, etc
+
+transport ssl
+
+port 993
+
+cert /path/to/cert
+
+# the password field will be filled in automatically
+
+----8<----8<----8<----8<----8<----8<----8<----8<----8<----
+
+Or a file named smtp.gmail.txt should contain:
+
+----8<----8<----8<----8<----8<----8<----8<----8<----8<----
+# Name and values are separated by spaces or tabs
+
+host smtp.gmail.com
+
+login USERNAME@gmail.com
+
+transport ssl # or "tls" or "plain"
+
+port 465
+
+----8<----8<----8<----8<----8<----8<----8<----8<----8<----
+
+EOF
+    act "Default accounts directory created"
+else
+    error "Existing configuration $WORKDIR/Accounts skipped"
+fi
 
 # procmail is entirely generated
 # so overwriting it won't hurt
 act "Installing procmail scripts"
-mkdir -p $PROCMAILDIR
+${=mkdir} $PROCMAILDIR
 cp -a share/procmail/* $PROCMAILDIR
 
 # also mutt is safe to override
-mkdir -p $MUTTDIR
+${=mkdir} $MUTTDIR
 cp -a share/mutt/* $MUTTDIR
 
 act "Installing little brother database"
 # safe to override
-mkdir -p $WORKDIR/.lbdb
+${=mkdir} $WORKDIR/.lbdb
 for aw in munge.awk.in munge-keeporder.awk.in tac.awk.in; do
 	dst=`echo $aw | sed -e 's/.awk.in$//'`
 	cat share/lbdb/$aw \
-	| sed -e "s&@AWK@&/usr/bin/env awk&g" \
+	| sed -e "s&@AWK@&`which awk`&g" \
 	> $WORKDIR/.lbdb/$dst
 done
 for sh in lbdb-fetchaddr.sh.in lbdb-munge.sh.in lbdb_lib.sh.in lbdbq.sh.in; do
 	dst=`echo $sh | sed -e 's/.sh.in$//'`
 	cat share/lbdb/$sh \
 	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
-	| sed -e "s&@DOTLOCK@&${WORKDIR}/tmp/.lbdb.lock&g" \
-	| sed -e "s&@LBDB_VERSION@&0.38-postino&g" \
+	| sed -e "s&@DOTLOCK@&mutt_dotlock&g" \
+	| sed -e "s&@LBDB_FILE&${WORKDIR}/.lbdb/m_inmail.list&g" \
+	| sed -e "s&@LBDB_VERSION@&0.38-jaromail&g" \
 	| sed -e "s&@prefix@&${WORKDIR}/.lbdb&g" \
 	| sed -e "s&@exec_prefix@&${WORKDIR}/.lbdb&g" \
 	| sed -e "s&@libdir@&${WORKDIR}/.lbdb&g" \
@@ -154,7 +180,7 @@ lbdb_modules=(m_finger m_gpg m_inmail m_muttalias m_osx_addressbook m_vcf)
 for mod in ${lbdb_modules}; do
 	cat share/lbdb/${mod}.sh.in \
 	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
-	| sed -e "s&@LBDB_VERSION@&0.38-postino&g" \
+	| sed -e "s&@LBDB_VERSION@&0.38-jaromail&g" \
 	| sed -e "s&@prefix@&${WORKDIR}/.lbdb&g" \
 	| sed -e "s&@exec_prefix@&${WORKDIR}/.lbdb&g" \
 	| sed -e "s&@libdir@&${WORKDIR}/.lbdb&g" \
@@ -178,7 +204,7 @@ ln -sf $WORKDIR/.lbdb $HOME/
 
 
 # generate initial configuration
-src/postino update
+MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update
 
 
 case $OS in
@@ -187,10 +213,10 @@ case $OS in
 	    cp -a build/osx/* $WORKDIR/bin
 	fi
 	touch $HOME/.profile
-	cat $HOME/.profile | grep '^# Postino' > /dev/null
+	cat $HOME/.profile | grep '^# Jaromail' > /dev/null
 	if [ $? != 0 ]; then
 	    cat <<EOF >> $HOME/.profile
-# Postino Installer addition on `date`
+# Jaromail Installer addition on `date`
 export PATH=$WORKDIR/bin:\$PATH
 # Finished adapting your PATH
 EOF
@@ -201,14 +227,13 @@ EOF
 	;;
 esac
 	
-notice "Installation completed, now edit your personal settings:"
-act "$MAILDIRS/Configuration.txt"
+notice "Installation completed" #, now edit your personal settings:"
 case $OS in
 	GNU)
 	;;
 	MAC)
-	open /Applications/TextEdit.app $MAILDIRS/Configuration.txt
 	;;
+#	open /Applications/TextEdit.app $WORKDIR/Configuration.txt
 	*)
 	;;
 esac

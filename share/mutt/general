@@ -1,13 +1,6 @@
 # Postino's generic config settings for Mutt
 # originally used by Jaromil
 
-# specific configuration files
-# hardcoded path for now (TODO)
-source ~/.postino/.mutt/crypto
-source ~/.postino/.mutt/colors
-source ~/.postino/.mutt/formats
-source ~/.postino/.mutt/keybindings
-
 ###############
 ## SMTP options
 unset use_8bitmime
