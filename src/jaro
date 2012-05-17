@@ -97,6 +97,7 @@ chmod 700 $WORKDIR
 ${=mkdir} "$WORKDIR/tmp"
 ${=mkdir} "$WORKDIR/cache"
 ${=mkdir} "$WORKDIR/log"
+${=mkdir} "$WORKDIR/certs"
 
 PROCMAILDIR=$WORKDIR/.procmail
 MUTTDIR=$WORKDIR/.mutt
@@ -361,6 +362,68 @@ queue() {
     return 0
 }
 
+######
+# CERT
+# downloads and/or installs certificates
+cert() {
+    if [ -z $1 ]; then
+	error "Certificate handler called without an argument"
+	return 1;
+    fi
+
+    certificate="$1"
+
+    case $certificate in
+	gmail)
+	    cc=Equifax_Secure_Certificate_Authority
+	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
+		
+		wget -O $WORKDIR/certs/${cc}.pem --no-check-certificate \
+		    "https://www.geotrust.com/resources/root_certificates/certificates/${cc}.cer"
+		openssl x509 -in \
+		    $WORKDIR/certs/${cc}.pem -fingerprint \
+		    -subject -issuer -serial -hash -noout
+	    fi
+	    ;;
+	dyne|autistici|freaknet)
+	    cc=Autistici_Certificate_Authority
+	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
+		wget -O $WORKDIR/certs/${cc}.pem \
+		    "http://ca.autistici.org/ca.pem"
+		openssl x509 -in \
+		    $WORKDIR/certs/${cc}.pem \
+		    -fingerprint -subject -issuer -serial -hash -noout
+	    fi
+	    ;;
+	riseup)
+	    cc=RiseupCA
+	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
+		wget -O $WORKDIR/certs/${cc}.pem --no-check-certificate "https://help.riseup.net/assets/43052/RiseupCA.pem"
+		openssl x509 -in \
+		    $WORKDIR/certs/${cc}.pem \
+		    -fingerprint -subject -issuer -serial -hash -noout
+	    fi
+	    ;;
+	*)
+	    cc="`basename $certificate`"
+	    wget -O "$WORKDIR/certs/${cc}" "$certificate"
+	    if [ $? != 0 ]; then
+		error "Error downloading certificate: $certificate"
+		return 1
+	    fi
+	    openssl x509 -in \
+		"$WORKDIR/certs/${cc}" \
+		-fingerprint -subject -issuer -serial -hash -noout
+	    ;;
+    esac
+    act "refreshing certificates"
+    c_rehash $WORKDIR/certs > /dev/null
+    if [ $? != 0 ]; then
+	error "Error refreshing certificates in $WORKDIR/certs"
+	c_rehash $WORKDIR/certs
+    fi
+    return 0
+}
 
 ###########
 # FETCHMAIL
@@ -398,6 +461,7 @@ fetch() {
 	cat <<EOF > $WORKDIR/tmp/$host.fetch
 poll $host with proto IMAP user "$login" there with password "$password"
 keep fetchall and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
+sslcertck sslcertpath '$WORKDIR/certs'
 antispam 571 550 501 554
 EOF
 	unset password
@@ -419,7 +483,7 @@ EOF
 	act "please wait while downloading mails..."
 
 	( sleep 2; ${=rm} $WORKDIR/tmp/$host.fetch ) &
-	fetchmail -s -f $WORKDIR/tmp/$host.fetch
+	fetchmail -v -f $WORKDIR/tmp/$host.fetch
 	
 	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
 	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print " .  " $2 "\t" $3 }'|sort -nr`
@@ -751,6 +815,7 @@ main()
     subcommands_opts[update]=""
     subcommands_opts[query]=""
     subcommands_opts[source]=""
+    subcommands_opts[cert]=""
 #    subcommands_opts[mount]=${subcommands_opts[open]}
 #    subcommands_opts[create]="s: -size=s -ignore-swap k: -key=k"
     ### Detect subcommand
@@ -818,6 +883,7 @@ main()
 	send) send ${PARAM} ;;
 	peek) peek ${PARAM} ;;
 	read) mutt -F $MUTTDIR/rc ;;
+	cert) cert ${PARAM} ;;
 	compose) mutt -F $MUTTDIR/rc ${PARAM} ;;
 	update) update ;;
 	query) ${WORKDIR}/.lbdb/lbdbq ${PARAM} ;;
