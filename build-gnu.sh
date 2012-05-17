@@ -18,7 +18,7 @@ case $distro in
 	which wipe || sudo apt-get install wipe
 	echo "All dependencies installed"
 	echo -n "Compiling a few sources... "
-	cd share/lbdb
+	cd src/lbdb
 	echo -n "dotlock "
 	[ -x dotlock ] || gcc -O2 -o dotlock dotlock.c
 	echo "fetchaddr"

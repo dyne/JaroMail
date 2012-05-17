@@ -147,24 +147,24 @@ fi
 # so overwriting it won't hurt
 act "Installing procmail scripts"
 ${=mkdir} $PROCMAILDIR
-cp -a share/procmail/* $PROCMAILDIR
+cp -a src/procmail/* $PROCMAILDIR
 
 # also mutt is safe to override
 ${=mkdir} $MUTTDIR
-cp -a share/mutt/* $MUTTDIR
+cp -a src/mutt/* $MUTTDIR
 
 act "Installing little brother database"
 # safe to override
 ${=mkdir} $WORKDIR/.lbdb
 for aw in munge.awk.in munge-keeporder.awk.in tac.awk.in; do
 	dst=`echo $aw | sed -e 's/.awk.in$//'`
-	cat share/lbdb/$aw \
+	cat src/lbdb/$aw \
 	| sed -e "s&@AWK@&`which awk`&g" \
 	> $WORKDIR/.lbdb/$dst
 done
 for sh in lbdb-fetchaddr.sh.in lbdb-munge.sh.in lbdb_lib.sh.in lbdbq.sh.in; do
 	dst=`echo $sh | sed -e 's/.sh.in$//'`
-	cat share/lbdb/$sh \
+	cat src/lbdb/$sh \
 	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
 	| sed -e "s&@DOTLOCK@&mutt_dotlock&g" \
 	| sed -e "s&@LBDB_FILE&${WORKDIR}/.lbdb/m_inmail.list&g" \
@@ -179,7 +179,7 @@ for sh in lbdb-fetchaddr.sh.in lbdb-munge.sh.in lbdb_lib.sh.in lbdbq.sh.in; do
 done
 lbdb_modules=(m_finger m_gpg m_inmail m_muttalias m_osx_addressbook m_vcf)
 for mod in ${lbdb_modules}; do
-	cat share/lbdb/${mod}.sh.in \
+	cat src/lbdb/${mod}.sh.in \
 	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
 	| sed -e "s&@LBDB_VERSION@&0.38-jaromail&g" \
 	| sed -e "s&@prefix@&${WORKDIR}/.lbdb&g" \

@@ -141,7 +141,7 @@ check_bin() {
     which wipe > /dev/null
     if [ $? = 0 ]; then rm="wipe -f -s -q -R /dev/urandom"
     else which srm > /dev/null
-	if [ $? = 0 ]; then rm="srm -f -l"
+	if [ $? = 0 ]; then rm="srm -m"
 	else rm="rm -f"; fi
     fi
 }
@@ -476,6 +476,7 @@ EOF
 	# archive old procmail log
 	if [ -r $WORKDIR/log/procmail.log ]; then
 	    touch $WORKDIR/log/procmail-${datestamp}.log
+	    chmod 700 $WORKDIR/log/procmail-${datestamp}.log
 	    cat $WORKDIR/log/procmail.log \
 		>> $WORKDIR/log/procmail-${datestamp}.log
 	    rm -f $WORKDIR/log/procmail.log

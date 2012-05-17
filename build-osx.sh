@@ -71,10 +71,10 @@ EOF
 notice "Building Jaro Mail binary stash for Apple/OSX"
 
 act "lbdb address book module"
-cd aux/lbdb-ABQuery
+cd src/lbdb-ABQuery
 xcodebuild > /dev/null
 cd -
-cp aux/lbdb-ABQuery/build/Release/lbdb-ABQuery build/osx/ABQuery
+cp src/lbdb-ABQuery/build/Release/lbdb-ABQuery build/osx/ABQuery
 
 copydeps bin/mutt
 copydeps bin/msmtp
