@@ -15,7 +15,7 @@
 
 # and local natives: fetchmail, procmail...
 
-source src/postino source
+source src/jaro source
 
 mkdir -p build/osx/dylib
 
@@ -60,7 +60,7 @@ copydeps() {
 		# create a wrapper
 		cat <<EOF > build/osx/`basename $1`
 #!/usr/bin/env sh
-PDIR=\$HOME/.postino
+PDIR=\$HOME/Mail/jaro
 DYLD_LIBRARY_PATH=\$PDIR/bin/dylib:\$DYLD_LIBRARY_PATH
 \$PDIR/bin/`basename $1`.bin \$@
 EOF
@@ -68,7 +68,7 @@ EOF
 	fi
 }
 
-notice "Building Postino binary stash for Apple/OSX"
+notice "Building Jaro Mail binary stash for Apple/OSX"
 
 act "lbdb address book module"
 cd aux/lbdb-ABQuery
@@ -80,6 +80,7 @@ copydeps bin/mutt
 copydeps bin/msmtp
 copydeps bin/gpg
 copydeps bin/pinentry
+copydeps bin/lynx
 
-cp src/postino build/osx
+cp src/jaro build/osx
 

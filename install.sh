@@ -208,7 +208,7 @@ MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update
 
 
 case $OS in
-	GNU)
+	GNU|MAC)
 	if [ -r build/osx ]; then
 	    cp -a build/osx/* $WORKDIR/bin
 	fi
@@ -218,13 +218,11 @@ case $OS in
 	    cat <<EOF >> $HOME/.profile
 # Jaro Mail Installer addition on `date`
 export PATH=$WORKDIR/bin:\$PATH
-# Finished adapting your PATH
+# Finished adapting your PATH for Jaro Mail environment
 EOF
 	fi
 	;;
-    MAC)
-		# TODO
-	;;
+	*) ;;
 esac
 	
 notice "Installation completed" #, now edit your personal settings:"

@@ -71,7 +71,7 @@ case $(uname) in
     Linux) OS=GNU
 	notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
 
-    Apple) OS=MAC
+    Darwin) OS=MAC
 	notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
 
     *) OS=GNU # default
