@@ -125,6 +125,8 @@ Or a file named smtp.gmail.txt should contain:
 ----8<----8<----8<----8<----8<----8<----8<----8<----8<----
 # Name and values are separated by spaces or tabs
 
+name USERNAME gmail
+
 host smtp.gmail.com
 
 login USERNAME@gmail.com
@@ -198,7 +200,6 @@ case $OS in
 	echo "METHODS=(m_inmail m_osx_addressbook)" > ${WORKDIR}/.lbdb/lbdb.rc
 	;;
 esac
-ln -sf $WORKDIR/.lbdb $HOME/
 ####
 
 

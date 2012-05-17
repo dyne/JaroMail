@@ -36,7 +36,8 @@ DEBUG=1
 
 # which command to use when creating dirs
 mkdir="`which mkdir` -m 700 -p"
-
+# date stamp
+datestamp=`date '+%d%b%y'`
 
 ##########################
 
@@ -165,7 +166,11 @@ ask_password() {
 	    ;;
 	GNU)
 	    password=`pin_entry $login $host`
-	    return 0
+	    if [ "$password" != "" ]; then
+		return 0
+	    else
+		return 1
+	    fi
 	    ;;
 	*)
 	    error "Unknown system, can't figure out how to handle passwords"
@@ -174,13 +179,18 @@ ask_password() {
 }
 
 switch_identity() {
-    act "switch to identity: $name <$login>"
-    rm -f $MUTTDIR/identity
-    cat <<EOF > $MUTTDIR/identity
+    if [ "$name" != "" ]; then
+	act "switch to identity: $name <$login>"
+	rm -f $MUTTDIR/identity
+	cat <<EOF > $MUTTDIR/identity
 set hostname = $host
 set realname = "$name"
 set from = "$name <$login>"
 EOF
+    else
+	error "No identity found, left blank."
+	touch $MUTTDIR/identity	
+    fi
 }
 
 
@@ -240,28 +250,25 @@ read_account() {
 	imap|smtp)
 	    ttmp=`cat $acct | awk '
     /^#/ { next }
-    /^name/ { for(i=2;i<=NF;i++) printf "%s ", $i; printf ";" }
-    /^host/ { printf "%s;", $2 }
-    /^login/ { printf "%s;", $2 }
-    /^transport/ { printf "%s;", $2 }
-    /^port/ { printf "%s;", $2 }    
-    /^password/ {printf "%s;", $2 }
-    /^auth/ { printf "%s;", $2 }
-    /^cert/ { printf "%s;", $2 }
+    /^name/ { printf "name=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
+    /^host/ { printf "host=\"%s\";", $2 }
+    /^login/ { printf "login=\"%s\";", $2 }
+    /^transport/ { printf "transport=\"%s\";", $2 }
+    /^port/ { printf "port=\"%s\";", $2 }
+    /^password/ {printf "password=\"%s\";", $2 }
+    /^auth/ { printf "auth=\"%s\";", $2 }
+    /^cert/ { printf "cert=\"%s\";", $2 }
     '`
-	    name=${ttmp[(ws:;:)1]}
-	    host=${ttmp[(ws:;:)2]}
-	    login=${ttmp[(ws:;:)3]}
-	    transport=${ttmp[(ws:;:)4]}
-	    port=${ttmp[(ws:;:)5]}
-	    password=${ttmp[(ws:;:)6]}
-	    auth=${ttmp[(ws:;:)7]}
-	    cert=${ttmp[(ws:;:)8]}
-
-	    # if not present the field is equal to the preceeding one
-	    [ "$cert" = "$auth" ] && unset cert
-	    [ "$auth" = "$password" ] && unset auth
-	    [ "$password" = "$port" ] && unset password
+	    eval "$ttmp"
+	    # check required fields
+	    { test -z $name } && { error "Field missing in account $acct: name"; return 1 }
+	    { test -z $host } && { error "Field missing in account $acct: host"; return 1 }
+	    { test -z $login } && { error "Field missing in account $acct: login"; return 1 }
+	    # fill in defaults
+	    { test -z $transport } && { transport=ssl }
+	    { test -z $port }      && { port=993 }
+	    { test -z $auth }      && { auth=plain }
+	    # cert and password can be missing
 
 	    func "name: $name"
 	    func "host: $host"
@@ -292,22 +299,30 @@ read_default_account() {
 	"in")
 	    if [ -r $adir/imap.default ]; then
 		read_account imap.default
+		return $?
 	    else
 		for a in `find $adir -name "imap*"`; do all+=($a); done
 		for a in `find $adir -name "pop*"`; do all+=($a); done
-		read_account `basename ${all[1]}` # take the first found
+		if [ ${#all} != 0 ]; then
+		    read_account `basename ${all[1]}` # take the first found
+		    return $?
+		else
+		    error "No accounts configured, look in $WORKDIR/Accounts"
+		fi
 	    fi
 	    ;;
 	"out")
 	    if [ -r $adir/smtp.default ]; then
 		read_account smtp.default
+		return $?
 	    else
 		for a in `find $adir -name "smtp*"`; do all+=($a); done
 		read_account `basename ${all[1]}` # take the first found
+		return $?
 	    fi
 	    ;;
     esac
-    return 0
+    return 1
 }
 
 queue() {
@@ -366,6 +381,10 @@ fetch() {
     fi
     for a in ${all}; do
 	read_account `basename $a`
+	if [ $? != 0 ]; then
+	    error "Account configuration not found, or broken. Aborting operation."
+	    return 1
+	fi
 	notice "Fetching mails from $name"
 	touch $WORKDIR/tmp/$host.fetch
 	chmod 600 $WORKDIR/tmp/$host.fetch
@@ -378,15 +397,34 @@ fetch() {
 
 	cat <<EOF > $WORKDIR/tmp/$host.fetch
 poll $host with proto IMAP user "$login" there with password "$password"
-keep and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
+keep fetchall and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 antispam 571 550 501 554
 EOF
 	unset password
     # this function generates a fetchmail configuration and downloads emails
-	act "launching fetchmail"
-	( sleep 2; act "deleting temporary files"
-	    ${=rm} $WORKDIR/tmp/$host.fetch ) &
-	fetchmail -f $WORKDIR/tmp/$host.fetch
+	fetchmail -c -f $WORKDIR/tmp/$host.fetch
+	# no mails found
+	if [ $? = 1 ]; then
+	    notice "No mails for $name"
+	    ${=rm} $WORKDIR/tmp/$host.fetch
+	    return 1
+	fi
+	# archive old procmail log
+	if [ -r $WORKDIR/log/procmail.log ]; then
+	    touch $WORKDIR/log/procmail-${datestamp}.log
+	    cat $WORKDIR/log/procmail.log \
+		>> $WORKDIR/log/procmail-${datestamp}.log
+	    rm -f $WORKDIR/log/procmail.log
+	fi
+	act "please wait while downloading mails..."
+
+	( sleep 2; ${=rm} $WORKDIR/tmp/$host.fetch ) &
+	fetchmail -s -f $WORKDIR/tmp/$host.fetch
+	
+	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
+	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print " .  " $2 "\t" $3 }'|sort -nr`
+	notice "$total emails fetched"
+	echo "${briefing}"
     done
     return 0
 }
@@ -566,6 +604,7 @@ EOF
     cat<<EOF >> $PROCMAILDIR/rc
 # procmail configuration file generated by Jaro Mail
 MAILDIR=$MAILDIRS
+JARO=$WORKDIR/bin/jaro
 DEFAULT=unsorted/
 VERBOSE=off
 LOGFILE=$WORKDIR/log/procmail.log
@@ -636,7 +675,7 @@ EOF
 
 # if the sender is known (ldbd recognizes it) then put mail in high priority 'known'
 :0 w:
-* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs jaro query
+* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO query
 known/
 
 # if got here, go to unsorted
@@ -663,11 +702,10 @@ Syntact: jaro command [options] [account]
 
 Commands:
 
- queue
- send
- peek
- fetch
- sync
+ peek   look into the [account] mailbox without downloading
+ fetch  download unread emails from [account]
+ read   open mutt to read all local mailfolders
+ send   send all mails queued in the outbox
 
 Options:
 
@@ -676,6 +714,11 @@ Options:
  -q     run quietly without printing informations
  -D     print debugging information at runtime
 
+Internal commands:
+
+ update refresh configurations
+ queue  add into outbox
+ query  query a name from addressbook
 
 For more informations on Jaro Mail read the manual: man jaro
 Please report bugs on <http://bugs.dyne.org>.
