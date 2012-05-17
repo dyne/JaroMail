@@ -387,7 +387,7 @@ cert() {
 	    cc=Equifax_Secure_Certificate_Authority
 	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
 		
-		wget -O $WORKDIR/certs/${cc}.pem --no-check-certificate \
+		curl -o $WORKDIR/certs/${cc}.pem \
 		    "https://www.geotrust.com/resources/root_certificates/certificates/${cc}.cer"
 		openssl x509 -in \
 		    $WORKDIR/certs/${cc}.pem -fingerprint \
@@ -397,7 +397,7 @@ cert() {
 	dyne|autistici|freaknet)
 	    cc=Autistici_Certificate_Authority
 	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
-		wget -O $WORKDIR/certs/${cc}.pem \
+		curl -o $WORKDIR/certs/${cc}.pem \
 		    "http://ca.autistici.org/ca.pem"
 		openssl x509 -in \
 		    $WORKDIR/certs/${cc}.pem \
@@ -407,7 +407,7 @@ cert() {
 	riseup)
 	    cc=RiseupCA
 	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
-		wget -O $WORKDIR/certs/${cc}.pem --no-check-certificate "https://help.riseup.net/assets/43052/RiseupCA.pem"
+		curl -o $WORKDIR/certs/${cc}.pem "https://help.riseup.net/assets/43052/RiseupCA.pem"
 		openssl x509 -in \
 		    $WORKDIR/certs/${cc}.pem \
 		    -fingerprint -subject -issuer -serial -hash -noout
@@ -415,7 +415,7 @@ cert() {
 	    ;;
 	*)
 	    cc="`basename $certificate`"
-	    wget -O "$WORKDIR/certs/${cc}" "$certificate"
+	    curl -o "$WORKDIR/certs/${cc}" "$certificate"
 	    if [ $? != 0 ]; then
 		error "Error downloading certificate: $certificate"
 		return 1
