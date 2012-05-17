@@ -187,6 +187,8 @@ for mod in ${lbdb_modules}; do
 	| sed -e "s&@libdir@&${WORKDIR}/.lbdb&g" \
 	> $WORKDIR/.lbdb/${mod}
 done
+cp src/lbdb/dotlock $WORKDIR/.lbdb/
+cp src/lbdb/fetchaddr $WORKDIR/.lbdb/
 chmod +x $WORKDIR/.lbdb/*
 ln -sf $WORKDIR/.lbdb/lbdb-fetchaddr $WORKDIR/bin/
 ln -sf $WORKDIR/.lbdb/lbdbq $WORKDIR/bin/

@@ -20,11 +20,17 @@ case $distro in
 	echo -n "Compiling a few sources... "
 	cd src/lbdb
 	echo -n "dotlock "
-	[ -x dotlock ] || gcc -O2 -o dotlock dotlock.c
-	echo "fetchaddr"
+	[ -x dotlock ] || gcc -O2 -static -o dotlock dotlock.c
+	echo -n "fetchaddr "
 	[ -x fetchaddr ] || \
-	    gcc -O2 -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-	    gcc -O2 -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o; \
+	    gcc -O2 -c -static fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+	    gcc -O2 -static -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
+	cd - > /dev/null
+	echo "gnome-keyring"
+	cd src/gnome-keyring
+	[ -x jaro-gnome-keyring ] || \
+	    gcc `pkg-config --cflags --libs glib-2.0 gnome-keyring-1` \
+	    -O2 -o jaro-gnome-keyring jaro-gnome-keyring.c
 	cd - > /dev/null
 	echo "Done compiling."
 	echo "Now run ./install.sh and jaromail will be ready in ~/Mail/jaro"
