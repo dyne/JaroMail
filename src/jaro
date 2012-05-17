@@ -46,7 +46,8 @@ PARAM=()
 typeset -A global_opts
 typeset -A opts
 
-typeset -h name login host protocol port password auth cert
+# global variables for accounts
+typeset -h name login host protocol port password auth folders accountopt
 
 autoload colors; colors
 
@@ -102,13 +103,16 @@ ${=mkdir} "$WORKDIR/certs"
 PROCMAILDIR=$WORKDIR/.procmail
 MUTTDIR=$WORKDIR/.mutt
 
+cleanexit() {
+    for f in `ls $WORKDIR/tmp/`; do
+	${=rm} $WORKDIR/tmp/$f
+    done
+    unset typeset -h name login host protocol port password auth folders accountopt
+}
 # make sure tmp is wiped from sensitive data in case of sigINT
 TRAPINT() {
 	error "Caught signal, aborting operations."
-        for f in `ls $WORKDIR/tmp/`; do
-	    ${=rm} $f
-	done
-
+	cleanexit
 	if [ "$DEBUG" = "1" ]; then
 	    return 1
 	else
@@ -256,21 +260,24 @@ read_account() {
     /^login/ { printf "login=\"%s\";", $2 }
     /^transport/ { printf "transport=\"%s\";", $2 }
     /^port/ { printf "port=\"%s\";", $2 }
-    /^password/ {printf "password=\"%s\";", $2 }
+    /^password/ { printf "password=\"%s\";", $2 }
     /^auth/ { printf "auth=\"%s\";", $2 }
-    /^cert/ { printf "cert=\"%s\";", $2 }
+    /^options/ { printf "accountopt=\"%s\";", $2 }
+    /^folders/ { printf "folders=\"%s\";", $2 }
     '`
 	    eval "$ttmp"
 	    # check required fields
-	    { test -z $name } && { error "Field missing in account $acct: name"; return 1 }
-	    { test -z $host } && { error "Field missing in account $acct: host"; return 1 }
+	    { test -z $host }  && { error "Field missing in account $acct: host"; return 1 }
 	    { test -z $login } && { error "Field missing in account $acct: login"; return 1 }
 	    # fill in defaults
-	    { test -z $transport } && { transport=ssl }
-	    { test -z $port }      && { port=993 }
-	    { test -z $auth }      && { auth=plain }
+	    { test -z $name }       && { name="$type" }
+	    { test -z $transport }  && { transport=ssl }
+	    { test -z $port }       && { port=993 }
+	    { test -z $auth }       && { auth=plain }
+	    { test -z $accountopt } && { accountopt=keep }
 	    # cert and password can be missing
 
+	    func "type: $type"
 	    func "name: $name"
 	    func "host: $host"
 	    func "login: $login"
@@ -278,6 +285,8 @@ read_account() {
 	    func "port: $port"
 	    func "cert: $cert"
 	    func "auth: $auth"
+	    func "options: $accountopt"
+	    func "folders: $folder"
 	    ;;
 	*)
 	    error "Account type \"$type\" not recognized."
@@ -460,19 +469,40 @@ fetch() {
 
 	cat <<EOF > $WORKDIR/tmp/$host.fetch
 poll $host with proto IMAP user "$login" there with password "$password"
-keep and ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
+EOF
+	if ! [ -z $accountopt ]; then # add option configuration
+	    echo "${accountopt}" >> $WORKDIR/tmp/$host.fetch; fi
+	if ! [ -z $folders ]; then # add folder configuration
+	    echo "folder ${folders}" >> $WORKDIR/tmp/$host.fetch; fi
+	cat <<EOF >> $WORKDIR/tmp/$host.fetch
+ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 sslcertck sslcertpath '$WORKDIR/certs'
 antispam 571 550 501 554
 EOF
 	unset password
-    # this function generates a fetchmail configuration and downloads emails
+
+	# try login without doing anything
 	fetchmail -c -f $WORKDIR/tmp/$host.fetch
-	# no mails found
-	if [ $? = 1 ]; then
-	    notice "No mails for $name"
-	    ${=rm} $WORKDIR/tmp/$host.fetch
-	    return 1
-	fi
+	# examine result
+	case $? in
+	    1) 
+		notice "No mails for $name"
+		${=rm} $WORKDIR/tmp/$host.fetch
+		return 1
+		;;
+	    2)
+		error "Invalid or unknown certificate for $host"
+		${=rm} $WORKDIR/tmp/$host.fetch
+		return 1
+		;;
+	    3)
+		error "Invalid password for user $login at $host"
+		${=rm} $WORKDIR/tmp/$host.fetch
+		return 1
+		;;
+	    *) ;;
+	esac
+
 	# archive old procmail log
 	if [ -r $WORKDIR/log/procmail.log ]; then
 	    touch $WORKDIR/log/procmail-${datestamp}.log
@@ -900,3 +930,4 @@ main()
 
 check_bin
 main $@
+cleanexit
