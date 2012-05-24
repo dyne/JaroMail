@@ -871,7 +871,7 @@ backup() {
     fi
     notice "Backup of all read mails older than $expire days"
     total=`find $src/cur -type f | wc -l`
-    moved=`find $src/cur -type f -mtime $expire | wc -l`
+    moved=`find $src/cur -type f -mtime +$expire | wc -l`
     act "from maildir $src ($total in current)"
     act "to maildir $dst ($moved to be moved)" 
 
