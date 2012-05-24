@@ -31,7 +31,7 @@ for arg in ${argv}; do OLDARGS+=($arg); done
 
 QUIET=0
 DEBUG=1
-
+DRYRUN=0
 
 
 # which command to use when creating dirs
@@ -874,6 +874,9 @@ backup() {
     moved=`find $src/cur -type f -mtime $expire | wc -l`
     act "from maildir $src ($total in current)"
     act "to maildir $dst ($moved to be moved)" 
+
+    if [ $DRYRUN = 1 ]; then return 0; fi
+
     find $src/cur -mtime $expire -type f -exec mv {} $dst/cur/ \;
 
     notice "Operation completed, current maildir sizes:"
@@ -940,6 +943,7 @@ Options:
  -h     print this help
  -v     version information for this tool
  -q     run quietly without printing informations
+ -n     dry run, show operations without executing them
  -D     print debugging information at runtime
 
 Maintenance commands:
@@ -1053,7 +1057,8 @@ main()
     if option_is_set -h; then usage;  fi
     if option_is_set -q; then QUIET=1; fi
     if option_is_set -D; then func "Debug messages ON"; DEBUG=1; fi
-        
+    if option_is_set -n; then act "Dry run, show operations without executing them."; DRYRUN=1; fi
+
     case "$subcommand" in
 	queue) queue ${PARAM} ;;
 	fetch) fetch ${PARAM} ;;
