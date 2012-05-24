@@ -183,7 +183,7 @@ for sh in lbdb-fetchaddr.sh.in lbdb-munge.sh.in lbdb_lib.sh.in lbdbq.sh.in; do
 	dst=`echo $sh | sed -e 's/.sh.in$//'`
 	cat src/lbdb/$sh \
 	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
-	| sed -e "s&@DOTLOCK@&mutt_dotlock&g" \
+	| sed -e "s&@DOTLOCK@&${WORKDIR}/.lbdb/dotlock&g" \
 	| sed -e "s&@LBDB_FILE&${WORKDIR}/.lbdb/m_inmail.list&g" \
 	| sed -e "s&@LBDB_VERSION@&0.38-jaromail&g" \
 	| sed -e "s&@prefix@&${WORKDIR}/.lbdb&g" \
@@ -191,7 +191,8 @@ for sh in lbdb-fetchaddr.sh.in lbdb-munge.sh.in lbdb_lib.sh.in lbdbq.sh.in; do
 	| sed -e "s&@libdir@&${WORKDIR}/.lbdb&g" \
 	| sed -e "s&@sysconfdir@&${WORKDIR}/.lbdb&g" \
 	| sed -e "s&@MODULES@&${WORKDIR}/.lbdb&g" \
-	| sed -e "s&@TAC@&${WORKDIR}/.lbdb/tac.awk&g" \
+	| sed -e "s&@TAC@&${WORKDIR}/.lbdb/tac&g" \
+        | sed -e "s&@TMPDIR@&${WORKDIR}/tmp&g" \
         > $WORKDIR/.lbdb/${dst}
 done
 lbdb_modules=(m_finger m_gpg m_inmail m_muttalias m_osx_addressbook m_vcf)
@@ -246,7 +247,8 @@ EOF
 esac
 	
 notice "Installation completed" #, now edit your personal settings:"
-
+act "Now edit your personal settings, accounts and filters in:"
+act "$WORKDIR"
 
 # OS specific post install rules
 case $OS in

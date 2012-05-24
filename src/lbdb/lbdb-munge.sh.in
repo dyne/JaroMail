@@ -28,7 +28,7 @@ prefix=@prefix@
 exec_prefix=@exec_prefix@
 dotlock=@DOTLOCK@
 fetchaddr=@libdir@/fetchaddr
-db=$HOME/.lbdb/m_inmail.list
+db=@LBDB_FILE@
 
 if [ "$SORT_OUTPUT" = "false" -o "$SORT_OUTPUT" = "no" ]
 then

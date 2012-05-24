@@ -28,8 +28,6 @@ bind pager <left> previous-entry
 # Little Brother Database settings
 # bind index,pager 	Q	     query
 bind editor 	<tab>	 complete-query
-macro index,pager A "<pipe-message>lbdb-fetchaddr -a" "add the sender address to lbdb"
-macro index,pager + "<pipe-message>lbdb-fetchaddr -a" "add the sender address to lbdb"
 
 macro pager \ef "|view-x-face<enter>" "display the X-Face included in the mail"
 

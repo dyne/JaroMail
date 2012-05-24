@@ -684,6 +684,10 @@ set header_cache= $WORKDIR/cache
 set maildir_header_cache_verify=no
 set editor = "$EDITOR"
 set mailcap_path = "$WORKDIR/mailcap"
+
+macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -q learn" "add the sender address to lbdb"
+macro index,pager + "<pipe-message>$WORKDIR/bin/jaro -q learn" "add the sender address to lbdb"
+
 EOF
 
     if [ -r $MUTTDIR/general ]; then

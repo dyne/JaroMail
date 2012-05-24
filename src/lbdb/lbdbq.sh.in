@@ -29,7 +29,7 @@ sysconfdir=@sysconfdir@
 METHODS="@MODULES@"
 MODULES_PATH=@libdir@
 TAC=@TAC@
-
+TMPDIR=@TMPDIR@
 case "$1" in
     -v|--version)
 	echo "lbdbq version $LBDB_VERSION"
