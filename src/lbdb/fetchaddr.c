@@ -32,6 +32,7 @@
 #include "rfc2047.h"
 
 #define MAXHDRS 21
+#define HAVE_ICONV 1
 
 struct header
 {

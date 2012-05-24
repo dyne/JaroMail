@@ -49,6 +49,10 @@ typeset -A opts
 # global variables for accounts
 typeset -h name login host protocol port password auth folders accountopt
 
+# global variable for exit code
+typeset exitcode
+exitcode=0
+
 autoload colors; colors
 
 # standard output message routines
@@ -66,22 +70,29 @@ act()    {
     fi
 }
 
+
 # what operating system are we in? use os_detect()
 # simplifying modes of operation: GNU or MAC
-case $(uname) in
-    Linux) OS=GNU
-	notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
+if [ "$1" != "-q" ]; then # honor quiet flag
+    case $(uname) in
+	Linux) OS=GNU
+	    notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
+	
+	Darwin) OS=MAC
+	    notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
+	
+	*) OS=GNU # default
+	    error "Running on an unknown operating system, assuming GNU" ;;
+    esac
+fi
 
-    Darwin) OS=MAC
-	notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
-
-    *) OS=GNU # default
-	error "Running on an unknown operating system, assuming GNU" ;;
-esac
-
-
-if [ -z $MAILDIRS ]; then 
-    MAILDIRS=$HOME/Mail
+if [ -z $MAILDIRS ]; then
+    # check if we are inside the directory
+    if [ -r jaro/bin/jaro ]; then
+	MAILDIRS=`pwd`
+    else # else use default
+	MAILDIRS=$HOME/Mail
+    fi
 fi
 
 
@@ -256,13 +267,15 @@ read_account() {
 	    ttmp=`cat $acct | awk '
     /^#/ { next }
     /^name/ { printf "name=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
+    /^email/ { printf "email=\"%s\";", $2 }
     /^host/ { printf "host=\"%s\";", $2 }
     /^login/ { printf "login=\"%s\";", $2 }
     /^transport/ { printf "transport=\"%s\";", $2 }
     /^port/ { printf "port=\"%s\";", $2 }
     /^password/ { printf "password=\"%s\";", $2 }
     /^auth/ { printf "auth=\"%s\";", $2 }
-    /^options/ { printf "accountopt=\"%s\";", $2 }
+    /^cert/ { printf "cert=\"%s\";", $2 }
+    /^options/ { printf "accountopt=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^folders/ { printf "folders=\"%s\";", $2 }
     '`
 	    eval "$ttmp"
@@ -271,14 +284,17 @@ read_account() {
 	    { test -z $login } && { error "Field missing in account $acct: login"; return 1 }
 	    # fill in defaults
 	    { test -z $name }       && { name="$type" }
+	    { test -z $email }       && { email="$login" }
 	    { test -z $transport }  && { transport=ssl }
 	    { test -z $port }       && { port=993 }
 	    { test -z $auth }       && { auth=plain }
+	    { test -z $cert }       && { cert=ignore }
 	    { test -z $accountopt } && { accountopt=keep }
 	    # cert and password can be missing
 
 	    func "type: $type"
 	    func "name: $name"
+	    func "email: $email"	    
 	    func "host: $host"
 	    func "login: $login"
 	    func "trans: $transport"
@@ -470,16 +486,25 @@ fetch() {
 	cat <<EOF > $WORKDIR/tmp/$host.fetch
 poll $host with proto IMAP user "$login" there with password "$password"
 EOF
+	unset password
+
 	if ! [ -z $accountopt ]; then # add option configuration
 	    echo "${accountopt}" >> $WORKDIR/tmp/$host.fetch; fi
+
 	if ! [ -z $folders ]; then # add folder configuration
 	    echo "folder ${folders}" >> $WORKDIR/tmp/$host.fetch; fi
+
 	cat <<EOF >> $WORKDIR/tmp/$host.fetch
 ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
+EOF
+	if [ "$cert" = "check" ]; then
+	    cat <<EOF >> $WORKDIR/tmp/$host.fetch
 sslcertck sslcertpath '$WORKDIR/certs'
+EOF
+	fi
+	cat <<EOF >> $WORKDIR/tmp/$host.fetch
 antispam 571 550 501 554
 EOF
-	unset password
 
 	# try login without doing anything
 	fetchmail -c -f $WORKDIR/tmp/$host.fetch
@@ -653,7 +678,7 @@ set spoolfile = $MAILDIRS/known/
 set record = $MAILDIRS/sent/
 set postponed= $MAILDIRS/postponed/
 set tmpdir = $WORKDIR/tmp
-set query_command = "$WORKDIR/bin/jaro query '%s'"
+set query_command = "$WORKDIR/bin/jaro -q query '%s'"
 set sendmail = "$WORKDIR/bin/jaro queue"
 set header_cache= $WORKDIR/cache
 set maildir_header_cache_verify=no
@@ -693,6 +718,7 @@ EOF
 
     ##########
     # PROCMAIL
+    act "generating procmail filters"
     ${=mkdir} $PROCMAILDIR
     rm -f $PROCMAILDIR/rc
     touch $PROCMAILDIR/rc
@@ -723,8 +749,9 @@ EOF
     #######
     echo "# filters generated from Accounts" >> $PROCMAILDIR/rc
     typeset -al accts
-    for f in `cat $WORKDIR/Accounts/* | awk '/^login/ { print $2 }'`; do
-	echo "ADDR=${f}\tDEST=priv\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
+    for f in `cat $WORKDIR/Accounts/* | awk '/^email/ { print $2 }'`; do
+	echo "ADDR=${f}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
+	act "private account: <${f}>"
     done
 
     #######
@@ -737,12 +764,14 @@ EOF
 	destination="${f[(ws:;:)4]}"
 	case $header in
 	    to)
-		print "ADDR=${address}\tDEST=${destination}\tINCLUDERC=\$PMSRC/pf-chkto.rc" \
+		print "ADDR=${address}\tDEST=${destination}/\tINCLUDERC=\$PMSRC/pf-chkto.rc" \
 		    >> $PROCMAILDIR/rc
+		act "messages to <${address}> in folder: ${destination}"
 		;;
 	    from)
-		print "ADDR=${address}\tDEST=${destination}\tINCLUDERC=\$PMSRC/pf-check.rc" \
+		print "ADDR=${address}\tDEST=${destination}/\tINCLUDERC=\$PMSRC/pf-check.rc" \
 		    >> $PROCMAILDIR/rc
+		act "messages from <${address}> in folder: {$destination}"
 		;;
 	    *)
 		error "unsupported filter: $header (skipped)"
@@ -770,7 +799,7 @@ EOF
 
 # if the sender is known (ldbd recognizes it) then put mail in high priority 'known'
 :0 w:
-* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO query
+* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -q query
 known/
 
 # if got here, go to unsorted
@@ -783,6 +812,29 @@ known/
 
 EOF
     return 0
+} # end of update()
+
+
+query() {
+    if [ $QUIET = 1 ]; then
+	${WORKDIR}/bin/lbdbq ${@} > /dev/null
+	exitcode=$?
+    else
+	act -n "Query known address <${@}> in "
+	${WORKDIR}/.lbdb/lbdbq ${@}
+	exitcode=$?
+    fi
+}
+
+learn() {
+    if [ $QUIET = 1 ]; then
+	${WORKDIR}/bin/lbdb-fetchaddr -a > /dev/null
+	exitcode=$?
+    else
+	act "Learning new address from mail pipe in stdin"
+	${WORKDIR}/bin/lbdb-fetchaddr -a
+	exitcode=$?
+    fi
 }
 
 usage() {
@@ -814,12 +866,14 @@ Internal commands:
  update refresh configurations
  queue  add into outbox
  query  query a name from addressbook
+ learn  learn known addresses from mails piped in stdin
 
-For more informations on Jaro Mail read the manual: man jaro
+
 Please report bugs on <http://bugs.dyne.org>.
 EOF
 }
 
+# TODO: For more informations on Jaro Mail read the manual: man jaro
 
 main()
     {
@@ -845,6 +899,7 @@ main()
     subcommands_opts[peek]=""    
     subcommands_opts[update]=""
     subcommands_opts[query]=""
+    subcommands_opts[learn]=""
     subcommands_opts[source]=""
     subcommands_opts[cert]=""
 #    subcommands_opts[mount]=${subcommands_opts[open]}
@@ -866,7 +921,8 @@ main()
     fi
     if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then #there's no such subcommand
         error "Subcommand '$subcommand' doesn't exist"
-        exit 127
+        exitcode=1
+	return 1
     fi
     argv=(${oldstar})
     unset oldstar
@@ -878,12 +934,12 @@ main()
         zparseopts -M -E -D -Aopts ${cmd_opts}
 	if [[ $? != 0 ]]; then
 	    error "Some error occurred during option processing."
-	    exit 127
+            exitcode=1
+	    return 1
 	fi
     fi
   #build PARAM (array of arguments) and check if there are unrecognized options
     local ok=0
-#    PARAM=()
     for arg in $*; do
 	if [[ $arg == '--' || $arg == '-' ]]; then
 	    ok=1
@@ -891,7 +947,8 @@ main()
 	elif [[ $arg[1] == '-'  ]]; then
 	    if [[ $ok == 0 ]]; then
 		error "unrecognized option $arg"
-		exit 127
+		exitcode=1
+		return 1
 	    fi
 	fi
 	PARAM+=$arg
@@ -916,8 +973,12 @@ main()
 	read) mutt -F $MUTTDIR/rc ;;
 	cert) cert ${PARAM} ;;
 	compose) mutt -F $MUTTDIR/rc ${PARAM} ;;
+
 	update) update ;;
-	query) ${WORKDIR}/.lbdb/lbdbq ${PARAM} ;;
+
+	query) query ${PARAM} ;;
+	learn) learn ${PARAM} ;;
+
 	'source')   return 0 ;;
 	__default) ;;
 	*) error "command \"$subcommand\" not recognized"
@@ -931,3 +992,4 @@ main()
 check_bin
 main $@
 cleanexit
+return $exitcode

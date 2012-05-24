@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env zsh 
 
 # jaromail install script
 #
@@ -36,7 +36,7 @@ MUTTDIR=$WORKDIR/.mutt
 umask 007 # James Bond ;^)
 
 
-source src/jaro
+source src/jaro source
 
 # make sure the directory is private
 ${=mkdir} $MAILDIRS
@@ -96,47 +96,64 @@ Directory containing account information
 Each file contains a different account: imap, pop or gmail
 each account contains all information needed to connect it
 
-For example a file named imap.gmail.txt should contain:
+Examples are: imap.default.txt and smtp.default.txt
 
-----8<----8<----8<----8<----8<----8<----8<----8<----8<----
+One can have multiple accounts named otherwise than default
+EOF
+    cat <<EOF > $WORKDIR/Accounts/imap.default.txt
 # Name and values are separated by spaces or tabs
+# comments start the line with a hash
 
 # Name appearing in From: field
-name Anonymous
+name To Be Configured
 
+# Email address (default is same as login)
+email unknown@gmail.com
+
+# Internet address
 host imap.gmail.com
 
+# Username
 login USERNAME@gmail.com
 
+# Authentication type
 auth plain # or kerberos, etc
 
+# Identity certificate: check or ignore
+cert ignore
+
+# Transport protocol
 transport ssl
 
+# Service port
 port 993
 
-cert /path/to/cert
+# Options when fetching
+# to empty your mailbox you can use: fetchall flush
+# by default this is 'keep': don't delete mails from server
+options keep
 
 # the password field will be filled in automatically
-
-----8<----8<----8<----8<----8<----8<----8<----8<----8<----
-
-Or a file named smtp.gmail.txt should contain:
-
-----8<----8<----8<----8<----8<----8<----8<----8<----8<----
+EOF
+    cat <<EOF > $WORKDIR/Accounts/smtp.default.txt
 # Name and values are separated by spaces or tabs
+# comments start the line with a hash
 
-name USERNAME gmail
+# Name for this account
+name To Be Configured
 
+# Internet address
 host smtp.gmail.com
 
+# Username
 login USERNAME@gmail.com
 
+# Transport protocol
 transport ssl # or "tls" or "plain"
 
+# Service port
 port 465
-
-----8<----8<----8<----8<----8<----8<----8<----8<----8<----
-
+# port 25
 EOF
     act "Default accounts directory created"
 else
@@ -193,6 +210,7 @@ chmod +x $WORKDIR/.lbdb/*
 ln -sf $WORKDIR/.lbdb/lbdb-fetchaddr $WORKDIR/bin/
 ln -sf $WORKDIR/.lbdb/lbdbq $WORKDIR/bin/
 
+# OS specific lbdb rules
 case $OS in
     GNU)
 	echo "METHODS=(m_inmail)" > ${WORKDIR}/.lbdb/lbdb.rc
@@ -228,6 +246,9 @@ EOF
 esac
 	
 notice "Installation completed" #, now edit your personal settings:"
+
+
+# OS specific post install rules
 case $OS in
 	GNU)
 	;;

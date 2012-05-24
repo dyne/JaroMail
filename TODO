@@ -1,0 +1,18 @@
+
+
+* Maildirs
+ + Remove duplicates from maildirs (garbage collection)
+ + Backup system with expiration date
+
+* GTD
+ + Integration with org-remember via org-protocol
+
+* Install
+ + Full integration with the Tomb process creation
+
+* Mutt
+ + Find out how to make mouse selection work
+
+* Stats
+ + Have some fancy statistics
+

@@ -31,7 +31,7 @@ fetchaddr=@libdir@/fetchaddr
 db=@LBDB_FILE@
 
 datefmt='%Y-%m-%d %H:%M'
-additional_param=""
+additional_param=()
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -78,7 +78,7 @@ do
 	fi
 	;;
     -a)
-	additional_param="$additional_param $1"
+	additional_param+=($1)
 	;;
     *)
 	if [ $# -eq 1 ]
@@ -120,7 +120,7 @@ else
   exit 1
 fi
 
-if $fetchaddr $additional_param -d "$datefmt" $hdrlist $charset >> $db ; then
+if $fetchaddr ${=additional_param} -d "$datefmt" $hdrlist $charset >> $db ; then
   touch $db.dirty
 fi
 
