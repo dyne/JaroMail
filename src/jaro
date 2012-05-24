@@ -870,14 +870,19 @@ backup() {
 	return 1
     fi
     notice "Backup of all read mails older than $expire days"
-    total=`find $src/cur -type f | wc -l`
-    moved=`find $src/cur -type f -mtime +$expire | wc -l`
-    act "from maildir $src ($total in current)"
-    act "to maildir $dst ($moved to be moved)" 
+    oldread=`find $src/cur -type f | wc -l`
+    oldunread=`find $src/new -type f | wc -l`
+
+    newread=`find $src/cur -type f -mtime +$expire | wc -l`
+    newunread=`find $src/new -type f -mtime +$expire | wc -l`
+
+    act "from maildir $src ($oldread read / $oldunread unread)"
+    act "to maildir $dst ($newread read / $newunread unread)"
 
     if [ $DRYRUN = 1 ]; then return 0; fi
 
-    find $src/cur -mtime $expire -type f -exec mv {} $dst/cur/ \;
+    find $src/cur -mtime +$expire -type f -exec mv {} $dst/cur/ \;
+    find $src/new -mtime +$expire -type f -exec mv {} $dst/new/ \;
 
     notice "Operation completed, current maildir sizes:"
     du -hs $src $dst
