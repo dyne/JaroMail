@@ -88,6 +88,36 @@ else
     error "Existing configuration $WORKDIR/Filters.txt skipped"
 fi
 
+if ! [ -r $WORKDIR/Mutt.txt ]; then
+    cat <<EOF > $WORKDIR/Mutt.txt
+# Mutt specific customizations
+# uncomment and fill in with your settings
+
+# set locale=""                   # system default locale ("C")
+# set signature='~/.signature'    # signature file
+# set pgp_sign_as="0xC2B68E39"    # UserID/KeyID for signing
+
+# Customized headers
+# unmy_hdr *                      # remove all extra headers first.
+
+# my_hdr From: Jaromil <jaromil@dyne.org>;
+# my_hdr Organization: Dyne.org Foundation
+# my_hdr X-GPG-Keyserver: pgp.mit.edu
+# my_hdr X-GPG-Id: C2B68E39 [expires: 2013-09-25]
+# my_hdr X-GPG-Fingerprint: B2D9 9376 BFB2 60B7 601F  5B62 F6D3 FBD9 C2B6 8E39
+# my_hdr X-Face: %H:nE)m:Rl>Z?(C7EvRtuUJp4^f@d\#~4pB48~:1:EC)^&9EDcZaKL/*+10(P?g*N0>n8n3&\n kVzfAD\`+RofVAx~ew>FGQmmT7NqlSQx+M8LN5\`,h^aPF[Njx+A~%f!&VJu9!y:~ma/\'^@mvOr@}DyG\n @\"g\`kfy(vyRC
+
+#############
+
+# set attribution='On %{%a, %d %b %Y}, %n wrote:\n'
+# set status_format="-%r-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del:%d?%?F? Flag:%F?%?t? Tag:%t?%?p? Post:%p?%?b? Inc:%b? %?l? %l?]---(%s/%S)-default-%>-(%P)---"
+
+EOF
+    act "Default Mutt configuration template created"
+else
+    error "Existing configuration $WORKDIR/Mutt.txt skipped"
+fi
+
 if ! [ -r $WORKDIR/Accounts ]; then
     ${=mkdir} $WORKDIR/Accounts
     cat <<EOF > $WORKDIR/Accounts/README.txt

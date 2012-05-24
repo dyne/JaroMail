@@ -276,7 +276,7 @@ read_account() {
     /^auth/ { printf "auth=\"%s\";", $2 }
     /^cert/ { printf "cert=\"%s\";", $2 }
     /^options/ { printf "accountopt=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
-    /^folders/ { printf "folders=\"%s\";", $2 }
+    /^folders/ { printf "folders=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     '`
 	    eval "$ttmp"
 	    # check required fields
@@ -302,7 +302,7 @@ read_account() {
 	    func "cert: $cert"
 	    func "auth: $auth"
 	    func "options: $accountopt"
-	    func "folders: $folder"
+	    func "folders: $folders"
 	    ;;
 	*)
 	    error "Account type \"$type\" not recognized."
@@ -708,6 +708,7 @@ source $MUTTDIR/colors
 source $MUTTDIR/formats
 source $MUTTDIR/keybindings
 source $MUTTDIR/identity
+source $WORKDIR/Mutt.txt
 ## end of Jaro Mail generated muttrc
 ####################################
 
@@ -789,7 +790,7 @@ EOF
     done
 
     echo " \\" >> $MUTTDIR/mboxes
-    echo " +unsorted" >> $MUTTDIR/mboxes
+    echo " +ml.unsorted +unsorted" >> $MUTTDIR/mboxes
     uniq $MUTTDIR/mboxes > $WORKDIR/tmp/mboxes
     mv $WORKDIR/tmp/mboxes $MUTTDIR/mboxes
     rm -f $WORKDIR/tmp/mboxes
@@ -808,6 +809,12 @@ EOF
 * ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -q query
 known/
 
+# if its an unknown mailinglist, save it into ml.unsorted
+:0
+* ^(List-Id|X-(Mailing-)?List):
+ml.unsorted/
+
+
 # if got here, go to unsorted
 
 # save the mails
@@ -820,7 +827,8 @@ EOF
     return 0
 } # end of update()
 
-
+###################
+# Little Brother DB
 query() {
     if [ $QUIET = 1 ]; then
 	${WORKDIR}/bin/lbdbq ${@}
@@ -842,6 +850,73 @@ learn() {
 	exitcode=$?
     fi
 }
+###################
+
+######################
+# Maildir manipulation
+backup() {
+    src=${PARAM[1]}
+    dst=${PARAM[2]}
+    expire=${PARAM[3]}
+    if ! [ -r ${src}/cur ]; then
+	error "No maildir found in $src"
+	return 1
+    fi
+    if ! [ -r ${dst}/cur ]; then
+	maildirmake "${dst}"
+    fi
+    if [ -z $expire ]; then
+	error "No expiration date set for backup, please indicate how many days old"
+	return 1
+    fi
+    notice "Backup of all read mails older than $expire days"
+    total=`find $src/cur -type f | wc -l`
+    moved=`find $src/cur -type f -mtime $expire | wc -l`
+    act "from maildir $src ($total in current)"
+    act "to maildir $dst ($moved to be moved)" 
+    find $src/cur -mtime $expire -type f -exec mv {} $dst/cur/ \;
+
+    notice "Operation completed, current maildir sizes:"
+    du -hs $src $dst
+}
+
+rmdupes() {
+    dir=$1
+    if ! [ -r $dir ]; then
+	error "No maildir found in $dir"
+	return 1
+    fi
+    notice "Removing duplicates in $dir"
+    c=0
+    for i in `find ${dir}`; do
+	formail -D 100000  $WORKDIR/tmp/$dir.rmdupes <$i \
+	    && rm $i && c=`expr $c + 1`
+    done
+    act "$c duplicates found and deleted"
+}
+
+merge() {
+    src=${PARAM[1]}
+    dst=${PARAM[2]}
+    if ! [ -r ${src}/cur ]; then
+	error "No source maildir found in $src"
+	return 1
+    fi
+    if ! [ -r ${dst}/cur ]; then
+	error "No destination maildir found in $dst"
+	return 1
+    fi
+    notice "Merging maildir ${src} into ${dst}"
+    c=0
+    for i in `find ${src}/cur -type f`; do mv $i ${dst}/cur/; c=`expr $c + 1`; done
+    for i in `find ${src}/new -type f`; do mv $i ${dst}/new/; c=`expr $c + 1`; done
+    for i in `find ${src}/tmp -type f`; do mv $i ${src}/tmp/; c=`expr $c + 1`; done
+    act "$c mails succesfully moved."
+    rmdupes ${dst}
+    notice "Operation completed, you can now safely remove ${src}"
+}
+
+######################
 
 usage() {
     cat <<EOF
@@ -853,7 +928,7 @@ Jaro Mail $VERSION - your humble and faithful electronic postman
 
 Syntact: jaro command [options] [account]
 
-Commands:
+Main commands:
 
  peek   look into the [account] mailbox without downloading
  fetch  download unread emails from [account]
@@ -867,13 +942,17 @@ Options:
  -q     run quietly without printing informations
  -D     print debugging information at runtime
 
-Internal commands:
+Maintenance commands:
 
- update refresh configurations
- queue  add into outbox
- query  query a name from addressbook
- learn  learn known addresses from mails piped in stdin
+ update   refresh configurations
+ queue    add a mail into outbox
 
+ query    query a name from addressbook
+ learn    learn known addresses from mails piped in stdin
+
+ backup   move all mails older than N days from a maildir to another
+ rmdupes  remove all duplicate mails into a maildir
+ merge    merge a maildir into another, removing all duplicates
 
 Please report bugs on <http://bugs.dyne.org>.
 EOF
@@ -908,6 +987,10 @@ main()
     subcommands_opts[learn]=""
     subcommands_opts[source]=""
     subcommands_opts[cert]=""
+    subcommands_opts[backup]=""
+    subcommands_opts[rmdupes]=""
+    subcommands_opts[merge]=""
+
 #    subcommands_opts[mount]=${subcommands_opts[open]}
 #    subcommands_opts[create]="s: -size=s -ignore-swap k: -key=k"
     ### Detect subcommand
@@ -984,6 +1067,10 @@ main()
 
 	query) query ${PARAM} ;;
 	learn) learn ${PARAM} ;;
+
+	backup) backup ${PARAM} ;;
+	rmdupes) rmdupes ${PARAM} ;;
+	merge)   merge ${PARAM} ;;
 
 	'source')   return 0 ;;
 	__default) ;;
