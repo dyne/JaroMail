@@ -16,3 +16,6 @@
 * Stats
  + Have some fancy statistics
 
+* Anonymizer
+ + Built-in support for Mixmaster
+ + Built-in support for Tor Mail

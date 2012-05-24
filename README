@@ -10,7 +10,65 @@ odP   your humble and faithful electronic postman   v 0.1
 
 A commandline tool to easily and privately handle your e-mail
 
-Testing release, you are on you own, there is very little docu
+Initial release so beware there is still very little docu
 
 come on #dyne http://hinezumi.im to get in touch with devs
 
+* Build
+
+Use the build scripts.
+
+You will need a compiler installed (XCode on Apple/OSX)
+
+* Install
+
+Use the install script.
+
+It will check for required packages.
+
+Give it a path as argument if you want to install your Jaro Mail
+directory into something different than ~/Mail, this way you can have
+completely separated setups with multiple identities and filters.
+
+* Use
+
+See the commandline help:
+
+ jaro -h
+
+A Manual is in the works
+
+* Developers
+
+All revisioned in Git, see http://code.dyne.org/jaromail
+
+To clone anonymously use
+
+ git clone git://code.dyne.org/jaromail.git
+
+Patches welcome.
+
+* Donate
+
+Money donations are very welcome and well needed, they will encourage
+further development even beyond my own needs for this software.
+
+ http://dyne.org/donate
+
+* License
+
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
