@@ -184,7 +184,7 @@ for sh in lbdb-fetchaddr.sh.in lbdb-munge.sh.in lbdb_lib.sh.in lbdbq.sh.in; do
 	cat src/lbdb/$sh \
 	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
 	| sed -e "s&@DOTLOCK@&${WORKDIR}/.lbdb/dotlock&g" \
-	| sed -e "s&@LBDB_FILE&${WORKDIR}/.lbdb/m_inmail.list&g" \
+	| sed -e "s&@LBDB_FILE@&${WORKDIR}/.lbdb/m_inmail.list&g" \
 	| sed -e "s&@LBDB_VERSION@&0.38-jaromail&g" \
 	| sed -e "s&@prefix@&${WORKDIR}/.lbdb&g" \
 	| sed -e "s&@exec_prefix@&${WORKDIR}/.lbdb&g" \

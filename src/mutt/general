@@ -26,8 +26,6 @@ set assumed_charset = us-ascii
 #set shell = retrieved from passwd file
 #set simple_search = "~f %s | ~s %s"
 
-# Little Brother Database
-set query_command = "lbdbq '%s'"
 
 
 ############

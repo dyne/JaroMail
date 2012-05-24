@@ -685,6 +685,8 @@ set maildir_header_cache_verify=no
 set editor = "$EDITOR"
 set mailcap_path = "$WORKDIR/mailcap"
 
+# Little Brother Database
+set query_command = "$WORKDIR/bin/jaro -q query '%s'"
 macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -q learn" "add the sender address to lbdb"
 macro index,pager + "<pipe-message>$WORKDIR/bin/jaro -q learn" "add the sender address to lbdb"
 
@@ -821,7 +823,7 @@ EOF
 
 query() {
     if [ $QUIET = 1 ]; then
-	${WORKDIR}/bin/lbdbq ${@} > /dev/null
+	${WORKDIR}/bin/lbdbq ${@}
 	exitcode=$?
     else
 	act -n "Query known address <${@}> in "
