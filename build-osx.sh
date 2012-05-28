@@ -70,6 +70,10 @@ EOF
 
 notice "Building Jaro Mail binary stash for Apple/OSX"
 
+if ! [ -r /opt/local/bin/port ]; then
+	error "MacPorts not found in /opt/local. Operation aborted."
+	return 1
+fi
 act "lbdb address book module"
 cd src/lbdb-ABQuery
 xcodebuild > /dev/null
