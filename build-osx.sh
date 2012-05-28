@@ -75,6 +75,19 @@ cd src/lbdb-ABQuery
 xcodebuild > /dev/null
 cd -
 cp src/lbdb-ABQuery/build/Release/lbdb-ABQuery build/osx/ABQuery
+cd src/lbdb
+gcc -O2 -c -m32 fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+gcc -O2 -m32 -o fetchaddr.32 fetchaddr.o helpers.o rfc2047.o rfc822.o;
+gcc -O2 -c -m64 fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+gcc -O2 -m64 -o fetchaddr.64 fetchaddr.o helpers.o rfc2047.o rfc822.o;
+lipo -arch i386 fetchaddr.32 -arch x86_64 fetchaddr.64 -output fetchaddr -create
+gcc -O2 -m32 -o dotlock.32 dotlock.c
+gcc -O2 -m64 -o dotlock.64 dotlock.c
+lipo -arch i386 dotlock.32 -arch x86_64 dotlock.64 -output dotlock -create
+rm -f *.32 *.64
+cd -
+cp src/lbdb/dotlock   build/osx/
+cp src/lbdb/fetchaddr build/osx/
 
 copydeps bin/mutt
 copydeps bin/msmtp
