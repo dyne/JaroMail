@@ -566,18 +566,14 @@ send() {
         return 0
     fi
 
-    if [ -z $acct ]; then
-	if [ -r $adir/smtp.default ]; then
-	    all+=($adir/smtp.default) # use the default account
-	else # else will use the first one
-	    for a in `find $adir -name "smtp*"`; do all+=($a); done
-	fi
-    else # or if specified, use a particular account
-	for a in `find $adir -name "smtp*$acct*"`; do all+=($a); done
+    if [ -z $1 ]; then # no particular account specified
+	# use the default account
+	read_default_account "out"
+    else
+	read_account smtp.${1}
     fi
-    read_account `basename ${all[1]}`
 
-    notice "Sending out ${mailnum} mails via `basename ${all[1]}`"
+    notice "Sending out ${mailnum} mails via $name"
  
     # defaults
     [ -z $auth ] && auth=plain
@@ -939,7 +935,7 @@ Jaro Mail $VERSION - your humble and faithful electronic postman
 
  Copyright (C) 2010-2012 Dyne.org Foundation, License GNU GPL v3+
  This is free software: you are free to change and redistribute it
- The latest Tomb sourcecode is published on <http://tomb.dyne.org>
+ The latest Jaro Mail sourcecode is on <http://jaromail.dyne.org>
 
 Syntact: jaro command [options] [account]
 
@@ -1075,25 +1071,25 @@ main()
     if option_is_set -n; then act "Dry run, show operations without executing them."; DRYRUN=1; fi
 
     case "$subcommand" in
-	queue) queue ${PARAM} ;;
-	fetch) fetch ${PARAM} ;;
-	send) send ${PARAM} ;;
-	peek) peek ${PARAM} ;;
-	read) mutt -F $MUTTDIR/rc ;;
-	cert) cert ${PARAM} ;;
+	queue)   queue ${PARAM} ;;
+	fetch)   fetch ${PARAM} ;;
+	send)    send ${PARAM} ;;
+	peek)    peek ${PARAM} ;;
+	read)    mutt -F $MUTTDIR/rc ;;
+	cert)    cert ${PARAM} ;;
 	compose) mutt -F $MUTTDIR/rc ${PARAM} ;;
 
-	update) update ;;
+	update)  update ;;
 
-	query) query ${PARAM} ;;
-	learn) learn ${PARAM} ;;
+	query)   query ${PARAM} ;;
+	learn)   learn ${PARAM} ;;
 
-	backup) backup ${PARAM} ;;
+	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;
 	merge)   merge ${PARAM} ;;
 
 	'source')   return 0 ;;
-	__default) ;;
+	__default)  ;;
 	*) error "command \"$subcommand\" not recognized"
 	    act "try -h for help"
 	    return 1

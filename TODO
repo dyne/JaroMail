@@ -1,11 +1,11 @@
 
 
-* Maildirs
- + Remove duplicates from maildirs (garbage collection)
- + Backup system with expiration date
-
 * GTD
  + Integration with org-remember via org-protocol
+
+* Anonymizer
+ + Built-in support for Mixmaster
+ + Built-in support for Tor Mail
 
 * Install
  + Full integration with the Tomb process creation
@@ -16,6 +16,6 @@
 * Stats
  + Have some fancy statistics
 
-* Anonymizer
- + Built-in support for Mixmaster
- + Built-in support for Tor Mail
+* DONE Maildirs
+ + Remove duplicates from maildirs (garbage collection)
+ + Backup system with expiration date

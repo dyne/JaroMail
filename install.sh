@@ -57,22 +57,23 @@ if ! [ -r $WORKDIR/Filters.txt ]; then
 
 # mailinglist filters are in order of importance
 # syntax: to <list email> save <folder>
+# below some commented out examples, note the use of a prefix,
+# which makes it handy when browsing with file completion.
 
-to	  crypto@lists.dyne	save	dyne.crypto
-to	  dynebolic		save	dyne.dynebolic
-to	  freej			save	dyne.freej
-to	  frei0r-devel		save	dyne.frei0r
-to	  taccuino		save	ml.freaknet
-to	  deadpoets		save	ml.freaknet
-to	  linux-libre		save	gnu.linux-libre
-to	  foundations@lists	save	gnu.foundations
-to	  debian-mentors	save	debian.mentors
-to	  debian-blends		save	debian.blends
-to	  freedombox-discuss	save	debian.freedombox
+# to	  crypto@lists.dyne	save	dyne.crypto
+# to	  dynebolic		save	dyne.dynebolic
+# to	  freej			save	dyne.freej
+# to	  frei0r-devel		save	dyne.frei0r
+# to	  taccuino		save	ml.freaknet
+# to	  deadpoets		save	ml.freaknet
+# to	  linux-libre		save	gnu.linux-libre
+# to	  foundations@lists	save	gnu.foundations
+# to	  debian-mentors	save	debian.mentors
+# to	  debian-blends		save	debian.blends
+# to	  freedombox-discuss	save	debian.freedombox
 
-# other filters for web 2.0 services
-# using folder names with a prefix. can facilitate
-# folder maintainance.
+# Other filters for web 2.0 using folder names with a prefix:
+# they can facilitate folder maintainance.
 
 from      identi.ca	        save	web.identica
 from      Twitter		save	web.twitter
@@ -163,7 +164,13 @@ port 993
 # by default this is 'keep': don't delete mails from server
 options keep
 
-# the password field will be filled in automatically
+# Imap folders
+# uncommend to provide a list of folders to be fetched
+# folders INBOX, known, priv, lists, ml.unsorted, unsorted
+
+#
+# The password field will be filled in automatically
+#
 EOF
     cat <<EOF > $WORKDIR/Accounts/smtp.default.txt
 # Name and values are separated by spaces or tabs
@@ -182,8 +189,8 @@ login USERNAME@gmail.com
 transport ssl # or "tls" or "plain"
 
 # Service port
-port 465
-# port 25
+# port 465
+port 25
 EOF
     act "Default accounts directory created"
 else
@@ -277,8 +284,9 @@ EOF
 esac
 	
 notice "Installation completed" #, now edit your personal settings:"
-act "Now edit your personal settings, accounts and filters in:"
-act "$WORKDIR"
+act "Configure your personal settings, accounts and filters in:"
+act "    $WORKDIR"
+act "Check the commandline help for a list of commands: jaro -h"
 
 # OS specific post install rules
 case $OS in
