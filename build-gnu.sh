@@ -20,11 +20,11 @@ case $distro in
 	echo -n "Compiling a few sources... "
 	cd src/lbdb
 	echo -n "dotlock "
-	[ -x dotlock ] || gcc -O2 -static -o dotlock dotlock.c
+	[ -x dotlock ] || gcc -Os -static -o dotlock dotlock.c
 	echo -n "fetchaddr "
 	[ -x fetchaddr ] || \
-	    gcc -O2 -c -static fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-	    gcc -O2 -static -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
+	    gcc -Os -c -static fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+	    gcc -Os -static -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
 	cd - > /dev/null
 	echo
 	# echo "gnome-keyring"

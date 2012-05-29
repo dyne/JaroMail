@@ -30,7 +30,7 @@ for arg in ${argv}; do OLDARGS+=($arg); done
 # declare global variables
 
 QUIET=0
-DEBUG=1
+DEBUG=0
 DRYRUN=0
 
 
@@ -538,11 +538,12 @@ EOF
 	fi
 	act "please wait while downloading mails..."
 
-	( sleep 2; ${=rm} $WORKDIR/tmp/$host.fetch ) &
-	fetchmail -f $WORKDIR/tmp/$host.fetch
+	cat $WORKDIR/tmp/$host.fetch | fetchmail -f -
+	# TODO: substitute this with cat conf | fetchmail -f -
+	# to avoid writing the password in clear on filesystem
 	
 	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
-	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print " .  " $2 "\t" $3 }'|sort -nr`
+	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
 	notice "$total emails fetched"
 	echo "${briefing}"
     done
@@ -601,18 +602,19 @@ EOF
     unset password
 
     for mail in `find $MAILDIRS/outbox -name "*.mail"`; do
-       act "`cat ${mail} | grep '^To:'`"
        smtp=`echo ${mail} | sed -e 's/mail/msmtp/'`
-       msmtp -C $WORKDIR/tmp/$host.send "`cat ${smtp}`" < "${mail}"
+       recipients="`cat ${smtp}`"
+       act "To: ${recipients}"
+       msmtp -C $WORKDIR/tmp/$host.send -- ${=recipients} < "${mail}"
        if [ $? != 0 ]; then
            error "Error sending mail, skipped"
        else
 	   act "Mail sent succesfully"
+	   # whitelist those to whom we send mails
+	   cat ${mail} | $WORKDIR/bin/jaro -q learn	   
 	   ${=rm} ${mail} ${smtp}
        fi
     done
-    cd -
-    ${=rm} $WORKDIR/tmp/$host.send
     return 0
 }
 
@@ -664,6 +666,7 @@ update() {
     maildirmake $MAILDIRS/priv
     maildirmake $MAILDIRS/postponed
     maildirmake $MAILDIRS/unsorted
+    maildirmake $MAILDIRS/ml.unsorted
     ${=mkdir} $MAILDIRS/outbox
     
     ######
@@ -754,14 +757,6 @@ PF_RECURSE = yes
 EOF
 
     #######
-    echo "# filters generated from Accounts" >> $PROCMAILDIR/rc
-    typeset -al accts
-    for f in `cat $WORKDIR/Accounts/* | awk '/^email/ { print $2 }'`; do
-	echo "ADDR=${f}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
-	act "private account: <${f}>"
-    done
-
-    #######
     echo "# filters generated from Filters.txt" >> $PROCMAILDIR/rc
     
     for f in `cat $WORKDIR/Filters.txt | awk '/^#/ {next} /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
@@ -773,12 +768,14 @@ EOF
 	    to)
 		print "ADDR=${address}\tDEST=${destination}/\tINCLUDERC=\$PMSRC/pf-chkto.rc" \
 		    >> $PROCMAILDIR/rc
-		act "messages to <${address}> in folder: ${destination}"
+		func "messages to <${address}> in folder: ${destination}"
+		maildirmake $MAILDIRS/$destination
 		;;
 	    from)
 		print "ADDR=${address}\tDEST=${destination}/\tINCLUDERC=\$PMSRC/pf-check.rc" \
 		    >> $PROCMAILDIR/rc
-		act "messages from <${address}> in folder: {$destination}"
+		func "messages from <${address}> in folder: {$destination}"
+		maildirmake $MAILDIRS/$destination
 		;;
 	    *)
 		error "unsupported filter: $header (skipped)"
@@ -789,8 +786,18 @@ EOF
 	echo -n " +${destination} " >> $MUTTDIR/mboxes
     done
 
+    #######
+    echo "# filters generated from Accounts" >> $PROCMAILDIR/rc
+    
+    typeset -al accts
+    for f in `cat $WORKDIR/Accounts/* | awk '/^email/ { print $2 }'`; do
+	echo "ADDR=${f}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
+	act "private account: <${f}>"
+    done
+
     echo " \\" >> $MUTTDIR/mboxes
     echo " +ml.unsorted +unsorted" >> $MUTTDIR/mboxes
+
     uniq $MUTTDIR/mboxes > $WORKDIR/tmp/mboxes
     mv $WORKDIR/tmp/mboxes $MUTTDIR/mboxes
     rm -f $WORKDIR/tmp/mboxes
@@ -1058,7 +1065,10 @@ main()
     fi
   ### End parsing command-specific options
 
-    if option_is_set -v; then act "Jaro Mail - $VERSION"; fi
+    if option_is_set -v; then 
+	cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
+	echo
+    fi
     if option_is_set -h; then usage;  fi
     if option_is_set -q; then QUIET=1; fi
     if option_is_set -D; then func "Debug messages ON"; DEBUG=1; fi
