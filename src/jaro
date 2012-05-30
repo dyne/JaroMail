@@ -886,8 +886,12 @@ backup() {
     newread=`find $src/cur -type f -mtime +$expire | wc -l`
     newunread=`find $src/new -type f -mtime +$expire | wc -l`
 
-    act "from maildir $src ($oldread read / $oldunread unread)"
-    act "to maildir $dst ($newread read / $newunread unread)"
+    act "from: (${oldread}/${oldunread} read/unread) maildir $src"
+    if [ $newunread != 0 ]; then # use some highlight to signal long due unread
+	act "to:   ($fg[red]${newread}/${newunread} read/unread$fg[white]) maildir $fg_bold[white]$dst$fg_no_bold[white]"
+    else
+	act "to:   (${newread}/${newunread} read/unread) maildir $dst"
+    fi
 
     if [ $DRYRUN = 1 ]; then return 0; fi
 
