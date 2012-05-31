@@ -618,24 +618,31 @@ EOF
 # PEEK
 # this function will open the MTA to the imap server without fetching mails locally
 peek() {
-    if [ -z $1 ]; then
-	read_default_account in
-    else
-	adir=$WORKDIR/Accounts
-	acct=$1
-	typeset -al all
-	for a in `find $adir -name "imap.$acct*"`; do all+=($a); done
-	read_account `basename ${all[1]}`
-    fi
+    # TODO account selection with -a
+    read_default_account in
     notice "Peek into remote imap account $name"
+
+    folder=""
+    if ! [ -z ${1} ]; then 
+	folder="/${1}"
+	act "opening folder ${folder}"
+    fi
+
     switch_identity
     case $transport in
-	ssl) iproto="imaps" ;;
-	plain) iproto="imap" ;;
+	ssl)
+	    act "using secure connection (SSL)"
+	    iproto="imaps"
+	    ;;
+	plain)
+	    act "using clear text connection"
+	    iproto="imap"
+	    ;;
     esac
+    sleep 2
     # escape at sign in login
     ilogin=`echo $login | sed 's/@/\\@/'`
-    mutt -F $MUTTDIR/rc -f ${iproto}://${ilogin}@${host}
+    mutt -F $MUTTDIR/rc -f ${iproto}://${ilogin}@${host}${folder}
     # TODO automatic input of password in mutt
     return $?
 }
@@ -834,7 +841,7 @@ EOF
 # Little Brother DB
 query() {
     if [ $QUIET = 1 ]; then
-	${WORKDIR}/bin/lbdbq ${@}
+	${WORKDIR}/.lbdb/lbdbq ${@}
 	exitcode=$?
     else
 	act -n "Query known address <${@}> in "
@@ -845,11 +852,11 @@ query() {
 
 learn() {
     if [ $QUIET = 1 ]; then
-	${WORKDIR}/bin/lbdb-fetchaddr -a > /dev/null
+	${WORKDIR}/.lbdb/lbdb-fetchaddr -a > /dev/null
 	exitcode=$?
     else
 	act "Learning new address from mail pipe in stdin"
-	${WORKDIR}/bin/lbdb-fetchaddr -a
+	${WORKDIR}/.lbdb/lbdb-fetchaddr -a
 	exitcode=$?
     fi
 }
