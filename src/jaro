@@ -46,6 +46,10 @@ PARAM=()
 typeset -A global_opts
 typeset -A opts
 
+# global variable for account selection
+typeset -h account
+account=default
+
 # global variables for accounts
 typeset -h name login host protocol port password auth folders accountopt
 
@@ -77,10 +81,10 @@ if [ "$1" != "-q" ]; then # honor quiet flag
     case $(uname) in
 	Linux) OS=GNU
 	    notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
-	
+
 	Darwin) OS=MAC
 	    notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
-	
+
 	*) OS=GNU # default
 	    error "Running on an unknown operating system, assuming GNU" ;;
     esac
@@ -217,7 +221,7 @@ ask_password() {
 		act "New password set for $1 @ $2"
 		security add-internet-password -a $1 -s $2 -w "${password}"
 	    else
-		act "Using saved password for $1 @ $2"        
+		act "Using saved password for $1 @ $2"
 		password=`security find-internet-password -a $1 -s $2 -g \
 		    2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
 	    fi
@@ -248,7 +252,7 @@ set from = "$name <$login>"
 EOF
     else
 	error "No identity found, left blank."
-	touch $MUTTDIR/identity	
+	touch $MUTTDIR/identity
     fi
 }
 
@@ -261,11 +265,11 @@ option_is_set() {
     [[ -n ${(k)opts[$1]} ]];
     r=$?
     if [[ $2 == out ]]; then
-        if [[ $r == 0 ]]; then
-            echo 'set'
-        else
-            echo 'unset'
-        fi
+	if [[ $r == 0 ]]; then
+	    echo 'set'
+	else
+	    echo 'unset'
+	fi
     fi
     return $r;
 }
@@ -290,20 +294,30 @@ maildirmake() {
     ${=mkdir} ${1}/tmp
 
 }
-# arg 1 : account name, es: imap.gmail
+# arg 1 : account type, es: imap or smtp
+# -a defines which account name other than 'default'
 read_account() {
-    adir=$WORKDIR/Accounts
-    acct=$1
-    type="`echo $1|cut -d. -f1`"
+    typeset -al all
+
+    if [ -z $1 ]; then type="*"
+
+    else type=$1 # smtp, imap, pop ... file prefixes"
+    fi
+
     # find the file
-    if [ -r $adir/$acct.txt ]; then
-	acct=$adir/$acct.txt
-    elif [ -r $adir/$acct ]; then  # try without .txt
-	acct=$adir/$acct
-    else
-	error "account $acct not found in $adir"
+    for a in `find $WORKDIR/Accounts -name "$type.$account*" | grep -v smtp`; do all+=($a); done
+    if [ ${#all} = 0 ]; then
+	error "No $type account found: $account"
+	return 1
+    elif [ ${#all} != 1 ]; then
+	error "Too many $type accounts named $account:"
+	for i in ${all}; do act -n "${all[i]}"; done
+	echo; error "Refine your account keyword"
 	return 1
     fi
+
+    acct=${all[1]}
+    type=`basename $acct | cut -d. -f1`
 
     case $type in
 	imap|smtp)
@@ -341,7 +355,7 @@ read_account() {
 
 	    func "type: $type"
 	    func "name: $name"
-	    func "email: $email"	    
+	    func "email: $email"
 	    func "host: $host"
 	    func "login: $login"
 	    func "trans: $transport"
@@ -358,43 +372,6 @@ read_account() {
     esac
     return 0
 }
-# read a default account
-# arg: "in" or "out"
-# meaning an account to receive or send emails
-read_default_account() {
-    adir=$WORKDIR/Accounts
-    typeset -al all
-    if [ -z $1 ]; then
-	error "Error: read_default_account called without argument"
-	return 1
-    fi
-    case $1 in
-	"in")
-	    read_account imap.default
-	    if [ $? = 0 ]; then return $? # configured default found
-	    else # pick first one
-		for a in `find $adir -name "imap*"`; do all+=($a); done
-		for a in `find $adir -name "pop*"`; do all+=($a); done
-		if [ ${#all} != 0 ]; then
-		    read_account `basename ${all[1]}` # take the first found
-		    return $?
-		else
-		    error "No accounts configured, look in $WORKDIR/Accounts"
-		fi
-	    fi
-	    ;;
-	"out")
-	    read_account smtp.default
-	    if [ $? = 0 ]; then return $? # configured default found
-	    else # pick first one
-		for a in `find $adir -name "smtp*"`; do all+=($a); done
-		read_account `basename ${all[1]}` # take the first found
-		return $?
-	    fi
-	    ;;
-    esac
-    return 1
-}
 
 queue() {
     local base;
@@ -409,7 +386,7 @@ queue() {
     # Create new unique filenames of the form
     # MAILFILE:  ccyy-mm-dd-hh.mm.ss[-x].mail
     # MSMTPFILE: ccyy-mm-dd-hh.mm.ss[-x].msmtp
-    # where x is a consecutive number only appended if you send more than one 
+    # where x is a consecutive number only appended if you send more than one
     # mail per second.
     base="`date +%Y-%m-%d-%H.%M.%S`"
     func "[$base] queue called with params: ${PARAM[@]}"
@@ -449,7 +426,7 @@ cert() {
 	gmail)
 	    cc=Equifax_Secure_Certificate_Authority
 	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
-		
+
 		curl -o $WORKDIR/certs/${cc}.pem \
 		    "https://www.geotrust.com/resources/root_certificates/certificates/${cc}.cer"
 		openssl x509 -in \
@@ -499,16 +476,32 @@ cert() {
 
 ###########
 # FETCHMAIL
+fetchall() {
+    notice "Fetching all accounts in $MAILDIRS"
+    res=0
+    for i in `find $WORKDIR/Accounts -type f | grep -v README`; do
+	a=`basename $i`
+	type=`echo $a | cut -d. -f1`
+	account=`echo $a | cut -d. -f2`
+	func "$account type $type: $a"
+	fetch $type
+	if [ $? != 0 ]; then res=1; fi
+	# returns an error if just one of the accounts did
+    done
+    return $res
+}
 fetch() {
     adir=$WORKDIR/Accounts
-    acct=$1
+
     typeset -al all
 
-    if [ -z $acct ]; then # fetch all accounts
-	for a in `find $adir -type f -name "imap*"`; do all+=($a); done
-	for a in `find $adir -type f -name "pop*"`; do all+=($a); done
-    else # fetch only one account
-	for a in `find $adir -type f -name "$acct*"`; do all+=($a); done
+    # recurdion here
+    if [ "$1" = "all" ]; then fetchall; return $?; fi
+
+    read_account "$1"
+    if [ $? != 0 ]; then
+	error "Account configuration not found, or broken. Aborting operation."
+	return 1
     fi
 
     if ! [ -r $PROCMAILDIR/rc ]; then
@@ -516,87 +509,81 @@ fetch() {
 	update
     fi
 
-    for a in ${all}; do
-	read_account `basename $a`
-	if [ $? != 0 ]; then
-	    error "Account configuration not found, or broken. Aborting operation."
-	    return 1
-	fi
-	notice "Fetching mails from $name"
-	ask_password $login $host
-	if [ $? != 0 ]; then
-	    error "Error retrieving password for $login on $host"
-	    unset password all
-	    return 1
-	fi
+    notice "Fetching mails for $name"
+    ask_password $login $host
+    if [ $? != 0 ]; then
+	error "Error retrieving password for $login on $host"
+	unset password all
+	return 1
+    fi
 
-	newlock $WORKDIR/tmp/$host.fetch
-	cat <<EOF > $WORKDIR/tmp/$host.fetch
+    newlock $WORKDIR/tmp/$host.fetch
+    cat <<EOF > $WORKDIR/tmp/$host.fetch
 poll $host with proto IMAP user "$login" there with password "$password"
 EOF
-	unset password
+    unset password
 
-	if ! [ -z $accountopt ]; then # add option configuration
-	    echo "${accountopt}" >> $WORKDIR/tmp/$host.fetch; fi
+    if ! [ -z $accountopt ]; then # add option configuration
+	echo "${accountopt}" >> $WORKDIR/tmp/$host.fetch; fi
 
-	if ! [ -z $folders ]; then # add folder configuration
-	    echo "folder ${folders}" >> $WORKDIR/tmp/$host.fetch; fi
+    if ! [ -z $folders ]; then # add folder configuration
+	echo "folder ${folders}" >> $WORKDIR/tmp/$host.fetch; fi
 
-	cat <<EOF >> $WORKDIR/tmp/$host.fetch
+    cat <<EOF >> $WORKDIR/tmp/$host.fetch
 ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 EOF
-	if [ "$cert" = "check" ]; then
-	    cat <<EOF >> $WORKDIR/tmp/$host.fetch
+    if [ "$cert" = "check" ]; then
+	cat <<EOF >> $WORKDIR/tmp/$host.fetch
 sslcertck sslcertpath '$WORKDIR/certs'
 EOF
-	fi
-	cat <<EOF >> $WORKDIR/tmp/$host.fetch
+    fi
+    cat <<EOF >> $WORKDIR/tmp/$host.fetch
 antispam 571 550 501 554
 EOF
 
 	# try login without doing anything
-	fetchmail -c -f $WORKDIR/tmp/$host.fetch
+    fetchmail -c -f $WORKDIR/tmp/$host.fetch
 	# examine result
-	case $? in
-	    1) 
-		notice "No mails for $name"
-		unlock $WORKDIR/tmp/$host.fetch
-		return 1
+    case $? in
+	1)
+	    notice "No mails for $name"
+	    unlock $WORKDIR/tmp/$host.fetch
+	    return 1
 		;;
-	    2)
-		error "Invalid or unknown certificate for $host"
-		unlock $WORKDIR/tmp/$host.fetch
-		return 1
-		;;
-	    3)
-		error "Invalid password for user $login at $host"
-		unlock $WORKDIR/tmp/$host.fetch
-		return 1
-		;;
-	    *) ;;
-	esac
+	2)
+	    error "Invalid or unknown certificate for $host"
+	    unlock $WORKDIR/tmp/$host.fetch
+	    return 1
+	    ;;
+	3)
+	    error "Invalid password for user $login at $host"
+	    unlock $WORKDIR/tmp/$host.fetch
+	    return 1
+	    ;;
+	*) ;;
+    esac
 
 	# archive old procmail log
-	if [ -r $WORKDIR/log/procmail.log ]; then
-	    newlock $WORKDIR/log/procmail-${datestamp}.log
-	    cat $WORKDIR/log/procmail.log \
-		>> $WORKDIR/log/procmail-${datestamp}.log
-	    rm -f $WORKDIR/log/procmail.log
-	    unlock $WORKDIR/log/procmail-${datestamp}.log
-	fi
-	act "please wait while downloading mails..."
+    if [ -r $WORKDIR/log/procmail.log ]; then
+	newlock $WORKDIR/log/procmail-${datestamp}.log
+	cat $WORKDIR/log/procmail.log \
+	    >> $WORKDIR/log/procmail-${datestamp}.log
+	rm -f $WORKDIR/log/procmail.log
+	unlock $WORKDIR/log/procmail-${datestamp}.log
+    fi
+    act "please wait while downloading mails..."
 
-	cat $WORKDIR/tmp/$host.fetch | fetchmail -f -
+    cat $WORKDIR/tmp/$host.fetch | fetchmail -f -
 	# TODO: substitute this with cat conf | fetchmail -f -
 	# to avoid writing the password in clear on filesystem
 
-	unlock $WORKDIR/tmp/$host.fetch
+    unlock $WORKDIR/tmp/$host.fetch
 
-	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
-	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
-	notice "$total emails fetched"
-	echo "${briefing}"
-    done
+    total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
+    briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+    notice "$total emails fetched"
+    echo "${briefing}"
+
     return 0
 }
 
@@ -612,19 +599,14 @@ send() {
     mailnum=`ls ${MAILDIRS}/outbox | grep 'mail$' | wc -l`
     mailnum=${mailnum// /} # trim whitespace
     if [ "$mailnum" = "0" ]; then
-        act "Outbox is empty, no mails to send."
-        return 0
+	act "Outbox is empty, no mails to send."
+	return 0
     fi
 
-    if [ -z $1 ]; then # no particular account specified
-	# use the default account
-	read_default_account "out"
-    else
-	read_account smtp.${1}
-    fi
+    read_account smtp
 
     notice "Sending out ${mailnum} mails via $name"
- 
+
     # defaults
     [ -z $auth ] && auth=plain
     [ -z $port ] && port=25
@@ -655,7 +637,7 @@ EOF
        act "To: ${recipients}"
        msmtp -C $WORKDIR/tmp/$host.send -- ${=recipients} < "${mail}"
        if [ $? != 0 ]; then
-           error "Error sending mail, skipped"
+	   error "Error sending mail, skipped"
 	   unlock ${smtp}
        else
 	   act "Mail sent succesfully"
@@ -673,12 +655,12 @@ EOF
 # PEEK
 # this function will open the MTA to the imap server without fetching mails locally
 peek() {
-    # TODO account selection with -a
-    read_default_account in
+    read_account imap
+
     notice "Peek into remote imap account $name"
 
     folder=""
-    if ! [ -z ${1} ]; then 
+    if ! [ -z ${1} ]; then
 	folder="/${1}"
 	act "opening folder ${folder}"
     fi
@@ -710,7 +692,7 @@ update() {
     # generate muttrc
     # backup what's too old in the maildirs
     # ...
-    
+
     # debug configuration
     func "MAILDIRS:    $MAILDIRS"
     func "WORKDIR:     $WORKDIR"
@@ -726,7 +708,7 @@ update() {
     maildirmake $MAILDIRS/unsorted
     maildirmake $MAILDIRS/ml.unsorted
     ${=mkdir} $MAILDIRS/outbox
-    
+
     ######
     # MUTT
     ${=mkdir} $MUTTDIR
@@ -775,13 +757,14 @@ source $WORKDIR/Mutt.txt
 
 EOF
 
-    
+
     # just the header, will be completed later in procmail loop
     rm -f $MUTTDIR/mboxes
     echo -n "mailboxes +priv" > $MUTTDIR/mboxes
 
     # update identity with default
-    read_default_account "in"
+    read_account imap
+
     switch_identity
 
     ##########
@@ -816,7 +799,7 @@ EOF
 
     #######
     echo "# filters generated from Filters.txt" >> $PROCMAILDIR/rc
-    
+
     for f in `cat $WORKDIR/Filters.txt | awk '/^#/ {next} /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
 	header="${f[(ws:;:)1]}"
 	address="${f[(ws:;:)2]}"
@@ -846,7 +829,7 @@ EOF
 
     #######
     echo "# filters generated from Accounts" >> $PROCMAILDIR/rc
-    
+
     typeset -al accts
     for f in `cat $WORKDIR/Accounts/* | awk '/^email/ { print $2 }'`; do
 	echo "ADDR=${f}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
@@ -1014,6 +997,7 @@ Main commands:
 
 Options:
 
+ -a     use a particular account instead of default (keyword)
  -h     print this help
  -v     version information for this tool
  -q     run quietly without printing informations
@@ -1052,14 +1036,14 @@ main()
     #       I. usability; user expect that "-s" is "size
     #       II. Option parsing WILL EXPLODE if you do this kind of bad things
     #               (it will say "option defined more than once, and he's right)
-    main_opts=(q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
+    main_opts=(a: -account=a q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
     subcommands_opts[__default]=""
     subcommands_opts[queue]=""
     subcommands_opts[fetch]=""
     subcommands_opts[send]=""
     subcommands_opts[read]=""
     subcommands_opts[compose]=""
-    subcommands_opts[peek]=""    
+    subcommands_opts[peek]=""
     subcommands_opts[update]=""
     subcommands_opts[query]=""
     subcommands_opts[learn]=""
@@ -1074,9 +1058,9 @@ main()
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
-        for opt in ${=optspec}; do
-            every_opts+=${opt}
-        done
+	for opt in ${=optspec}; do
+	    every_opts+=${opt}
+	done
     done
     local -a oldstar
     oldstar=($argv)
@@ -1084,11 +1068,11 @@ main()
     unset discardme
     subcommand=$1
     if [[ -z $subcommand ]]; then
-        subcommand="__default"
+	subcommand="__default"
     fi
     if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then #there's no such subcommand
-        error "Subcommand '$subcommand' doesn't exist"
-        exitcode=1
+	error "Subcommand '$subcommand' doesn't exist"
+	exitcode=1
 	return 1
     fi
     argv=(${oldstar})
@@ -1098,10 +1082,10 @@ main()
     # zsh magic: ${=string} will split to multiple arguments when spaces occur
     set -A cmd_opts ${main_opts} ${=subcommands_opts[$subcommand]}
     if [[ -n $cmd_opts ]]; then #if there is no option, we don't need parsing
-        zparseopts -M -E -D -Aopts ${cmd_opts}
+	zparseopts -M -E -D -Aopts ${cmd_opts}
 	if [[ $? != 0 ]]; then
 	    error "Some error occurred during option processing."
-            exitcode=1
+	    exitcode=1
 	    return 1
 	fi
     fi
@@ -1127,10 +1111,11 @@ main()
     fi
   ### End parsing command-specific options
 
-    if option_is_set -v; then 
+    if option_is_set -v; then
 	cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
 	echo
     fi
+    if option_is_set -a; then account=`option_value -a`; fi
     if option_is_set -h; then usage;  fi
     if option_is_set -q; then QUIET=1; fi
     if option_is_set -D; then func "Debug messages ON"; DEBUG=1; fi
