@@ -956,18 +956,19 @@ backup() {
 }
 
 rmdupes() {
-    dir=$1
-    if ! [ -r $dir ]; then
-	error "No maildir found in $dir"
-	return 1
-    fi
-    notice "Removing duplicates in $dir"
-    c=0
-    for i in `find ${dir}`; do
-	formail -D 100000  $WORKDIR/tmp/$dir.rmdupes <$i \
-	    && rm $i && c=`expr $c + 1`
+    newlock $WORKDIR/tmp/$datestamp.rmdupes
+    for folder in ${=PARAM}; do
+	{ test ! -r $folder } && { folder=$MAILDIRS/$folder }
+	{ test ! -r $folder } && { error "Maildir not found: $folder"; continue }
+	notice "Removing duplicates in $folder"
+	c=0
+	for i in `find ${folder} -type f`; do
+	    formail -D 100000  $WORKDIR/tmp/$datestamp.rmdupes <$i \
+		&& rm $i && c=`expr $c + 1`
+	done
     done
-    act "$c duplicates found and deleted"
+    unlock $WORKDIR/tmp/$datestamp.rmdupes
+    notice "$c duplicates found and deleted"
 }
 
 merge() {
@@ -989,6 +990,40 @@ merge() {
     act "$c mails succesfully moved."
     rmdupes ${dst}
     notice "Operation completed, you can now safely remove ${src}"
+}
+
+# re-sort all maildir through the procmail filters
+# it can create duplicates, up to the user to rmdupes
+filter() {
+
+    update # update all filters
+
+	# archive old procmail log
+    if [ -r $WORKDIR/log/procmail.log ]; then
+	newlock $WORKDIR/log/procmail-${datestamp}.log
+	cat $WORKDIR/log/procmail.log \
+	    >> $WORKDIR/log/procmail-${datestamp}.log
+	rm -f $WORKDIR/log/procmail.log
+	unlock $WORKDIR/log/procmail-${datestamp}.log
+    fi
+
+    for folder in ${=PARAM}; do
+	typeset -al fall
+	{ test ! -r $folder } && { folder=$MAILDIRS/$folder }
+	{ test ! -r $folder } && { error "Maildir not found: $folder"; return 1 }
+	notice "Filtering folder $folder"
+	# first index current state
+	for m in `find $folder -type f`; do fall+=($m); done
+	# then process it, this way ignoring new mails send to same folder
+	for n in ${=fall}; do
+	    cat $n | procmail -m $PROCMAILDIR/rc
+	done
+	unset fall
+    done
+
+    total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
+    briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+    echo "${briefing}"
 }
 
 ######################
@@ -1067,6 +1102,7 @@ main()
     subcommands_opts[backup]=""
     subcommands_opts[rmdupes]=""
     subcommands_opts[merge]=""
+    subcommands_opts[filter]=""
 
 #    subcommands_opts[mount]=${subcommands_opts[open]}
 #    subcommands_opts[create]="s: -size=s -ignore-swap k: -key=k"
@@ -1153,6 +1189,7 @@ main()
 	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;
 	merge)   merge ${PARAM} ;;
+	filter)  filter ${PARAM} ;;
 
 	'source')   return 0 ;;
 	__default)  ;;
