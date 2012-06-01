@@ -305,7 +305,7 @@ read_account() {
     fi
 
     # find the file
-    for a in `find $WORKDIR/Accounts -name "$type.$account*" | grep -v smtp`; do all+=($a); done
+    for a in `find $WORKDIR/Accounts -name "$type.$account*"`; do all+=($a); done
     if [ ${#all} = 0 ]; then
 	error "No $type account found: $account"
 	return 1
@@ -499,6 +499,9 @@ fetch() {
     if [ "$1" = "all" ]; then fetchall; return $?; fi
 
     read_account "$1"
+    if [ "$type" = "smtp" ]; then # we skip smtp in fetch
+	return 0; fi
+
     if [ $? != 0 ]; then
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
@@ -604,6 +607,10 @@ send() {
     fi
 
     read_account smtp
+    if [ $? != 0 ]; then
+	error "Account configuration not found, or broken. Aborting operation."
+	return 1
+    fi
 
     notice "Sending out ${mailnum} mails via $name"
 
@@ -656,6 +663,10 @@ EOF
 # this function will open the MTA to the imap server without fetching mails locally
 peek() {
     read_account imap
+    if [ $? != 0 ]; then
+	error "Account configuration not found, or broken. Aborting operation."
+	return 1
+    fi
 
     notice "Peek into remote imap account $name"
 
