@@ -247,6 +247,7 @@ cp src/lbdb/fetchaddr $WORKDIR/.lbdb/
 chmod +x $WORKDIR/.lbdb/*
 ln -sf $WORKDIR/.lbdb/lbdb-fetchaddr $WORKDIR/bin/
 ln -sf $WORKDIR/.lbdb/lbdbq $WORKDIR/bin/
+ln -sf $WORKDIR/.lbdb/dotlock $WORKDIR/bin/
 
 # OS specific lbdb rules
 case $OS in

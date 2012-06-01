@@ -30,9 +30,9 @@ for arg in ${argv}; do OLDARGS+=($arg); done
 # declare global variables
 
 QUIET=0
-DEBUG=0
+DEBUG=1
 DRYRUN=0
-
+CLEANEXIT=1
 
 # which command to use when creating dirs
 mkdir="`which mkdir` -m 700 -p"
@@ -115,8 +115,9 @@ PROCMAILDIR=$WORKDIR/.procmail
 MUTTDIR=$WORKDIR/.mutt
 
 cleanexit() {
-    for f in `ls $WORKDIR/tmp/`; do
-	${=rm} $WORKDIR/tmp/$f
+    func "Clean exit procedures"
+    for f in `ls $WORKDIR/tmp/ | grep -v '.lock$'`; do
+	unlink $WORKDIR/tmp/$f
     done
     unset typeset -h name login host protocol port password auth folders accountopt
 }
@@ -130,6 +131,48 @@ TRAPINT() {
 	    exit 1
 	fi
 }
+
+lock() {
+    func "lock: $@"
+    $WORKDIR/.lbdb/dotlock ${=@}
+    case $? in
+	1) error "Cannot lock non existing file: $@"
+	    return 1 ;;
+	3) error "Locked file in use: $@"
+	    return 3 ;;
+	5) error "Impossible to lock: $@"
+	    return 5 ;;
+	# success
+	0) return 0 ;;
+    esac
+}
+newlock() { # create locked
+    func "creating locked file: $1"
+    touch $1
+    chmod 600 $1
+    lock $1
+}
+unlock() {
+    func "unlock: $@"
+    $WORKDIR/.lbdb/dotlock -u ${=@}
+    if [ $? != 0 ]; then
+	error "Unable to unlock: $@"
+	return 1
+    fi
+    return 0
+}
+locked_unlink() { # delete a file that we are locking
+    # use with care! this can permanently erase currently locked files
+    ${=rm} ${1}
+    touch ${1}
+    $WORKDIR/.lbdb/dotlock -d -f ${1}
+}
+unlink() { # lock and delete
+    func "unlink: $1"
+    lock ${1}
+    locked_unlink ${1} &
+}
+
 
 # we use pinentry
 # comes from gpg project and is secure
@@ -261,9 +304,11 @@ read_account() {
 	error "account $acct not found in $adir"
 	return 1
     fi
-    atmp=$WORKDIR/tmp/$1
+
     case $type in
 	imap|smtp)
+
+	    lock $acct
 	    ttmp=`cat $acct | awk '
     /^#/ { next }
     /^name/ { printf "name=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
@@ -278,6 +323,8 @@ read_account() {
     /^options/ { printf "accountopt=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^folders/ { printf "folders=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     '`
+	    unlock $acct
+
 	    eval "$ttmp"
 	    # check required fields
 	    { test -z $host }  && { error "Field missing in account $acct: host"; return 1 }
@@ -323,10 +370,9 @@ read_default_account() {
     fi
     case $1 in
 	"in")
-	    if [ -r $adir/imap.default ]; then
-		read_account imap.default
-		return $?
-	    else
+	    read_account imap.default
+	    if [ $? = 0 ]; then return $? # configured default found
+	    else # pick first one
 		for a in `find $adir -name "imap*"`; do all+=($a); done
 		for a in `find $adir -name "pop*"`; do all+=($a); done
 		if [ ${#all} != 0 ]; then
@@ -338,10 +384,9 @@ read_default_account() {
 	    fi
 	    ;;
 	"out")
-	    if [ -r $adir/smtp.default ]; then
-		read_account smtp.default
-		return $?
-	    else
+	    read_account smtp.default
+	    if [ $? = 0 ]; then return $? # configured default found
+	    else # pick first one
 		for a in `find $adir -name "smtp*"`; do all+=($a); done
 		read_account `basename ${all[1]}` # take the first found
 		return $?
@@ -381,8 +426,10 @@ queue() {
     msmtpfile="$base.msmtp"
     # Write command line to $MSMTPFILE
     echo "$@" > "$msmtpfile"
+    lock $msmtpfile
     # Write the mail to $MAILFILE
     cat > "$mailfile"
+    unlock $msmtpfile
     cd -
     return 0
 }
@@ -456,17 +503,19 @@ fetch() {
     adir=$WORKDIR/Accounts
     acct=$1
     typeset -al all
+
     if [ -z $acct ]; then # fetch all accounts
-	for a in `find $adir -name "imap*"`; do all+=($a); done
-	for a in `find $adir -name "pop*"`; do all+=($a); done
-    else
-	# fetch only one account
-	for a in `find $adir -name "$acct*"`; do all+=($a); done
+	for a in `find $adir -type f -name "imap*"`; do all+=($a); done
+	for a in `find $adir -type f -name "pop*"`; do all+=($a); done
+    else # fetch only one account
+	for a in `find $adir -type f -name "$acct*"`; do all+=($a); done
     fi
+
     if ! [ -r $PROCMAILDIR/rc ]; then
 	act "updating procmail configuration"
 	update
     fi
+
     for a in ${all}; do
 	read_account `basename $a`
 	if [ $? != 0 ]; then
@@ -474,8 +523,6 @@ fetch() {
 	    return 1
 	fi
 	notice "Fetching mails from $name"
-	touch $WORKDIR/tmp/$host.fetch
-	chmod 600 $WORKDIR/tmp/$host.fetch
 	ask_password $login $host
 	if [ $? != 0 ]; then
 	    error "Error retrieving password for $login on $host"
@@ -483,6 +530,7 @@ fetch() {
 	    return 1
 	fi
 
+	newlock $WORKDIR/tmp/$host.fetch
 	cat <<EOF > $WORKDIR/tmp/$host.fetch
 poll $host with proto IMAP user "$login" there with password "$password"
 EOF
@@ -512,17 +560,17 @@ EOF
 	case $? in
 	    1) 
 		notice "No mails for $name"
-		${=rm} $WORKDIR/tmp/$host.fetch
+		unlock $WORKDIR/tmp/$host.fetch
 		return 1
 		;;
 	    2)
 		error "Invalid or unknown certificate for $host"
-		${=rm} $WORKDIR/tmp/$host.fetch
+		unlock $WORKDIR/tmp/$host.fetch
 		return 1
 		;;
 	    3)
 		error "Invalid password for user $login at $host"
-		${=rm} $WORKDIR/tmp/$host.fetch
+		unlock $WORKDIR/tmp/$host.fetch
 		return 1
 		;;
 	    *) ;;
@@ -530,18 +578,20 @@ EOF
 
 	# archive old procmail log
 	if [ -r $WORKDIR/log/procmail.log ]; then
-	    touch $WORKDIR/log/procmail-${datestamp}.log
-	    chmod 700 $WORKDIR/log/procmail-${datestamp}.log
+	    newlock $WORKDIR/log/procmail-${datestamp}.log
 	    cat $WORKDIR/log/procmail.log \
 		>> $WORKDIR/log/procmail-${datestamp}.log
 	    rm -f $WORKDIR/log/procmail.log
+	    unlock $WORKDIR/log/procmail-${datestamp}.log
 	fi
 	act "please wait while downloading mails..."
 
 	cat $WORKDIR/tmp/$host.fetch | fetchmail -f -
 	# TODO: substitute this with cat conf | fetchmail -f -
 	# to avoid writing the password in clear on filesystem
-	
+
+	unlock $WORKDIR/tmp/$host.fetch
+
 	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
 	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
 	notice "$total emails fetched"
@@ -578,13 +628,14 @@ send() {
     # defaults
     [ -z $auth ] && auth=plain
     [ -z $port ] && port=25
-    
-    touch $WORKDIR/tmp/$host.send
-    chmod 600 $WORKDIR/tmp/$host.send
+
+
     ask_password $login $host
+
+    newlock $WORKDIR/tmp/$host.send
     cat <<EOF > $WORKDIR/tmp/$host.send
 account default
-from ${name}
+from ${email}
 user ${login}
 host ${host}
 port ${port}
@@ -599,18 +650,22 @@ EOF
 
     for mail in `find $MAILDIRS/outbox -name "*.mail"`; do
        smtp=`echo ${mail} | sed -e 's/mail/msmtp/'`
+       lock ${smtp}
        recipients="`cat ${smtp}`"
        act "To: ${recipients}"
        msmtp -C $WORKDIR/tmp/$host.send -- ${=recipients} < "${mail}"
        if [ $? != 0 ]; then
            error "Error sending mail, skipped"
+	   unlock ${smtp}
        else
 	   act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
-	   cat ${mail} | $WORKDIR/bin/jaro -q learn	   
-	   ${=rm} ${mail} ${smtp}
+	   cat ${mail} | $WORKDIR/bin/jaro -q learn
+	   ${=rm} ${mail} &
+	   locked_unlink ${smtp} &
        fi
     done
+    unlock $WORKDIR/tmp/$host.send
     return 0
 }
 
@@ -1092,8 +1147,8 @@ main()
 
 	update)  update ;;
 
-	query)   query ${PARAM} ;;
-	learn)   learn ${PARAM} ;;
+	query)   CLEANEXIT=0; query ${PARAM} ;;
+	learn)   CLEANEXIT=0; learn ${PARAM} ;;
 
 	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;
@@ -1111,5 +1166,5 @@ main()
 
 check_bin
 main $@
-cleanexit
+if [ $CLEANEXIT = 1 ]; then cleanexit; fi
 return $exitcode

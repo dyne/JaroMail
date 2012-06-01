@@ -16,6 +16,12 @@
 * Stats
  + Have some fancy statistics
 
+* Speedmail or Quickmail
+  write down a mail from commandline and send it right away (if online)
+  doesn't uses Mutt to generate the mail body
+  but might read Mutt.txt configuration for headers and such
+  
+
 * DONE Maildirs
  + Remove duplicates from maildirs (garbage collection)
  + Backup system with expiration date
