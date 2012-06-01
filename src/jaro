@@ -74,21 +74,24 @@ act()    {
     fi
 }
 
+# honor quiet flag as early as possible
+echo "${@}" | grep '\-q' > /dev/null # silent
+if [ "$?" = 0 ]; then QUIET=1; fi
+
 
 # what operating system are we in? use os_detect()
 # simplifying modes of operation: GNU or MAC
-if [ "$1" != "-q" ]; then # honor quiet flag
-    case $(uname) in
-	Linux) OS=GNU
-	    notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
+case $(uname) in
+    Linux) OS=GNU
+	notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
 
-	Darwin) OS=MAC
-	    notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
+    Darwin) OS=MAC
+	notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
 
-	*) OS=GNU # default
-	    error "Running on an unknown operating system, assuming GNU" ;;
-    esac
-fi
+    *) OS=GNU # default
+	error "Running on an unknown operating system, assuming GNU" ;;
+esac
+
 
 if [ -z $MAILDIRS ]; then
     # check if we are inside the directory
@@ -310,8 +313,9 @@ read_account() {
 	error "No $type account found: $account"
 	return 1
     elif [ ${#all} != 1 ]; then
-	error "Too many $type accounts named $account:"
-	for i in ${all}; do act -n "${all[i]}"; done
+	error "Too many $type accounts named $account"
+	act -n ""
+	for i in ${=all}; do echo -n "`basename ${i}` "; done
 	echo; error "Refine your account keyword"
 	return 1
     fi
@@ -495,17 +499,17 @@ fetch() {
 
     typeset -al all
 
-    # recurdion here
-    if [ "$1" = "all" ]; then fetchall; return $?; fi
+    # recursion here
+    if [ -z $1 ]; then fetchall; return $?; fi
 
     read_account "$1"
-    if [ "$type" = "smtp" ]; then # we skip smtp in fetch
-	return 0; fi
-
     if [ $? != 0 ]; then
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
     fi
+
+    if [ "$type" = "smtp" ]; then # we skip smtp in fetch
+	return 0; fi
 
     if ! [ -r $PROCMAILDIR/rc ]; then
 	act "updating procmail configuration"
