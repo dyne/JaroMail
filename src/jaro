@@ -346,10 +346,11 @@ read_account() {
 	    eval "$ttmp"
 	    # check required fields
 	    { test -z $host }  && { error "Field missing in account $acct: host"; return 1 }
-	    { test -z $login } && { error "Field missing in account $acct: login"; return 1 }
+
 	    # fill in defaults
 	    { test -z $name }       && { name="$type" }
-	    { test -z $email }       && { email="$login" }
+	    { test -z $login }      && { login="$email" } # usually email and login are the same
+	    { test -z $email }      && { email="$login" } # so if one is specified, deduce the other
 	    { test -z $transport }  && { transport=ssl }
 	    { test -z $port }       && { port=993 }
 	    { test -z $auth }       && { auth=plain }
