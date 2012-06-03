@@ -30,7 +30,7 @@ set assumed_charset = us-ascii
 
 ############
 ## Main menu
-#set collapse_unread
+set collapse_unread
 set arrow_cursor
 set ascii_chars
 set auto_tag

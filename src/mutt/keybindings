@@ -29,10 +29,21 @@ bind pager <left> previous-entry
 # bind index,pager 	Q	     query
 bind editor 	<tab>	 complete-query
 
+macro index,pager "=" "<sync-mailbox><change-folder>?<toggle-mailboxes>" # folder list
 macro pager \ef "|view-x-face<enter>" "display the X-Face included in the mail"
+macro pager "\e1"    "<enter-command>set pager_index_lines=1<enter>"      # Change PIL size
+macro pager "\e2"    "<enter-command>set pager_index_lines=2<enter>"      # Change PIL size
+macro pager "\e3"    "<enter-command>set pager_index_lines=3<enter>"      # Change PIL size
+macro pager "\e4"    "<enter-command>set pager_index_lines=4<enter>"      # Change PIL size
+macro pager "\e5"    "<enter-command>set pager_index_lines=5<enter>"      # Change PIL size
+macro pager "\e6"    "<enter-command>set pager_index_lines=6<enter>"      # Change PIL size
+macro pager "\e7"    "<enter-command>set pager_index_lines=7<enter>"      # Change PIL size
+macro pager "\e8"    "<enter-command>set pager_index_lines=8<enter>"      # Change PIL size
+macro pager "\e9"    "<enter-command>set pager_index_lines=9<enter>"      # Change PIL size
+macro pager "\e0"    "<enter-command>set pager_index_lines=0<enter>"      # Change PIL size
 
-# Not possible to simulate zoom-out...
-macro index z l~T\r
+bind index - collapse-thread
+bind index _ collapse-all
 
 # mutt sidebar
 # bind index,pager \CP sidebar-prev

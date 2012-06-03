@@ -12,7 +12,6 @@ color indicator brightgreen default
 color tree brightred default # the thread tree in the index menu
 color status cyan default
 color hdrdefault cyan default
-color header brightred default ^(From|Subject|Date|To):
 color body magenta default "(ftp|http)://[^ ]+"	# point out URLs
 color body magenta default [-a-z_0-9.]+@[-a-z_0-9.]+	# e-mail addresses
 color underline brightgreen default
@@ -21,6 +20,9 @@ color signature green default
 color error red default
 color attachment brightmagenta default
 color search default green   # how to hilite search patterns in the pager
+
+# headers
+color header brightred default ^(From|Subject|Date|To):
 
 # quoted message
 color quoted brightgreen default
@@ -36,10 +38,16 @@ color index white default "~N" # New
 color index brightcyan default "~O" # Unread
 color index brightgreen default "~N (~x jaromil@* | ~h \"^In-[Rr]eply-[Tt]o: .*jaromil@*")"
 color index yellow default "~f jaromil@*"
+
 # color index brightblue default "~g" # gpg signed
-color index brightblue default "~G" # gpg encrypted
+color index brightgreen default "~G" # gpg encrypted
+
 color index brightgreen default "~F" # Flagged
 color index brightred default "~T" # Tagged
 color index red default "~f MAILER-DAEMON@*"
 color index red default "~f Mailer-Daemon@*"
+color index brightwhite default "~v~(~N)" # Collapsed thread with some unread
+color index green default "~v~(!~N)" # Collapsed thread with no unread
+
+color index red default "~=" # Duplicated messages
 color index brightblack default "~D" # Deleted
