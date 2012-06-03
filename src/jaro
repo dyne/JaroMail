@@ -795,8 +795,14 @@ peek() {
 	error "Error retrieving password for $login on $host"
 	unset password all; return 1
     }
-
-    mutt -F $MUTTDIR/rc -f ${iproto}://${ilogin}@${host}${folder}
+    newlock $WORKDIR/tmp/muttpasswd
+    cat <<EOF >> $WORKDIR/tmp/muttpasswd
+set imap_pass = "${password}"
+\`$WORKDIR/bin/dotlock -u $WORKDIR/tmp/muttpasswd; echo 'set imap_peek=yes'\`
+EOF
+    unset password
+    (sleep 5; unlink $WORKDIR/tmp/muttpasswd)&
+    mutt -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
     # TODO automatic input of password in mutt
     return $?
 }
@@ -851,6 +857,7 @@ macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q forget<
 macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q learn<enter>" "add sender to blacklist"
 macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q forget<enter>" "remove sender from blacklist
 
+\`test -r $WORKDIR/tmp/muttpasswd && echo "source $WORKDIR/tmp/muttpasswd"\`
 EOF
 
     if [ -r $MUTTDIR/general ]; then
