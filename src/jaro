@@ -885,7 +885,7 @@ set mailcap_path = "$WORKDIR/mailcap"
 set query_command = "$WORKDIR/bin/jaro -q query '%s'"
 macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q learn<enter>" "add sender to whitelist"
 macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q forget<enter>" "remove sender from whitelist
-macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q learn<enter>" "add sender to blacklist"
+macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q learn from:<enter>" "add sender to blacklist"
 macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q forget<enter>" "remove sender from blacklist
 
 # mailboxes in order of priority
@@ -1061,14 +1061,14 @@ query() {
 learn() {
     export jarodir=$WORKDIR
     export jarolist=$listaddr
-    if [ $QUIET = 1 ]; then
-	${WORKDIR}/.lbdb/lbdb-fetchaddr -a > /dev/null
-	exitcode=$?
-    else
-	act "Learning new address from mail pipe in stdin"
+    act "Learning new address from mail pipe in stdin"
+    if [ -z ${PARAM[1]} ]; then
 	${WORKDIR}/.lbdb/lbdb-fetchaddr -a
-	exitcode=$?
+    else
+	${WORKDIR}/.lbdb/lbdb-fetchaddr -a -x "${PARAM[1]}"
     fi
+    exitcode=$?
+
     unset jarodir
     unset jarolist
 }
