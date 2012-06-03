@@ -46,7 +46,7 @@ notice "Installing Jaromail in $WORKDIR"
 
 # install the main jaromail script
 ${=mkdir} ${WORKDIR}/bin
-cp src/jaro ${WORKDIR}/bin
+cp -f src/jaro ${WORKDIR}/bin
 
 # make sure we have a temp and cache dir
 ${=mkdir} $WORKDIR/tmp $WORKDIR/cache
@@ -244,7 +244,6 @@ for mod in ${lbdb_modules}; do
 done
 cp src/lbdb/dotlock $WORKDIR/.lbdb/
 cp src/lbdb/fetchaddr $WORKDIR/.lbdb/
-cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
 chmod +x $WORKDIR/.lbdb/*
 ln -sf $WORKDIR/.lbdb/lbdb-fetchaddr $WORKDIR/bin/
 ln -sf $WORKDIR/.lbdb/lbdbq $WORKDIR/bin/
@@ -293,6 +292,7 @@ act "Check the commandline help for a list of commands: jaro -h"
 # OS specific post install rules
 case $OS in
 	GNU)
+	cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
 	;;
 	MAC)
 	;;

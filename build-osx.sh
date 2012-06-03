@@ -99,5 +99,3 @@ copydeps bin/gpg
 copydeps bin/pinentry
 copydeps bin/lynx
 
-cp src/jaro build/osx
-
