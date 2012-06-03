@@ -131,7 +131,7 @@ cleanexit() {
 # make sure tmp is wiped from sensitive data in case of sigINT
 TRAPINT() {
 	error "Caught signal, aborting operations."
-	cleanexit
+	{ test $CLEANEXIT = 1 } && { cleanexit }
 	if [ "$DEBUG" = "1" ]; then
 	    return 1
 	else
@@ -737,7 +737,6 @@ set spoolfile = $MAILDIRS/known/
 set record = $MAILDIRS/sent/
 set postponed= $MAILDIRS/postponed/
 set tmpdir = $WORKDIR/cache
-set query_command = "$WORKDIR/bin/jaro -q query '%s'"
 set sendmail = "$WORKDIR/bin/jaro queue"
 set header_cache= $WORKDIR/cache
 set maildir_header_cache_verify=no
@@ -746,8 +745,8 @@ set mailcap_path = "$WORKDIR/mailcap"
 
 # Little Brother Database
 set query_command = "$WORKDIR/bin/jaro -q query '%s'"
-macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -q learn" "add the sender address to lbdb"
-macro index,pager + "<pipe-message>$WORKDIR/bin/jaro -q learn" "add the sender address to lbdb"
+macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -q learn" "add sender to whitelist"
+macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -q forget" "remove sender from whitelist
 
 EOF
 
@@ -913,7 +912,6 @@ query() {
 	exitcode=$?
     fi
 }
-
 learn() {
     if [ $QUIET = 1 ]; then
 	${WORKDIR}/.lbdb/lbdb-fetchaddr -a > /dev/null
@@ -923,6 +921,20 @@ learn() {
 	${WORKDIR}/.lbdb/lbdb-fetchaddr -a
 	exitcode=$?
     fi
+}
+forget() {
+    { test $QUIET != 1 } && { act "Forgetting address from mail pipe in stdin" }
+    addr=`cat | formail -x"From:" \
+	| head -n1 \
+	| tr 'A-Z' 'a-z' \
+	| sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/'`
+    func "forgetting address: $addr"
+    newlock $WORKDIR/tmp/forget-addr
+    awk "/$addr/"' { next; }
+{ print $0 }' ${WORKDIR}/.lbdb/m_inmail.list \
+    >> $WORKDIR/tmp/forget-addr
+    cp $WORKDIR/tmp/forget-addr ${WORKDIR}/.lbdb/m_inmail.list
+    unlock $WORKDIR/tmp/forget-addr
 }
 ###################
 
@@ -1071,7 +1083,8 @@ Maintenance commands:
  queue    add a mail into outbox
 
  query    query a name from addressbook
- learn    learn known addresses from mails piped in stdin
+ learn    learn addresses found in mails piped in stdin
+ forget   forget sender addresses found in mails piped in stdin
 
  backup   move all mails older than N days from a maildir to another
  rmdupes  remove all duplicate mails into a maildir
@@ -1106,14 +1119,19 @@ main()
     subcommands_opts[compose]=""
     subcommands_opts[peek]=""
     subcommands_opts[update]=""
+
     subcommands_opts[query]=""
     subcommands_opts[learn]=""
-    subcommands_opts[source]=""
-    subcommands_opts[cert]=""
+    subcommands_opts[forget]=""
+
     subcommands_opts[backup]=""
     subcommands_opts[rmdupes]=""
     subcommands_opts[merge]=""
     subcommands_opts[filter]=""
+
+    subcommands_opts[cert]=""
+
+    subcommands_opts[source]=""
 
 #    subcommands_opts[mount]=${subcommands_opts[open]}
 #    subcommands_opts[create]="s: -size=s -ignore-swap k: -key=k"
@@ -1189,18 +1207,20 @@ main()
 	send)    send ${PARAM} ;;
 	peek)    peek ${PARAM} ;;
 	read)    mutt -F $MUTTDIR/rc ;;
-	cert)    cert ${PARAM} ;;
 	compose) mutt -F $MUTTDIR/rc ${PARAM} ;;
 
 	update)  update ;;
 
 	query)   CLEANEXIT=0; query ${PARAM} ;;
 	learn)   CLEANEXIT=0; learn ${PARAM} ;;
+	forget)  CLEANEXIT=0; forget ${PARAM} ;;
 
 	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;
 	merge)   merge ${PARAM} ;;
 	filter)  filter ${PARAM} ;;
+
+	cert)    cert ${PARAM} ;;
 
 	'source')   return 0 ;;
 	__default)  ;;
