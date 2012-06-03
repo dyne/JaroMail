@@ -1,3 +1,26 @@
+/* Jaro Mail gnome keyring handler
+
+   Originally from some Gnome example code, slightly modified
+
+   Copyright (C) 2012 Denis Roio <jaromil@dyne.org>
+
+   * This source code is free software; you can redistribute it and/or
+   * modify it under the terms of the GNU Public License as published 
+   * by the Free Software Foundation; either version 3 of the License,
+   * or (at your option) any later version.
+   *
+   * This source code is distributed in the hope that it will be useful,
+   * but WITHOUT ANY WARRANTY; without even the implied warranty of
+   * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+   * Please refer to the GNU Public License for more details.
+   *
+   * You should have received a copy of the GNU Public License along with
+   * this source code; if not, write to:
+   * Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+   
+*/
+
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -36,7 +59,7 @@ error(const char *err, ...)
     va_end(params);
 }
 
-static void
+static int
 get_password(git_credential_t *cred)
 {
     GnomeKeyringResult keyres;
@@ -50,13 +73,34 @@ get_password(git_credential_t *cred)
 					      "username", cred->username,
 					      NULL);
     if (keyres != GNOME_KEYRING_RESULT_OK) {
-	return;
+	return 1;
     }
-    g_printf("password=%s\n", pass);
+    g_printf("%s\n", pass);
     gnome_keyring_free_password(pass);
+    return 0;
 }
 
-static void
+static int
+check_password(git_credential_t *cred)
+{
+    GnomeKeyringResult keyres;
+    gchar *pass = NULL;
+    
+    keyres = gnome_keyring_find_password_sync(&git_schema,
+					      &pass,
+					      "protocol", cred->protocol,
+					      "host", cred->host,
+					      "path", cred->path,
+					      "username", cred->username,
+					      NULL);
+    if (keyres != GNOME_KEYRING_RESULT_OK) {
+	return 1;
+    }
+    gnome_keyring_free_password(pass);
+    return 0;
+}
+
+static int
 store_password(git_credential_t *cred)
 {
     gchar desc[1024];
@@ -65,7 +109,7 @@ store_password(git_credential_t *cred)
     /* Only store complete credentials */
     if (!cred->protocol || !cred->host ||
        	!cred->username || !cred->password)
-	return;
+      return 1;
 
     g_snprintf(desc, sizeof(desc), "Git %s", cred->host);
     keyres = gnome_keyring_store_password_sync(&git_schema,
@@ -79,11 +123,12 @@ store_password(git_credential_t *cred)
 					       NULL);
     if (keyres != GNOME_KEYRING_RESULT_OK) {
 	error("failed to store password");
-	return;
+	return 1;
     }
+    return 0;
 }
 
-static void
+static int
 erase_password(git_credential_t *cred)
 {
     GnomeKeyringResult keyres;
@@ -96,8 +141,9 @@ erase_password(git_credential_t *cred)
 						NULL);
     if (keyres != GNOME_KEYRING_RESULT_OK) {
 	error("failed to delete password");
-	return;
+	return 1;
     }
+    return 0;
 }
 
 static int
@@ -147,6 +193,7 @@ int
 main(int argc, const char **argv)
 {
     git_credential_t cred = {0};
+    int res = 0;
 
     if (argc < 2) {
 	error("Usage: git credential-gnomekeyring <get|store|erase>");
@@ -159,15 +206,18 @@ main(int argc, const char **argv)
     }
 
     if (strcmp(argv[1], "get") == 0) {
-	get_password(&cred);
+      res = get_password(&cred);
+    }
+    if (strcmp(argv[1], "check") == 0) {
+      res = check_password(&cred);
     }
     else if (strcmp(argv[1], "store") == 0) {
-	store_password(&cred);
+      res = store_password(&cred);
     }
     else if (strcmp(argv[1], "erase") == 0) {
-	erase_password(&cred);
+      res = erase_password(&cred);
     }
     clear_credential(&cred);
 
-    return 0;
+    return res;
 }

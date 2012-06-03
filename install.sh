@@ -244,6 +244,7 @@ for mod in ${lbdb_modules}; do
 done
 cp src/lbdb/dotlock $WORKDIR/.lbdb/
 cp src/lbdb/fetchaddr $WORKDIR/.lbdb/
+cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
 chmod +x $WORKDIR/.lbdb/*
 ln -sf $WORKDIR/.lbdb/lbdb-fetchaddr $WORKDIR/bin/
 ln -sf $WORKDIR/.lbdb/lbdbq $WORKDIR/bin/
