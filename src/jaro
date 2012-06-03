@@ -843,15 +843,40 @@ EOF
 	echo -n " +${destination} " >> $MUTTDIR/mboxes
     done
 
-    #######
-    echo "# filters generated from Accounts" >> $PROCMAILDIR/rc
+    # if the sender is known (ldbd recognizes it) then put mail in high priority 'known'
+    cat <<EOF >> $PROCMAILDIR/rc
+}
 
+# whitelisting filters using lbdb
+:0 w:
+* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -q query
+known/
+EOF
+
+    #######
+cat <<EOF >> $PROCMAILDIR/rc
+# filters generated from Accounts
+:0
+* ? test \$PMSRC/pf-chkto.rc
+{
+EOF
     typeset -al accts
     for f in `cat $WORKDIR/Accounts/* | awk '/^email/ { print $2 }'`; do
 	echo "ADDR=${f}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
 	act "private account: <${f}>"
     done
 
+    cat <<EOF >> $PROCMAILDIR/rc
+}
+
+# if its an unknown mailinglist, save it into ml.unsorted
+:0
+* ^(List-Id|X-(Mailing-)?List):
+ml.unsorted/
+
+EOF
+
+    # MUTT (generate mailboxes priority this parser)
     echo " \\" >> $MUTTDIR/mboxes
     echo " +ml.unsorted +unsorted" >> $MUTTDIR/mboxes
 
@@ -859,34 +884,19 @@ EOF
     mv $WORKDIR/tmp/mboxes $MUTTDIR/mboxes
     rm -f $WORKDIR/tmp/mboxes
 
+    # conclude
     cat <<EOF >> $PROCMAILDIR/rc
-}
-
-# save the mails
-:0
-* PF_DEST ?? .
-* ? test \$PMSRC/pf-save.rc
-{ INCLUDERC=\$PMSRC/pf-save.rc }
-
-# if the sender is known (ldbd recognizes it) then put mail in high priority 'known'
-:0 w:
-* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -q query
-known/
-
-# if its an unknown mailinglist, save it into ml.unsorted
-:0
-* ^(List-Id|X-(Mailing-)?List):
-ml.unsorted/
-
 
 # if got here, go to unsorted
-
-# save the mails
+# the command below actually save the mails
 :0
 * PF_DEST ?? .
 * ? test \$PMSRC/pf-save.rc
 { INCLUDERC=\$PMSRC/pf-save.rc }
 
+#
+# End of generated procmail rc
+#
 EOF
     return 0
 } # end of update()
