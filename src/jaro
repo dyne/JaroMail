@@ -30,7 +30,7 @@ for arg in ${argv}; do OLDARGS+=($arg); done
 # declare global variables
 
 QUIET=0
-DEBUG=1
+DEBUG=0
 DRYRUN=0
 CLEANEXIT=1
 
