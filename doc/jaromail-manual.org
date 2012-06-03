@@ -1,0 +1,326 @@
+#+TITLE: Jaro Mail
+#+AUTHOR: by Jaromil @ dyne.org
+#+DATE: 2010 - 2012
+
+#+LaTeX_CLASS: article
+#+LaTeX_CLASS_OPTIONS: [a4,onecolumn,portrait]
+#+LATEX_HEADER: \usepackage[utf8x]{inputenc}
+#+LATEX_HEADER: \usepackage[T1]{fontenc}
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \usepackage[pdftex]{graphicx}
+#+LATEX_HEADER: \usepackage{fullpage}
+#+LATEX_HEADER: \usepackage{lmodern}
+#+LATEX_HEADER: \usepackage[hang,small]{caption}
+#+LATEX_HEADER: \usepackage{float}
+
+#+LATEX: \pagebreak
+
+* Introduction
+
+Jaro Mail is an integrated suite of interoperable tools to manage
+e-mail communication in a private and efficient way, without relying
+too much on on-line services, in fact encouraging users to store their
+email locally.
+
+
+Rather than reinventing the wheel, this suite reuses existing free and
+open source tools and protocols and is mainly targeted for
+GNU/Linux/BSD desktop usage.
+
+** Features
+
+   + Easy to deploy and use
+   + Targets intensive usage of mailinglists
+   + Integrates addressbook and whitelisting
+   + Generates Procmail and Sieve filters
+   + Encrypts password storage (keyrings)
+   + Provides advanced maildir tools
+   + Defers connections for off-line operations
+   + Checks SSL certificates over (imap, smtp)
+   + Supports strong encryption (GnuPG)
+   + Is Based on solid GNU and BSD technology
+   + Is Multi platform: GNU/Linux/BSD, Apple/OSX
+   + Old school, used by its author for the past 10 years
+
+#+LATEX: \pagebreak
+
+* Diagram
+
+A little diagram that clarifies a bit where do we place the components
+and actions involved in managing one's email communication:
+
+[[file:postino-diagram.png]]
+
+ + MUA = Mail User Agent
+ + MTA = Mail Transport Agent
+ + SMTP = Simple Mail Transport Protocol
+ + IMAP = Internet Message Access Protocol
+   
+
+#+LATEX: \pagebreak
+
+* Components
+
+** Client side
+
+To use Jaro Mail on your desktop client, you will require some
+programs. These programs are ready into the Apple/OSX package, but you
+will have to install them by yourself if you use GNU/Linux, preferably
+using your favourite package manager.
+
+ + [[http://www.mutt.org][Mutt]] Mail User Agent
+ + [[http://www.fetchmail.info/][Fetchmail]] Mail Transport Agent
+ + [[http://www.procmail.org/][Procmail]] Filtering Agent
+ + [[http://freecode.com/projects/procmail-lib][Procmail-lib]] Advanced Filtering
+ + [[http://msmtp.sourceforge.net/][MSmtp]] the mini SMTP
+ + [[http://www.spinnaker.de/lbdb][Little Brother DB]] Addressbook
+ + [[http://www.zsh.org/][Z Shell]] Our scripting language
+
+** Server side
+
+The software below is not necessary if you like to use Jaro Mail with
+your E-Mail accounts, but it is what you need to install and configure
+on your web server if you like to provide E-Mail services to you and
+your friends and family. However, to describe the configuration and
+administration of a E-mail server is beyond the scope of this
+document.
+
+ + [[http://www.postfix.org][Postfix]] SMTP server
+ + [[http://dovecot.org/][Dovecot]] IMAP server
+
+* Configuration
+
+** Build
+
+   There are two *build-* scripts coming with the sourcecode of Jaro Mail
+
+   One is for building it on GNU/Linux systems, the other on OSX
+
+   A compiler and various dependencies are mandatory in order to
+   build this software, please look into the scripts to find out
+   more.
+
+
+** Install
+
+   Installing Jaro Mail once all dependencies are build is fairly
+   easy: the *install.sh* script provided will create a working
+   environment in your HOME/Mail directory or, if you like, you can
+   specify an argument.
+
+   Every installation of Jaro Mail is fully reentrant, meaning the
+   directory where it is installed contains all necessary files to
+   operate it on the system. Hence it is possible that a single user
+   has multiple Jaro Mail installations, for instance to permit the
+   complete separation of E-Mail identities.
+   
+** Receive mail
+
+   The place where Jaro Mail is installed, that is the directory
+   $HOME/Mail by default, contains a *jaro* folder where all
+   configuration files are found.
+
+   There, inside the directory *Accounts*, are some brief
+   instructions and some default templates which can be filled in
+   with Imap or Pop account configuration to fetch mail.
+
+   There is also a file *jaro/Mutt.txt* that can be configured with
+   some customized settings for the mail transport agent, such as
+   custom headers and the default GPG key to be used when signing and
+   encrypting mails.
+
+** Send mail
+
+
+   Also inside the *jaro/Accounts* directory are found the *smtp.*
+   files that configure various sending accounts, it is possible to
+   have more than one, just give the files different names.
+
+   When no special account is specified using the *-a* option, then
+   the accounts files named *.default* will be used. It is also
+   possible to use symbolic links.
+
+** Filter mail
+
+   The file *jaro/Filters.txt* is pretty easy and self explanatory,
+   yet it is a powerful way to configure mailinglist filters that
+   will be applied to all mails that are fetched locally.
+
+   After editing that file it is necessary to run *jaro update* so
+   that Jaro Mail will generate all the procmail, mutt and sieve
+   rules out of those. An update is issued automatically every time
+   *jaro fetch* is called.
+
+
+** Examples
+
+*** imap.default
+
+#+BEGIN_EXAMPLE
+# Name and values are separated by spaces or tabs
+# comments start the line with a hash
+
+# Name appearing in From: field
+name To Be Configured
+
+# Email address (default is same as login)
+email unknown@gmail.com
+
+# Internet address
+host imap.gmail.com
+
+# Username
+login USERNAME@gmail.com
+
+# Authentication type
+auth plain # or kerberos, etc
+
+# Identity certificate: check or ignore
+cert ignore
+
+# Transport protocol
+transport ssl
+
+# Service port
+port 993
+
+# Options when fetching
+# to empty your mailbox you can also use: fetchall
+# by default this is 'keep' which will not delete mails from server
+options keep
+# we encourage you to store emails locally, hence using a fetchall
+# configuration from a machine that you keep at home and secured.
+
+# Imap folders
+# uncommend to provide a list of folders to be fetched
+# folders INBOX, known, priv, lists, ml.unsorted, unsorted
+#+END_EXAMPLE
+
+*** smtp.default
+
+#+BEGIN_EXAMPLE
+# Name and values are separated by spaces or tabs
+# comments start the line with a hash
+
+# Name for this account
+name To Be Configured
+
+# Internet address
+host smtp.gmail.com
+
+# Username
+login USERNAME@gmail.com
+
+# Transport protocol
+transport ssl # or "tls" or "plain"
+
+# Service port
+# port 465
+port 25
+#+END_EXAMPLE
+
+*** Filters.txt
+
+#+BEGIN_EXAMPLE
+# Example filter configuration for Jaro Mail
+
+# mailinglist filters are in order of importance
+# syntax: to <list email> save <folder>
+# below some commented out examples, note the use of a prefix,
+# which makes it handy when browsing with file completion.
+
+# to	  crypto@lists.dyne	save	dyne.crypto
+# to	  dynebolic		save	dyne.dynebolic
+# to	  freej			save	dyne.freej
+# to	  frei0r-devel		save	dyne.frei0r
+# to	  taccuino		save	ml.freaknet
+# to	  deadpoets		save	ml.freaknet
+# to	  linux-libre		save	gnu.linux-libre
+# to	  foundations@lists	save	gnu.foundations
+# to	  debian-mentors	save	debian.mentors
+# to	  debian-blends		save	debian.blends
+# to	  freedombox-discuss	save	debian.freedombox
+
+# Other filters for web 2.0 using folder names with a prefix:
+# they can facilitate folder maintainance.
+
+from      identi.ca	        save	web.identica
+from      Twitter		save	web.twitter
+from      linkedin		save	web.linkedin
+from      googlealerts		save	web.google
+from      facebook		save	web.facebook
+from      FriendFeed		save	web.friendfeed
+from      academia.edu		save	web.academia
+#+END_EXAMPLE
+
+
+
+* Flow of operation
+
+This section goes through a scenario of typical daily usage of Jaro
+Mail
+
+** Fetch and read your mail at home
+
+As you acces your computer where Jaro Mail has been configured, you
+can open a Terminal and type:
+: $ jaro fetch
+This will download all new mails.
+
+If you have configured *fetchall* among the imap account options, then
+will delete them from the server, freeing online space.
+
+If you have configured the *keep* option, which is the default, Jaro
+Mail will only download the email that you have not yet read and in
+any case it won't delete anything from the server.
+
+: $ jaro
+
+This will open the first folder *known* where all mails from people
+that you know or that you usually exchange mails with are shown.
+
+From there on, pressing *=* or *c* you can change the folder and
+explore your *priv* folder, the mailinglist ones as configured by your
+Filters.txt, as well your *unsorted* mails.
+
+** Write a new mail
+
+If you like to write a mail to someone, just write his/her own address
+as an argument to Jaro Mail
+: $ jaro friend@home.net
+But if you don't remember the email of your friend, then you can just
+start *jaro* without options, then press *m* and then start typing the
+name or whatever you remember of it: pressing the *Tab* key a
+completion will help to remind what you are looking for, offering a
+list of options to choose from.
+
+
+** Peek without downloading anything
+
+If you are around and like to see your new mails without downloading
+them, then you can use the *peek* function:
+: $ jaro peek
+This will open the default configured IMAP account and folder over SSL
+protocol (securing the data transfer) and show your emails.
+
+From peek you can reply and even delete emails, but be careful since
+what you delete here will be removed from the server and won't be
+there when you download it from home.
+
+This functionality can be also very useful if you are from a slow
+connection and need to delete some email that is clogging your mailbox
+and that you are not able to download because of its size.
+
+** Send emails whenever possible
+
+All the time you write an E-mail, Jaro Mail will save it into your
+outbox folder, waiting for the right moment to send it. In fact you
+will have to tell it the right moment by running the *send* command:
+: $ jaro send
+
+This will authenticate with your SMTP and send all your emails to
+destination. This way even if you are off-line you will always be able
+to write emails and eventually bring them around for sending them
+whenever possible.
+
+
