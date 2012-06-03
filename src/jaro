@@ -49,6 +49,8 @@ typeset -A opts
 # global variable for account selection
 typeset -h account
 account=default
+typeset -h listaddr
+listaddr=Whitelist.txt
 
 # global variables for accounts
 typeset -h name login host protocol port password auth folders accountopt
@@ -690,7 +692,7 @@ EOF
        else
 	   act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
-	   cat ${mail} | $WORKDIR/bin/jaro -q learn
+	   cat ${mail} | $WORKDIR/bin/jaro -l Whitelist.txt -q learn
 	   ${=rm} ${mail} &
 	   locked_unlink ${smtp} &
        fi
@@ -781,8 +783,10 @@ set mailcap_path = "$WORKDIR/mailcap"
 
 # Little Brother Database
 set query_command = "$WORKDIR/bin/jaro -q query '%s'"
-macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -q learn" "add sender to whitelist"
-macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -q forget" "remove sender from whitelist
+macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q learn<enter>" "add sender to whitelist"
+macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q forget<enter>" "remove sender from whitelist
+macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q learn<enter>" "add sender to blacklist"
+macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q forget<enter>" "remove sender from blacklist
 
 EOF
 
@@ -843,6 +847,13 @@ PF_DEST = ""			# clear these vars
 PF_FROM = ""
 # don't save multiple copies
 PF_RECURSE = yes
+
+# blacklist filters using lbdb
+:0 w:
+* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -l Blacklist.txt -q query
+zz.blacklist/
+
+# filters generated from Filters.txt
 :0
 * ? test \$PMSRC/pf-chkto.rc
 {
@@ -884,7 +895,7 @@ EOF
 
 # whitelisting filters using lbdb
 :0 w:
-* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -q query
+* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -l Whitelist.txt -q query
 known/
 EOF
 
@@ -939,16 +950,23 @@ EOF
 ###################
 # Little Brother DB
 query() {
+    export jarodir=$WORKDIR
+    export jarolist=$listaddr
     if [ $QUIET = 1 ]; then
 	${WORKDIR}/.lbdb/lbdbq ${@}
 	exitcode=$?
     else
-	act -n "Query known address <${@}> in "
+	act "Query address <${@}> in $listaddr"
 	${WORKDIR}/.lbdb/lbdbq ${@}
 	exitcode=$?
     fi
+    unset jarodir
+    unset jarolist
 }
+
 learn() {
+    export jarodir=$WORKDIR
+    export jarolist=$listaddr
     if [ $QUIET = 1 ]; then
 	${WORKDIR}/.lbdb/lbdb-fetchaddr -a > /dev/null
 	exitcode=$?
@@ -957,9 +975,18 @@ learn() {
 	${WORKDIR}/.lbdb/lbdb-fetchaddr -a
 	exitcode=$?
     fi
+    unset jarodir
+    unset jarolist
 }
+
 forget() {
-    { test $QUIET != 1 } && { act "Forgetting address from mail pipe in stdin" }
+    { test ! -r ${WORKDIR}/$listaddr } && {
+	error "$listaddr not created yet, first pipe something into jaro -l $listaddr learn"
+	return 1
+    }
+    { test $QUIET != 1 } && {
+	act "Removing address from $listaddr (expecting mail from stdin pipe)"
+    }
     addr=`cat | formail -x"From:" \
 	| head -n1 \
 	| tr 'A-Z' 'a-z' \
@@ -967,9 +994,9 @@ forget() {
     func "forgetting address: $addr"
     newlock $WORKDIR/tmp/forget-addr
     awk "/$addr/"' { next; }
-{ print $0 }' ${WORKDIR}/.lbdb/m_inmail.list \
+{ print $0 }' ${WORKDIR}/$listaddr \
     >> $WORKDIR/tmp/forget-addr
-    cp $WORKDIR/tmp/forget-addr ${WORKDIR}/.lbdb/m_inmail.list
+    cp $WORKDIR/tmp/forget-addr ${WORKDIR}/$listaddr
     unlock $WORKDIR/tmp/forget-addr
 }
 ###################
@@ -1095,18 +1122,18 @@ Jaro Mail $VERSION - your humble and faithful electronic postman
  This is free software: you are free to change and redistribute it
  The latest Jaro Mail sourcecode is on <http://jaromail.dyne.org>
 
-Syntact: jaro command [options] [account]
+Synopsis: jaro [options] [command] [command-options]
 
 Main commands:
 
- peek   look into the [account] mailbox without downloading
  fetch  download unread emails from [account]
- read   open mutt to read all local mailfolders
  send   send all mails queued in the outbox
+ peek   look into the [account] mailbox without downloading
 
 Options:
 
  -a     use a particular account instead of default (keyword)
+ -l     address list database to use with learn/query/forget
  -h     print this help
  -v     version information for this tool
  -q     run quietly without printing informations
@@ -1119,8 +1146,8 @@ Maintenance commands:
  queue    add a mail into outbox
 
  query    query a name from addressbook
- learn    learn addresses found in mails piped in stdin
- forget   forget sender addresses found in mails piped in stdin
+ learn    learn addresses from mails piped in stdin
+ forget   remove addresses found in mails piped in stdin
 
  backup   move all mails older than N days from a maildir to another
  rmdupes  remove all duplicate mails into a maildir
@@ -1146,13 +1173,11 @@ main()
     #       I. usability; user expect that "-s" is "size
     #       II. Option parsing WILL EXPLODE if you do this kind of bad things
     #               (it will say "option defined more than once, and he's right)
-    main_opts=(a: -account=a q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
+    main_opts=(a: -account=a l: -listaddr=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
     subcommands_opts[__default]=""
     subcommands_opts[queue]=""
     subcommands_opts[fetch]=""
     subcommands_opts[send]=""
-#    subcommands_opts[read]=""
-#    subcommands_opts[compose]=""
     subcommands_opts[peek]=""
     subcommands_opts[update]=""
 
@@ -1242,6 +1267,7 @@ main()
 	echo
     fi
     if option_is_set -a; then account=`option_value -a`; fi
+    if option_is_set -l; then listaddr=`option_value -l`; fi
     if option_is_set -h; then usage;  fi
     if option_is_set -q; then QUIET=1; fi
     if option_is_set -D; then func "Debug messages ON"; DEBUG=1; fi
@@ -1252,8 +1278,6 @@ main()
 	fetch)   fetch ${PARAM} ;;
 	send)    send ${PARAM} ;;
 	peek)    peek ${PARAM} ;;
-#	read)    mutt -F $MUTTDIR/rc ;;
-#	compose) mutt -F $MUTTDIR/rc ${PARAM} ;;
 
 	update)  update ;;
 

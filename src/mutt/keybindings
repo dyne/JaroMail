@@ -1,12 +1,13 @@
 # Postino's keybindings for mutt
 # originally used by Jaromil
 
-bind index t create-alias
 bind index w search
 bind index x sync-mailbox
 macro index $ '<enter-command>set mark_old=yes<enter>'
-bind index a tag-prefix
 bind index \; tag-entry
+bind index \, tag-entry
+bind index T tag-pattern
+bind index t untag-pattern
 
 bind index      <pagedown>    next-page
 bind index      <pageup>  previous-page
@@ -31,24 +32,26 @@ bind editor 	<tab>	 complete-query
 
 macro index,pager "=" "<sync-mailbox><change-folder>?<toggle-mailboxes>" # folder list
 macro pager \ef "|view-x-face<enter>" "display the X-Face included in the mail"
-macro pager "\e1"    "<enter-command>set pager_index_lines=1<enter>"      # Change PIL size
-macro pager "\e2"    "<enter-command>set pager_index_lines=2<enter>"      # Change PIL size
-macro pager "\e3"    "<enter-command>set pager_index_lines=3<enter>"      # Change PIL size
-macro pager "\e4"    "<enter-command>set pager_index_lines=4<enter>"      # Change PIL size
-macro pager "\e5"    "<enter-command>set pager_index_lines=5<enter>"      # Change PIL size
-macro pager "\e6"    "<enter-command>set pager_index_lines=6<enter>"      # Change PIL size
-macro pager "\e7"    "<enter-command>set pager_index_lines=7<enter>"      # Change PIL size
-macro pager "\e8"    "<enter-command>set pager_index_lines=8<enter>"      # Change PIL size
-macro pager "\e9"    "<enter-command>set pager_index_lines=9<enter>"      # Change PIL size
-macro pager "\e0"    "<enter-command>set pager_index_lines=0<enter>"      # Change PIL size
+# Change PIL size
+macro pager "\e1"    "<enter-command>set pager_index_lines=1<enter>"
+macro pager "\e2"    "<enter-command>set pager_index_lines=2<enter>"
+macro pager "\e3"    "<enter-command>set pager_index_lines=3<enter>"
+macro pager "\e4"    "<enter-command>set pager_index_lines=4<enter>"
+macro pager "\e5"    "<enter-command>set pager_index_lines=5<enter>"
+macro pager "\e6"    "<enter-command>set pager_index_lines=6<enter>"
+macro pager "\e7"    "<enter-command>set pager_index_lines=7<enter>"
+macro pager "\e8"    "<enter-command>set pager_index_lines=8<enter>"
+macro pager "\e9"    "<enter-command>set pager_index_lines=9<enter>"
+macro pager "\e0"    "<enter-command>set pager_index_lines=0<enter>"
 
 bind index - collapse-thread
 bind index _ collapse-all
 
 # mutt sidebar
-# bind index,pager \CP sidebar-prev
-# bind index,pager \CN sidebar-next
-# bind index,pager \CO sidebar-open
+# bind index,pager \C<up> sidebar-prev
+# bind index,pager \C<down> sidebar-next
+# bind index,pager \C<right> sidebar-open
+# bind index,pager \C<left> sidebar-open
 # macro index,pager B '<enter-command>toggle sidebar_visible<enter>'
 # color sidebar_new yellow default
 
