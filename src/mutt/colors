@@ -46,8 +46,9 @@ color index brightgreen default "~F" # Flagged
 color index brightred default "~T" # Tagged
 color index red default "~f MAILER-DAEMON@*"
 color index red default "~f Mailer-Daemon@*"
-color index brightwhite default "~v~(~N)" # Collapsed thread with some unread
-color index green default "~v~(!~N)" # Collapsed thread with no unread
+color index default brightblue "~v" # Collapsed thread with some unread
+
+
 
 color index red default "~=" # Duplicated messages
 color index brightblack default "~D" # Deleted

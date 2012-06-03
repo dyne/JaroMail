@@ -100,8 +100,8 @@ set noconfirmappend
 #unset save_address
 set save_empty
 #set folder_format = "%N %F %2l %-8.8u %-8.8g %8s %d %f"
-#set move = ask-no
-set mbox_type = mbox
+set move = no
+# set mbox_type = mbox
 
 #######################################
 ## Attaching documents and MIME options

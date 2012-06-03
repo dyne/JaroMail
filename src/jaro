@@ -378,6 +378,42 @@ read_account() {
     return 0
 }
 
+# start without options: auto
+# read or compose depending if there is an argument that is an email
+# or a folder to start with
+
+autostart() {
+# no argument passed. open known folder
+    { test -z ${1} } && {
+
+	{ test ! -r $MUTTDIR/rc } \
+	    && { error "Jaro Mail is not yet configured."; return 1 }
+
+	mutt -F $MUTTDIR/rc
+	return $?
+    }
+
+    # argument passed: determine if an email or a folder
+    echo "${1}" \
+	| tr 'A-Z' 'a-z' \
+	| grep '^[a-zA-Z0-9._%+-]*@[a-zA-Z0-9]*[\.[a-zA-Z0-9]*]*[a-zA-Z0-9]$' \
+	> /dev/null
+    { test $? = 0 } && {
+	notice "Composing message to: ${1}"
+	# its an email, TODO see if we have it in our addressbook
+	mutt -F $MUTTDIR/rc "${1}"
+	return 0
+    }
+
+    { test -r $MAILDIRS/${1} } && {
+	notice "Opening folder ${1}"
+	mutt -F $MUTTDIR/rc -f "$MAILDIRS/${1}"
+	return 0
+    }
+
+    return $?
+}
+
 queue() {
     local base;
     local tmp;
@@ -1115,8 +1151,8 @@ main()
     subcommands_opts[queue]=""
     subcommands_opts[fetch]=""
     subcommands_opts[send]=""
-    subcommands_opts[read]=""
-    subcommands_opts[compose]=""
+#    subcommands_opts[read]=""
+#    subcommands_opts[compose]=""
     subcommands_opts[peek]=""
     subcommands_opts[update]=""
 
@@ -1150,11 +1186,21 @@ main()
     if [[ -z $subcommand ]]; then
 	subcommand="__default"
     fi
-    if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then #there's no such subcommand
-	error "Subcommand '$subcommand' doesn't exist"
-	exitcode=1
-	return 1
+
+# QUAA
+    if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
+ # unknown command, pass it to autostart
+	func "unknown command, autostart: $@"
+	autostart ${@}
+	exitcode=$?
+	{ test $exitcode != 0 } && {
+		error "command \"$subcommand\" not recognized"
+		act "try -h for help"
+		CLEANEXIT=0
+	}
+    	return $exitcode
     fi
+
     argv=(${oldstar})
     unset oldstar
 
@@ -1206,8 +1252,8 @@ main()
 	fetch)   fetch ${PARAM} ;;
 	send)    send ${PARAM} ;;
 	peek)    peek ${PARAM} ;;
-	read)    mutt -F $MUTTDIR/rc ;;
-	compose) mutt -F $MUTTDIR/rc ${PARAM} ;;
+#	read)    mutt -F $MUTTDIR/rc ;;
+#	compose) mutt -F $MUTTDIR/rc ${PARAM} ;;
 
 	update)  update ;;
 
@@ -1222,11 +1268,20 @@ main()
 
 	cert)    cert ${PARAM} ;;
 
-	'source')   return 0 ;;
-	__default)  ;;
-	*) error "command \"$subcommand\" not recognized"
-	    act "try -h for help"
-	    return 1
+	'source')   CLEANEXIT=0; return 0 ;;
+	__default)  func "no command provided" 
+	    autostart ${PARAM}
+	    exitcode=$?
+	    ;;
+	*) # unknown command, pass it to autostart
+	    func "unknown command, remote check"
+	    autostart ${PARAM}
+	    exitcode=$?
+	    { $exitcode != 0 } && {
+		error "command \"$subcommand\" not recognized"
+		act "try -h for help"
+		CLEANEXIT=0
+	    }
 	    ;;
     esac
     return 0
