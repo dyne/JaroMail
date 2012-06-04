@@ -500,7 +500,7 @@ read_account() {
 	    { test -z $name }       && { name="$type" }
 	    { test -z $login }      && { login="$email" } # usually email and login are the same
 	    { test -z $email }      && { email="$login" } # so if one is specified, deduce the other
-	    { test -z $transport }  && { transport=ssl }
+	    { test -z $transport }  && { transport=plain }
 	    { test -z $port }       && { port=993 }
 	    { test -z $auth }       && { auth=plain }
 	    { test -z $cert }       && { cert=ignore }
