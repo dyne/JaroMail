@@ -956,6 +956,7 @@ source $MUTTDIR/mboxes
 # specific configuration files
 source $MUTTDIR/crypto
 source $MUTTDIR/colors
+source $MUTTDIR/general
 source $MUTTDIR/formats
 source $MUTTDIR/keybindings
 source $MUTTDIR/identity
