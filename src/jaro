@@ -63,15 +63,15 @@ autoload colors; colors
 
 # standard output message routines
 # it's always useful to wrap them, in case we change behaviour later
-notice() { if [[ $QUIET == 0 ]]; then print "$fg_bold[green][*]$fg_no_bold[white] $1" >&2; fi }
-error()  { if [[ $QUIET == 0 ]]; then print "$fg[red][!]$fg[white] $1" >&2; fi }
-func()   { if [[ $DEBUG == 1 ]]; then print "$fg[blue][D]$fg[white] $1" >&2; fi }
+notice() { if [[ $QUIET == 0 ]]; then print "$fg_bold[green][*]$fg_no_bold[default] $1" >&2; fi }
+error()  { if [[ $QUIET == 0 ]]; then print "$fg[red][!]$fg[default] $1" >&2; fi }
+func()   { if [[ $DEBUG == 1 ]]; then print "$fg[blue][D]$fg[default] $1" >&2; fi }
 act()    {
     if [[ $QUIET == 0 ]]; then
 	if [ "$1" = "-n" ]; then
-	    print -n "$fg_bold[white] . $fg_no_bold[white] $2" >&2;
+	    print -n "$fg_bold[white] . $fg_no_bold[default] $2" >&2;
 	else
-	    print "$fg_bold[white] . $fg_no_bold[white] $1" >&2;
+	    print "$fg_bold[white] . $fg_no_bold[default] $1" >&2;
 	fi
     fi
 }
@@ -231,17 +231,23 @@ EOF
 
 check_bin() {
     # check for required programs
-    for req in pinentry fetchmail procmail; do
-	which $req >/dev/null || die "Cannot find $req.  Please install it." 1
+    for req in pinentry fetchmail procmail mutt; do
+	which $req >/dev/null
+	{ test $? != 0 } && {
+	    error "Cannot find $req. Please install it."
+	    return 1
+	}
     done
 
     # which wipe command to use
     which wipe > /dev/null
-    if [ $? = 0 ]; then rm="wipe -f -s -q -R /dev/urandom"
-    else which srm > /dev/null
-	if [ $? = 0 ]; then rm="srm -m"
-	else rm="rm -f"; fi
-    fi
+    { test $? = 0 } && { 
+	rm="wipe -f -s -q -R /dev/urandom"; return 0 }
+    which srm > /dev/null
+    { test $? = 0 } && {
+	rm="srm -m"; return 0 }
+    rm="rm -f"
+    return 0
 }
 
 # retrieve a password for user @ domain

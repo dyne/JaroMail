@@ -1,5 +1,7 @@
 #!/bin/sh
 
+cd ..
+
 distro=unknown
 
 which apt-get && distro=debian
@@ -13,7 +15,7 @@ case $distro in
 	which mutt || sudo apt-get install mutt
 	which procmail || sudo apt-get install procmail
 	which msmtp || sudo apt-get install msmtp
-	which pinentry || sudo apt-get install pinentry
+	which pinentry || sudo apt-get install pinentry-curses
 	which fetchmail || sudo apt-get install fetchmail
 	which wipe || sudo apt-get install wipe
 	echo "All dependencies installed"
