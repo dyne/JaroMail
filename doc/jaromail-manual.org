@@ -49,7 +49,7 @@ GNU/Linux/BSD desktop usage.
 A little diagram that clarifies a bit where do we place the components
 and actions involved in managing one's email communication:
 
-[[file:postino-diagram.png]]
+[[file:jaromail-diagram.png]]
 
  + MUA = Mail User Agent
  + MTA = Mail Transport Agent
