@@ -248,19 +248,19 @@ check_bin() {
 # put it in variable password
 # up to the caller to unset it after use
 ask_password() {
+    func "Looking for password in keyring: $name"
     case $OS in
 	MAC)
-	    func "Looking for password in keyring: $1 @ $2"
-	    security find-internet-password -a $1 -s $2 > /dev/null
+	    security find-internet-password \
+		-c JARO -a $email -s $host \
+		-p $transport -P $port > /dev/null
 	    if [ $? != 0 ]; then # its a new password
 		new_password
-		{ test $? = 0 } && {
+		{ test $? != 0 } && {
 		    error "Password input aborted."
 		    return 1 }
 	    else
-		act "Using saved password for $1 @ $2"
-		password=`security find-internet-password -a $1 -s $2 -g \
-		    2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
+		password=`security find-internet-password -c JARO -a $email -s $host -p $transport -P $port -g 2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
 	    fi
 	    return 0
 	    ;;
@@ -286,16 +286,34 @@ ask_password() {
 }
 
 new_password() {
+    notice "Setting a new password for $name"
+    password=`pin_entry $login $host`
+    res=0
     case $OS in
 	MAC)
-	    password=`pin_entry $1 $2`
-	    act "New password set for $1 @ $2"
-	    security add-internet-password -a $1 -s $2 -w "${password}"
-	    # TODO: erase and error codes
+	    if [ "$password" != "" ]; then
+		security add-internet-password \
+		    -c JARO -a $email -s $host \
+		    -p $transport -P $port -w "${password}"
+		{ test $? != 0 } && {
+		    unset password
+		    error "Error adding password to keyring."
+		    return 1 }
+		act "New password set."
+		return 0
+	    else
+		security delete-internet-password \
+		    -c JARO -a $email -s $host \
+		    -p $transport -P $port > /dev/null
+		res=$?; unset password
+		{ test $res != 0 } && {
+		    error "Error deleting password from keyring."
+		    return 1 }
+		act "No new password given, old password erased."
+		return 0
+	    fi
 	    ;;
 	GNU)
-	    notice "Setting a new password for $login @ $host"
-	    password=`pin_entry $login $host`
 	    if [ "$password" != "" ]; then
 		cat <<EOF | $WORKDIR/bin/jaro-gnome-keyring store
 protocol=${type}
@@ -1405,7 +1423,9 @@ main()
     fi
     if option_is_set -a; then account=`option_value -a`; fi
     if option_is_set -l; then listaddr=`option_value -l`; fi
-    if option_is_set -h; then usage;  fi
+    { option_is_set -h } && { CLEANEXIT=0; usage; return 0 }
+    { option_is_set -v } && { CLEANEXIT=0;
+	cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'; return 0 }
     if option_is_set -q; then QUIET=1; fi
     if option_is_set -D; then func "Debug messages ON"; DEBUG=1; fi
     if option_is_set -n; then act "Dry run, show operations without executing them."; DRYRUN=1; fi
