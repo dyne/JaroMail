@@ -59,6 +59,101 @@ and actions involved in managing one's email communication:
 
 #+LATEX: \pagebreak
 
+* Organization
+
+One of the main goals for Jaro Mail is to organize the mail flow so
+that one's attention is dedicated to important communications, rather
+than being constantly distracted by various degrees of spam and the
+need to weed it out of the mailbox. This ardous and ambitious task is
+pursued by realizing an integrated approach consisting of
+whitelisting, flexibility and a rather simple yet peculiar way to
+distinguish between mails from known people and the rest.
+
+** Folders
+
+First lets start with a categorization of the standard maildirs and a
+brief description for each. The following maildirs are standard in
+Jaro Mail and are listed in order of priority:
+
+| Folder         | What goes in there                               |
+|----------------+--------------------------------------------------|
+| *known*        | Mails whose sender is known (Whitelist)          |
+| *priv*         | Unknown sender, we are the explicit destination  |
+| *unsorted*     | Unknown sender, we are in cc: or somehow reached |
+| *ml.unsorted*  | From a mailinglist that we haven't filtered yet  |
+| *zz.blacklist* | Mails whose sender is not desired (Blacklist)    |
+
+The advantage using such a folder organization is that every time we
+open up the mail reader we will be presented with something we are
+likely to be most interested in (known people replying our mails) and
+progressively, as we will have the time to scroll through, mails from
+"new people" or mass mailings of sort. Please note this organization
+does not includes spam, which is supposedly weeded out on the server
+via spamlists: White/Blacklisting has more to do with our own
+selection of content sources than with the generic protection from
+random pieces of information.
+
+** Whitelist
+
+The way whitelisting works if quite crucial to this setup and, at the
+same time, is fairly simple since it does not include any automatic
+detection, learning filters, Markov chains or Bayesian A/I. We believe
+the user should be in full control of prioritizing communication
+channels and at the same time constantly able to tweak the setup in an
+easy way.
+
+To whitelist an address is sufficient to send it an e-mail: at the
+moment the message is sent Jaro Mail will remember the destination
+address and prioritize all messages coming back from it.
+This we call implicit whitelisting.
+
+There is also a way to explicitly whitelist an address: from inside
+the mail reader index (Mutt) press 'a' while selecting an email, this
+will add in the whitelist all addresses mentioned in To: and Cc:. To
+remove an address from the whitelist, press 'A' (shift-a) while
+selecting a mail and its sender (only the From: field) will lose the
+privilege of ending up in your known/ folder.
+
+There is one more privilege for people that have their address
+whitelisted: their name and e-mail will be completed automatically
+when composing a new email, pressing the 'Tab' key while indicating
+them among the recipients.
+
+The file where the whitelist is stored is in plain text format, you
+can even edit it with a normal editor and it is found in
+Mail/jaro/Whitelist.txt
+
+** Blacklist
+
+To blacklist an address instead one can use the 'z' key while an
+e-mail is selected on the index: the sender indicated in the From:
+field will be downgraded to the very bottom of your priorities, closes
+to spam than the rest, the most infamous zz.blacklist/ folder.
+
+Similarly, to remove addresses from the blacklist the 'Z' (shift-z)
+key can be pressed and all addresses mentioned in the currently
+selected e-mail (including those in Cc:) will be redeemed, but not
+whitelisted unless you do it explicitly with 'a'.
+
+The blacklist file is also in plain text: Mail/jaro/Blacklist.txt
+
+** In Brief
+
+Below a recapitulation of keys related to the white and blacklisting
+functionality, to be used in the e-mail index or when an e-mail is
+open inside the mail user agent:
+
+| List  | Key       | Function                   | Fields    |
+|-------+-----------+----------------------------+-----------|
+| White | a         | Add all addresses found    | From: Cc: |
+| White | A (shift) | Remove sender address      | From:     |
+| Black | z         | Add sender address         | From:     |
+| Black | Z (shift) | Remove all addresses found | From: Cc: |
+
+
+
+
+
 * Components
 
 ** Client side
