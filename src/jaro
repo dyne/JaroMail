@@ -156,7 +156,7 @@ MUTTDIR=$WORKDIR/.mutt
 
 # use gnome-keyring for passwords on GNU systems
 GNOMEKEY=0
-pidof gnome-keyring-daemon > /dev/null
+ps ax | grep '[g]nome-keyring-daemon' > /dev/null
 { test $? = 0 } && { 
     which jaro-gnome-keyring > /dev/null
     { test $? = 0 } && { GNOMEKEY=1 }
@@ -501,7 +501,7 @@ read_account() {
 	    { test -z $login }      && { login="$email" } # usually email and login are the same
 	    { test -z $email }      && { email="$login" } # so if one is specified, deduce the other
 	    { test -z $transport }  && { transport=plain }
-	    { test -z $port }       && { port=993 }
+	    { test -z $port }       && { port=143 }
 	    { test -z $auth }       && { auth=plain }
 	    { test -z $cert }       && { cert=ignore }
 	    { test -z $accountopt } && { accountopt=keep }
