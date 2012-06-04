@@ -15,6 +15,8 @@
 
 # and local natives: fetchmail, procmail...
 
+cd ..
+
 source src/jaro source
 
 mkdir -p build/osx/dylib
