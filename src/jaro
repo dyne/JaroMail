@@ -1225,6 +1225,7 @@ filter() {
 }
 
 # opens and closes a ramdisk for temporary files 
+# users can do this explicitly between session to speed up operations
 ramdisk() {
     case $OS in
 	GNU)
@@ -1241,13 +1242,14 @@ ramdisk() {
 		    # 2048 is a megabyte here
 		    devsize=$((1024*2*10))
 		    devname=`hdid -nomount ram://${devsize}`
-		    act -n "Mounting 10MB ramdisk: $devname"
+		    act "Mounting 10MB ramdisk: $devname"
 		    diskutil eraseVolume HFS+ JaroTmp `basename $devname` > /dev/null
 		    { test $? != 0 } && {
 			error "Error initializing ramdisk"
 			hdiutil detach `basename $devname`
 			return 1 }
-		    notice "Operation succesful, ramdisk ready on /Volume/JaroTmp"
+		    notice "Operation successful, ramdisk ready on /Volume/JaroTmp"
+		    TMPRAM=1
 		    ;;
 	        close)
 		    devname=`mount | awk '/JaroTmp/ {print $1}'`
@@ -1258,6 +1260,7 @@ ramdisk() {
 		    diskutil unmount /Volumes/JaroTmp > /dev/null
 		    hdiutil detach `basename $devname` > /dev/null
 		    notice "Ramdisk succesfully detached"
+		    TMPRAM=0
 		    ;;
 	    esac
 	    ;;

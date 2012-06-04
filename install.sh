@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh 
 
-# jaromail install script
+# Jaro Mail install script
 #
 # Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
 #
@@ -43,6 +43,10 @@ ${=mkdir} $MAILDIRS
 ${=mkdir} $WORKDIR
 
 notice "Installing Jaromail in $WORKDIR"
+act "This script will create the ~/Mail folder if it doesn't exist,"
+act "then populate it with default Maildirs and the Jaro Mail binaries."
+act "At last, a shell execution PATH to ~/Mail/jaro/bin will be added"
+act "to your ~/.profile so that you can call 'jaro' from a Terminal."
 
 # install the main jaromail script
 ${=mkdir} ${WORKDIR}/bin
