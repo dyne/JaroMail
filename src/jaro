@@ -954,7 +954,7 @@ set editor = "$EDITOR"
 set mailcap_path = "$WORKDIR/mailcap"
 
 # Little Brother Database
-set query_command = "$WORKDIR/bin/jaro -q query '%s'"
+set query_command = "$WORKDIR/bin/jaro -q addr '%s'"
 macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q learn<enter>" "add sender to whitelist"
 macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q forget<enter>" "remove sender from whitelist
 macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q learn from:<enter>" "add sender to blacklist"
@@ -1012,12 +1012,11 @@ PMSRC  = $PROCMAILDIR
 INCLUDERC = \$PMSRC/pm-javar.rc
 PF_DEST = ""			# clear these vars
 PF_FROM = ""
-# don't save multiple copies
 PF_RECURSE = yes
 
 # blacklist filters using lbdb
 :0 w:
-* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -l Blacklist.txt -q query
+* ? \$JARO -l Blacklist.txt -q query
 zz.blacklist/
 
 # filters generated from Filters.txt
@@ -1067,7 +1066,7 @@ EOF
 
 # whitelisting filters using lbdb
 :0 w:
-* ? formail -x"From:" | head -n1 | tr 'A-Z' 'a-z' | sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/' | xargs \$JARO -l Whitelist.txt -q query
+* ? \$JARO -l Whitelist.txt -q query
 known/
 EOF
 
@@ -1111,6 +1110,8 @@ EOF
     cat <<EOF >> $PROCMAILDIR/rc
 
 # if got here, go to unsorted
+:0:
+\$DEFAULT
 
 #
 # End of generated procmail rc
@@ -1121,17 +1122,30 @@ EOF
 
 ###################
 # Little Brother DB
+address() {
+    export jarodir=$WORKDIR
+    export jarolist=$listaddr
+    ${WORKDIR}/.lbdb/lbdbq ${@}
+    unset jarodir
+    unset jarolist
+}
 query() {
     export jarodir=$WORKDIR
     export jarolist=$listaddr
-    if [ $QUIET = 1 ]; then
-	${WORKDIR}/.lbdb/lbdbq ${@}
-	exitcode=$?
+
+    if [ -z ${PARAM[1]} ]; then
+	email="`${WORKDIR}/.lbdb/fetchaddr -a| awk '{print $1}'`"
     else
-	act "Query address <${@}> in $listaddr"
-	${WORKDIR}/.lbdb/lbdbq ${@}
-	exitcode=$?
+	email="`${WORKDIR}/.lbdb/fetchaddr -x ${PARAM[1]} -a| awk '{print $1}'`"
     fi
+
+    exitcode=1
+    { test "$email" != "" } && { 
+	${WORKDIR}/.lbdb/lbdbq "${email}" \
+	    | grep -v '^lbdbq: no matches' > /dev/null
+	exitcode=$?
+	{ test $exitcode != 1 } && { func "found: $email" }
+    }
     unset jarodir
     unset jarolist
 }
@@ -1361,7 +1375,8 @@ Maintenance commands:
  update   refresh configurations
  queue    add a mail into outbox
 
- query    query a name from addressbook
+ addr     look for a matching address in list
+ query    read mail from stdin, return 0 if known to list
  learn    learn addresses from mails piped in stdin
  forget   remove addresses found in mails piped in stdin
 
@@ -1397,6 +1412,7 @@ main()
     subcommands_opts[peek]=""
     subcommands_opts[update]=""
 
+    subcommands_opts[addr]=""
     subcommands_opts[query]=""
     subcommands_opts[learn]=""
     subcommands_opts[forget]=""
@@ -1501,6 +1517,7 @@ main()
 
 	update)  update ;;
 
+	addr)    CLEANEXIT=0; address ${PARAM} ;;
 	query)   CLEANEXIT=0; query ${PARAM} ;;
 	learn)   CLEANEXIT=0; learn ${PARAM} ;;
 	forget)  CLEANEXIT=0; forget ${PARAM} ;;
