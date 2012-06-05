@@ -49,8 +49,8 @@ typeset -A opts
 # global variable for account selection
 typeset -h account
 account=default
-typeset -h listaddr
-listaddr=Whitelist.txt
+typeset -h list
+list=whitelist
 
 # global variables for accounts
 typeset -h name login host protocol port password auth folders accountopt
@@ -789,6 +789,11 @@ EOF
     return 0
 }
 
+stats() {
+    mailstat -k $WORKDIR/log/procmail.log
+    return $?
+}
+
 ######
 # SEND
 # this function should send all mails in outbox
@@ -955,10 +960,10 @@ set mailcap_path = "$WORKDIR/mailcap"
 
 # Little Brother Database
 set query_command = "$WORKDIR/bin/jaro -q addr '%s'"
-macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q learn<enter>" "add to whitelist everyone in the message"
-macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q forget from:<enter>" "remove sender from whitelist
-macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q learn from:<enter>" "add sender to blacklist"
-macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q forget from:<enter>" "remove sender from blacklist
+macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn from:<enter>" "add to whitelist everyone in the message"
+macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q forget from:<enter>" "remove sender from whitelist
+macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q learn from:<enter>" "add sender to blacklist"
+macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q forget from:<enter>" "remove sender from blacklist
 
 # mailboxes in order of priority
 source $MUTTDIR/mboxes
@@ -1016,7 +1021,7 @@ PF_RECURSE = yes
 
 # blacklist filters using lbdb
 :0 w:
-* ? \$JARO -l Blacklist.txt -q query
+* ? \$JARO -l blacklist -q query
 zz.blacklist/
 
 # filters generated from Filters.txt
@@ -1064,10 +1069,13 @@ EOF
 * ? test \$PMSRC/pf-save.rc
 { INCLUDERC=\$PMSRC/pf-save.rc }
 
+
 # whitelisting filters using lbdb
 :0 w:
-* ? \$JARO -l Whitelist.txt -q query
+* ? \$JARO -l whitelist -q query
 known/
+
+
 EOF
 
     #######
@@ -1121,72 +1129,126 @@ EOF
 } # end of update()
 
 ###################
-# Little Brother DB
+# Jaro Brother DB
+SQL=sqlite3
+create_addressbook() {
+    { test -r $WORKDIR/Addressbook } && {
+	error "Addressbook already exists: $WORKDIR/Addressbook"
+	return 1
+    }
+    cat <<EOF | ${SQL} -batch $WORKDIR/Addressbook
+CREATE TABLE whitelist
+(
+  email   text collate nocase,
+  name    text collate nocase unique,
+  hits    int
+);
+CREATE TABLE blacklist
+(
+  email   text collate nocase,
+  name    text collate nocase unique,
+  hits    int
+);
+EOF
+    { $? != 0 } && {
+	error "Error creating addressbook database." 
+	return 1 }
+    return 0
+}
+insert_address() {
+    func "insert address: $1, $2"
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
+INSERT INTO $list (email, name)
+VALUES ("${1}", "${2}");
+EOF
+    { test $? != 0 } && {
+	func "address already present in $list" }
+    return $0
+}
+remove_address() {
+    func "remove address <$1> from $list"
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
+DELETE FROM $list
+WHERE email LIKE "${1}";
+EOF
+    { test $? != 0 } && {
+	func "address not found or error occurred" }
+}
+search_name() {
+	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
+SELECT * FROM $list
+WHERE name LIKE "%${1}%";
+EOF
+}
+search_email() {
+	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
+SELECT rowid FROM $list
+WHERE email IS "${1}";
+EOF
+return $?
+}    
 address() {
-    export jarodir=$WORKDIR
-    export jarolist=$listaddr
-    ${WORKDIR}/.lbdb/lbdbq ${@}
-    unset jarodir
-    unset jarolist
+    { test ! -r ${WORKDIR}/Addressbook } && { create_addressbook }
+    act "Searching for \"${PARAM[1]}\" in $list"
+    { test "$OS" = "MAC" } && { 
+	matches=`$WORKDIR/bin/ABQuery ${PARAM[1]}`
+    }
+    matches="${matches}\n`search_name ${PARAM[1]}`"
+
+    # mutt query requires something like this
+    echo "jaro: `echo $matches | wc -l` matches"
+    echo "$matches" | awk '
+{ printf "%s\t", $1
+  for(i=2;i<=NF;i++) {
+    sub("<","",$i)
+    sub(">","",$i)
+    if($i!=$1) printf "%s ", $i
+  }
+  printf "\n" }'
 }
 query() {
-    export jarodir=$WORKDIR
-    export jarolist=$listaddr
-
+    { test ! -r ${WORKDIR}/Addressbook } && { create_addressbook }
     if [ -z ${PARAM[1]} ]; then
-	email="`${WORKDIR}/.lbdb/fetchaddr -a| awk '{print $1}'`"
+	email="`${WORKDIR}/bin/fetchaddr -a| awk '{print $1}'`"
     else
-	email="`${WORKDIR}/.lbdb/fetchaddr -x ${PARAM[1]} -a| awk '{print $1}'`"
+	email="`${WORKDIR}/bin/fetchaddr -x ${PARAM[1]} -a| awk '{print $1}'`"
     fi
-
     exitcode=1
-    { test "$email" != "" } && { 
-	${WORKDIR}/.lbdb/lbdbq "${email}" \
-	    | grep -v '^lbdbq: no matches' > /dev/null
-	exitcode=$?
-	{ test $exitcode != 1 } && { func "found: $email" }
-    }
-    unset jarodir
-    unset jarolist
+    lookup="`search_email ${email}`"
+    { test "$lookup" != "" } && { exitcode=0 }
+    act "Email <$email> found in $list with id $lookup"
 }
 
 learn() {
-    export jarodir=$WORKDIR
-    export jarolist=$listaddr
-    act "Learning new address from mail pipe in stdin"
+    { test ! -r ${WORKDIR}/Addressbook } && { create_addressbook }
+    message="`cat`"
+    from="`echo ${message} | formail -xFrom: | sed -e 's/\"//g'`"
     if [ -z ${PARAM[1]} ]; then
-	${WORKDIR}/.lbdb/lbdb-fetchaddr -a
+	email="`echo ${message} | ${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
     else
-	${WORKDIR}/.lbdb/lbdb-fetchaddr -a -x "${PARAM[1]}"
+	email="`echo ${message} | ${WORKDIR}/bin/fetchaddr -x ${PARAM[1]}| awk '{print $1}'`"
     fi
-    exitcode=$?
-
-    unset jarodir
-    unset jarolist
+    insert_address "$email" "$from"
 }
 
 forget() {
-    { test ! -r ${WORKDIR}/$listaddr } && {
-	error "$listaddr not created yet, first pipe something into jaro -l $listaddr learn"
-	return 1
-    }
-
+    { test ! -r ${WORKDIR}/Addressbook } && { create_addressbook }
+    act "Expecting mail from stdin pipe"
     if [ -z ${PARAM[1]} ]; then
-	email="`${WORKDIR}/.lbdb/fetchaddr -a| awk '{print $1}'`"
+	email="`${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
     else
-	email="`${WORKDIR}/.lbdb/fetchaddr -x ${PARAM[1]} -a| awk '{print $1}'`"
+	email="`${WORKDIR}/bin/fetchaddr -x ${PARAM[1]}| awk '{print $1}'`"
     fi
-
-    { test $QUIET != 1 } && {
-	act "Removing <$email> from $listaddr (expecting mail from stdin pipe)"
-    }
-    newlock $TMPDIR/forget-addr
-    awk "/$email/"' { next; }
-{ print $0 }' ${WORKDIR}/$listaddr \
-    >> $TMPDIR/forget-addr
-    cp $TMPDIR/forget-addr ${WORKDIR}/$listaddr
-    unlock $TMPDIR/forget-addr
+    remove_address "${email}"
 }
+list_addresses() {
+    { test ${PARAM[1]} } && { list=${PARAM[1]} }
+    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook
+.width 32 40
+SELECT * FROM $list;
+EOF
+}
+
 ###################
 
 ######################
@@ -1363,7 +1425,7 @@ Main commands:
 Options:
 
  -a     use a particular account instead of default (keyword)
- -l     address list database to use with learn/query/forget
+ -l     whitelist or blacklist to use with learn/query/forget
  -h     print this help
  -v     version information for this tool
  -q     run quietly without printing informations
@@ -1406,18 +1468,20 @@ main()
     #       I. usability; user expect that "-s" is "size
     #       II. Option parsing WILL EXPLODE if you do this kind of bad things
     #               (it will say "option defined more than once, and he's right)
-    main_opts=(a: -account=a l: -listaddr=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
+    main_opts=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
     subcommands_opts[__default]=""
     subcommands_opts[queue]=""
     subcommands_opts[fetch]=""
     subcommands_opts[send]=""
     subcommands_opts[peek]=""
     subcommands_opts[update]=""
+    subcommands_opts[stats]=""
 
     subcommands_opts[addr]=""
     subcommands_opts[query]=""
     subcommands_opts[learn]=""
     subcommands_opts[forget]=""
+    subcommands_opts[list]=""
 
     subcommands_opts[backup]=""
     subcommands_opts[rmdupes]=""
@@ -1503,7 +1567,7 @@ main()
 	echo
     fi
     if option_is_set -a; then account=`option_value -a`; fi
-    if option_is_set -l; then listaddr=`option_value -l`; fi
+    if option_is_set -l; then list=`option_value -l`; fi
     { option_is_set -h } && { CLEANEXIT=0; usage; return 0 }
     { option_is_set -v } && { CLEANEXIT=0;
 	cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'; return 0 }
@@ -1516,13 +1580,15 @@ main()
 	fetch)   fetch ${PARAM} ;;
 	send)    send ${PARAM} ;;
 	peek)    peek ${PARAM} ;;
-
+	
 	update)  update ;;
 
+	stats)   CLEANEXIT=0; stats ;;
 	addr)    CLEANEXIT=0; address ${PARAM} ;;
 	query)   CLEANEXIT=0; query ${PARAM} ;;
 	learn)   CLEANEXIT=0; learn ${PARAM} ;;
 	forget)  CLEANEXIT=0; forget ${PARAM} ;;
+	list)    CLEANEXIT=0; list_addresses ${PARAM} ;;
 
 	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;
