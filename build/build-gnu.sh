@@ -29,8 +29,8 @@ case $distro in
 	    gcc -Os -static -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
 	cd - > /dev/null
 	echo
-	{ test -r /usr/bin/gnome-keyring } && {
-	    echo "gnome-keyring"
+	if [ -r /usr/bin/gnome-keyring ]; then
+	    echo "gnome-keyring" \
 	    sudo apt-get install libglib2.0-dev
 
 	    cd src/gnome-keyring
@@ -41,6 +41,7 @@ case $distro in
 	    echo "Done compiling."
 	    echo "Now run ./install.sh and Jaro Mail will be ready in ~/Mail"
 	    echo "or \"./install.sh path\" to install it somewhere else."
+	fi
 	;;
 
     *)

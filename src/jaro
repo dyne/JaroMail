@@ -290,7 +290,7 @@ ask_password() {
 		    | $WORKDIR/bin/jaro-gnome-keyring check
 		if [ $? != 0 ]; then # its a new password
 		    new_password
-		    { test $? = 0 } && {
+		    { test $? != 0 } && {
 			error "Password input aborted."
 			return 1 }
 		else # password found into gnome keyring
@@ -458,8 +458,18 @@ read_account() {
     for a in `find $WORKDIR/Accounts -name "$type.$account*"`; do all+=($a); done
     if [ ${#all} = 0 ]; then
 	error "No $type account found: $account"
-	error "Refine your argument using 'type.account'"
-	error "For instance: imap.default or smtp.default"
+	error "Refine your argument using '-a type.account'"
+	error "For instance: jaro -a imap.default"
+	error "Available accounts (excluding symbolic links):"
+	for a in `find $WORKDIR/Accounts -type f | grep -v README`; do
+	    act -n "`basename $a` :: "
+	    awk '
+/^name/ { for(i=2;i<=NF;i++) printf "%s ", $i }
+/^email/ { printf "<%s>", $2 }
+/^host/ { printf " on %s", $2 }
+{next}' $a
+	    echo " (`basename $a | cut -d. -f1`)"
+	done
 	return 1
     elif [ ${#all} != 1 ]; then
 	error "Too many $type accounts named $account"
