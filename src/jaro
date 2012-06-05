@@ -1024,7 +1024,7 @@ PF_RECURSE = yes
 
 # blacklist filters using lbdb
 :0 w:
-* ? \$JARO -l blacklist -q query
+* ? \$JARO -l blacklist -q query from:
 zz.blacklist/
 
 # filters generated from Filters.txt
@@ -1075,7 +1075,7 @@ EOF
 
 # whitelisting filters using lbdb
 :0 w:
-* ? \$JARO -l whitelist -q query
+* ? \$JARO -l whitelist -q query from:
 known/
 
 
