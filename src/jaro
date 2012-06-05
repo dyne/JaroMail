@@ -955,10 +955,10 @@ set mailcap_path = "$WORKDIR/mailcap"
 
 # Little Brother Database
 set query_command = "$WORKDIR/bin/jaro -q addr '%s'"
-macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q learn<enter>" "add sender to whitelist"
-macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q forget<enter>" "remove sender from whitelist
+macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q learn<enter>" "add to whitelist everyone in the message"
+macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l Whitelist.txt -q forget from:<enter>" "remove sender from whitelist
 macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q learn from:<enter>" "add sender to blacklist"
-macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q forget<enter>" "remove sender from blacklist
+macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l Blacklist.txt -q forget from:<enter>" "remove sender from blacklist
 
 # mailboxes in order of priority
 source $MUTTDIR/mboxes
