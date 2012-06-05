@@ -120,7 +120,7 @@ case $OS in
     GNU)
 	touch /dev/shm/jaromail.test.tmp > /dev/null
 	{ test $? = 0 } && {
-        # we can use volatile ram
+	# we can use volatile ram
 	    rm -f /dev/shm/jaromail.test.tmp
 	    TMPDIR=/dev/shm/jaromail.$USER
 	    TMPRAM=1
@@ -135,7 +135,7 @@ case $OS in
 	}
 	;;
 esac
-	    
+
 { test $TMPRAM = 1 } && {
     act "Using temporary directory in volatile RAM" }
 
@@ -157,7 +157,7 @@ MUTTDIR=$WORKDIR/.mutt
 # use gnome-keyring for passwords on GNU systems
 GNOMEKEY=0
 ps ax | grep '[g]nome-keyring-daemon' > /dev/null
-{ test $? = 0 } && { 
+{ test $? = 0 } && {
     which jaro-gnome-keyring > /dev/null
     { test $? = 0 } && { GNOMEKEY=1 }
 }
@@ -251,7 +251,7 @@ check_bin() {
 
     # which wipe command to use
     which wipe > /dev/null
-    { test $? = 0 } && { 
+    { test $? = 0 } && {
 	rm="wipe -f -s -q -R /dev/urandom"; return 0 }
     which srm > /dev/null
     { test $? = 0 } && {
@@ -344,9 +344,9 @@ new_password() {
 	GNU)
 	    if [ "$password" != "" ]; then # password was written
 
-	        # USE GNOME KEYRING
+		# USE GNOME KEYRING
 		{ test $GNOMEKEY = 1 } && {
-		    
+
 		    cat <<EOF | $WORKDIR/bin/jaro-gnome-keyring store
 protocol=${type}
 path=jaromail/${email}
@@ -360,14 +360,14 @@ EOF
 			return 1 }
 		    return 0
 		}
-		
+
 		return 0
 
 	    else # password is blank or aborted
 
-	        # USE GNOME KEYRING
+		# USE GNOME KEYRING
 		{ test $GNOMEKEY = 1 } && {
-		    
+
 		    cat <<EOF | $WORKDIR/bin/jaro-gnome-keyring erase
 protocol=${type}
 path=jaromail/${email}
@@ -383,7 +383,7 @@ EOF
 
 		return 1
 
-	    fi		
+	    fi
 	    ;;
 	*)
 	    error "Unknown system, can't figure out how to handle passwords"
@@ -958,7 +958,7 @@ set tmpdir = $WORKDIR/cache
 set sendmail = "$WORKDIR/bin/jaro queue"
 set header_cache= $WORKDIR/cache
 set maildir_header_cache_verify=no
-set editor = "$EDITOR"
+set editor = "$WORKDIR/bin/jaro edit"
 set mailcap_path = "$WORKDIR/.mutt/mailcap:$WORKDIR/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
 
 # Little Brother Database
@@ -1166,7 +1166,7 @@ CREATE TABLE blacklist
 );
 EOF
     { $? != 0 } && {
-	error "Error creating addressbook database." 
+	error "Error creating addressbook database."
 	return 1 }
     return 0
 }
@@ -1202,11 +1202,11 @@ SELECT rowid FROM $list
 WHERE email IS "${1}";
 EOF
 return $?
-}    
+}
 address() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
     act "Searching for \"${PARAM[1]}\" in $list"
-    { test "$OS" = "MAC" } && { 
+    { test "$OS" = "MAC" } && {
 	matches=`$WORKDIR/bin/ABQuery ${PARAM[1]}`
     }
     matches="${matches}\n`search_name ${PARAM[1]}`"
@@ -1273,6 +1273,28 @@ EOF
 }
 
 ###################
+
+
+#########
+## Editor
+# this part guesses what is the best editor already present on the system
+# of course we have a preference for AutOrg, the editor from our suite
+# however the default is nano if nothing else is choosen.
+editor() {
+    { test ${EDITOR} } && {
+	${EDITOR} ${PARAM[1]}
+	return $? }
+    case $OS in
+	MAC) open -t ${PARAM[1]} ;;
+	GNU)
+	    { which nano > /dev/null } && {
+		nano -m -S -Q ">" -I -E -D -T 4 -U -W -c -i -k -r 72 ${PARAM[1]} }
+	    error "No editor found, please configure the EDITOR environment variable."
+	    sleep 3
+	    ;;
+    esac
+    return $?
+}
 
 ######################
 # Maildir manipulation
@@ -1386,7 +1408,7 @@ filter() {
     echo "${briefing}"
 }
 
-# opens and closes a ramdisk for temporary files 
+# opens and closes a ramdisk for temporary files
 # users can do this explicitly between session to speed up operations
 ramdisk() {
     case $OS in
@@ -1413,7 +1435,7 @@ ramdisk() {
 		    notice "Operation successful, ramdisk ready on /Volume/JaroTmp"
 		    TMPRAM=1
 		    ;;
-	        close)
+		close)
 		    devname=`mount | awk '/JaroTmp/ {print $1}'`
 		    { test "$devname" = "" } && {
 			error "No ramdisk seems to be open"
@@ -1506,6 +1528,8 @@ main()
     subcommands_opts[learn]=""
     subcommands_opts[forget]=""
     subcommands_opts[list]=""
+
+    subcommands_opts[edit]=""
 
     subcommands_opts[backup]=""
     subcommands_opts[rmdupes]=""
@@ -1604,7 +1628,7 @@ main()
 	fetch)   fetch ${PARAM} ;;
 	send)    send ${PARAM} ;;
 	peek)    peek ${PARAM} ;;
-	
+
 	update)  update ;;
 
 	stats)   CLEANEXIT=0; stats ;;
@@ -1613,6 +1637,8 @@ main()
 	learn)   CLEANEXIT=0; learn ${PARAM} ;;
 	forget)  CLEANEXIT=0; forget ${PARAM} ;;
 	list)    CLEANEXIT=0; list_addresses ${PARAM} ;;
+
+	edit)    CLEANEXIT=0; editor ${PARAM} ;;
 
 	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;
@@ -1627,7 +1653,7 @@ main()
 	ramdisk) ramdisk ${PARAM} ;;
 
 	'source')   CLEANEXIT=0; return 0 ;;
-	__default)  func "no command provided" 
+	__default)  func "no command provided"
 	    autostart ${PARAM}
 	    exitcode=$?
 	    ;;

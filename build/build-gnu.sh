@@ -46,7 +46,6 @@ case $distro in
 
     *)
 	echo "Error: no distro recognized, build by hand."
-	return 1
 	;;
 esac
 
