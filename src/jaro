@@ -1132,11 +1132,11 @@ EOF
 # Jaro Brother DB
 SQL=sqlite3
 create_addressbook() {
-    { test -r $WORKDIR/Addressbook } && {
-	error "Addressbook already exists: $WORKDIR/Addressbook"
+    { test -r $WORKDIR/addressbook } && {
+	error "Addressbook already exists: $WORKDIR/addressbook"
 	return 1
     }
-    cat <<EOF | ${SQL} -batch $WORKDIR/Addressbook
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
 CREATE TABLE whitelist
 (
   email   text collate nocase,
@@ -1188,7 +1188,7 @@ EOF
 return $?
 }    
 address() {
-    { test ! -r ${WORKDIR}/Addressbook } && { create_addressbook }
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
     act "Searching for \"${PARAM[1]}\" in $list"
     { test "$OS" = "MAC" } && { 
 	matches=`$WORKDIR/bin/ABQuery ${PARAM[1]}`
@@ -1207,7 +1207,7 @@ address() {
   printf "\n" }'
 }
 query() {
-    { test ! -r ${WORKDIR}/Addressbook } && { create_addressbook }
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
     if [ -z ${PARAM[1]} ]; then
 	email="`${WORKDIR}/bin/fetchaddr -a| awk '{print $1}'`"
     else
@@ -1220,7 +1220,7 @@ query() {
 }
 
 learn() {
-    { test ! -r ${WORKDIR}/Addressbook } && { create_addressbook }
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
     message="`cat`"
     from="`echo ${message} | formail -xFrom: | sed -e 's/\"//g'`"
     if [ -z ${PARAM[1]} ]; then
@@ -1232,7 +1232,7 @@ learn() {
 }
 
 forget() {
-    { test ! -r ${WORKDIR}/Addressbook } && { create_addressbook }
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
     act "Expecting mail from stdin pipe"
     if [ -z ${PARAM[1]} ]; then
 	email="`${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
@@ -1243,10 +1243,17 @@ forget() {
 }
 list_addresses() {
     { test ${PARAM[1]} } && { list=${PARAM[1]} }
+    act "Listing all contents for $list"
     cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook
 .width 32 40
 SELECT * FROM $list;
 EOF
+
+    echo ".dump" | ${SQL} -batch $WORKDIR/addressbook \
+	| bzip2 > $WORKDIR/addressbook.bz2
+    notice "Backup of all addressbook created"
+    act -n ""; ls -lh $WORKDIR/addressbook.bz2
+
 }
 
 ###################
