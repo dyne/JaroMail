@@ -79,13 +79,13 @@ if ! [ -r $WORKDIR/Filters.txt ]; then
 # Other filters for web 2.0 using folder names with a prefix:
 # they can facilitate folder maintainance.
 
-from      identi.ca	        save	web.identica
-from      Twitter		save	web.twitter
-from      linkedin		save	web.linkedin
-from      googlealerts		save	web.google
-from      facebook		save	web.facebook
-from      FriendFeed		save	web.friendfeed
-from      academia.edu		save	web.academia
+# from      identi.ca	        save	web.identica
+# from      Twitter		save	web.twitter
+# from      linkedin		save	web.linkedin
+# from      googlealerts	save	web.google
+# from      facebook		save	web.facebook
+# from      FriendFeed		save	web.friendfeed
+# from      academia.edu	save	web.academia
 
 EOF
     act "Default filters created"
