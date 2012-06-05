@@ -859,7 +859,7 @@ EOF
        else
 	   act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
-	   cat ${mail} | $WORKDIR/bin/jaro -l Whitelist.txt -q learn
+	   cat ${mail} | $WORKDIR/bin/jaro -l whitelist -q learn to:
 	   ${=rm} ${mail} &
 	   locked_unlink ${smtp} &
        fi
