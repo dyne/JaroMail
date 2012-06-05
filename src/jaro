@@ -959,7 +959,7 @@ set sendmail = "$WORKDIR/bin/jaro queue"
 set header_cache= $WORKDIR/cache
 set maildir_header_cache_verify=no
 set editor = "$EDITOR"
-set mailcap_path = "$WORKDIR/mailcap"
+set mailcap_path = "$WORKDIR/.mutt/mailcap:$WORKDIR/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
 
 # Little Brother Database
 set query_command = "$WORKDIR/bin/jaro -q addr '%s'"
@@ -983,6 +983,18 @@ source $WORKDIR/Mutt.txt
 ## end of Jaro Mail generated muttrc
 ####################################
 
+EOF
+
+   # making sure we have the minimum mailcap necessary
+wwwtext=w3m
+{ which lynx > /dev/null } && { wwwtext=lynx }
+{ which elinks > /dev/null } && { wwwtext=elinks }
+cat <<EOF > $MUTTDIR/mailcap
+text/html; ${wwwtext} -dump %s; nametemplate=%s.html; copiousoutput
+
+text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
+  && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
+text/plain; cat %s
 EOF
 
     # this one is empty and sources files in temp when necessary
