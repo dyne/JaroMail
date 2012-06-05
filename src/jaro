@@ -1176,6 +1176,7 @@ EOF
 }
 search_name() {
 	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
+.width 64 128
 SELECT * FROM $list
 WHERE name LIKE "%${1}%";
 EOF
