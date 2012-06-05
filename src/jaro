@@ -719,47 +719,48 @@ fetch() {
 	unset password all; return 1
     }
 
-    newlock $TMPDIR/$host.fetch
-    cat <<EOF > $TMPDIR/$host.fetch
+    tmp=$TMPDIR/$host.fetch.$RANDOM
+    newlock $tmp
+    cat <<EOF > $tmp
 poll $host with proto IMAP user "$login" there with password "$password"
 EOF
     unset password
 
     if ! [ -z $accountopt ]; then # add option configuration
-	echo "${accountopt}" >> $TMPDIR/$host.fetch; fi
+	echo "${accountopt}" >> $tmp; fi
 
     if ! [ -z $folders ]; then # add folder configuration
-	echo "folder ${folders}" >> $TMPDIR/$host.fetch; fi
+	echo "folder ${folders}" >> $tmp; fi
 
-    cat <<EOF >> $TMPDIR/$host.fetch
+    cat <<EOF >> $tmp
 ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 EOF
     if [ "$cert" = "check" ]; then
-	cat <<EOF >> $TMPDIR/$host.fetch
+	cat <<EOF >> $tmp
 sslcertck sslcertpath '$WORKDIR/certs'
 EOF
     fi
-    cat <<EOF >> $TMPDIR/$host.fetch
+    cat <<EOF >> $tmp
 antispam 571 550 501 554
 EOF
 
 	# try login without doing anything
-    fetchmail -c -f $TMPDIR/$host.fetch
+    fetchmail -c -f $tmp
 	# examine result
     case $? in
 	1)
 	    notice "No mails for $name"
-	    unlock $TMPDIR/$host.fetch
+	    unlock $tmp
 	    return 1
 		;;
 	2)
 	    error "Invalid or unknown certificate for $host"
-	    unlock $TMPDIR/$host.fetch
+	    unlock $tmp
 	    return 1
 	    ;;
 	3)
 	    error "Invalid password for user $login at $host"
-	    unlock $TMPDIR/$host.fetch
+	    unlock $tmp
 	    return 1
 	    ;;
 	*) ;;
@@ -775,11 +776,11 @@ EOF
     fi
     act "please wait while downloading mails..."
 
-    cat $TMPDIR/$host.fetch | fetchmail -f -
+    cat $tmp | fetchmail -f -
 	# TODO: substitute this with cat conf | fetchmail -f -
 	# to avoid writing the password in clear on filesystem
 
-    unlock $TMPDIR/$host.fetch
+    unlock $tmp
 
     total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
     briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
@@ -829,8 +830,9 @@ send() {
 	unset password all; return 1
     }
 
-    newlock $TMPDIR/$host.send
-    cat <<EOF > $TMPDIR/$host.send
+    tmp=$TMPDIR/$host.send.$RANDOM
+    newlock $tmp
+    cat <<EOF > $tmp
 account default
 from ${email}
 user ${login}
@@ -850,7 +852,7 @@ EOF
        lock ${smtp}
        recipients="`cat ${smtp}`"
        act "To: ${recipients}"
-       msmtp -C $TMPDIR/$host.send -- ${=recipients} < "${mail}"
+       msmtp -C $tmp -- ${=recipients} < "${mail}"
        if [ $? != 0 ]; then
 	   error "Error sending mail, skipped"
 	   unlock ${smtp}
@@ -862,7 +864,7 @@ EOF
 	   locked_unlink ${smtp} &
        fi
     done
-    unlock $TMPDIR/$host.send
+    unlock $tmp
     return 0
 }
 
@@ -899,8 +901,9 @@ peek() {
 	error "Error retrieving password for $login on $host"
 	unset password all; return 1
     }
-    newlock $TMPDIR/muttpasswd
-    cat <<EOF >> $TMPDIR/muttpasswd
+    tmp=$TMPDIR/muttpasswd.$RANDOM
+    newlock $tmp
+    cat <<EOF >> $tmp
 set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
@@ -908,8 +911,8 @@ EOF
     echo "source $TMPDIR/muttpasswd" >> $MUTTDIR/password
     (sleep 1;
 	cp /dev/null $MUTTDIR/password
-	cp /dev/null $TMPDIR/muttpasswd
-	unlock $TMPDIR/muttpasswd
+	cp /dev/null $tmp
+	unlock $tmp
     ) &
     mutt -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
     return $?
@@ -1300,18 +1303,19 @@ backup() {
 }
 
 rmdupes() {
-    newlock $TMPDIR/$datestamp.rmdupes
+    tmp=$TMPDIR/$datestamp.rmdupes.$RANDOM
+    newlock $tmp
     for folder in ${=PARAM}; do
 	{ test ! -r $folder } && { folder=$MAILDIRS/$folder }
 	{ test ! -r $folder } && { error "Maildir not found: $folder"; continue }
 	notice "Removing duplicates in $folder"
 	c=0
 	for i in `find ${folder} -type f`; do
-	    formail -D 100000  $TMPDIR/$datestamp.rmdupes <$i \
+	    formail -D 100000  $tmp <$i \
 		&& rm $i && c=`expr $c + 1`
 	done
     done
-    unlock $TMPDIR/$datestamp.rmdupes
+    unlock $tmp
     notice "$c duplicates found and deleted"
 }
 
