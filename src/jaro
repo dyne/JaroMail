@@ -1221,13 +1221,14 @@ query() {
 
 learn() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    message="`cat`"
-    from="`echo ${message} | formail -xFrom: | sed -e 's/\"//g'`"
+    tmp=$TMPDIR/learn.$datestamp.$RANDOM
+    from="`tee $tmp | formail -xFrom: | sed -e 's/\"//g'`"
     if [ -z ${PARAM[1]} ]; then
-	email="`echo ${message} | ${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
+	email="`cat $tmp | ${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
     else
-	email="`echo ${message} | ${WORKDIR}/bin/fetchaddr -x ${PARAM[1]}| awk '{print $1}'`"
+	email="`cat $tmp | ${WORKDIR}/bin/fetchaddr -x ${PARAM[1]}| awk '{print $1}'`"
     fi
+    ${=rm} $tmp &
     insert_address "$email" "$from"
 }
 
@@ -1253,7 +1254,6 @@ EOF
 	| bzip2 > $WORKDIR/addressbook.bz2
     notice "Backup of all addressbook created"
     act -n ""; ls -lh $WORKDIR/addressbook.bz2
-
 }
 
 ###################
