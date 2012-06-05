@@ -1170,16 +1170,18 @@ forget() {
 	error "$listaddr not created yet, first pipe something into jaro -l $listaddr learn"
 	return 1
     }
+
+    if [ -z ${PARAM[1]} ]; then
+	email="`${WORKDIR}/.lbdb/fetchaddr -a| awk '{print $1}'`"
+    else
+	email="`${WORKDIR}/.lbdb/fetchaddr -x ${PARAM[1]} -a| awk '{print $1}'`"
+    fi
+
     { test $QUIET != 1 } && {
-	act "Removing address from $listaddr (expecting mail from stdin pipe)"
+	act "Removing <$email> from $listaddr (expecting mail from stdin pipe)"
     }
-    addr=`cat | formail -x"From:" \
-	| head -n1 \
-	| tr 'A-Z' 'a-z' \
-	| sed 's/.*\W\([0-9a-z_.-]\+@[0-9a-z_.-]\+\).*/\1/'`
-    func "forgetting address: $addr"
     newlock $TMPDIR/forget-addr
-    awk "/$addr/"' { next; }
+    awk "/$email/"' { next; }
 { print $0 }' ${WORKDIR}/$listaddr \
     >> $TMPDIR/forget-addr
     cp $TMPDIR/forget-addr ${WORKDIR}/$listaddr
