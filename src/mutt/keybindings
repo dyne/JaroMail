@@ -20,6 +20,13 @@ bind index      \e<         first-entry
 bind index      >            last-entry
 bind index      \e>          last-entry
 
+# we want to be able to scroll also over e-mails to be deleted
+bind index   <down>  next-entry
+bind index   j	     next-entry
+bind index   <up>    previous-entry
+bind index   k 	     previous-entry
+
+
 bind pager w search
 bind pager \n noop	# PINE prints "No default action for this menu."
 bind pager <up> previous-line
