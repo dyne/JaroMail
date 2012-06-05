@@ -13,7 +13,6 @@
 #+LATEX_HEADER: \usepackage[hang,small]{caption}
 #+LATEX_HEADER: \usepackage{float}
 
-#+LATEX: \pagebreak
 
 * Introduction
 
@@ -62,12 +61,14 @@ consistent way to operate e-mail communication with tools that are
 available on most platforms and can be as well used remotely over a
 secure shell connection.
 
-It also aims to facilitate the task of downloading and storing e-mail
+Jaro Mail aims to facilitate the task of downloading and storing e-mail
 archives off-line in a way that they can be still accessible in more
 than 10 years time and independently of any software. Nowadays many
 users have the habit of keeping all their e-mails on servers,
 accessing them through an often clumsy web interface, while
 downloading them can free space and improve their privacy.
+
+[[file:foster_privacy.png]]
 
 #+LATEX: \pagebreak
 
