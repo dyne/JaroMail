@@ -292,7 +292,9 @@ act "Check the commandline help for a list of commands: jaro -h"
 # OS specific post install rules
 case $OS in
 	GNU)
-	cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
+	{ test -r src/gnome-keyring/jaro-gnome-keyring } && {
+	    cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
+	}
 	;;
 	MAC)
 	;;

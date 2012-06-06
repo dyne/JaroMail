@@ -188,7 +188,7 @@ TRAPINT() {
 
 lock() {
     func "lock: $1"
-    $WORKDIR/.lbdb/dotlock ${1}
+    $WORKDIR/bin/dotlock ${1}
     case $? in
 	1) error "Cannot lock non existing file: $1"
 	    return 1 ;;
@@ -216,7 +216,7 @@ unlock() {
 	error "Created by $lockpid now $$ is trying to unlock"
 	return 1
     }
-    $WORKDIR/.lbdb/dotlock -u ${=@}
+    $WORKDIR/bin/dotlock -u ${=@}
     if [ $? != 0 ]; then
 	error "Unable to unlock: $1"
 	return 1
@@ -237,7 +237,7 @@ unlink() { # delete a file that we are locking
     (
 	${=rm} ${1}
 	touch ${1}
-	$WORKDIR/.lbdb/dotlock -d -f ${1}
+	$WORKDIR/bin/dotlock -d -f ${1}
 	rm -f ${1}.pid
     ) &!
     return 0
@@ -1051,7 +1051,7 @@ PF_DEST = ""			# clear these vars
 PF_FROM = ""
 PF_RECURSE = yes
 
-# blacklist filters using lbdb
+# blacklist filters
 :0 w:
 * ? \$JARO -l blacklist -q query from:
 zz.blacklist/
@@ -1102,7 +1102,7 @@ EOF
 { INCLUDERC=\$PMSRC/pf-save.rc }
 
 
-# whitelisting filters using lbdb
+# whitelisting filters
 :0 w:
 * ? \$JARO -l whitelist -q query from:
 known/
