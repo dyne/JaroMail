@@ -180,108 +180,122 @@ and actions involved in managing one's email communication:
 
 
 
-** Examples
 
-*** Accounts/imap.default
 
-#+BEGIN_EXAMPLE
-# Name and values are separated by spaces or tabs
-# comments start the line with a hash
 
-# Name appearing in From: field
-name To Be Configured
 
-# Email address (default is same as login)
-email unknown@gmail.com
+* Organization
 
-# Internet address
-host imap.gmail.com
+One of the main goals for Jaro Mail is to organize the e-mail workflow
+so that one's attention is dedicated to important communications,
+rather than being constantly distracted by various degrees of spam and
+the need to weed it out of the mailbox. This ambitious task is pursued
+by realizing an integrated approach consisting of flexible
+whitelisting and the distinction between mails from known people and
+the rest.
 
-# Username
-login USERNAME@gmail.com
+** Folders
 
-# Authentication type
-auth plain # or kerberos, etc
+First lets start with a categorization of the standard maildirs and a
+brief description for each. The following maildirs are standard in
+Jaro Mail and are listed in order of priority:
 
-# Identity certificate: check or ignore
-cert ignore
+| Folder         | What goes in there                               |
+|----------------+--------------------------------------------------|
+| *known*        | Mails whose sender is known (Whitelist)          |
+| *priv*         | Unknown sender, we are the explicit destination  |
+| *unsorted*     | Unknown sender, we are in cc: or somehow reached |
+| *ml.unsorted*  | From a mailinglist that we haven't filtered yet  |
+| *zz.blacklist* | Mails whose sender is not desired (Blacklist)    |
 
-# Transport protocol
-transport ssl
+The advantage using such a folder organization is that every time we
+open up the mail reader we will be presented with something we are
+likely to be most interested in (known people replying our mails) and
+progressively, as we will have the time to scroll through, mails from
+"new people" or mass mailings of sort. Please note this organization
+does not includes spam, which is supposedly weeded out on the server
+via spamlists: White/Blacklisting has more to do with our own
+selection of content sources than with the generic protection from
+random pieces of information.
 
-# Service port
-port 993
+** Whitelist
 
-# Options when fetching
-# to empty your mailbox you can also use: fetchall
-# by default this is 'keep' which will not delete mails from server
-options keep
-# we encourage you to store emails locally, hence using a fetchall
-# configuration from a machine that you keep at home and secured.
+The way whitelisting works if quite crucial to this setup and, at the
+same time, is fairly simple since it does not include any automatic
+detection, learning filters, Markov chains or Bayesian A/I. We believe
+the user should be in full control of prioritizing communication
+channels and at the same time constantly able to tweak the setup in an
+easy way.
 
-# Imap folders
-# uncommend to provide a list of folders to be fetched
-# folders INBOX, known, priv, lists, ml.unsorted, unsorted
-#+END_EXAMPLE
+To whitelist an address is sufficient to send it an e-mail: at the
+moment the message is sent Jaro Mail will remember the destination
+address and prioritize all messages coming back from it.
+This we call implicit whitelisting.
 
-*** Accounts/smtp.default
+To explicitly whitelist an address from inside the mail reader index
+press [ *a* ] while selecting an email, this will add in the whitelist
+all addresses mentioned in To: and Cc:. To remove an address from the
+whitelist, press [ *A* ] (shift-a) while selecting a mail and its
+sender (only the From: field) will lose the privilege of ending up in
+your *known/* folder.
 
-#+BEGIN_EXAMPLE
-# Name and values are separated by spaces or tabs
-# comments start the line with a hash
+There is one more privilege for people that have their address
+whitelisted: their name and e-mail will be completed automatically
+when composing a new email, pressing the *Tab* key while indicating
+them among the recipients.
 
-# Name for this account
-name To Be Configured
+** Blacklist
 
-# Internet address
-host smtp.gmail.com
+To blacklist an address instead one can use the [ *z* ] key while an
+e-mail is selected on the index: the sender indicated in the From:
+field will be downgraded to the very bottom of your priorities, closes
+to spam than the rest, the most infamous *zz.blacklist/* folder.
 
-# Username
-login USERNAME@gmail.com
+Similarly, to remove addresses from the blacklist the [ *Z* ] (shift-z)
+key can be pressed and all addresses mentioned in the currently
+selected e-mail (including those in Cc:) will be redeemed, but not
+whitelisted unless you do it explicitly with 'a'.
 
-# Transport protocol
-transport ssl # or "tls" or "plain"
+** Addressbook
 
-# Service port
-# port 465
-port 25
-#+END_EXAMPLE
+What we call addressbook here basically consists of both the white and
+the blacklist. We store both lists in a unique database file in
+*Mail/jaro/addressbook* (using sqlite3). On Apple/OSX there is also a
+gateway to the system addressbook so all entries there will be
+automatically considered whitelisted in Jaro Mail without the need to
+import them into its database. In future, following usage and feature
+requests, we may add similar support for other addressbook formats
+that people use (abook, vcf etc.)
 
-*** Filters.txt
+To see what is in the Jaro Mail addressbook and to dump the file for a
+backup the *list* command is available
 
-#+BEGIN_EXAMPLE
-# Example filter configuration for Jaro Mail
+: $ jaro list whitelist
 
-# mailinglist filters are in order of importance
-# syntax: to <list email> save <folder>
-# below some commented out examples, note the use of a prefix,
-# which makes it handy when browsing with file completion.
+or
 
-# Field   String match          Folder in Mail/
-to	  crypto@lists.dyne	save	dyne.crypto
-to	  dynebolic		save	dyne.dynebolic
-to	  freej			save	dyne.freej
-to	  frei0r-devel		save	dyne.frei0r
-to	  taccuino		save	ml.freaknet
-to	  deadpoets		save	ml.freaknet
-to	  linux-libre		save	gnu.linux-libre
-to	  foundations@lists	save	gnu.foundations
-to	  debian-mentors	save	debian.mentors
-to	  debian-blends		save	debian.blends
-to	  freedombox-discuss	save	debian.freedombox
+: $ jaro list blacklist
 
-# Other filters for web 2.0 using folder names with a prefix:
-# they can facilitate folder maintainance.
+will dump the contents to the terminal and also save the whole
+database in a compressed text file containing a portable sequence of
+SQL commands: *Mail/jaro/addressbook.bz2*
 
-# Field   String match          Folder in Mail/
-from      identi.ca	        save	web.identica
-from      Twitter		save	web.twitter
-from      linkedin		save	web.linkedin
-from      googlealerts		save	web.google
-from      facebook		save	web.facebook
-from      FriendFeed		save	web.friendfeed
-from      academia.edu		save	web.academia
-#+END_EXAMPLE
+In some close future the addressbook functionality will be expanded to
+permit inclusive syncing between multiple databases and more
+maintainance operations.
+
+** In Brief
+
+Below a recapitulation of keys related to the white and blacklisting
+functionality, to be used in the e-mail index or when an e-mail is
+open inside the mail user agent:
+
+| List  | Key         | Function                   | Fields    |
+|-------+-------------+----------------------------+-----------|
+| White | *a*         | Add all addresses found    | From: Cc: |
+| White | *A* (shift) | Remove sender address      | From:     |
+| Black | *z*         | Add sender address         | From:     |
+| Black | *Z* (shift) | Remove all addresses found | From: Cc: |
 
 
 
@@ -353,98 +367,6 @@ This will authenticate with your SMTP and send all your emails to
 destination. This way even if you are off-line you will always be able
 to write emails and eventually bring them around for sending them
 whenever possible.
-
-
-
-* Organization
-
-One of the main goals for Jaro Mail is to organize the e-mail workflow
-so that one's attention is dedicated to important communications,
-rather than being constantly distracted by various degrees of spam and
-the need to weed it out of the mailbox. This ambitious task is pursued
-by realizing an integrated approach consisting of flexible
-whitelisting and the distinction between mails from known people and
-the rest.
-
-** Folders
-
-First lets start with a categorization of the standard maildirs and a
-brief description for each. The following maildirs are standard in
-Jaro Mail and are listed in order of priority:
-
-| Folder         | What goes in there                               |
-|----------------+--------------------------------------------------|
-| *known*        | Mails whose sender is known (Whitelist)          |
-| *priv*         | Unknown sender, we are the explicit destination  |
-| *unsorted*     | Unknown sender, we are in cc: or somehow reached |
-| *ml.unsorted*  | From a mailinglist that we haven't filtered yet  |
-| *zz.blacklist* | Mails whose sender is not desired (Blacklist)    |
-
-The advantage using such a folder organization is that every time we
-open up the mail reader we will be presented with something we are
-likely to be most interested in (known people replying our mails) and
-progressively, as we will have the time to scroll through, mails from
-"new people" or mass mailings of sort. Please note this organization
-does not includes spam, which is supposedly weeded out on the server
-via spamlists: White/Blacklisting has more to do with our own
-selection of content sources than with the generic protection from
-random pieces of information.
-
-** Whitelist
-
-The way whitelisting works if quite crucial to this setup and, at the
-same time, is fairly simple since it does not include any automatic
-detection, learning filters, Markov chains or Bayesian A/I. We believe
-the user should be in full control of prioritizing communication
-channels and at the same time constantly able to tweak the setup in an
-easy way.
-
-To whitelist an address is sufficient to send it an e-mail: at the
-moment the message is sent Jaro Mail will remember the destination
-address and prioritize all messages coming back from it.
-This we call implicit whitelisting.
-
-To explicitly whitelist an address from inside the mail reader index
-press [ *a* ] while selecting an email, this will add in the whitelist
-all addresses mentioned in To: and Cc:. To remove an address from the
-whitelist, press [ *A* ] (shift-a) while selecting a mail and its
-sender (only the From: field) will lose the privilege of ending up in
-your *known/* folder.
-
-There is one more privilege for people that have their address
-whitelisted: their name and e-mail will be completed automatically
-when composing a new email, pressing the *Tab* key while indicating
-them among the recipients.
-
-The file where the whitelist is stored in *Mail/jaro/Whitelist.txt* in
-a plain text format that you can even edit it with a normal editor.
-
-** Blacklist
-
-To blacklist an address instead one can use the [ *z* ] key while an
-e-mail is selected on the index: the sender indicated in the From:
-field will be downgraded to the very bottom of your priorities, closes
-to spam than the rest, the most infamous *zz.blacklist/* folder.
-
-Similarly, to remove addresses from the blacklist the [ *Z* ] (shift-z)
-key can be pressed and all addresses mentioned in the currently
-selected e-mail (including those in Cc:) will be redeemed, but not
-whitelisted unless you do it explicitly with 'a'.
-
-The blacklist file is also in plain text: *Mail/jaro/Blacklist.txt*
-
-** In Brief
-
-Below a recapitulation of keys related to the white and blacklisting
-functionality, to be used in the e-mail index or when an e-mail is
-open inside the mail user agent:
-
-| List  | Key       | Function                   | Fields    |
-|-------+-----------+----------------------------+-----------|
-| White | *a*       | Add all addresses found    | From: Cc: |
-| White | *A* (shift) | Remove sender address      | From:     |
-| Black | *z*       | Add sender address         | From:     |
-| Black | *Z* (shift) | Remove all addresses found | From: Cc: |
 
 
 
@@ -681,6 +603,23 @@ licenses, or available in the public domain.
  notice are preserved on all copies.
 #+END_EXAMPLE
 
+
+** Jaro Mail credits
+
+Jaro Mail is written and maintained by Jaromil, it started from the
+intention to share his own 10 years old e-mail setup, encouraged by
+the typical geek attitude of exchanging configuration files between
+friends.
+
+The RFC 822 address parser (fetchaddr) is originally written by
+Michael Elkins for the Mutt MUA.
+
+The gateway to Apple/OSX addressbook (ABQuery) was written by Brendan
+Cully and just slightly updated for our distribution.
+
+Thanks also go to Anatole Shaw for the help testing and debugging Jaro
+Mail.
+
 ** Mutt credits
 
 Please note that this is by no means an exhaustive list of all the
@@ -731,17 +670,107 @@ General Public License as published by the Free Software Foundation;
 either version 3 of the License, or (at your option) any later
 version.
 
+* Appendix
 
-** Lbdb credits
+** Configuration examples
 
-The "little brother database" was initially written by Thomas
-Roessler.
+*** Accounts/imap.default
 
-Most of the really interesting code of this program (namely, the RFC
-822 address parser used by lbdb-fetchaddr) was stolen from Michael
-Elkins' mutt mail user agent.
+#+BEGIN_EXAMPLE
+# Name and values are separated by spaces or tabs
+# comments start the line with a hash
 
-Additional credits go to Brandon Long for putting the query
-functionality into mutt and to Brendan Cully for writing the gateway
-module to Apple/OSX addressbook, just slightly updated in our
-distribution.
+# Name appearing in From: field
+name To Be Configured
+
+# Email address (default is same as login)
+email unknown@gmail.com
+
+# Internet address
+host imap.gmail.com
+
+# Username
+login USERNAME@gmail.com
+
+# Authentication type
+auth plain # or kerberos, etc
+
+# Identity certificate: check or ignore
+cert ignore
+
+# Transport protocol
+transport ssl
+
+# Service port
+port 993
+
+# Options when fetching
+# to empty your mailbox you can also use: fetchall
+# by default this is 'keep' which will not delete mails from server
+options keep
+# we encourage you to store emails locally, hence using a fetchall
+# configuration from a machine that you keep at home and secured.
+
+# Imap folders
+# uncommend to provide a list of folders to be fetched
+# folders INBOX, known, priv, lists, ml.unsorted, unsorted
+#+END_EXAMPLE
+
+*** Accounts/smtp.default
+
+#+BEGIN_EXAMPLE
+# Name and values are separated by spaces or tabs
+# comments start the line with a hash
+
+# Name for this account
+name To Be Configured
+
+# Internet address
+host smtp.gmail.com
+
+# Username
+login USERNAME@gmail.com
+
+# Transport protocol
+transport ssl # or "tls" or "plain"
+
+# Service port
+# port 465
+port 25
+#+END_EXAMPLE
+
+*** Filters.txt
+
+#+BEGIN_EXAMPLE
+# Example filter configuration for Jaro Mail
+
+# mailinglist filters are in order of importance
+# syntax: to <list email> save <folder>
+# below some commented out examples, note the use of a prefix,
+# which makes it handy when browsing with file completion.
+
+# Field   String match          Folder in Mail/
+to	  crypto@lists.dyne	save	dyne.crypto
+to	  dynebolic		save	dyne.dynebolic
+to	  freej			save	dyne.freej
+to	  frei0r-devel		save	dyne.frei0r
+to	  taccuino		save	ml.freaknet
+to	  deadpoets		save	ml.freaknet
+to	  linux-libre		save	gnu.linux-libre
+to	  foundations@lists	save	gnu.foundations
+to	  debian-mentors	save	debian.mentors
+to	  debian-blends		save	debian.blends
+to	  freedombox-discuss	save	debian.freedombox
+
+# Other filters for web 2.0 using folder names with a prefix:
+# they can facilitate folder maintainance.
+
+# Field   String match          Folder in Mail/
+from      identi.ca	        save	web.identica
+from      Twitter		save	web.twitter
+from      linkedin		save	web.linkedin
+from      googlealerts		save	web.google
+from      facebook		save	web.facebook
+from      FriendFeed		save	web.friendfeed
+from      academia.edu		save	web.academia
+#+END_EXAMPLE
