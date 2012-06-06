@@ -20,8 +20,8 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=0.1
-DATE=May/2012
+VERSION=0.9
+DATE=Jun/2012
 JAROMAILEXEC=$0
 typeset -a OLDARGS
 for arg in ${argv}; do OLDARGS+=($arg); done
@@ -165,9 +165,13 @@ ps ax | grep '[g]nome-keyring-daemon' > /dev/null
 
 cleanexit() {
     func "Clean exit procedures"
-    for f in `ls $TMPDIR/ | grep -v '.lock$'`; do
-	{ test -r $TMPDIR/$f } && { unlink $TMPDIR/$f }
-    done
+    # while ( ps ax | grep '[s]rm' > /dev/null
+    # 	test $? = 0 ); do sleep 1; done
+
+    # for f in `ls $TMPDIR/ | grep -v '.lock$'`; do
+    # 	{ test ! -r $TMPDIR/$f.lock } && { unlink $TMPDIR/$f }
+    # done
+
 #    { test $TMPRAM = 1 } && { rmdir $TMPDIR }
     unset typeset -h name login host protocol port password auth folders accountopt
 }
@@ -183,17 +187,18 @@ TRAPINT() {
 }
 
 lock() {
-    func "lock: $@"
-    $WORKDIR/.lbdb/dotlock ${=@}
+    func "lock: $1"
+    $WORKDIR/.lbdb/dotlock ${1}
     case $? in
-	1) error "Cannot lock non existing file: $@"
+	1) error "Cannot lock non existing file: $1"
 	    return 1 ;;
-	3) error "Locked file in use: $@"
+	3) error "Locked file in use: $1"
 	    return 3 ;;
-	5) error "Impossible to lock: $@"
+	5) error "Impossible to lock: $1"
 	    return 5 ;;
 	# success
-	0) return 0 ;;
+	0) echo "$$" > ${1}.pid
+	    return 0 ;;
     esac
 }
 newlock() { # create locked
@@ -201,26 +206,41 @@ newlock() { # create locked
     touch $1
     chmod 600 $1
     lock $1
+    echo "$$" > ${1}.pid
 }
 unlock() {
-    func "unlock: $@"
+    func "unlock: $1"
+    lockpid="`cat ${1}.pid`"
+    { test "$$" != "$lockpid" } && {
+	error "Unlock attempt by different PID: $1"
+	error "Created by $lockpid now $$ is trying to unlock"
+	return 1
+    }
     $WORKDIR/.lbdb/dotlock -u ${=@}
     if [ $? != 0 ]; then
-	error "Unable to unlock: $@"
+	error "Unable to unlock: $1"
 	return 1
     fi
+    rm -f ${1}.pid
     return 0
 }
-locked_unlink() { # delete a file that we are locking
-    # use with care! this can permanently erase currently locked files
-    ${=rm} ${1}
-    touch ${1}
-    $WORKDIR/.lbdb/dotlock -d -f ${1}
-}
-unlink() { # lock and delete
+unlink() { # delete a file that we are locking
     func "unlink: $1"
-    lock ${1}
-    locked_unlink ${1} &
+    # use with care! this can permanently erase currently locked files
+    # only the locking PID should use it on its own locks
+    lockpid="`cat ${1}.pid`"
+    { test "$$" != "$lockpid" } && {
+	error "Unlock attempt by different PID: $1"
+	error "Created by $lockpid now $$ is trying to unlock"
+	return 1
+    }
+    (
+	${=rm} ${1}
+	touch ${1}
+	$WORKDIR/.lbdb/dotlock -d -f ${1}
+	rm -f ${1}.pid
+    ) &!
+    return 0
 }
 
 
@@ -750,17 +770,17 @@ EOF
     case $? in
 	1)
 	    notice "No mails for $name"
-	    unlock $tmp
+	    unlink $tmp
 	    return 1
 		;;
 	2)
 	    error "Invalid or unknown certificate for $host"
-	    unlock $tmp
+	    unlink $tmp
 	    return 1
 	    ;;
 	3)
 	    error "Invalid password for user $login at $host"
-	    unlock $tmp
+	    unlink $tmp
 	    return 1
 	    ;;
 	*) ;;
@@ -776,11 +796,11 @@ EOF
     fi
     act "please wait while downloading mails..."
 
-    cat $tmp | fetchmail -f -
+    cat $tmp | fetchmail -f $tmp
 	# TODO: substitute this with cat conf | fetchmail -f -
 	# to avoid writing the password in clear on filesystem
 
-    unlock $tmp
+    unlink $tmp
 
     total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
     briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
@@ -861,10 +881,10 @@ EOF
 	   # whitelist those to whom we send mails
 	   cat ${mail} | $WORKDIR/bin/jaro -l whitelist -q learn to:
 	   ${=rm} ${mail} &
-	   locked_unlink ${smtp} &
+	   unlink ${smtp} &
        fi
     done
-    unlock $tmp
+    unlink $tmp
     return 0
 }
 
@@ -901,18 +921,18 @@ peek() {
 	error "Error retrieving password for $login on $host"
 	unset password all; return 1
     }
-    tmp=$TMPDIR/muttpasswd.$RANDOM
+    tmp=$TMPDIR/$host.peek.$RANDOM
     newlock $tmp
     cat <<EOF >> $tmp
 set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
     unset password
-    echo "source $TMPDIR/muttpasswd" >> $MUTTDIR/password
+    echo "source $tmp" >> $MUTTDIR/password
     (sleep 1;
 	cp /dev/null $MUTTDIR/password
 	cp /dev/null $tmp
-	unlock $tmp
+	unlink $tmp
     ) &
     mutt -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
     return $?
@@ -1345,11 +1365,12 @@ rmdupes() {
 	notice "Removing duplicates in $folder"
 	c=0
 	for i in `find ${folder} -type f`; do
-	    formail -D 100000  $tmp <$i \
+	    # 5MB should be enough ehre?
+	    formail -D 5000000  $tmp <$i \
 		&& rm $i && c=`expr $c + 1`
 	done
     done
-    unlock $tmp
+    unlink $tmp
     notice "$c duplicates found and deleted"
 }
 

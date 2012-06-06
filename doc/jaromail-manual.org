@@ -85,7 +85,6 @@ and actions involved in managing one's email communication:
  | MTA     | Mail Transport Agent | [[http://www.fetchmail.info][Fetchmail]] |
  |         | Filtering Agent      | [[http://www.procmail.org][Procmail]]  |
  | SMTP    | Mail Delivery Agent  | [[http://msmtp.sourceforge.net][MSmtp]]     |
- |         | Addressbook          | [[http://www.spinnaker.de/lbdb][Lbdb]]      |
 
 #+LATEX: \pagebreak
 
