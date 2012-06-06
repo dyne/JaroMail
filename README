@@ -6,25 +6,28 @@
  88 88.  .88 88       88.  .88 88  88  88 88.  .88 88 88
  88 `88888P8 dP       `88888P' dP  dP  dP `88888P8 dP dP
  88~ooooooooooooooooooooooooooooooooooooooooooooooooooooo
-odP   your humble and faithful electronic postman   v 0.1
+odP   your humble and faithful electronic postman   v 0.9
 
 A commandline tool to easily and privately handle your e-mail
 
-Initial release so beware there is still very little docu
+Homepage with more information and links to the manual:
 
-come on #dyne http://hinezumi.im to get in touch with devs
+	      	   	             http://jaromail.dyne.org
+
 
 * Build
 
-Use the build scripts.
+Use the build scripts in build/
 
 You will need a compiler installed (XCode on Apple/OSX)
+
+But if you use Apple/OSX you can simply download the binary.
 
 * Install
 
 Use the install script.
 
-It will check for required packages.
+It will check for all requirements on your system to be satisfied.
 
 Give it a path as argument if you want to install your Jaro Mail
 directory into something different than ~/Mail, this way you can have
@@ -47,6 +50,8 @@ To clone anonymously use
  git clone git://code.dyne.org/jaromail.git
 
 Patches welcome.
+
+Come on channel #dyne on http://hinezumi.im to get in touch with devs
 
 * Donate
 
