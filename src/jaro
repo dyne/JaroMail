@@ -343,11 +343,11 @@ new_password() {
 		security add-internet-password \
 		    -c JARO -a $email -s $host \
 		    -p $transport -P $port -w "${password}"
-		{ test $? != 0 } && {
-		    unset password
+		if [ $? != 0 ]; then
 		    error "Error adding password to keyring."
-		    return 1 }
-		act "New password set."
+		else
+		    act "New password saved in keyring"
+		fi
 		return 0
 	    else
 		security delete-internet-password \
@@ -374,10 +374,7 @@ username=${login}
 host=${host}
 password=${password}
 EOF
-		    { test $? != 0 } && {
-			unset password
-			error "Error saving password in Gnome keyring"
-			return 1 }
+		    { test $? != 0 } && { error "Error saving password in Gnome keyring" }
 		    return 0
 		}
 
