@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh 
+#!/usr/bin/env zsh
 
 # Jaro Mail install script
 #
@@ -18,12 +18,13 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-if ! [ -r src/jaro ]; then
-    echo "Error: this script should be run from inside a jaromail software distribution"
-    exit 1
-fi
+{ test -r src/jaro } || {
+    echo "Error: this script should be run from inside a Jaro Mail source distribution"
+    exit 1 }
 
-if [ $1 ]; then 
+
+
+if [ $1 ]; then
     MAILDIRS=$1;
 else
     MAILDIRS=$HOME/Mail
@@ -33,10 +34,12 @@ WORKDIR=$MAILDIRS/jaro
 PROCMAILDIR=$WORKDIR/.procmail
 MUTTDIR=$WORKDIR/.mutt
 
-umask 007 # James Bond ;^)
-
-
 source src/jaro source
+
+{ test -r src/fetchaddr } || {
+    error "Jaro Mail was not built yet. Look into the build/ directory before installing."
+    exit 1
+}
 
 # make sure the directory is private
 ${=mkdir} $MAILDIRS
@@ -77,7 +80,7 @@ if ! [ -r $WORKDIR/Filters.txt ]; then
 # Other filters for web 2.0 using folder names with a prefix:
 # they can facilitate folder maintainance.
 
-# from      identi.ca	        save	web.identica
+# from      identi.ca		save	web.identica
 # from      Twitter		save	web.twitter
 # from      linkedin		save	web.linkedin
 # from      googlealerts	save	web.google
