@@ -817,7 +817,6 @@ stats() {
 # this function should send all mails in outbox
 send() {
     adir=$WORKDIR/Accounts
-    acct=$1
     typeset -al all
 
     # list mails to send
@@ -1117,10 +1116,9 @@ cat <<EOF >> $PROCMAILDIR/rc
 * ? test \$PMSRC/pf-chkto.rc
 {
 EOF
-    typeset -al accts
     for f in `cat $WORKDIR/Accounts/* | awk '/^email/ { print $2 }'`; do
 	echo "ADDR=${f}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
-	act "private account: <${f}>"
+	func "private account: <${f}>"
     done
 
     cat <<EOF >> $PROCMAILDIR/rc
