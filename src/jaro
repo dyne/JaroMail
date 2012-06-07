@@ -713,9 +713,9 @@ fetch() {
     typeset -al all
 
     # recursion here
-    if [ -z $1 ]; then fetchall; return $?; fi
+    { test $account = default } && { fetchall; return $? }
 
-    read_account "$1"
+    read_account "$account"
     if [ $? != 0 ]; then
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
