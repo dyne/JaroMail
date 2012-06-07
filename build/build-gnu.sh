@@ -19,10 +19,8 @@ case $distro in
 	which fetchmail || sudo apt-get install fetchmail
 	which wipe || sudo apt-get install wipe
 	echo "All dependencies installed"
-	echo -n "Compiling a few sources... "
-	cd src/lbdb
-	echo -n "dotlock "
-	[ -x dotlock ] || gcc -Os -static -o dotlock dotlock.c
+	echo -n "Compiling the address parser... "
+	cd src
 	echo -n "fetchaddr "
 	[ -x fetchaddr ] || \
 	    gcc -Os -c -static fetchaddr.c helpers.c rfc2047.c rfc822.c; \

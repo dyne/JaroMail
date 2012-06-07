@@ -45,8 +45,6 @@ ${=mkdir} $WORKDIR
 notice "Installing Jaromail in $WORKDIR"
 act "This script will create the ~/Mail folder if it doesn't exist,"
 act "then populate it with default Maildirs and the Jaro Mail binaries."
-act "At last, a shell execution PATH to ~/Mail/jaro/bin will be added"
-act "to your ~/.profile so that you can call 'jaro' from a Terminal."
 
 # install the main jaromail script
 ${=mkdir} ${WORKDIR}/bin
@@ -211,83 +209,39 @@ cp -a src/procmail/* $PROCMAILDIR
 ${=mkdir} $MUTTDIR
 cp -a src/mutt/* $MUTTDIR
 
-act "Installing little brother database"
-# safe to override
-${=mkdir} $WORKDIR/.lbdb
-for aw in munge.awk.in munge-keeporder.awk.in tac.awk.in; do
-	dst=`echo $aw | sed -e 's/.awk.in$//'`
-	cat src/lbdb/$aw \
-	| sed -e "s&@AWK@&`which awk`&g" \
-	> $WORKDIR/.lbdb/$dst
-done
-for sh in lbdb-fetchaddr.sh.in lbdb-munge.sh.in lbdb_lib.sh.in lbdbq.sh.in; do
-	dst=`echo $sh | sed -e 's/.sh.in$//'`
-	cat src/lbdb/$sh \
-	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
-	| sed -e "s&@DOTLOCK@&${WORKDIR}/.lbdb/dotlock&g" \
-	| sed -e "s&@LBDB_FILE@&${WORKDIR}/.lbdb/m_inmail.list&g" \
-	| sed -e "s&@LBDB_VERSION@&0.38-jaromail&g" \
-	| sed -e "s&@prefix@&${WORKDIR}/.lbdb&g" \
-	| sed -e "s&@exec_prefix@&${WORKDIR}/.lbdb&g" \
-	| sed -e "s&@libdir@&${WORKDIR}/.lbdb&g" \
-	| sed -e "s&@sysconfdir@&${WORKDIR}/.lbdb&g" \
-	| sed -e "s&@MODULES@&${WORKDIR}/.lbdb&g" \
-	| sed -e "s&@TAC@&${WORKDIR}/.lbdb/tac&g" \
-        | sed -e "s&@TMPDIR@&${WORKDIR}/tmp&g" \
-        > $WORKDIR/.lbdb/${dst}
-done
-lbdb_modules=(m_finger m_gpg m_inmail m_muttalias m_osx_addressbook m_vcf)
-for mod in ${lbdb_modules}; do
-	cat src/lbdb/${mod}.sh.in \
-	| sed -e "s&@SH@&/usr/bin/env zsh&g" \
-	| sed -e "s&@LBDB_VERSION@&0.38-jaromail&g" \
-	| sed -e "s&@prefix@&${WORKDIR}/.lbdb&g" \
-	| sed -e "s&@exec_prefix@&${WORKDIR}/.lbdb&g" \
-	| sed -e "s&@libdir@&${WORKDIR}/.lbdb&g" \
-	> $WORKDIR/.lbdb/${mod}
-done
-cp src/lbdb/dotlock $WORKDIR/bin/
-cp src/lbdb/fetchaddr $WORKDIR/bin/
-
-# OS specific lbdb rules
-case $OS in
-    GNU)
-	echo "METHODS=(m_inmail)" > ${WORKDIR}/.lbdb/lbdb.rc
-	;;
-    MAC)
-	# use ABQuery on mac
-	echo "METHODS=(m_inmail m_osx_addressbook)" > ${WORKDIR}/.lbdb/lbdb.rc
-	;;
-esac
-####
+cp src/fetchaddr $WORKDIR/bin/
 
 
 # generate initial configuration
-MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update
-
+MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update -q
 
 case $OS in
-	GNU|MAC)
-	if [ -r build/osx ]; then
-	    cp -a build/osx/* $WORKDIR/bin
-	fi
-	touch $HOME/.profile
-	cat $HOME/.profile | grep '^# Jaro Mail' > /dev/null
-	if [ $? != 0 ]; then
-	    cat <<EOF >> $HOME/.profile
+	MAC) cp -a build/osx/* $WORKDIR/bin ;;
+	GNU)
+cat <<EOF > $WORKDIR/bin/dotlock
+#!/usr/bin/env sh
+PATH=$HOME/bin:/usr/local/bin:/bin:/usr/bin
+mutt_dotlock ${@}
+EOF
+;;
+esac
+
+touch $HOME/.profile
+cat $HOME/.profile | grep '^# Jaro Mail' > /dev/null
+if [ $? != 0 ]; then
+    cat <<EOF >> $HOME/.profile
 # Jaro Mail Installer addition on `date`
 export PATH=$WORKDIR/bin:\$PATH
 # Finished adapting your PATH for Jaro Mail environment
 EOF
-	fi
-	;;
-	*) ;;
-esac
-	
-notice "Installation completed" #, now edit your personal settings:"
-act "Configure your personal settings, accounts and filters in:"
+fi
+
+notice "Done! now configure your personal settings, accounts and filters in:"
 act "    $WORKDIR"
-act "Check the commandline help for a list of commands: jaro -h"
+act "To read the commandline help, with a list of commands: jaro -h"
+act "Make sure jaro is in your PATH! it was just added to your ~/.profile"
+act "    $WORKDIR/bin"
+
 
 # OS specific post install rules
 case $OS in
@@ -296,9 +250,7 @@ case $OS in
 	    cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
 	}
 	;;
-	MAC)
-	;;
-#	open /Applications/TextEdit.app $WORKDIR/Configuration.txt
+	MAC) open $WORKDIR ;;
 	*)
 	;;
 esac
