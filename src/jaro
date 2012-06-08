@@ -113,6 +113,7 @@ ${=mkdir} $WORKDIR
 # make sure the directory is private
 chmod 700 $WORKDIR
 
+PATH=$WORKDIR/bin:/bin:/usr/bin:/usr/local/bin:/opt/local/bin
 
 # temporary directory
 TMPDIR=$WORKDIR/tmp
@@ -179,11 +180,13 @@ cleanexit() {
 TRAPINT() {
 	error "Caught signal, aborting operations."
 	{ test $CLEANEXIT = 1 } && { cleanexit }
-	if [ "$DEBUG" = "1" ]; then
-	    return 1
-	else
-	    exit 1
-	fi
+	error "Forced removal of locks"
+	{ test $TMPDIR } && {
+	    for l in `find $TMPDIR/`; do
+		${=rm} $l; done
+	}
+	if [ "$DEBUG" = "1" ]; then return 1
+	else exit 1; fi
 }
 
 lock() {
@@ -206,39 +209,41 @@ newlock() { # create locked
     touch $1
     chmod 600 $1
     lock $1
-    echo "$$" > ${1}.pid
 }
 unlock() {
     func "unlock: $1"
     lockpid="`cat ${1}.pid`"
-    { test "$$" != "$lockpid" } && {
-	error "Unlock attempt by different PID: $1"
-	error "Created by $lockpid now $$ is trying to unlock"
-	return 1
+    { test -r ${1}.pid } && {
+	{ test "$$" != "$lockpid" } && {
+	    error "Unlock attempt by different PID: $1"
+	    error "Created by $lockpid now $$ is trying to unlock"
+	    return 1 }
     }
+
     $WORKDIR/bin/dotlock -u ${=@}
-    if [ $? != 0 ]; then
-	error "Unable to unlock: $1"
-	return 1
-    fi
-    rm -f ${1}.pid
+    { test $? != 0 } && { error "Unable to unlock: $1"; return 1 }
+    { test -r ${1}.pid } && { rm -f ${1}.pid }
     return 0
 }
 unlink() { # delete a file that we are locking
     func "unlink: $1"
     # use with care! this can permanently erase currently locked files
     # only the locking PID should use it on its own locks
-    lockpid="`cat ${1}.pid`"
-    { test "$$" != "$lockpid" } && {
-	error "Unlock attempt by different PID: $1"
-	error "Created by $lockpid now $$ is trying to unlock"
-	return 1
+
+    { test -r ${1}.pid } && {
+	lockpid="`cat ${1}.pid`"
+	{ test "$$" != "$lockpid" } && {
+	    error "Unlock attempt by different PID: $1"
+	    error "Created by $lockpid now $$ is trying to unlock"
+	    return 1 }
     }
+
     (
 	${=rm} ${1}
 	touch ${1}
 	$WORKDIR/bin/dotlock -d -f ${1}
-	rm -f ${1}.pid
+	{ test $? != 0 } && { error "Unable to unlink: $1"; return 1 }
+	{ test -r ${1}.pid } && { rm -f ${1}.pid }
     ) &!
     return 0
 }
@@ -465,18 +470,16 @@ maildirmake() {
 read_account() {
     typeset -al all
 
-    if [ -z $1 ]; then
-	type=`echo $account | cut -d. -f1`
-	account=`echo $account | cut -d. -f2`
-    else type=$1 # smtp, imap, pop ... file prefixes"
-    fi
-
     # find the file
-    for a in `find $WORKDIR/Accounts -name "$type.$account*"`; do all+=($a); done
+    func "read_account looking for \"$account\""
+    for a in `find $WORKDIR/Accounts -name "$account*"`; do
+	func "found account: $a"
+	all+=($a)
+    done
     if [ ${#all} = 0 ]; then
 	error "No $type account found: $account"
 	error "Refine your argument using '-a type.account'"
-	error "For instance: jaro -a imap.default"
+	error "For instance adding to the commandline: -a imap.default"
 	error "Available accounts (excluding symbolic links):"
 	for a in `find $WORKDIR/Accounts -type f | grep -v README`; do
 	    act -n "`basename $a` :: "
@@ -569,7 +572,7 @@ autostart() {
 	return $?
     }
 
-    # argument passed: determine if an email or a folder
+    # argument passed: determine if an email
     echo "${1}" \
 	| tr 'A-Z' 'a-z' \
 	| grep '^[a-zA-Z0-9._%+-]*@[a-zA-Z0-9]*[\.[a-zA-Z0-9]*]*[a-zA-Z0-9]$' \
@@ -580,7 +583,13 @@ autostart() {
 	mutt -F $MUTTDIR/rc "${1}"
 	return 0
     }
+    # or a path to folder 
+    { test -r ${1} } && {
+	mutt -F $MUTTDIR/rc -f ${1}
+	return 0
+    }
 
+    # or the name of a folder in Jaro Mail
     { test -r $MAILDIRS/${1} } && {
 	notice "Opening folder ${1}"
 	mutt -F $MUTTDIR/rc -f "$MAILDIRS/${1}"
@@ -697,11 +706,10 @@ fetchall() {
     notice "Fetching all accounts in $MAILDIRS"
     res=0
     for i in `find $WORKDIR/Accounts -type f | grep -v README`; do
-	a=`basename $i`
-	type=`echo $a | cut -d. -f1`
-	account=`echo $a | cut -d. -f2`
-	func "$account type $type: $a"
-	fetch $type
+	account=`basename $i`
+	type=`echo $account | cut -d. -f1`
+	func "fetchall: $account type $type"
+	fetch
 	if [ $? != 0 ]; then res=1; fi
 	# returns an error if just one of the accounts did
     done
@@ -1297,7 +1305,7 @@ EOF
 # however the default is nano if nothing else is choosen.
 editor() {
     { test ${EDITOR} } && {
-	${EDITOR} ${PARAM[1]}
+	${=EDITOR} ${PARAM[1]}
 	return $? }
     case $OS in
 	MAC) open -t ${PARAM[1]} ;;
@@ -1580,7 +1588,7 @@ main()
     if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
  # unknown command, pass it to autostart
 	func "unknown command, autostart: $@"
-	autostart ${@}
+	autostart ${=@}
 	exitcode=$?
 	{ test $exitcode != 0 } && {
 		error "command \"$subcommand\" not recognized"

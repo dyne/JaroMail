@@ -214,20 +214,20 @@ cp -a src/mutt/* $MUTTDIR
 
 cp src/fetchaddr $WORKDIR/bin/
 
-
-# generate initial configuration
-MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update -q
-
 case $OS in
 	MAC) cp -a build/osx/* $WORKDIR/bin ;;
 	GNU)
+rm -f $WORKDIR/bin/dotlock
 cat <<EOF > $WORKDIR/bin/dotlock
-#!/usr/bin/env sh
-PATH=$HOME/bin:/usr/local/bin:/bin:/usr/bin
-mutt_dotlock ${@}
+#!/usr/bin/env zsh
+mutt_dotlock \${=@}
 EOF
+chmod a+x $WORKDIR/bin/dotlock
 ;;
 esac
+
+# generate initial configuration
+MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update -q
 
 touch $HOME/.profile
 cat $HOME/.profile | grep '^# Jaro Mail' > /dev/null
