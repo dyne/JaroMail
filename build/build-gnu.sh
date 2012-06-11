@@ -29,7 +29,7 @@ case $distro in
 	echo
 	if [ -r /usr/bin/gnome-keyring ]; then
 	    echo "gnome-keyring" \
-	    sudo apt-get install libglib2.0-dev
+	    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
 
 	    cd src/gnome-keyring
 #	[ -x jaro-gnome-keyring ] || \
