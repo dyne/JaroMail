@@ -28,14 +28,14 @@ case $distro in
 	cd - > /dev/null
 	echo
 	if [ -r /usr/bin/gnome-keyring ]; then
-	    echo "gnome-keyring" \
+	    echo "Compiling gnome-keyring, need to install -dev packages"
 	    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
-
 	    cd src/gnome-keyring
 #	[ -x jaro-gnome-keyring ] || \
-	    gcc `pkg-config --cflags --libs glib-2.0 gnome-keyring-1` \
-		-O2 -o jaro-gnome-keyring jaro-gnome-keyring.c
-	    cd - > /dev/null
+	    gcc jaro-gnome-keyring.c \
+		`pkg-config --cflags --libs glib-2.0 gnome-keyring-1` \
+		-O2 -o jaro-gnome-keyring
+ 	    cd - > /dev/null
 	    echo "Done compiling."
 	    echo "Now run ./install.sh and Jaro Mail will be ready in ~/Mail"
 	    echo "or \"./install.sh path\" to install it somewhere else."
