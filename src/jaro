@@ -1188,7 +1188,7 @@ CREATE TABLE blacklist
   hits    int
 );
 EOF
-    { $? != 0 } && {
+    { test $? != 0 } && {
 	error "Error creating addressbook database."
 	return 1 }
     return 0
