@@ -10,6 +10,7 @@ which apt-get && distro=debian
 
 case $distro in
     debian)
+	mkdir -p build/gnu
 	echo "Checking software to install..."
 	which zsh || sudo apt-get install zsh
 	which mutt || sudo apt-get install mutt
@@ -26,7 +27,14 @@ case $distro in
 	    gcc -Os -c -static fetchaddr.c helpers.c rfc2047.c rfc822.c; \
 	    gcc -Os -static -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
 	cd - > /dev/null
+	cp src/fetchaddr build/gnu/
 	echo
+	echo "Compiling the search engine..."
+	cd src/mairix
+	./configure
+	make > /dev/null
+	cd - > /dev/null
+	cp src/mairix/mairix build/gnu/
 	if [ -r /usr/bin/gnome-keyring ]; then
 	    echo "Compiling gnome-keyring, need to install -dev packages"
 	    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
@@ -36,10 +44,12 @@ case $distro in
 		`pkg-config --cflags --libs glib-2.0 gnome-keyring-1` \
 		-O2 -o jaro-gnome-keyring
  	    cd - > /dev/null
-	    echo "Done compiling."
-	    echo "Now run ./install.sh and Jaro Mail will be ready in ~/Mail"
-	    echo "or \"./install.sh path\" to install it somewhere else."
+	    cp src/gnome-keyring/jaro-gnome-keyring build/gnu/
 	fi
+	
+	echo "Done compiling."
+	echo "Now run ./install.sh and Jaro Mail will be ready in ~/Mail"
+	echo "or \"./install.sh path\" to install it somewhere else."
 	;;
 
     *)

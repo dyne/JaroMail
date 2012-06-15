@@ -22,7 +22,7 @@
 #########################################################################
 # Edit the following variables as required
 CC=gcc
-CFLAGS=-O2 -m64  -DHAS_STDINT_H -DHAS_INTTYPES_H -DUSE_GZIP_MBOX -DUSE_BZIP_MBOX
+CFLAGS=-O2 -Wall  -DHAS_STDINT_H -DHAS_INTTYPES_H -DUSE_GZIP_MBOX -DUSE_BZIP_MBOX
 CPPFLAGS=
 LDFLAGS=
 LIBS=-lz -lbz2

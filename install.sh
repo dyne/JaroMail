@@ -216,7 +216,7 @@ cp src/fetchaddr $WORKDIR/bin/
 
 case $OS in
 	MAC) cp -a build/osx/* $WORKDIR/bin ;;
-	GNU)
+	GNU) cp -a build/gnu/* $WORKDIR/bin
 rm -f $WORKDIR/bin/dotlock
 cat <<EOF > $WORKDIR/bin/dotlock
 #!/usr/bin/env zsh
