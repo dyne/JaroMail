@@ -583,7 +583,7 @@ autostart() {
 	mutt -F $MUTTDIR/rc "${1}"
 	return 0
     }
-    # or a path to folder 
+    # or a path to folder
     { test -r ${1} } && {
 	mutt -F $MUTTDIR/rc -f ${1}
 	return 0
@@ -997,12 +997,12 @@ source $MUTTDIR/mboxes
 
 # specific configuration files
 source $MUTTDIR/crypto
-source $MUTTDIR/colors
 source $MUTTDIR/general
 source $MUTTDIR/formats
 source $MUTTDIR/keybindings
 source $MUTTDIR/identity
 source $MUTTDIR/password
+source $MUTTDIR/colors
 source $WORKDIR/Mutt.txt
 ## end of Jaro Mail generated muttrc
 ####################################
@@ -1319,7 +1319,48 @@ editor() {
     return $?
 }
 
+#######################
+## Search into maildirs
+# using mairix
+search() {
+    { which mairix > /dev/null } || { return 1 }
+    id=$RANDOM
+    rc=$WORKDIR/tmp/search.conf.$id
 
+    # make index if no params given
+    ml=""; c=0
+    for i in `ls $MAILDIRS`; do
+	# is it a maildir?
+	{ test -r $MAILDIRS/${i}/cur } \
+	    && { test -r $MAILDIRS/${i}/new } \
+	    && { test -r $MAILDIRS/${i}/tmp } \
+	    && { c=`expr $c + 1`; ml="$ml:$i" }
+    done
+    func "searching maildirs: $ml"
+    cat <<EOF > $rc
+base=$MAILDIRS
+database=$WORKDIR/search.db
+maildir=${ml}
+mfolder=$WORKDIR/tmp/search.result.$id
+mformat=maildir
+EOF
+    # just index
+    { test ${#PARAM} = 0 } && {
+	act "Indexing $c maildirs for search"
+	act "please be patient..."
+	mairix -F -f $rc
+	rm -f $rc
+	exitcode=$?
+	{ test $exitcode = 0 } && { notice "Done." } || { error "Error, indexing aborted." }
+	return $exitcode
+    }
+    act "Searching maildirs for: $PARAM"
+    act -n ""
+    mairix -F -f $rc ${=PARAM} 2> /dev/null
+    { test $? = 0 } && { jaro -q $WORKDIR/tmp/search.result.$id }
+    rm -rf $WORKDIR/tmp/search.result.$id
+    rm -f $rc
+}
 ##############
 ## Open a File
 open_file() {
@@ -1563,6 +1604,7 @@ main()
     subcommands_opts[update]=""
     subcommands_opts[stats]=""
 
+    subcommands_opts[search]=""
     subcommands_opts[addr]=""
     subcommands_opts[query]=""
     subcommands_opts[learn]=""
@@ -1672,6 +1714,7 @@ main()
 
 	update)  update ;;
 
+	search)  CLEANEXIT=0; search ${PARAM} ;;
 	stats)   CLEANEXIT=0; stats ;;
 	addr)    CLEANEXIT=0; address ${PARAM} ;;
 	query)   CLEANEXIT=0; query ${PARAM} ;;

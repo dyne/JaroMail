@@ -102,7 +102,7 @@ lipo mairix.32 mairix.64 -create -output mairix 2>&1 > /dev/null
 cd -
 
 cp src/fetchaddr build/osx/
-
+cp src/mairix/mairix build/osx/
 copydeps bin/mutt
 copydeps bin/mutt_dotlock
 copydeps bin/msmtp

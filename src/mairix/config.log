@@ -1,0 +1,14 @@
+Test program is
+#include <zlib.h>
+int main () {
+  const char *foo;
+  foo = zlibVersion();
+  return 0;
+}
+Test program is
+#include <bzlib.h>
+int main () {
+  const char *foo;
+  foo = BZ2_bzlibVersion();
+  return 0;
+}

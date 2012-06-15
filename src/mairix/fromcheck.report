@@ -1,0 +1,3222 @@
+NFA state 0 = in
+  [(epsilon)] -> before_date
+   5:[+] -> before_date
+   6:[\055] -> before_date
+  [(epsilon)] -> angled_email#2.in
+  [(epsilon)] -> email#1.in
+   0:[\t ] -> in
+  Epsilon closure :
+    (self)
+    email#1.in
+    angled_email#2.in
+    before_date
+    date#3.in
+    date#4.in
+
+NFA state 1 = email#1.in
+   3:[!#-'*/=?^`{-~] -> email#1.in
+   16:[_] -> email#1.in
+   7:[.] -> email#1.in
+   5:[+] -> email#1.in
+   6:[\055] -> email#1.in
+   8:[0-9] -> email#1.in
+   13:[A-Z] -> email#1.in
+   17:[a-z] -> email#1.in
+   3:[!#-'*/=?^`{-~] -> email#1.before_at
+   16:[_] -> email#1.before_at
+   7:[.] -> email#1.before_at
+   5:[+] -> email#1.before_at
+   6:[\055] -> email#1.before_at
+   8:[0-9] -> email#1.before_at
+   13:[A-Z] -> email#1.before_at
+   17:[a-z] -> email#1.before_at
+   4:["] -> email#1.quoted_before_at
+   12:[@] -> email#1.domain_route
+  Epsilon closure :
+    (self)
+
+NFA state 2 = email#1.domain_route
+   6:[\055] -> email#1.domain_route
+   16:[_] -> email#1.domain_route
+   7:[.] -> email#1.domain_route
+   8:[0-9] -> email#1.domain_route
+   13:[A-Z] -> email#1.domain_route
+   17:[a-z] -> email#1.domain_route
+   9:[:] -> email#1.in
+  Epsilon closure :
+    (self)
+
+NFA state 3 = email#1.quoted_before_at
+   9:[:] -> email#1.quoted_before_at
+   12:[@] -> email#1.quoted_before_at
+   11:[>] -> email#1.quoted_before_at
+   10:[<] -> email#1.quoted_before_at
+   0:[\t ] -> email#1.quoted_before_at
+   3:[!#-'*/=?^`{-~] -> email#1.quoted_before_at
+   16:[_] -> email#1.quoted_before_at
+   7:[.] -> email#1.quoted_before_at
+   5:[+] -> email#1.quoted_before_at
+   6:[\055] -> email#1.quoted_before_at
+   8:[0-9] -> email#1.quoted_before_at
+   13:[A-Z] -> email#1.quoted_before_at
+   17:[a-z] -> email#1.quoted_before_at
+   4:["] -> email#1.before_at
+  Epsilon closure :
+    (self)
+
+NFA state 4 = email#1.before_at
+   3:[!#-'*/=?^`{-~] -> email#1.before_at
+   16:[_] -> email#1.before_at
+   7:[.] -> email#1.before_at
+   5:[+] -> email#1.before_at
+   6:[\055] -> email#1.before_at
+   8:[0-9] -> email#1.before_at
+   13:[A-Z] -> email#1.before_at
+   17:[a-z] -> email#1.before_at
+   4:["] -> email#1.quoted_before_at
+  [(epsilon)] -> email#1.out
+   12:[@] -> email#1.start_of_domain
+  Epsilon closure :
+    (self)
+    email#1.out
+    before_date
+    date#3.in
+    date#4.in
+
+NFA state 5 = email#1.start_of_domain
+   14:[[] -> email#1.dotted_quad
+   6:[\055] -> email#1.after_at
+   16:[_] -> email#1.after_at
+   7:[.] -> email#1.after_at
+   8:[0-9] -> email#1.after_at
+   13:[A-Z] -> email#1.after_at
+   17:[a-z] -> email#1.after_at
+  Epsilon closure :
+    (self)
+
+NFA state 6 = email#1.dotted_quad
+   7:[.] -> email#1.dotted_quad
+   8:[0-9] -> email#1.dotted_quad
+   15:[]] -> email#1.out
+  Epsilon closure :
+    (self)
+
+NFA state 7 = email#1.after_at
+   6:[\055] -> email#1.after_at
+   16:[_] -> email#1.after_at
+   7:[.] -> email#1.after_at
+   8:[0-9] -> email#1.after_at
+   13:[A-Z] -> email#1.after_at
+   17:[a-z] -> email#1.after_at
+   6:[\055] -> email#1.out
+   16:[_] -> email#1.out
+   7:[.] -> email#1.out
+   8:[0-9] -> email#1.out
+   13:[A-Z] -> email#1.out
+   17:[a-z] -> email#1.out
+  Epsilon closure :
+    (self)
+
+NFA state 8 = email#1.out
+  [(epsilon)] -> before_date
+  Epsilon closure :
+    (self)
+    before_date
+    date#3.in
+    date#4.in
+
+NFA state 9 = angled_email#2.in
+   10:[<] -> angled_email#2.in_angles
+  Epsilon closure :
+    (self)
+
+NFA state 10 = angled_email#2.in_angles
+  [(epsilon)] -> angled_email#2.email#1.in
+  Epsilon closure :
+    (self)
+    angled_email#2.email#1.in
+
+NFA state 11 = angled_email#2.email#1.in
+   12:[@] -> angled_email#2.email#1.domain_route
+   4:["] -> angled_email#2.email#1.quoted_before_at
+   17:[a-z] -> angled_email#2.email#1.before_at
+   13:[A-Z] -> angled_email#2.email#1.before_at
+   8:[0-9] -> angled_email#2.email#1.before_at
+   5:[+] -> angled_email#2.email#1.before_at
+   6:[\055] -> angled_email#2.email#1.before_at
+   3:[!#-'*/=?^`{-~] -> angled_email#2.email#1.before_at
+   16:[_] -> angled_email#2.email#1.before_at
+   7:[.] -> angled_email#2.email#1.before_at
+   17:[a-z] -> angled_email#2.email#1.in
+   13:[A-Z] -> angled_email#2.email#1.in
+   8:[0-9] -> angled_email#2.email#1.in
+   5:[+] -> angled_email#2.email#1.in
+   6:[\055] -> angled_email#2.email#1.in
+   3:[!#-'*/=?^`{-~] -> angled_email#2.email#1.in
+   16:[_] -> angled_email#2.email#1.in
+   7:[.] -> angled_email#2.email#1.in
+  Epsilon closure :
+    (self)
+
+NFA state 12 = angled_email#2.email#1.domain_route
+   9:[:] -> angled_email#2.email#1.in
+   17:[a-z] -> angled_email#2.email#1.domain_route
+   13:[A-Z] -> angled_email#2.email#1.domain_route
+   8:[0-9] -> angled_email#2.email#1.domain_route
+   6:[\055] -> angled_email#2.email#1.domain_route
+   16:[_] -> angled_email#2.email#1.domain_route
+   7:[.] -> angled_email#2.email#1.domain_route
+  Epsilon closure :
+    (self)
+
+NFA state 13 = angled_email#2.email#1.quoted_before_at
+   4:["] -> angled_email#2.email#1.before_at
+   17:[a-z] -> angled_email#2.email#1.quoted_before_at
+   13:[A-Z] -> angled_email#2.email#1.quoted_before_at
+   8:[0-9] -> angled_email#2.email#1.quoted_before_at
+   5:[+] -> angled_email#2.email#1.quoted_before_at
+   6:[\055] -> angled_email#2.email#1.quoted_before_at
+   3:[!#-'*/=?^`{-~] -> angled_email#2.email#1.quoted_before_at
+   16:[_] -> angled_email#2.email#1.quoted_before_at
+   7:[.] -> angled_email#2.email#1.quoted_before_at
+   0:[\t ] -> angled_email#2.email#1.quoted_before_at
+   9:[:] -> angled_email#2.email#1.quoted_before_at
+   12:[@] -> angled_email#2.email#1.quoted_before_at
+   11:[>] -> angled_email#2.email#1.quoted_before_at
+   10:[<] -> angled_email#2.email#1.quoted_before_at
+  Epsilon closure :
+    (self)
+
+NFA state 14 = angled_email#2.email#1.before_at
+   12:[@] -> angled_email#2.email#1.start_of_domain
+  [(epsilon)] -> angled_email#2.email#1.out
+   4:["] -> angled_email#2.email#1.quoted_before_at
+   17:[a-z] -> angled_email#2.email#1.before_at
+   13:[A-Z] -> angled_email#2.email#1.before_at
+   8:[0-9] -> angled_email#2.email#1.before_at
+   5:[+] -> angled_email#2.email#1.before_at
+   6:[\055] -> angled_email#2.email#1.before_at
+   3:[!#-'*/=?^`{-~] -> angled_email#2.email#1.before_at
+   16:[_] -> angled_email#2.email#1.before_at
+   7:[.] -> angled_email#2.email#1.before_at
+  Epsilon closure :
+    (self)
+    angled_email#2.email#1.out
+    angled_email#2.before_gt
+
+NFA state 15 = angled_email#2.email#1.start_of_domain
+   17:[a-z] -> angled_email#2.email#1.after_at
+   13:[A-Z] -> angled_email#2.email#1.after_at
+   8:[0-9] -> angled_email#2.email#1.after_at
+   6:[\055] -> angled_email#2.email#1.after_at
+   16:[_] -> angled_email#2.email#1.after_at
+   7:[.] -> angled_email#2.email#1.after_at
+   14:[[] -> angled_email#2.email#1.dotted_quad
+  Epsilon closure :
+    (self)
+
+NFA state 16 = angled_email#2.email#1.dotted_quad
+   15:[]] -> angled_email#2.email#1.out
+   8:[0-9] -> angled_email#2.email#1.dotted_quad
+   7:[.] -> angled_email#2.email#1.dotted_quad
+  Epsilon closure :
+    (self)
+
+NFA state 17 = angled_email#2.email#1.after_at
+   17:[a-z] -> angled_email#2.email#1.out
+   13:[A-Z] -> angled_email#2.email#1.out
+   8:[0-9] -> angled_email#2.email#1.out
+   6:[\055] -> angled_email#2.email#1.out
+   16:[_] -> angled_email#2.email#1.out
+   7:[.] -> angled_email#2.email#1.out
+   17:[a-z] -> angled_email#2.email#1.after_at
+   13:[A-Z] -> angled_email#2.email#1.after_at
+   8:[0-9] -> angled_email#2.email#1.after_at
+   6:[\055] -> angled_email#2.email#1.after_at
+   16:[_] -> angled_email#2.email#1.after_at
+   7:[.] -> angled_email#2.email#1.after_at
+  Epsilon closure :
+    (self)
+
+NFA state 18 = angled_email#2.email#1.out
+  [(epsilon)] -> angled_email#2.before_gt
+  Epsilon closure :
+    (self)
+    angled_email#2.before_gt
+
+NFA state 19 = angled_email#2.before_gt
+   11:[>] -> angled_email#2.out
+  Epsilon closure :
+    (self)
+
+NFA state 20 = angled_email#2.out
+  [(epsilon)] -> before_date
+  Epsilon closure :
+    (self)
+    before_date
+    date#3.in
+    date#4.in
+
+NFA state 21 = before_date
+  [(epsilon)] -> date#4.in
+  [(epsilon)] -> date#3.in
+  Epsilon closure :
+    (self)
+    date#3.in
+    date#4.in
+
+NFA state 22 = #1
+   1:[\n] -> #2
+  Epsilon closure :
+    (self)
+
+NFA state 23 = date#3.in
+   0:[\t ] -> date#3.in
+   0:[\t ] -> date#3.before_weekday
+  Epsilon closure :
+    (self)
+
+NFA state 24 = date#3.before_weekday
+   13:[A-Z] -> date#3.#1
+  Epsilon closure :
+    (self)
+
+NFA state 25 = date#3.#1
+   17:[a-z] -> date#3.#2
+  Epsilon closure :
+    (self)
+
+NFA state 26 = date#3.#2
+   17:[a-z] -> date#3.#3
+  Epsilon closure :
+    (self)
+
+NFA state 27 = date#3.#3
+   0:[\t ] -> date#3.after_weekday
+  Epsilon closure :
+    (self)
+
+NFA state 28 = date#3.after_weekday
+   0:[\t ] -> date#3.after_weekday
+   13:[A-Z] -> date#3.#4
+  Epsilon closure :
+    (self)
+
+NFA state 29 = date#3.#4
+   17:[a-z] -> date#3.#5
+  Epsilon closure :
+    (self)
+
+NFA state 30 = date#3.#5
+   17:[a-z] -> date#3.#6
+  Epsilon closure :
+    (self)
+
+NFA state 31 = date#3.#6
+   0:[\t ] -> date#3.after_month
+  Epsilon closure :
+    (self)
+
+NFA state 32 = date#3.after_month
+   0:[\t ] -> date#3.after_month
+   8:[0-9] -> date#3.#7
+   8:[0-9] -> date#3.#8
+  Epsilon closure :
+    (self)
+
+NFA state 33 = date#3.#7
+   0:[\t ] -> date#3.after_day
+  Epsilon closure :
+    (self)
+
+NFA state 34 = date#3.#8
+   8:[0-9] -> date#3.#9
+  Epsilon closure :
+    (self)
+
+NFA state 35 = date#3.#9
+   0:[\t ] -> date#3.after_day
+  Epsilon closure :
+    (self)
+
+NFA state 36 = date#3.after_day
+   0:[\t ] -> date#3.after_day
+   8:[0-9] -> date#3.#10
+   8:[0-9] -> date#3.#18
+  Epsilon closure :
+    (self)
+
+NFA state 37 = date#3.#10
+   8:[0-9] -> date#3.#11
+  Epsilon closure :
+    (self)
+
+NFA state 38 = date#3.#11
+   9:[:] -> date#3.#12
+  Epsilon closure :
+    (self)
+
+NFA state 39 = date#3.#12
+   8:[0-9] -> date#3.#13
+  Epsilon closure :
+    (self)
+
+NFA state 40 = date#3.#13
+   8:[0-9] -> date#3.#14
+  Epsilon closure :
+    (self)
+
+NFA state 41 = date#3.#14
+   9:[:] -> date#3.#15
+  Epsilon closure :
+    (self)
+
+NFA state 42 = date#3.#15
+   8:[0-9] -> date#3.#16
+  Epsilon closure :
+    (self)
+
+NFA state 43 = date#3.#16
+   8:[0-9] -> date#3.#17
+  Epsilon closure :
+    (self)
+
+NFA state 44 = date#3.#17
+   0:[\t ] -> date#3.after_time
+  Epsilon closure :
+    (self)
+
+NFA state 45 = date#3.#18
+   8:[0-9] -> date#3.#19
+  Epsilon closure :
+    (self)
+
+NFA state 46 = date#3.#19
+   9:[:] -> date#3.#20
+  Epsilon closure :
+    (self)
+
+NFA state 47 = date#3.#20
+   8:[0-9] -> date#3.#21
+  Epsilon closure :
+    (self)
+
+NFA state 48 = date#3.#21
+   8:[0-9] -> date#3.#22
+  Epsilon closure :
+    (self)
+
+NFA state 49 = date#3.#22
+   0:[\t ] -> date#3.after_time
+  Epsilon closure :
+    (self)
+
+NFA state 50 = date#3.after_time
+   0:[\t ] -> date#3.after_time
+  [(epsilon)] -> date#3.after_timezone
+  [(epsilon)] -> date#3.zone#1.in
+  [(epsilon)] -> date#3.zone#2.in
+   8:[0-9] -> date#3.#25
+  Epsilon closure :
+    (self)
+    date#3.zone#1.in
+    date#3.zone#2.in
+    date#3.after_timezone
+
+NFA state 51 = date#3.#23
+   0:[\t ] -> date#3.after_timezone
+  Epsilon closure :
+    (self)
+
+NFA state 52 = date#3.zone#1.in
+   5:[+] -> date#3.zone#1.zone2
+   6:[\055] -> date#3.zone#1.zone2
+   13:[A-Z] -> date#3.zone#1.out
+   13:[A-Z] -> date#3.zone#1.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 53 = date#3.zone#1.zone2
+   8:[0-9] -> date#3.zone#1.out
+   8:[0-9] -> date#3.zone#1.zone2
+   13:[A-Z] -> date#3.zone#1.out
+   17:[a-z] -> date#3.zone#1.out
+   13:[A-Z] -> date#3.zone#1.zone2
+   17:[a-z] -> date#3.zone#1.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 54 = date#3.zone#1.out
+  [(epsilon)] -> date#3.#23
+  Epsilon closure :
+    (self)
+    date#3.#23
+
+NFA state 55 = date#3.#24
+   0:[\t ] -> date#3.after_timezone_1
+  Epsilon closure :
+    (self)
+
+NFA state 56 = date#3.zone#2.in
+   5:[+] -> date#3.zone#2.zone2
+   6:[\055] -> date#3.zone#2.zone2
+   13:[A-Z] -> date#3.zone#2.out
+   13:[A-Z] -> date#3.zone#2.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 57 = date#3.zone#2.zone2
+   8:[0-9] -> date#3.zone#2.out
+   8:[0-9] -> date#3.zone#2.zone2
+   13:[A-Z] -> date#3.zone#2.out
+   17:[a-z] -> date#3.zone#2.out
+   13:[A-Z] -> date#3.zone#2.zone2
+   17:[a-z] -> date#3.zone#2.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 58 = date#3.zone#2.out
+  [(epsilon)] -> date#3.#24
+  Epsilon closure :
+    (self)
+    date#3.#24
+
+NFA state 59 = date#3.#25
+   8:[0-9] -> date#3.#26
+  Epsilon closure :
+    (self)
+
+NFA state 60 = date#3.#26
+   8:[0-9] -> date#3.#27
+  Epsilon closure :
+    (self)
+
+NFA state 61 = date#3.#27
+   8:[0-9] -> date#3.after_year_before_zone
+  Epsilon closure :
+    (self)
+
+NFA state 62 = date#3.after_year_before_zone
+   0:[\t ] -> date#3.after_year_before_zone
+  [(epsilon)] -> date#3.zone#3.in
+  [(epsilon)] -> date#3.zone#4.in
+  Epsilon closure :
+    (self)
+    date#3.zone#3.in
+    date#3.zone#4.in
+
+NFA state 63 = date#3.zone#3.in
+   5:[+] -> date#3.zone#3.zone2
+   6:[\055] -> date#3.zone#3.zone2
+   13:[A-Z] -> date#3.zone#3.out
+   13:[A-Z] -> date#3.zone#3.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 64 = date#3.zone#3.zone2
+   8:[0-9] -> date#3.zone#3.out
+   8:[0-9] -> date#3.zone#3.zone2
+   13:[A-Z] -> date#3.zone#3.out
+   17:[a-z] -> date#3.zone#3.out
+   13:[A-Z] -> date#3.zone#3.zone2
+   17:[a-z] -> date#3.zone#3.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 65 = date#3.zone#3.out
+  [(epsilon)] -> date#3.after_timezone_after_year
+  Epsilon closure :
+    (self)
+    #1
+    date#3.after_timezone_after_year
+    date#3.out
+
+NFA state 66 = date#3.#28
+   0:[\t ] -> date#3.after_timezone_after_year_1
+  Epsilon closure :
+    (self)
+
+NFA state 67 = date#3.zone#4.in
+   5:[+] -> date#3.zone#4.zone2
+   6:[\055] -> date#3.zone#4.zone2
+   13:[A-Z] -> date#3.zone#4.out
+   13:[A-Z] -> date#3.zone#4.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 68 = date#3.zone#4.zone2
+   8:[0-9] -> date#3.zone#4.out
+   8:[0-9] -> date#3.zone#4.zone2
+   13:[A-Z] -> date#3.zone#4.out
+   17:[a-z] -> date#3.zone#4.out
+   13:[A-Z] -> date#3.zone#4.zone2
+   17:[a-z] -> date#3.zone#4.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 69 = date#3.zone#4.out
+  [(epsilon)] -> date#3.#28
+  Epsilon closure :
+    (self)
+    date#3.#28
+
+NFA state 70 = date#3.after_timezone_after_year_1
+   0:[\t ] -> date#3.after_timezone_after_year_1
+  [(epsilon)] -> date#3.zone#5.in
+  Epsilon closure :
+    (self)
+    date#3.zone#5.in
+
+NFA state 71 = date#3.zone#5.in
+   5:[+] -> date#3.zone#5.zone2
+   6:[\055] -> date#3.zone#5.zone2
+   13:[A-Z] -> date#3.zone#5.out
+   13:[A-Z] -> date#3.zone#5.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 72 = date#3.zone#5.zone2
+   8:[0-9] -> date#3.zone#5.out
+   8:[0-9] -> date#3.zone#5.zone2
+   13:[A-Z] -> date#3.zone#5.out
+   17:[a-z] -> date#3.zone#5.out
+   13:[A-Z] -> date#3.zone#5.zone2
+   17:[a-z] -> date#3.zone#5.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 73 = date#3.zone#5.out
+  [(epsilon)] -> date#3.after_timezone_after_year
+  Epsilon closure :
+    (self)
+    #1
+    date#3.after_timezone_after_year
+    date#3.out
+
+NFA state 74 = date#3.after_timezone_after_year
+   0:[\t ] -> date#3.after_timezone_after_year
+  [(epsilon)] -> date#3.out
+  Epsilon closure :
+    (self)
+    #1
+    date#3.out
+
+NFA state 75 = date#3.after_timezone_1
+   0:[\t ] -> date#3.after_timezone_1
+  [(epsilon)] -> date#3.zone#6.in
+  Epsilon closure :
+    (self)
+    date#3.zone#6.in
+
+NFA state 76 = date#3.#29
+   0:[\t ] -> date#3.after_timezone
+  Epsilon closure :
+    (self)
+
+NFA state 77 = date#3.zone#6.in
+   5:[+] -> date#3.zone#6.zone2
+   6:[\055] -> date#3.zone#6.zone2
+   13:[A-Z] -> date#3.zone#6.out
+   13:[A-Z] -> date#3.zone#6.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 78 = date#3.zone#6.zone2
+   8:[0-9] -> date#3.zone#6.out
+   8:[0-9] -> date#3.zone#6.zone2
+   13:[A-Z] -> date#3.zone#6.out
+   17:[a-z] -> date#3.zone#6.out
+   13:[A-Z] -> date#3.zone#6.zone2
+   17:[a-z] -> date#3.zone#6.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 79 = date#3.zone#6.out
+  [(epsilon)] -> date#3.#29
+  Epsilon closure :
+    (self)
+    date#3.#29
+
+NFA state 80 = date#3.after_timezone
+   0:[\t ] -> date#3.after_timezone
+   8:[0-9] -> date#3.#30
+  Epsilon closure :
+    (self)
+
+NFA state 81 = date#3.#30
+   8:[0-9] -> date#3.#31
+  Epsilon closure :
+    (self)
+
+NFA state 82 = date#3.#31
+   8:[0-9] -> date#3.#32
+  Epsilon closure :
+    (self)
+
+NFA state 83 = date#3.#32
+   8:[0-9] -> date#3.after_year
+  Epsilon closure :
+    (self)
+
+NFA state 84 = date#3.after_year
+   0:[\t ] -> date#3.after_year
+  [(epsilon)] -> date#3.out
+  Epsilon closure :
+    (self)
+    #1
+    date#3.out
+
+NFA state 85 = date#3.out
+  [(epsilon)] -> #1
+  Epsilon closure :
+    (self)
+    #1
+
+NFA state 86 = #2
+  Tags : FROMCHECK_PASS
+  Epsilon closure :
+    (self)
+
+NFA state 87 = #3
+   2:[\r] -> #4
+  Epsilon closure :
+    (self)
+
+NFA state 88 = date#4.in
+   0:[\t ] -> date#4.in
+   0:[\t ] -> date#4.before_weekday
+  Epsilon closure :
+    (self)
+
+NFA state 89 = date#4.before_weekday
+   13:[A-Z] -> date#4.#1
+  Epsilon closure :
+    (self)
+
+NFA state 90 = date#4.#1
+   17:[a-z] -> date#4.#2
+  Epsilon closure :
+    (self)
+
+NFA state 91 = date#4.#2
+   17:[a-z] -> date#4.#3
+  Epsilon closure :
+    (self)
+
+NFA state 92 = date#4.#3
+   0:[\t ] -> date#4.after_weekday
+  Epsilon closure :
+    (self)
+
+NFA state 93 = date#4.after_weekday
+   0:[\t ] -> date#4.after_weekday
+   13:[A-Z] -> date#4.#4
+  Epsilon closure :
+    (self)
+
+NFA state 94 = date#4.#4
+   17:[a-z] -> date#4.#5
+  Epsilon closure :
+    (self)
+
+NFA state 95 = date#4.#5
+   17:[a-z] -> date#4.#6
+  Epsilon closure :
+    (self)
+
+NFA state 96 = date#4.#6
+   0:[\t ] -> date#4.after_month
+  Epsilon closure :
+    (self)
+
+NFA state 97 = date#4.after_month
+   0:[\t ] -> date#4.after_month
+   8:[0-9] -> date#4.#7
+   8:[0-9] -> date#4.#8
+  Epsilon closure :
+    (self)
+
+NFA state 98 = date#4.#7
+   0:[\t ] -> date#4.after_day
+  Epsilon closure :
+    (self)
+
+NFA state 99 = date#4.#8
+   8:[0-9] -> date#4.#9
+  Epsilon closure :
+    (self)
+
+NFA state 100 = date#4.#9
+   0:[\t ] -> date#4.after_day
+  Epsilon closure :
+    (self)
+
+NFA state 101 = date#4.after_day
+   0:[\t ] -> date#4.after_day
+   8:[0-9] -> date#4.#10
+   8:[0-9] -> date#4.#18
+  Epsilon closure :
+    (self)
+
+NFA state 102 = date#4.#10
+   8:[0-9] -> date#4.#11
+  Epsilon closure :
+    (self)
+
+NFA state 103 = date#4.#11
+   9:[:] -> date#4.#12
+  Epsilon closure :
+    (self)
+
+NFA state 104 = date#4.#12
+   8:[0-9] -> date#4.#13
+  Epsilon closure :
+    (self)
+
+NFA state 105 = date#4.#13
+   8:[0-9] -> date#4.#14
+  Epsilon closure :
+    (self)
+
+NFA state 106 = date#4.#14
+   9:[:] -> date#4.#15
+  Epsilon closure :
+    (self)
+
+NFA state 107 = date#4.#15
+   8:[0-9] -> date#4.#16
+  Epsilon closure :
+    (self)
+
+NFA state 108 = date#4.#16
+   8:[0-9] -> date#4.#17
+  Epsilon closure :
+    (self)
+
+NFA state 109 = date#4.#17
+   0:[\t ] -> date#4.after_time
+  Epsilon closure :
+    (self)
+
+NFA state 110 = date#4.#18
+   8:[0-9] -> date#4.#19
+  Epsilon closure :
+    (self)
+
+NFA state 111 = date#4.#19
+   9:[:] -> date#4.#20
+  Epsilon closure :
+    (self)
+
+NFA state 112 = date#4.#20
+   8:[0-9] -> date#4.#21
+  Epsilon closure :
+    (self)
+
+NFA state 113 = date#4.#21
+   8:[0-9] -> date#4.#22
+  Epsilon closure :
+    (self)
+
+NFA state 114 = date#4.#22
+   0:[\t ] -> date#4.after_time
+  Epsilon closure :
+    (self)
+
+NFA state 115 = date#4.after_time
+   0:[\t ] -> date#4.after_time
+  [(epsilon)] -> date#4.after_timezone
+  [(epsilon)] -> date#4.zone#1.in
+  [(epsilon)] -> date#4.zone#2.in
+   8:[0-9] -> date#4.#25
+  Epsilon closure :
+    (self)
+    date#4.zone#1.in
+    date#4.zone#2.in
+    date#4.after_timezone
+
+NFA state 116 = date#4.#23
+   0:[\t ] -> date#4.after_timezone
+  Epsilon closure :
+    (self)
+
+NFA state 117 = date#4.zone#1.in
+   5:[+] -> date#4.zone#1.zone2
+   6:[\055] -> date#4.zone#1.zone2
+   13:[A-Z] -> date#4.zone#1.out
+   13:[A-Z] -> date#4.zone#1.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 118 = date#4.zone#1.zone2
+   8:[0-9] -> date#4.zone#1.out
+   8:[0-9] -> date#4.zone#1.zone2
+   13:[A-Z] -> date#4.zone#1.out
+   17:[a-z] -> date#4.zone#1.out
+   13:[A-Z] -> date#4.zone#1.zone2
+   17:[a-z] -> date#4.zone#1.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 119 = date#4.zone#1.out
+  [(epsilon)] -> date#4.#23
+  Epsilon closure :
+    (self)
+    date#4.#23
+
+NFA state 120 = date#4.#24
+   0:[\t ] -> date#4.after_timezone_1
+  Epsilon closure :
+    (self)
+
+NFA state 121 = date#4.zone#2.in
+   5:[+] -> date#4.zone#2.zone2
+   6:[\055] -> date#4.zone#2.zone2
+   13:[A-Z] -> date#4.zone#2.out
+   13:[A-Z] -> date#4.zone#2.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 122 = date#4.zone#2.zone2
+   8:[0-9] -> date#4.zone#2.out
+   8:[0-9] -> date#4.zone#2.zone2
+   13:[A-Z] -> date#4.zone#2.out
+   17:[a-z] -> date#4.zone#2.out
+   13:[A-Z] -> date#4.zone#2.zone2
+   17:[a-z] -> date#4.zone#2.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 123 = date#4.zone#2.out
+  [(epsilon)] -> date#4.#24
+  Epsilon closure :
+    (self)
+    date#4.#24
+
+NFA state 124 = date#4.#25
+   8:[0-9] -> date#4.#26
+  Epsilon closure :
+    (self)
+
+NFA state 125 = date#4.#26
+   8:[0-9] -> date#4.#27
+  Epsilon closure :
+    (self)
+
+NFA state 126 = date#4.#27
+   8:[0-9] -> date#4.after_year_before_zone
+  Epsilon closure :
+    (self)
+
+NFA state 127 = date#4.after_year_before_zone
+   0:[\t ] -> date#4.after_year_before_zone
+  [(epsilon)] -> date#4.zone#3.in
+  [(epsilon)] -> date#4.zone#4.in
+  Epsilon closure :
+    (self)
+    date#4.zone#3.in
+    date#4.zone#4.in
+
+NFA state 128 = date#4.zone#3.in
+   5:[+] -> date#4.zone#3.zone2
+   6:[\055] -> date#4.zone#3.zone2
+   13:[A-Z] -> date#4.zone#3.out
+   13:[A-Z] -> date#4.zone#3.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 129 = date#4.zone#3.zone2
+   8:[0-9] -> date#4.zone#3.out
+   8:[0-9] -> date#4.zone#3.zone2
+   13:[A-Z] -> date#4.zone#3.out
+   17:[a-z] -> date#4.zone#3.out
+   13:[A-Z] -> date#4.zone#3.zone2
+   17:[a-z] -> date#4.zone#3.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 130 = date#4.zone#3.out
+  [(epsilon)] -> date#4.after_timezone_after_year
+  Epsilon closure :
+    (self)
+    #3
+    date#4.after_timezone_after_year
+    date#4.out
+
+NFA state 131 = date#4.#28
+   0:[\t ] -> date#4.after_timezone_after_year_1
+  Epsilon closure :
+    (self)
+
+NFA state 132 = date#4.zone#4.in
+   5:[+] -> date#4.zone#4.zone2
+   6:[\055] -> date#4.zone#4.zone2
+   13:[A-Z] -> date#4.zone#4.out
+   13:[A-Z] -> date#4.zone#4.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 133 = date#4.zone#4.zone2
+   8:[0-9] -> date#4.zone#4.out
+   8:[0-9] -> date#4.zone#4.zone2
+   13:[A-Z] -> date#4.zone#4.out
+   17:[a-z] -> date#4.zone#4.out
+   13:[A-Z] -> date#4.zone#4.zone2
+   17:[a-z] -> date#4.zone#4.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 134 = date#4.zone#4.out
+  [(epsilon)] -> date#4.#28
+  Epsilon closure :
+    (self)
+    date#4.#28
+
+NFA state 135 = date#4.after_timezone_after_year_1
+   0:[\t ] -> date#4.after_timezone_after_year_1
+  [(epsilon)] -> date#4.zone#5.in
+  Epsilon closure :
+    (self)
+    date#4.zone#5.in
+
+NFA state 136 = date#4.zone#5.in
+   5:[+] -> date#4.zone#5.zone2
+   6:[\055] -> date#4.zone#5.zone2
+   13:[A-Z] -> date#4.zone#5.out
+   13:[A-Z] -> date#4.zone#5.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 137 = date#4.zone#5.zone2
+   8:[0-9] -> date#4.zone#5.out
+   8:[0-9] -> date#4.zone#5.zone2
+   13:[A-Z] -> date#4.zone#5.out
+   17:[a-z] -> date#4.zone#5.out
+   13:[A-Z] -> date#4.zone#5.zone2
+   17:[a-z] -> date#4.zone#5.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 138 = date#4.zone#5.out
+  [(epsilon)] -> date#4.after_timezone_after_year
+  Epsilon closure :
+    (self)
+    #3
+    date#4.after_timezone_after_year
+    date#4.out
+
+NFA state 139 = date#4.after_timezone_after_year
+   0:[\t ] -> date#4.after_timezone_after_year
+  [(epsilon)] -> date#4.out
+  Epsilon closure :
+    (self)
+    #3
+    date#4.out
+
+NFA state 140 = date#4.after_timezone_1
+   0:[\t ] -> date#4.after_timezone_1
+  [(epsilon)] -> date#4.zone#6.in
+  Epsilon closure :
+    (self)
+    date#4.zone#6.in
+
+NFA state 141 = date#4.#29
+   0:[\t ] -> date#4.after_timezone
+  Epsilon closure :
+    (self)
+
+NFA state 142 = date#4.zone#6.in
+   5:[+] -> date#4.zone#6.zone2
+   6:[\055] -> date#4.zone#6.zone2
+   13:[A-Z] -> date#4.zone#6.out
+   13:[A-Z] -> date#4.zone#6.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 143 = date#4.zone#6.zone2
+   8:[0-9] -> date#4.zone#6.out
+   8:[0-9] -> date#4.zone#6.zone2
+   13:[A-Z] -> date#4.zone#6.out
+   17:[a-z] -> date#4.zone#6.out
+   13:[A-Z] -> date#4.zone#6.zone2
+   17:[a-z] -> date#4.zone#6.zone2
+  Epsilon closure :
+    (self)
+
+NFA state 144 = date#4.zone#6.out
+  [(epsilon)] -> date#4.#29
+  Epsilon closure :
+    (self)
+    date#4.#29
+
+NFA state 145 = date#4.after_timezone
+   0:[\t ] -> date#4.after_timezone
+   8:[0-9] -> date#4.#30
+  Epsilon closure :
+    (self)
+
+NFA state 146 = date#4.#30
+   8:[0-9] -> date#4.#31
+  Epsilon closure :
+    (self)
+
+NFA state 147 = date#4.#31
+   8:[0-9] -> date#4.#32
+  Epsilon closure :
+    (self)
+
+NFA state 148 = date#4.#32
+   8:[0-9] -> date#4.after_year
+  Epsilon closure :
+    (self)
+
+NFA state 149 = date#4.after_year
+   0:[\t ] -> date#4.after_year
+  [(epsilon)] -> date#4.out
+  Epsilon closure :
+    (self)
+    #3
+    date#4.out
+
+NFA state 150 = date#4.out
+  [(epsilon)] -> #3
+  Epsilon closure :
+    (self)
+    #3
+
+NFA state 151 = #4
+   1:[\n] -> #5
+  Epsilon closure :
+    (self)
+
+NFA state 152 = #5
+  Tags : FROMCHECK_PASS
+  Epsilon closure :
+    (self)
+
+--------------------------------
+DFA structure before compression
+--------------------------------
+DFA state 0
+  NFA states :
+    in
+    email#1.in
+    angled_email#2.in
+    before_date
+    date#3.in
+    date#4.in
+
+  Forward route :
+   (START)->(HERE)
+  Transitions :
+    0:[\t ] -> 1
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    10:[<] -> 4
+    12:[@] -> 5
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 2
+
+DFA state 1
+  NFA states :
+    in
+    email#1.in
+    angled_email#2.in
+    before_date
+    date#3.in
+    date#3.before_weekday
+    date#4.in
+    date#4.before_weekday
+
+  Forward route : (from state 0)
+   (START)->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 1
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    10:[<] -> 4
+    12:[@] -> 5
+    13:[A-Z] -> 6
+    16:[_] -> 2
+    17:[a-z] -> 2
+
+DFA state 2
+  NFA states :
+    email#1.in
+    email#1.before_at
+    email#1.out
+    before_date
+    date#3.in
+    date#4.in
+
+  Forward route : (from state 0)
+   (START)->3:[!#-'*/=?^`{-~]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 8
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 2
+
+DFA state 3
+  NFA states :
+    email#1.quoted_before_at
+
+  Forward route : (from state 0)
+   (START)->4:["]->(HERE)
+  Transitions :
+    0:[\t ] -> 3
+    3:[!#-'*/=?^`{-~] -> 3
+    4:["] -> 9
+    5:[+] -> 3
+    6:[\055] -> 3
+    7:[.] -> 3
+    8:[0-9] -> 3
+    9:[:] -> 3
+    10:[<] -> 3
+    11:[>] -> 3
+    12:[@] -> 3
+    13:[A-Z] -> 3
+    16:[_] -> 3
+    17:[a-z] -> 3
+
+DFA state 4
+  NFA states :
+    angled_email#2.in_angles
+    angled_email#2.email#1.in
+
+  Forward route : (from state 0)
+   (START)->10:[<]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 10
+    4:["] -> 11
+    5:[+] -> 10
+    6:[\055] -> 10
+    7:[.] -> 10
+    8:[0-9] -> 10
+    12:[@] -> 12
+    13:[A-Z] -> 10
+    16:[_] -> 10
+    17:[a-z] -> 10
+
+DFA state 5
+  NFA states :
+    email#1.domain_route
+
+  Forward route : (from state 0)
+   (START)->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 5
+    7:[.] -> 5
+    8:[0-9] -> 5
+    9:[:] -> 13
+    13:[A-Z] -> 5
+    16:[_] -> 5
+    17:[a-z] -> 5
+
+DFA state 6
+  NFA states :
+    email#1.in
+    email#1.before_at
+    email#1.out
+    before_date
+    date#3.in
+    date#3.#1
+    date#4.in
+    date#4.#1
+
+  Forward route : (from state 1)
+   (START)->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 8
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 14
+
+DFA state 7
+  NFA states :
+    date#3.in
+    date#3.before_weekday
+    date#4.in
+    date#4.before_weekday
+
+  Forward route : (from state 2)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    13:[A-Z] -> 15
+
+DFA state 8
+  NFA states :
+    email#1.domain_route
+    email#1.start_of_domain
+
+  Forward route : (from state 2)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 16
+    7:[.] -> 16
+    8:[0-9] -> 16
+    9:[:] -> 13
+    13:[A-Z] -> 16
+    14:[[] -> 17
+    16:[_] -> 16
+    17:[a-z] -> 16
+
+DFA state 9
+  NFA states :
+    email#1.before_at
+    email#1.out
+    before_date
+    date#3.in
+    date#4.in
+
+  Forward route : (from state 3)
+   (START)->4:["]->4:["]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    3:[!#-'*/=?^`{-~] -> 9
+    4:["] -> 3
+    5:[+] -> 9
+    6:[\055] -> 9
+    7:[.] -> 9
+    8:[0-9] -> 9
+    12:[@] -> 18
+    13:[A-Z] -> 9
+    16:[_] -> 9
+    17:[a-z] -> 9
+
+DFA state 10
+  NFA states :
+    angled_email#2.email#1.in
+    angled_email#2.email#1.before_at
+    angled_email#2.email#1.out
+    angled_email#2.before_gt
+
+  Forward route : (from state 4)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 10
+    4:["] -> 11
+    5:[+] -> 10
+    6:[\055] -> 10
+    7:[.] -> 10
+    8:[0-9] -> 10
+    11:[>] -> 19
+    12:[@] -> 20
+    13:[A-Z] -> 10
+    16:[_] -> 10
+    17:[a-z] -> 10
+
+DFA state 11
+  NFA states :
+    angled_email#2.email#1.quoted_before_at
+
+  Forward route : (from state 4)
+   (START)->10:[<]->4:["]->(HERE)
+  Transitions :
+    0:[\t ] -> 11
+    3:[!#-'*/=?^`{-~] -> 11
+    4:["] -> 21
+    5:[+] -> 11
+    6:[\055] -> 11
+    7:[.] -> 11
+    8:[0-9] -> 11
+    9:[:] -> 11
+    10:[<] -> 11
+    11:[>] -> 11
+    12:[@] -> 11
+    13:[A-Z] -> 11
+    16:[_] -> 11
+    17:[a-z] -> 11
+
+DFA state 12
+  NFA states :
+    angled_email#2.email#1.domain_route
+
+  Forward route : (from state 4)
+   (START)->10:[<]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 12
+    7:[.] -> 12
+    8:[0-9] -> 12
+    9:[:] -> 22
+    13:[A-Z] -> 12
+    16:[_] -> 12
+    17:[a-z] -> 12
+
+DFA state 13
+  NFA states :
+    email#1.in
+
+  Forward route : (from state 5)
+   (START)->12:[@]->9:[:]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 5
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 2
+
+DFA state 14
+  NFA states :
+    email#1.in
+    email#1.before_at
+    email#1.out
+    before_date
+    date#3.in
+    date#3.#2
+    date#4.in
+    date#4.#2
+
+  Forward route : (from state 6)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 8
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 23
+
+DFA state 15
+  NFA states :
+    date#3.#1
+    date#4.#1
+
+  Forward route : (from state 7)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    17:[a-z] -> 24
+
+DFA state 16
+  NFA states :
+    email#1.domain_route
+    email#1.after_at
+
+  Forward route : (from state 8)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 25
+    7:[.] -> 25
+    8:[0-9] -> 25
+    9:[:] -> 13
+    13:[A-Z] -> 25
+    16:[_] -> 25
+    17:[a-z] -> 25
+
+DFA state 17
+  NFA states :
+    email#1.dotted_quad
+
+  Forward route : (from state 8)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->14:[[]->(HERE)
+  Transitions :
+    7:[.] -> 17
+    8:[0-9] -> 17
+    15:[]] -> 26
+
+DFA state 18
+  NFA states :
+    email#1.start_of_domain
+
+  Forward route : (from state 9)
+   (START)->4:["]->4:["]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 27
+    7:[.] -> 27
+    8:[0-9] -> 27
+    13:[A-Z] -> 27
+    14:[[] -> 17
+    16:[_] -> 27
+    17:[a-z] -> 27
+
+DFA state 19
+  NFA states :
+    angled_email#2.out
+    before_date
+    date#3.in
+    date#4.in
+
+  Forward route : (from state 10)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->11:[>]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+
+DFA state 20
+  NFA states :
+    angled_email#2.email#1.domain_route
+    angled_email#2.email#1.start_of_domain
+
+  Forward route : (from state 10)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 28
+    7:[.] -> 28
+    8:[0-9] -> 28
+    9:[:] -> 22
+    13:[A-Z] -> 28
+    14:[[] -> 29
+    16:[_] -> 28
+    17:[a-z] -> 28
+
+DFA state 21
+  NFA states :
+    angled_email#2.email#1.before_at
+    angled_email#2.email#1.out
+    angled_email#2.before_gt
+
+  Forward route : (from state 11)
+   (START)->10:[<]->4:["]->4:["]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 21
+    4:["] -> 11
+    5:[+] -> 21
+    6:[\055] -> 21
+    7:[.] -> 21
+    8:[0-9] -> 21
+    11:[>] -> 19
+    12:[@] -> 30
+    13:[A-Z] -> 21
+    16:[_] -> 21
+    17:[a-z] -> 21
+
+DFA state 22
+  NFA states :
+    angled_email#2.email#1.in
+
+  Forward route : (from state 12)
+   (START)->10:[<]->12:[@]->9:[:]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 10
+    4:["] -> 11
+    5:[+] -> 10
+    6:[\055] -> 10
+    7:[.] -> 10
+    8:[0-9] -> 10
+    12:[@] -> 12
+    13:[A-Z] -> 10
+    16:[_] -> 10
+    17:[a-z] -> 10
+
+DFA state 23
+  NFA states :
+    email#1.in
+    email#1.before_at
+    email#1.out
+    before_date
+    date#3.in
+    date#3.#3
+    date#4.in
+    date#4.#3
+
+  Forward route : (from state 14)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 31
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 8
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 2
+
+DFA state 24
+  NFA states :
+    date#3.#2
+    date#4.#2
+
+  Forward route : (from state 15)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->(HERE)
+  Transitions :
+    17:[a-z] -> 32
+
+DFA state 25
+  NFA states :
+    email#1.domain_route
+    email#1.after_at
+    email#1.out
+    before_date
+    date#3.in
+    date#4.in
+
+  Forward route : (from state 16)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->6:[\055]->6:[\055]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    6:[\055] -> 25
+    7:[.] -> 25
+    8:[0-9] -> 25
+    9:[:] -> 13
+    13:[A-Z] -> 25
+    16:[_] -> 25
+    17:[a-z] -> 25
+
+DFA state 26
+  NFA states :
+    email#1.out
+    before_date
+    date#3.in
+    date#4.in
+
+  Forward route : (from state 17)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->14:[[]->15:[]]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+
+DFA state 27
+  NFA states :
+    email#1.after_at
+
+  Forward route : (from state 18)
+   (START)->4:["]->4:["]->12:[@]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 33
+    7:[.] -> 33
+    8:[0-9] -> 33
+    13:[A-Z] -> 33
+    16:[_] -> 33
+    17:[a-z] -> 33
+
+DFA state 28
+  NFA states :
+    angled_email#2.email#1.domain_route
+    angled_email#2.email#1.after_at
+
+  Forward route : (from state 20)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 34
+    7:[.] -> 34
+    8:[0-9] -> 34
+    9:[:] -> 22
+    13:[A-Z] -> 34
+    16:[_] -> 34
+    17:[a-z] -> 34
+
+DFA state 29
+  NFA states :
+    angled_email#2.email#1.dotted_quad
+
+  Forward route : (from state 20)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->14:[[]->(HERE)
+  Transitions :
+    7:[.] -> 29
+    8:[0-9] -> 29
+    15:[]] -> 35
+
+DFA state 30
+  NFA states :
+    angled_email#2.email#1.start_of_domain
+
+  Forward route : (from state 21)
+   (START)->10:[<]->4:["]->4:["]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 36
+    7:[.] -> 36
+    8:[0-9] -> 36
+    13:[A-Z] -> 36
+    14:[[] -> 29
+    16:[_] -> 36
+    17:[a-z] -> 36
+
+DFA state 31
+  NFA states :
+    date#3.in
+    date#3.before_weekday
+    date#3.after_weekday
+    date#4.in
+    date#4.before_weekday
+    date#4.after_weekday
+
+  Forward route : (from state 23)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 31
+    13:[A-Z] -> 37
+
+DFA state 32
+  NFA states :
+    date#3.#3
+    date#4.#3
+
+  Forward route : (from state 24)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 38
+
+DFA state 33
+  NFA states :
+    email#1.after_at
+    email#1.out
+    before_date
+    date#3.in
+    date#4.in
+
+  Forward route : (from state 27)
+   (START)->4:["]->4:["]->12:[@]->6:[\055]->6:[\055]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    6:[\055] -> 33
+    7:[.] -> 33
+    8:[0-9] -> 33
+    13:[A-Z] -> 33
+    16:[_] -> 33
+    17:[a-z] -> 33
+
+DFA state 34
+  NFA states :
+    angled_email#2.email#1.domain_route
+    angled_email#2.email#1.after_at
+    angled_email#2.email#1.out
+    angled_email#2.before_gt
+
+  Forward route : (from state 28)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->6:[\055]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 34
+    7:[.] -> 34
+    8:[0-9] -> 34
+    9:[:] -> 22
+    11:[>] -> 19
+    13:[A-Z] -> 34
+    16:[_] -> 34
+    17:[a-z] -> 34
+
+DFA state 35
+  NFA states :
+    angled_email#2.email#1.out
+    angled_email#2.before_gt
+
+  Forward route : (from state 29)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->14:[[]->15:[]]->(HERE)
+  Transitions :
+    11:[>] -> 19
+
+DFA state 36
+  NFA states :
+    angled_email#2.email#1.after_at
+
+  Forward route : (from state 30)
+   (START)->10:[<]->4:["]->4:["]->12:[@]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 39
+    7:[.] -> 39
+    8:[0-9] -> 39
+    13:[A-Z] -> 39
+    16:[_] -> 39
+    17:[a-z] -> 39
+
+DFA state 37
+  NFA states :
+    date#3.#1
+    date#3.#4
+    date#4.#1
+    date#4.#4
+
+  Forward route : (from state 31)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    17:[a-z] -> 40
+
+DFA state 38
+  NFA states :
+    date#3.after_weekday
+    date#4.after_weekday
+
+  Forward route : (from state 32)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 38
+    13:[A-Z] -> 41
+
+DFA state 39
+  NFA states :
+    angled_email#2.email#1.after_at
+    angled_email#2.email#1.out
+    angled_email#2.before_gt
+
+  Forward route : (from state 36)
+   (START)->10:[<]->4:["]->4:["]->12:[@]->6:[\055]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 39
+    7:[.] -> 39
+    8:[0-9] -> 39
+    11:[>] -> 19
+    13:[A-Z] -> 39
+    16:[_] -> 39
+    17:[a-z] -> 39
+
+DFA state 40
+  NFA states :
+    date#3.#2
+    date#3.#5
+    date#4.#2
+    date#4.#5
+
+  Forward route : (from state 37)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->(HERE)
+  Transitions :
+    17:[a-z] -> 42
+
+DFA state 41
+  NFA states :
+    date#3.#4
+    date#4.#4
+
+  Forward route : (from state 38)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    17:[a-z] -> 43
+
+DFA state 42
+  NFA states :
+    date#3.#3
+    date#3.#6
+    date#4.#3
+    date#4.#6
+
+  Forward route : (from state 40)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 44
+
+DFA state 43
+  NFA states :
+    date#3.#5
+    date#4.#5
+
+  Forward route : (from state 41)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->(HERE)
+  Transitions :
+    17:[a-z] -> 45
+
+DFA state 44
+  NFA states :
+    date#3.after_weekday
+    date#3.after_month
+    date#4.after_weekday
+    date#4.after_month
+
+  Forward route : (from state 42)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 44
+    8:[0-9] -> 46
+    13:[A-Z] -> 41
+
+DFA state 45
+  NFA states :
+    date#3.#6
+    date#4.#6
+
+  Forward route : (from state 43)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 47
+
+DFA state 46
+  NFA states :
+    date#3.#7
+    date#3.#8
+    date#4.#7
+    date#4.#8
+
+  Forward route : (from state 44)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 48
+    8:[0-9] -> 49
+
+DFA state 47
+  NFA states :
+    date#3.after_month
+    date#4.after_month
+
+  Forward route : (from state 45)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 47
+    8:[0-9] -> 46
+
+DFA state 48
+  NFA states :
+    date#3.after_day
+    date#4.after_day
+
+  Forward route : (from state 46)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 48
+    8:[0-9] -> 50
+
+DFA state 49
+  NFA states :
+    date#3.#9
+    date#4.#9
+
+  Forward route : (from state 46)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 48
+
+DFA state 50
+  NFA states :
+    date#3.#10
+    date#3.#18
+    date#4.#10
+    date#4.#18
+
+  Forward route : (from state 48)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 51
+
+DFA state 51
+  NFA states :
+    date#3.#11
+    date#3.#19
+    date#4.#11
+    date#4.#19
+
+  Forward route : (from state 50)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    9:[:] -> 52
+
+DFA state 52
+  NFA states :
+    date#3.#12
+    date#3.#20
+    date#4.#12
+    date#4.#20
+
+  Forward route : (from state 51)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->(HERE)
+  Transitions :
+    8:[0-9] -> 53
+
+DFA state 53
+  NFA states :
+    date#3.#13
+    date#3.#21
+    date#4.#13
+    date#4.#21
+
+  Forward route : (from state 52)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 54
+
+DFA state 54
+  NFA states :
+    date#3.#14
+    date#3.#22
+    date#4.#14
+    date#4.#22
+
+  Forward route : (from state 53)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 55
+    9:[:] -> 56
+
+DFA state 55
+  NFA states :
+    date#3.after_time
+    date#3.zone#1.in
+    date#3.zone#2.in
+    date#3.after_timezone
+    date#4.after_time
+    date#4.zone#1.in
+    date#4.zone#2.in
+    date#4.after_timezone
+
+  Forward route : (from state 54)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 55
+    5:[+] -> 57
+    6:[\055] -> 57
+    8:[0-9] -> 58
+    13:[A-Z] -> 59
+
+DFA state 56
+  NFA states :
+    date#3.#15
+    date#4.#15
+
+  Forward route : (from state 54)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->9:[:]->(HERE)
+  Transitions :
+    8:[0-9] -> 60
+
+DFA state 57
+  NFA states :
+    date#3.zone#1.zone2
+    date#3.zone#2.zone2
+    date#4.zone#1.zone2
+    date#4.zone#2.zone2
+
+  Forward route : (from state 55)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->5:[+]->(HERE)
+  Transitions :
+    8:[0-9] -> 59
+    13:[A-Z] -> 59
+    17:[a-z] -> 59
+
+DFA state 58
+  NFA states :
+    date#3.#25
+    date#3.#30
+    date#4.#25
+    date#4.#30
+
+  Forward route : (from state 55)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 61
+
+DFA state 59
+  NFA states :
+    date#3.#23
+    date#3.zone#1.zone2
+    date#3.zone#1.out
+    date#3.#24
+    date#3.zone#2.zone2
+    date#3.zone#2.out
+    date#4.#23
+    date#4.zone#1.zone2
+    date#4.zone#1.out
+    date#4.#24
+    date#4.zone#2.zone2
+    date#4.zone#2.out
+
+  Forward route : (from state 55)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 62
+    8:[0-9] -> 59
+    13:[A-Z] -> 59
+    17:[a-z] -> 59
+
+DFA state 60
+  NFA states :
+    date#3.#16
+    date#4.#16
+
+  Forward route : (from state 56)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 63
+
+DFA state 61
+  NFA states :
+    date#3.#26
+    date#3.#31
+    date#4.#26
+    date#4.#31
+
+  Forward route : (from state 58)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 64
+
+DFA state 62
+  NFA states :
+    date#3.after_timezone_1
+    date#3.zone#6.in
+    date#3.after_timezone
+    date#4.after_timezone_1
+    date#4.zone#6.in
+    date#4.after_timezone
+
+  Forward route : (from state 59)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 62
+    5:[+] -> 65
+    6:[\055] -> 65
+    8:[0-9] -> 66
+    13:[A-Z] -> 67
+
+DFA state 63
+  NFA states :
+    date#3.#17
+    date#4.#17
+
+  Forward route : (from state 60)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 55
+
+DFA state 64
+  NFA states :
+    date#3.#27
+    date#3.#32
+    date#4.#27
+    date#4.#32
+
+  Forward route : (from state 61)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 68
+
+DFA state 65
+  NFA states :
+    date#3.zone#6.zone2
+    date#4.zone#6.zone2
+
+  Forward route : (from state 62)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->5:[+]->(HERE)
+  Transitions :
+    8:[0-9] -> 67
+    13:[A-Z] -> 67
+    17:[a-z] -> 67
+
+DFA state 66
+  NFA states :
+    date#3.#30
+    date#4.#30
+
+  Forward route : (from state 62)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 69
+
+DFA state 67
+  NFA states :
+    date#3.#29
+    date#3.zone#6.zone2
+    date#3.zone#6.out
+    date#4.#29
+    date#4.zone#6.zone2
+    date#4.zone#6.out
+
+  Forward route : (from state 62)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 70
+    8:[0-9] -> 67
+    13:[A-Z] -> 67
+    17:[a-z] -> 67
+
+DFA state 68
+  NFA states :
+    #1
+    date#3.after_year_before_zone
+    date#3.zone#3.in
+    date#3.zone#4.in
+    date#3.after_year
+    date#3.out
+    #3
+    date#4.after_year_before_zone
+    date#4.zone#3.in
+    date#4.zone#4.in
+    date#4.after_year
+    date#4.out
+
+  Forward route : (from state 64)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 68
+    1:[\n] -> 71
+    2:[\r] -> 72
+    5:[+] -> 73
+    6:[\055] -> 73
+    13:[A-Z] -> 74
+
+DFA state 69
+  NFA states :
+    date#3.#31
+    date#4.#31
+
+  Forward route : (from state 66)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 75
+
+DFA state 70
+  NFA states :
+    date#3.after_timezone
+    date#4.after_timezone
+
+  Forward route : (from state 67)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->13:[A-Z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 70
+    8:[0-9] -> 66
+
+DFA state 71
+  NFA states :
+    #2
+
+  Forward route : (from state 68)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->1:[\n]->(HERE)
+  Transitions :
+  NFA exit tags applying :
+    FROMCHECK_PASS
+  Attributes for <(DEFAULT)> : FROMCHECK_PASS
+
+DFA state 72
+  NFA states :
+    #4
+
+  Forward route : (from state 68)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->2:[\r]->(HERE)
+  Transitions :
+    1:[\n] -> 76
+
+DFA state 73
+  NFA states :
+    date#3.zone#3.zone2
+    date#3.zone#4.zone2
+    date#4.zone#3.zone2
+    date#4.zone#4.zone2
+
+  Forward route : (from state 68)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->5:[+]->(HERE)
+  Transitions :
+    8:[0-9] -> 74
+    13:[A-Z] -> 74
+    17:[a-z] -> 74
+
+DFA state 74
+  NFA states :
+    #1
+    date#3.zone#3.zone2
+    date#3.zone#3.out
+    date#3.#28
+    date#3.zone#4.zone2
+    date#3.zone#4.out
+    date#3.after_timezone_after_year
+    date#3.out
+    #3
+    date#4.zone#3.zone2
+    date#4.zone#3.out
+    date#4.#28
+    date#4.zone#4.zone2
+    date#4.zone#4.out
+    date#4.after_timezone_after_year
+    date#4.out
+
+  Forward route : (from state 68)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 77
+    1:[\n] -> 71
+    2:[\r] -> 72
+    8:[0-9] -> 74
+    13:[A-Z] -> 74
+    17:[a-z] -> 74
+
+DFA state 75
+  NFA states :
+    date#3.#32
+    date#4.#32
+
+  Forward route : (from state 69)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 78
+
+DFA state 76
+  NFA states :
+    #5
+
+  Forward route : (from state 72)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->2:[\r]->1:[\n]->(HERE)
+  Transitions :
+  NFA exit tags applying :
+    FROMCHECK_PASS
+  Attributes for <(DEFAULT)> : FROMCHECK_PASS
+
+DFA state 77
+  NFA states :
+    #1
+    date#3.after_timezone_after_year_1
+    date#3.zone#5.in
+    date#3.after_timezone_after_year
+    date#3.out
+    #3
+    date#4.after_timezone_after_year_1
+    date#4.zone#5.in
+    date#4.after_timezone_after_year
+    date#4.out
+
+  Forward route : (from state 74)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 77
+    1:[\n] -> 71
+    2:[\r] -> 72
+    5:[+] -> 79
+    6:[\055] -> 79
+    13:[A-Z] -> 80
+
+DFA state 78
+  NFA states :
+    #1
+    date#3.after_year
+    date#3.out
+    #3
+    date#4.after_year
+    date#4.out
+
+  Forward route : (from state 75)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 78
+    1:[\n] -> 71
+    2:[\r] -> 72
+
+DFA state 79
+  NFA states :
+    date#3.zone#5.zone2
+    date#4.zone#5.zone2
+
+  Forward route : (from state 77)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->0:[\t ]->5:[+]->(HERE)
+  Transitions :
+    8:[0-9] -> 80
+    13:[A-Z] -> 80
+    17:[a-z] -> 80
+
+DFA state 80
+  NFA states :
+    #1
+    date#3.zone#5.zone2
+    date#3.zone#5.out
+    date#3.after_timezone_after_year
+    date#3.out
+    #3
+    date#4.zone#5.zone2
+    date#4.zone#5.out
+    date#4.after_timezone_after_year
+    date#4.out
+
+  Forward route : (from state 77)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 81
+    1:[\n] -> 71
+    2:[\r] -> 72
+    8:[0-9] -> 80
+    13:[A-Z] -> 80
+    17:[a-z] -> 80
+
+DFA state 81
+  NFA states :
+    #1
+    date#3.after_timezone_after_year
+    date#3.out
+    #3
+    date#4.after_timezone_after_year
+    date#4.out
+
+  Forward route : (from state 80)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->0:[\t ]->13:[A-Z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 81
+    1:[\n] -> 71
+    2:[\r] -> 72
+
+
+Entry states in DFA:
+Entry <(ONLY ENTRY)> : 0
+Searching for dead states...
+(no dead states found)
+
+-----------------------------
+------ COMPRESSING DFA ------
+-----------------------------
+Old DFA state 0 becomes 0
+Old DFA state 1 becomes 1
+Old DFA state 2 becomes 2
+Old DFA state 3 becomes 3
+Old DFA state 4 becomes 4
+Old DFA state 5 becomes 5
+Old DFA state 6 becomes 6
+Old DFA state 7 becomes 7
+Old DFA state 8 becomes 8
+Old DFA state 9 becomes 9
+Old DFA state 10 becomes 10
+Old DFA state 11 becomes 11
+Old DFA state 12 becomes 12
+Old DFA state 13 becomes 13
+Old DFA state 14 becomes 14
+Old DFA state 15 becomes 15
+Old DFA state 16 becomes 16
+Old DFA state 17 becomes 17
+Old DFA state 18 becomes 18
+Old DFA state 19 becomes 19
+Old DFA state 20 becomes 20
+Old DFA state 21 becomes 21
+Old DFA state 22 becomes 4 (formerly 4)
+Old DFA state 23 becomes 22
+Old DFA state 24 becomes 23
+Old DFA state 25 becomes 24
+Old DFA state 26 becomes 19 (formerly 19)
+Old DFA state 27 becomes 25
+Old DFA state 28 becomes 26
+Old DFA state 29 becomes 27
+Old DFA state 30 becomes 28
+Old DFA state 31 becomes 29
+Old DFA state 32 becomes 30
+Old DFA state 33 becomes 31
+Old DFA state 34 becomes 32
+Old DFA state 35 becomes 33
+Old DFA state 36 becomes 34
+Old DFA state 37 becomes 35
+Old DFA state 38 becomes 36
+Old DFA state 39 becomes 37
+Old DFA state 40 becomes 38
+Old DFA state 41 becomes 39
+Old DFA state 42 becomes 40
+Old DFA state 43 becomes 41
+Old DFA state 44 becomes 42
+Old DFA state 45 becomes 43
+Old DFA state 46 becomes 44
+Old DFA state 47 becomes 45
+Old DFA state 48 becomes 46
+Old DFA state 49 becomes 47
+Old DFA state 50 becomes 48
+Old DFA state 51 becomes 49
+Old DFA state 52 becomes 50
+Old DFA state 53 becomes 51
+Old DFA state 54 becomes 52
+Old DFA state 55 becomes 53
+Old DFA state 56 becomes 54
+Old DFA state 57 becomes 55
+Old DFA state 58 becomes 56
+Old DFA state 59 becomes 57
+Old DFA state 60 becomes 58
+Old DFA state 61 becomes 59
+Old DFA state 62 becomes 60
+Old DFA state 63 becomes 61
+Old DFA state 64 becomes 62
+Old DFA state 65 becomes 63
+Old DFA state 66 becomes 64
+Old DFA state 67 becomes 65
+Old DFA state 68 becomes 66
+Old DFA state 69 becomes 67
+Old DFA state 70 becomes 68
+Old DFA state 71 becomes 69
+Old DFA state 72 becomes 70
+Old DFA state 73 becomes 71
+Old DFA state 74 becomes 72
+Old DFA state 75 becomes 73
+Old DFA state 76 becomes 69 (formerly 71)
+Old DFA state 77 becomes 74
+Old DFA state 78 becomes 75
+Old DFA state 79 becomes 76
+Old DFA state 80 becomes 77
+Old DFA state 81 becomes 75 (formerly 78)
+Entry <(ONLY ENTRY)>, formerly state 0, now state 0
+-------------------------------
+DFA structure after compression
+-------------------------------
+DFA state 0
+  Forward route :
+   (START)->(HERE)
+  Transitions :
+    0:[\t ] -> 1
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    10:[<] -> 4
+    12:[@] -> 5
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 2
+
+DFA state 1
+  Forward route : (from state 0)
+   (START)->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 1
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    10:[<] -> 4
+    12:[@] -> 5
+    13:[A-Z] -> 6
+    16:[_] -> 2
+    17:[a-z] -> 2
+  Use state 0 as basis (1 fixups)
+
+DFA state 2
+  Forward route : (from state 0)
+   (START)->3:[!#-'*/=?^`{-~]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 8
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 2
+  Use state 0 as basis (3 fixups)
+
+DFA state 3
+  Forward route : (from state 0)
+   (START)->4:["]->(HERE)
+  Transitions :
+    0:[\t ] -> 3
+    3:[!#-'*/=?^`{-~] -> 3
+    4:["] -> 9
+    5:[+] -> 3
+    6:[\055] -> 3
+    7:[.] -> 3
+    8:[0-9] -> 3
+    9:[:] -> 3
+    10:[<] -> 3
+    11:[>] -> 3
+    12:[@] -> 3
+    13:[A-Z] -> 3
+    16:[_] -> 3
+    17:[a-z] -> 3
+
+DFA state 4
+  Forward route : (from state 0)
+   (START)->10:[<]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 10
+    4:["] -> 11
+    5:[+] -> 10
+    6:[\055] -> 10
+    7:[.] -> 10
+    8:[0-9] -> 10
+    12:[@] -> 12
+    13:[A-Z] -> 10
+    16:[_] -> 10
+    17:[a-z] -> 10
+
+DFA state 5
+  Forward route : (from state 0)
+   (START)->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 5
+    7:[.] -> 5
+    8:[0-9] -> 5
+    9:[:] -> 13
+    13:[A-Z] -> 5
+    16:[_] -> 5
+    17:[a-z] -> 5
+
+DFA state 6
+  Forward route : (from state 1)
+   (START)->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 8
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 14
+  Use state 0 as basis (4 fixups)
+
+DFA state 7
+  Forward route : (from state 2)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    13:[A-Z] -> 15
+
+DFA state 8
+  Forward route : (from state 2)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 16
+    7:[.] -> 16
+    8:[0-9] -> 16
+    9:[:] -> 13
+    13:[A-Z] -> 16
+    14:[[] -> 17
+    16:[_] -> 16
+    17:[a-z] -> 16
+
+DFA state 9
+  Forward route : (from state 3)
+   (START)->4:["]->4:["]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    3:[!#-'*/=?^`{-~] -> 9
+    4:["] -> 3
+    5:[+] -> 9
+    6:[\055] -> 9
+    7:[.] -> 9
+    8:[0-9] -> 9
+    12:[@] -> 18
+    13:[A-Z] -> 9
+    16:[_] -> 9
+    17:[a-z] -> 9
+
+DFA state 10
+  Forward route : (from state 4)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 10
+    4:["] -> 11
+    5:[+] -> 10
+    6:[\055] -> 10
+    7:[.] -> 10
+    8:[0-9] -> 10
+    11:[>] -> 19
+    12:[@] -> 20
+    13:[A-Z] -> 10
+    16:[_] -> 10
+    17:[a-z] -> 10
+  Use state 4 as basis (2 fixups)
+
+DFA state 11
+  Forward route : (from state 4)
+   (START)->10:[<]->4:["]->(HERE)
+  Transitions :
+    0:[\t ] -> 11
+    3:[!#-'*/=?^`{-~] -> 11
+    4:["] -> 21
+    5:[+] -> 11
+    6:[\055] -> 11
+    7:[.] -> 11
+    8:[0-9] -> 11
+    9:[:] -> 11
+    10:[<] -> 11
+    11:[>] -> 11
+    12:[@] -> 11
+    13:[A-Z] -> 11
+    16:[_] -> 11
+    17:[a-z] -> 11
+
+DFA state 12
+  Forward route : (from state 4)
+   (START)->10:[<]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 12
+    7:[.] -> 12
+    8:[0-9] -> 12
+    9:[:] -> 4
+    13:[A-Z] -> 12
+    16:[_] -> 12
+    17:[a-z] -> 12
+
+DFA state 13
+  Forward route : (from state 5)
+   (START)->12:[@]->9:[:]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 5
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 2
+  Use state 0 as basis (2 fixups)
+
+DFA state 14
+  Forward route : (from state 6)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 8
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 22
+  Use state 0 as basis (4 fixups)
+
+DFA state 15
+  Forward route : (from state 7)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    17:[a-z] -> 23
+
+DFA state 16
+  Forward route : (from state 8)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 24
+    7:[.] -> 24
+    8:[0-9] -> 24
+    9:[:] -> 13
+    13:[A-Z] -> 24
+    16:[_] -> 24
+    17:[a-z] -> 24
+
+DFA state 17
+  Forward route : (from state 8)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->14:[[]->(HERE)
+  Transitions :
+    7:[.] -> 17
+    8:[0-9] -> 17
+    15:[]] -> 19
+
+DFA state 18
+  Forward route : (from state 9)
+   (START)->4:["]->4:["]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 25
+    7:[.] -> 25
+    8:[0-9] -> 25
+    13:[A-Z] -> 25
+    14:[[] -> 17
+    16:[_] -> 25
+    17:[a-z] -> 25
+
+DFA state 19
+  Forward route : (from state 10)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->11:[>]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+
+DFA state 20
+  Forward route : (from state 10)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 26
+    7:[.] -> 26
+    8:[0-9] -> 26
+    9:[:] -> 4
+    13:[A-Z] -> 26
+    14:[[] -> 27
+    16:[_] -> 26
+    17:[a-z] -> 26
+
+DFA state 21
+  Forward route : (from state 11)
+   (START)->10:[<]->4:["]->4:["]->(HERE)
+  Transitions :
+    3:[!#-'*/=?^`{-~] -> 21
+    4:["] -> 11
+    5:[+] -> 21
+    6:[\055] -> 21
+    7:[.] -> 21
+    8:[0-9] -> 21
+    11:[>] -> 19
+    12:[@] -> 28
+    13:[A-Z] -> 21
+    16:[_] -> 21
+    17:[a-z] -> 21
+
+DFA state 22
+  Forward route : (from state 14)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 29
+    3:[!#-'*/=?^`{-~] -> 2
+    4:["] -> 3
+    5:[+] -> 2
+    6:[\055] -> 2
+    7:[.] -> 2
+    8:[0-9] -> 2
+    12:[@] -> 8
+    13:[A-Z] -> 2
+    16:[_] -> 2
+    17:[a-z] -> 2
+  Use state 0 as basis (3 fixups)
+
+DFA state 23
+  Forward route : (from state 15)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->(HERE)
+  Transitions :
+    17:[a-z] -> 30
+
+DFA state 24
+  Forward route : (from state 16)
+   (START)->3:[!#-'*/=?^`{-~]->12:[@]->6:[\055]->6:[\055]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    6:[\055] -> 24
+    7:[.] -> 24
+    8:[0-9] -> 24
+    9:[:] -> 13
+    13:[A-Z] -> 24
+    16:[_] -> 24
+    17:[a-z] -> 24
+  Use state 16 as basis (1 fixups)
+
+DFA state 25
+  Forward route : (from state 18)
+   (START)->4:["]->4:["]->12:[@]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 31
+    7:[.] -> 31
+    8:[0-9] -> 31
+    13:[A-Z] -> 31
+    16:[_] -> 31
+    17:[a-z] -> 31
+
+DFA state 26
+  Forward route : (from state 20)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 32
+    7:[.] -> 32
+    8:[0-9] -> 32
+    9:[:] -> 4
+    13:[A-Z] -> 32
+    16:[_] -> 32
+    17:[a-z] -> 32
+
+DFA state 27
+  Forward route : (from state 20)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->14:[[]->(HERE)
+  Transitions :
+    7:[.] -> 27
+    8:[0-9] -> 27
+    15:[]] -> 33
+
+DFA state 28
+  Forward route : (from state 21)
+   (START)->10:[<]->4:["]->4:["]->12:[@]->(HERE)
+  Transitions :
+    6:[\055] -> 34
+    7:[.] -> 34
+    8:[0-9] -> 34
+    13:[A-Z] -> 34
+    14:[[] -> 27
+    16:[_] -> 34
+    17:[a-z] -> 34
+
+DFA state 29
+  Forward route : (from state 22)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 29
+    13:[A-Z] -> 35
+
+DFA state 30
+  Forward route : (from state 23)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 36
+
+DFA state 31
+  Forward route : (from state 25)
+   (START)->4:["]->4:["]->12:[@]->6:[\055]->6:[\055]->(HERE)
+  Transitions :
+    0:[\t ] -> 7
+    6:[\055] -> 31
+    7:[.] -> 31
+    8:[0-9] -> 31
+    13:[A-Z] -> 31
+    16:[_] -> 31
+    17:[a-z] -> 31
+  Use state 25 as basis (1 fixups)
+
+DFA state 32
+  Forward route : (from state 26)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->6:[\055]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 32
+    7:[.] -> 32
+    8:[0-9] -> 32
+    9:[:] -> 4
+    11:[>] -> 19
+    13:[A-Z] -> 32
+    16:[_] -> 32
+    17:[a-z] -> 32
+  Use state 26 as basis (1 fixups)
+
+DFA state 33
+  Forward route : (from state 27)
+   (START)->10:[<]->3:[!#-'*/=?^`{-~]->12:[@]->14:[[]->15:[]]->(HERE)
+  Transitions :
+    11:[>] -> 19
+
+DFA state 34
+  Forward route : (from state 28)
+   (START)->10:[<]->4:["]->4:["]->12:[@]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 37
+    7:[.] -> 37
+    8:[0-9] -> 37
+    13:[A-Z] -> 37
+    16:[_] -> 37
+    17:[a-z] -> 37
+
+DFA state 35
+  Forward route : (from state 29)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    17:[a-z] -> 38
+
+DFA state 36
+  Forward route : (from state 30)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 36
+    13:[A-Z] -> 39
+
+DFA state 37
+  Forward route : (from state 34)
+   (START)->10:[<]->4:["]->4:["]->12:[@]->6:[\055]->6:[\055]->(HERE)
+  Transitions :
+    6:[\055] -> 37
+    7:[.] -> 37
+    8:[0-9] -> 37
+    11:[>] -> 19
+    13:[A-Z] -> 37
+    16:[_] -> 37
+    17:[a-z] -> 37
+  Use state 34 as basis (1 fixups)
+
+DFA state 38
+  Forward route : (from state 35)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->(HERE)
+  Transitions :
+    17:[a-z] -> 40
+
+DFA state 39
+  Forward route : (from state 36)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    17:[a-z] -> 41
+
+DFA state 40
+  Forward route : (from state 38)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 42
+
+DFA state 41
+  Forward route : (from state 39)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->(HERE)
+  Transitions :
+    17:[a-z] -> 43
+
+DFA state 42
+  Forward route : (from state 40)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 42
+    8:[0-9] -> 44
+    13:[A-Z] -> 39
+
+DFA state 43
+  Forward route : (from state 41)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->(HERE)
+  Transitions :
+    0:[\t ] -> 45
+
+DFA state 44
+  Forward route : (from state 42)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 46
+    8:[0-9] -> 47
+
+DFA state 45
+  Forward route : (from state 43)
+   (START)->3:[!#-'*/=?^`{-~]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 45
+    8:[0-9] -> 44
+
+DFA state 46
+  Forward route : (from state 44)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 46
+    8:[0-9] -> 48
+
+DFA state 47
+  Forward route : (from state 44)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 46
+
+DFA state 48
+  Forward route : (from state 46)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 49
+
+DFA state 49
+  Forward route : (from state 48)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    9:[:] -> 50
+
+DFA state 50
+  Forward route : (from state 49)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->(HERE)
+  Transitions :
+    8:[0-9] -> 51
+
+DFA state 51
+  Forward route : (from state 50)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 52
+
+DFA state 52
+  Forward route : (from state 51)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 53
+    9:[:] -> 54
+
+DFA state 53
+  Forward route : (from state 52)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 53
+    5:[+] -> 55
+    6:[\055] -> 55
+    8:[0-9] -> 56
+    13:[A-Z] -> 57
+
+DFA state 54
+  Forward route : (from state 52)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->9:[:]->(HERE)
+  Transitions :
+    8:[0-9] -> 58
+
+DFA state 55
+  Forward route : (from state 53)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->5:[+]->(HERE)
+  Transitions :
+    8:[0-9] -> 57
+    13:[A-Z] -> 57
+    17:[a-z] -> 57
+
+DFA state 56
+  Forward route : (from state 53)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 59
+
+DFA state 57
+  Forward route : (from state 53)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 60
+    8:[0-9] -> 57
+    13:[A-Z] -> 57
+    17:[a-z] -> 57
+  Use state 55 as basis (1 fixups)
+
+DFA state 58
+  Forward route : (from state 54)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 61
+
+DFA state 59
+  Forward route : (from state 56)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 62
+
+DFA state 60
+  Forward route : (from state 57)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 60
+    5:[+] -> 63
+    6:[\055] -> 63
+    8:[0-9] -> 64
+    13:[A-Z] -> 65
+
+DFA state 61
+  Forward route : (from state 58)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 53
+
+DFA state 62
+  Forward route : (from state 59)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 66
+
+DFA state 63
+  Forward route : (from state 60)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->5:[+]->(HERE)
+  Transitions :
+    8:[0-9] -> 65
+    13:[A-Z] -> 65
+    17:[a-z] -> 65
+
+DFA state 64
+  Forward route : (from state 60)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 67
+
+DFA state 65
+  Forward route : (from state 60)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 68
+    8:[0-9] -> 65
+    13:[A-Z] -> 65
+    17:[a-z] -> 65
+  Use state 63 as basis (1 fixups)
+
+DFA state 66
+  Forward route : (from state 62)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 66
+    1:[\n] -> 69
+    2:[\r] -> 70
+    5:[+] -> 71
+    6:[\055] -> 71
+    13:[A-Z] -> 72
+
+DFA state 67
+  Forward route : (from state 64)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 73
+
+DFA state 68
+  Forward route : (from state 65)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->13:[A-Z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 68
+    8:[0-9] -> 64
+
+DFA state 69
+  Forward route : (from state 66)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->1:[\n]->(HERE)
+  Transitions :
+  NFA exit tags applying :
+    FROMCHECK_PASS
+  Attributes for <(DEFAULT)> : FROMCHECK_PASS
+
+DFA state 70
+  Forward route : (from state 66)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->2:[\r]->(HERE)
+  Transitions :
+    1:[\n] -> 69
+
+DFA state 71
+  Forward route : (from state 66)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->5:[+]->(HERE)
+  Transitions :
+    8:[0-9] -> 72
+    13:[A-Z] -> 72
+    17:[a-z] -> 72
+
+DFA state 72
+  Forward route : (from state 66)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 74
+    1:[\n] -> 69
+    2:[\r] -> 70
+    8:[0-9] -> 72
+    13:[A-Z] -> 72
+    17:[a-z] -> 72
+  Use state 71 as basis (3 fixups)
+
+DFA state 73
+  Forward route : (from state 67)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    8:[0-9] -> 75
+
+DFA state 74
+  Forward route : (from state 72)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->0:[\t ]->(HERE)
+  Transitions :
+    0:[\t ] -> 74
+    1:[\n] -> 69
+    2:[\r] -> 70
+    5:[+] -> 76
+    6:[\055] -> 76
+    13:[A-Z] -> 77
+
+DFA state 75
+  Forward route : (from state 73)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->13:[A-Z]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->(HERE)
+  Transitions :
+    0:[\t ] -> 75
+    1:[\n] -> 69
+    2:[\r] -> 70
+
+DFA state 76
+  Forward route : (from state 74)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->0:[\t ]->5:[+]->(HERE)
+  Transitions :
+    8:[0-9] -> 77
+    13:[A-Z] -> 77
+    17:[a-z] -> 77
+
+DFA state 77
+  Forward route : (from state 74)
+   (START)->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->13:[A-Z]->17:[a-z]->17:[a-z]->0:[\t ]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->9:[:]->8:[0-9]->8:[0-9]->0:[\t ]->8:[0-9]->8:[0-9]->8:[0-9]->8:[0-9]->13:[A-Z]->0:[\t ]->13:[A-Z]->(HERE)
+  Transitions :
+    0:[\t ] -> 75
+    1:[\n] -> 69
+    2:[\r] -> 70
+    8:[0-9] -> 77
+    13:[A-Z] -> 77
+    17:[a-z] -> 77
+  Use state 75 as basis (3 fixups)
+
+
+Entry states in DFA:
+Entry <(ONLY ENTRY)> : 0
