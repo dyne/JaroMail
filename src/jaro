@@ -1015,7 +1015,7 @@ wwwtext=w3m
 { which elinks > /dev/null } && { wwwtext=elinks }
 cat <<EOF > $MUTTDIR/mailcap
 text/html; ${wwwtext} -dump %s; nametemplate=%s.html; copiousoutput
-
+application/*; a=$WORKDIR/tmp/attach-$RANDOM$RANDOM && cp %s \$a && jaro open \$a
 text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
   && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
 text/plain; cat %s
@@ -1319,6 +1319,22 @@ editor() {
     return $?
 }
 
+
+##############
+## Open a File
+open_file() {
+    a=$WORKDIR/cache/attach-$RANDOM$RANDOM
+    cp ${PARAM[1]} $a
+    case $OS in
+	GNU)
+	    # TODO
+	    ;;
+	MAC)
+	    open -g $a
+	    ;;
+    esac
+}
+
 ######################
 # Maildir manipulation
 backup() {
@@ -1554,6 +1570,7 @@ main()
     subcommands_opts[list]=""
 
     subcommands_opts[edit]=""
+    subcommands_opts[open]=""
 
     subcommands_opts[backup]=""
     subcommands_opts[rmdupes]=""
@@ -1663,6 +1680,7 @@ main()
 	list)    CLEANEXIT=0; list_addresses ${PARAM} ;;
 
 	edit)    CLEANEXIT=0; editor ${PARAM} ;;
+	open)    CLEANEXIT=0; open_file ${PARAM} ;;
 
 	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;
