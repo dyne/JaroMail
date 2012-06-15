@@ -370,6 +370,56 @@ whenever possible.
 
 
 
+* Searching
+
+  Searching across all your emails it is as important as demanding of
+  a task. Jaro Mail implements it using an indexing mechanism that
+  speeds up greatly its operation, but require a first pass for
+  indexing.
+
+  To index all your local mails, or refresh the index, launch the
+  *search* command without arguments:
+
+: jaro search
+
+  Then wait for a while until the indexing is done. The time to wait
+  variates depending from the quantity of mails you have, it can take
+  about 10 seconds for 100MB on a fast computer, your mileage may
+  vary.
+
+  After the indexing is done, you can use the command *jaro search*
+  followed by any number of arguments to run the search. This is not a
+  glob match, but an absolute match on the single words. More than one
+  word is aloud to refine the match (they are all AND'ed together),
+  plus a number of tricks can be done: every single word following the
+  command can be a particular expression that indicates in which
+  header to search and for what. Here below a short reference of
+  possible expressions:
+
+
+  | word          | match word in message body and major headers                           |
+  | t:word        | match word in To: header                                               |
+  | c:word        | match word in Cc: header                                               |
+  | f:word        | match word in From: header                                             |
+  | a:word        | match word in To:, Cc: or From: headers (address)                      |
+  | s:word        | match word in Subject: header                                          |
+  | b:word        | match word in message body                                             |
+  | m:word        | match word in Message-ID: header                                       |
+  | n:word        | match name of attachment within message                                |
+  | F:flags       | match on message flags (s=seen,r=replied,f=flagged,-=negate)           |
+  | p:substring   | match substring of path                                                |
+  | d:start-end   | match date range                                                       |
+  | z:low-high    | match messages in size range                                           |
+  | bs:word       | match word in Subject: header or body (or any other group of prefixes) |
+  | s:word1,word2 | match both words in Subject:                                           |
+  | s:word1/word2 | match either word or both words in Subject:                            |
+  | s:~word       | match messages not containing word in Subject:                         |
+  | s:substring=  | match substring in any word in Subject:                                |
+  | s:^substring= | match left-anchored substring in any word in Subject:                  |
+  | s:substring=2 | match substring with <=2 errors in any word in Subject:                |
+
+
+
 * Security
 
 ** Password storage
