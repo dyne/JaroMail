@@ -185,8 +185,7 @@ MUTTDIR=$WORKDIR/.mutt
 
 # use gnome-keyring for passwords on GNU systems
 GNOMEKEY=0
-ps ax | grep '[g]nome-keyring-daemon' > /dev/null
-{ test $? = 0 } && {
+{ test $GNOME_KEYRING_CONTROL } && {
     which jaro-gnome-keyring > /dev/null
     { test $? = 0 } && { GNOMEKEY=1 }
 }

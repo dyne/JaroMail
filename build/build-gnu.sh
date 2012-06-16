@@ -118,6 +118,7 @@ case $distro in
 	echo "Compiling the search engine..."
 	cd src/mairix
 	./configure
+	make clean > /dev/null
 	make > /dev/null
 	cd - > /dev/null
 
