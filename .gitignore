@@ -2,3 +2,5 @@
 *.o
 dotlock
 fetchaddr
+src/mairix/Makefile
+src/mairix/config.log
