@@ -1,0 +1,81 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+lock() {
+    func "lock: $1"
+    $WORKDIR/bin/dotlock ${1}
+    case $? in
+	1) error "Cannot lock non existing file: $1"
+	    return 1 ;;
+	3) error "Locked file in use: $1"
+	    return 3 ;;
+	5) error "Impossible to lock: $1"
+	    return 5 ;;
+	# success
+	0) echo "$$" > ${1}.pid
+	    return 0 ;;
+    esac
+}
+newlock() { # create locked
+    func "creating locked file: $1"
+    touch $1
+    chmod 600 $1
+    lock $1
+}
+unlock() {
+    func "unlock: $1"
+    lockpid="`cat ${1}.pid`"
+    { test -r ${1}.pid } && {
+	{ test "$$" != "$lockpid" } && {
+	    error "Unlock attempt by different PID: $1"
+	    error "Created by $lockpid now $$ is trying to unlock"
+	    return 1 }
+    }
+
+    $WORKDIR/bin/dotlock -u ${=@}
+    { test $? != 0 } && { error "Unable to unlock: $1"; return 1 }
+    { test -r ${1}.pid } && { rm -f ${1}.pid }
+    return 0
+}
+unlink() { # delete a file that we are locking
+    func "unlink: $1"
+    # use with care! this can permanently erase currently locked files
+    # only the locking PID should use it on its own locks
+
+    { test -r ${1}.pid } && {
+	lockpid="`cat ${1}.pid`"
+	{ test "$$" != "$lockpid" } && {
+	    error "Unlock attempt by different PID: $1"
+	    error "Created by $lockpid now $$ is trying to unlock"
+	    return 1 }
+    }
+
+    (
+	${=rm} ${1}
+	touch ${1}
+	$WORKDIR/bin/dotlock -d -f ${1}
+	{ test $? != 0 } && { error "Unable to unlink: $1"; return 1 }
+	{ test -r ${1}.pid } && { rm -f ${1}.pid }
+    ) &!
+    return 0
+}
+

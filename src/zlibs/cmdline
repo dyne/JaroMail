@@ -1,0 +1,111 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+check_bin() {
+    # check for required programs
+    for req in pinentry fetchmail procmail mutt; do
+	which $req >/dev/null
+	{ test $? != 0 } && {
+	    error "Cannot find $req. Please install it."
+	    return 1
+	}
+    done
+
+    # which wipe command to use
+    which wipe > /dev/null
+    { test $? = 0 } && {
+	rm="wipe -f -s -q -R /dev/urandom"; return 0 }
+    which srm > /dev/null
+    { test $? = 0 } && {
+	rm="srm -m"; return 0 }
+    rm="rm -f"
+    return 0
+}
+
+
+option_is_set() {
+    #First argument, the option (something like "-s")
+    #Second (optional) argument: if it's "out", command will print it out 'set'/'unset'
+    #                       This is useful for if conditions
+    #Return 0 if is set, 1 otherwise
+    [[ -n ${(k)opts[$1]} ]];
+    r=$?
+    if [[ $2 == out ]]; then
+	if [[ $r == 0 ]]; then
+	    echo 'set'
+	else
+	    echo 'unset'
+	fi
+    fi
+    return $r;
+}
+option_value() {
+    #First argument, the option (something like "-s")
+    <<< ${opts[$1]}
+}
+
+
+usage() {
+    cat <<EOF
+Jaro Mail $VERSION - your humble and faithful electronic postman
+
+ Copyright (C) 2010-2012 Dyne.org Foundation, License GNU GPL v3+
+ This is free software: you are free to change and redistribute it
+ The latest Jaro Mail sourcecode is on <http://jaromail.dyne.org>
+
+Synopsis: jaro [options] [command] [command-options]
+
+Main commands:
+
+ fetch  download unread emails from [account]
+ send   send all mails queued in the outbox
+ peek   look into the [account] mailbox without downloading
+
+Options:
+
+ -a     use a particular account instead of default (keyword)
+ -l     whitelist or blacklist to use with learn/query/forget
+ -h     print this help
+ -v     version information for this tool
+ -q     run quietly without printing informations
+ -n     dry run, show operations without executing them
+ -D     print debugging information at runtime
+
+Maintenance commands:
+
+ passwd   reset password for the account in use
+
+ update   refresh configurations
+ queue    add a mail into outbox
+
+ addr     look for a matching address in list
+ query    read mail from stdin, return 0 if known to list
+ learn    learn addresses from mails piped in stdin
+ forget   remove addresses found in mails piped in stdin
+
+ backup   move all mails older than N days from a maildir to another
+ rmdupes  remove all duplicate mails into a maildir
+ merge    merge a maildir into another, removing all duplicates
+
+Please report bugs on <http://bugs.dyne.org>.
+EOF
+}

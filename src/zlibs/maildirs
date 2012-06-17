@@ -1,0 +1,147 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+
+# checks if its a maildir
+# returns 0 (success) if yes
+# no in all other cases
+maildircheck() {
+    { test -r $1 } || {	
+	error "Maildir not existing: $1"
+	return 1 }
+    { test -w $1 } || {
+	error "Directory not writable: $1"
+	return 1 }
+    { test -r $1/cur } \
+	&& { return 0 } # Yes is a maildir
+# shortened test to speedup
+#	&& { test -r $1/new } \
+#	&& { test -r $1/tmp } \
+    func "Not a maildir: $1"
+    return 1
+}
+
+maildirmake() {
+
+    if [ -z $1 ]; then
+	error "internal error: missing argument for maildirmake"
+	return
+    fi
+
+    if [ -r $1 ]; then
+	func "maildir exists: $1"
+	return
+    fi
+
+    ${=mkdir} ${1}/cur
+    ${=mkdir} ${1}/new
+    ${=mkdir} ${1}/tmp
+
+}
+
+
+list_maildirs() {
+    maildirs=()
+    for m in `find $MAILDIRS -type d`; do
+	maildircheck $m
+	{ test $? = 0 } && {
+	    # is a maildir
+	    { test "`find $m -type f`" != "" } && {
+		# and is not empty
+		maildirs+=(`basename $m`)
+	    }
+	}
+    done
+    return ${#maildirs}
+}
+
+rmdupes() {
+    tmp=$TMPDIR/$datestamp.rmdupes.$RANDOM
+    newlock $tmp
+    for folder in ${=PARAM}; do
+	{ test ! -r $folder } && { folder=$MAILDIRS/$folder }
+	{ test ! -r $folder } && { error "Maildir not found: $folder"; continue }
+	notice "Removing duplicates in $folder"
+	c=0
+	for i in `find ${folder} -type f`; do
+	    # 5MB should be enough ehre?
+	    formail -D 5000000  $tmp <$i \
+		&& rm $i && c=`expr $c + 1`
+	done
+    done
+    unlink $tmp
+    notice "$c duplicates found and deleted"
+}
+
+merge() {
+    src=${PARAM[1]}
+    dst=${PARAM[2]}
+    if ! [ -r ${src}/cur ]; then
+	error "No source maildir found in $src"
+	return 1
+    fi
+    if ! [ -r ${dst}/cur ]; then
+	error "No destination maildir found in $dst"
+	return 1
+    fi
+    notice "Merging maildir ${src} into ${dst}"
+    c=0
+    for i in `find ${src}/cur -type f`; do mv $i ${dst}/cur/; c=`expr $c + 1`; done
+    for i in `find ${src}/new -type f`; do mv $i ${dst}/new/; c=`expr $c + 1`; done
+    for i in `find ${src}/tmp -type f`; do mv $i ${src}/tmp/; c=`expr $c + 1`; done
+    act "$c mails succesfully moved."
+    notice "Operation completed, you can now safely remove ${src}"
+}
+
+# re-sort all maildir through the procmail filters
+# it can create duplicates, up to the user to rmdupes
+filter() {
+
+    update # update all filters
+
+	# archive old procmail log
+    if [ -r $WORKDIR/log/procmail.log ]; then
+	newlock $WORKDIR/log/procmail-${datestamp}.log
+	cat $WORKDIR/log/procmail.log \
+	    >> $WORKDIR/log/procmail-${datestamp}.log
+	rm -f $WORKDIR/log/procmail.log
+	unlock $WORKDIR/log/procmail-${datestamp}.log
+    fi
+
+    for folder in ${=PARAM}; do
+	typeset -al fall
+	{ test ! -r $folder } && { folder=$MAILDIRS/$folder }
+	{ test ! -r $folder } && { error "Maildir not found: $folder"; return 1 }
+	notice "Filtering folder $folder"
+	# first index current state
+	for m in `find $folder -type f`; do fall+=($m); done
+	# then process it, this way ignoring new mails send to same folder
+	for n in ${=fall}; do
+	    cat $n | procmail -m $PROCMAILDIR/rc
+	done
+	unset fall
+    done
+
+    total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
+    briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+    echo "${briefing}"
+}

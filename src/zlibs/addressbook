@@ -1,0 +1,153 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+
+
+###################
+# Jaro Brother DB
+create_addressbook() {
+    { test -r $WORKDIR/addressbook } && {
+	error "Addressbook already exists: $WORKDIR/addressbook"
+	return 1
+    }
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
+CREATE TABLE whitelist
+(
+  email   text collate nocase,
+  name    text collate nocase unique,
+  hits    int
+);
+CREATE TABLE blacklist
+(
+  email   text collate nocase,
+  name    text collate nocase unique,
+  hits    int
+);
+EOF
+    { test $? != 0 } && {
+	error "Error creating addressbook database."
+	return 1 }
+    return 0
+}
+insert_address() {
+    func "insert address: $1, $2"
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
+INSERT INTO $list (email, name)
+VALUES ("${1}", "${2}");
+EOF
+    { test $? != 0 } && {
+	func "address already present in $list" }
+    return $0
+}
+remove_address() {
+    func "remove address <$1> from $list"
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
+DELETE FROM $list
+WHERE email LIKE "${1}";
+EOF
+    { test $? != 0 } && {
+	func "address not found or error occurred" }
+}
+search_name() {
+	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
+.width 64 128
+SELECT * FROM $list
+WHERE name LIKE "%${1}%";
+EOF
+}
+search_email() {
+	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
+SELECT rowid FROM $list
+WHERE email IS "${1}";
+EOF
+return $?
+}
+address() {
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    act "Searching for \"${PARAM[1]}\" in $list"
+    { test "$OS" = "MAC" } && {
+	matches=`$WORKDIR/bin/ABQuery ${PARAM[1]}`
+    }
+    matches="${matches}\n`search_name ${PARAM[1]}`"
+
+    # mutt query requires something like this
+    echo "jaro: `echo $matches | wc -l` matches"
+    echo "$matches" | awk '
+{ printf "%s\t", $1
+  for(i=2;i<=NF;i++) {
+    sub("<","",$i)
+    sub(">","",$i)
+    if($i!=$1) printf "%s ", $i
+  }
+  printf "\n" }'
+}
+query() {
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    if [ -z ${PARAM[1]} ]; then
+	email="`${WORKDIR}/bin/fetchaddr -a| awk '{print $1}'`"
+    else
+	email="`${WORKDIR}/bin/fetchaddr -x ${PARAM[1]} -a| awk '{print $1}'`"
+    fi
+    exitcode=1
+    lookup="`search_email ${email}`"
+    { test "$lookup" != "" } && { exitcode=0 }
+    act "Email <$email> found in $list with id $lookup"
+}
+
+learn() {
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    tmp=$TMPDIR/learn.$datestamp.$RANDOM
+    from="`tee $tmp | formail -xFrom: | sed -e 's/\"//g'`"
+    if [ -z ${PARAM[1]} ]; then
+	email="`cat $tmp | ${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
+    else
+	email="`cat $tmp | ${WORKDIR}/bin/fetchaddr -x ${PARAM[1]}| awk '{print $1}'`"
+    fi
+    ${=rm} $tmp &
+    insert_address "$email" "$from"
+}
+
+forget() {
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    act "Expecting mail from stdin pipe"
+    if [ -z ${PARAM[1]} ]; then
+	email="`${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
+    else
+	email="`${WORKDIR}/bin/fetchaddr -x ${PARAM[1]}| awk '{print $1}'`"
+    fi
+    remove_address "${email}"
+}
+list_addresses() {
+    { test ${PARAM[1]} } && { list=${PARAM[1]} }
+    act "Listing all contents for $list"
+    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook
+.width 32 40
+SELECT * FROM $list;
+EOF
+
+    echo ".dump" | ${SQL} -batch $WORKDIR/addressbook \
+	| bzip2 > $WORKDIR/addressbook.bz2
+    notice "Backup of all addressbook created"
+    act -n ""; ls -lh $WORKDIR/addressbook.bz2
+}
+
+###################

@@ -1,0 +1,208 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+
+
+
+stats() {
+    # make index of all maildirs
+    notice "Maildirs status"
+    case ${PARAM[1]} in
+
+	timecloud) timecloud ;;
+
+	weeks) weeks ;;
+
+	*) # simple stats
+	    typeset -alU ml
+	    typeset -al empty
+	    list_maildirs
+	    for i in ${maildirs}; do
+		cur=`ls $MAILDIRS/$i/cur | wc -l`
+		new=`ls $MAILDIRS/$i/cur | wc -l`
+		tot=$(( $cur + $new ))
+		ml+=("$tot\t:: $i\t ($cur/$new)")
+	    done
+	    for m in ${ml}; do
+		{ test ${m[1]} = "0" } && { 
+		    empty+=${m}
+		    continue }
+		print "    ${m}"
+	    done
+	    { test ${#empty} != 0 } && { emptystr="(${#empty} are empty)" }
+	    notice "Total maildirs: ${#ml} $emptystr"
+	    ;;
+    esac
+    return 0
+}
+
+weeks() {
+    id=$RANDOM
+    db=$TMPDIR/weekstats.db.$id
+    sql=$TMPDIR/weekstats.select.$id
+    list_maildirs
+    notice "Computing weekly statistics on ${#maildirs} maildirs"
+    func "Creating temporary database"
+    cat <<EOF | ${SQL} -batch $db
+CREATE TABLE stats
+(
+  date    text nocase,
+  ml      text collate nocase,
+  hits    int
+);
+EOF
+    { test $? != 0 } && {
+	error "Error creating temporary week stats database."
+	return 1 }
+
+    for m in ${maildirs}; do
+	for f in `find $MAILDIRS/${m} -type f`; do
+	    timestamp=`fetchdate "%Y-%U" ${f}`
+	    cat <<EOF | ${SQL} -batch $db > $sql
+SELECT * FROM stats
+WHERE ml IS "${m}" AND date IS "${timestamp}";
+EOF
+	    res=`cat $sql`
+	    if [ "$res" = "" ]; then
+		# new tag
+		cat <<EOF | ${SQL} -batch $db
+INSERT INTO stats (date, ml, hits)
+VALUES ("${timestamp}", "${m}", 1);
+EOF
+	    else
+		cat <<EOF | ${SQL} -batch $db
+UPDATE stats SET hits = hits + 1
+WHERE ml IS "${m}" AND date IS "${timestamp}";
+EOF
+	    fi
+	done
+    done
+    # gather results from the database
+    table=$WORKDIR/.stats/jaromail.html
+    ${=mkdir} $WORKDIR/.stats
+
+    cat <<EOF > $table
+<table >
+	<caption>Jaro Mail weekly statistics</caption>
+	<thead>
+		<tr>
+		<td></td>
+EOF
+    typeset -al week
+    cat <<EOF | ${SQL} -batch $db > $sql
+SELECT date FROM stats ORDER BY date;
+EOF
+    for w in `cat $sql | uniq`; do
+	week+=($w)
+	echo "<th scope=\"col\">${w}</th>" >> $table
+    done
+    cat <<EOF >> $table
+		</tr>
+	</thead>
+	<tbody>
+
+EOF
+    for m in ${maildirs}; do
+	echo -n "<tr><th scopre=\"row\">$m</th>" >> $table
+	for w in ${week}; do
+	    cat <<EOF | ${SQL} -batch $db > $sql
+SELECT hits FROM stats
+WHERE ml IS "${m}" AND date IS "${w}";
+EOF
+	echo -n "<td>`cat $sql`</td>" >> $table
+	done
+	echo "</tr>" >> $table
+    done
+
+    cat <<EOF >> $table
+	</tbody>
+</table>	
+EOF
+    cp $WORKDIR/.stats/visualize/header.html \
+	$WORKDIR/.stats/index.html
+    cat $table >> $WORKDIR/.stats/index.html
+    echo "</body>\n</html>\n" >> $WORKDIR/.stats/index.html
+}
+
+timecloud() {
+    id=$RANDOM
+    list_maildirs
+    notice "Computing timecloud statistics on ${#maildirs} maildirs"
+    func "Creating temporary database"
+    cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id
+CREATE TABLE stats
+(
+  date    text collate nocase,
+  tag     text collate nocase,
+  hits    int
+);
+EOF
+    { test $? != 0 } && {
+	error "Error creating temporary timecloud database."
+	return 1 }
+    
+    for m in ${maildirs}; do
+	for f in `find $MAILDIRS/${m} -type f`; do
+	    timestamp=`fetchdate "%Y-%m-%d" ${f}`
+	    cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id > $TMPDIR/timecloud.select.$id
+SELECT * FROM stats
+WHERE tag IS "${m}" AND date IS "${timestamp}";
+EOF
+	    res=`cat $TMPDIR/timecloud.select.$id`
+	    if [ "$res" = "" ]; then
+		# new tag
+		cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id
+INSERT INTO stats (date, tag, hits)
+VALUES ("${timestamp}", "${m}", 1);
+EOF
+	    else
+		cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id
+UPDATE stats SET hits = hits + 1
+WHERE tag IS "${m}" AND date IS "${timestamp}";
+EOF
+	    fi
+	done
+    done
+    # gather results from the database
+    cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id > $TMPDIR/timecloud.results.$id
+.separator \t
+SELECT * FROM stats ORDER BY date;
+EOF
+    # format the results into a JSON string
+    awk 'BEGIN { date=0; printf "[" }
+{ if(date != $1) {
+    if( date != 0 ) printf "]],"
+    date=$1
+    printf "[\"" date "\",["
+    printf "[\"" $2 "\",\"" $3 "\"]"
+  } else {
+    printf ",[\"" $2 "\",\"" $3 "\"]"
+  }
+}
+END { print "]]];" }
+'  $TMPDIR/timecloud.results.$id > $TMPDIR/timecloud.json.$id
+    ${=mkdir} $WORKDIR/timecloud
+    cat <<EOF > $WORKDIR/timecloud/jaromail.js
+var jaromail=`cat $TMPDIR/timecloud.json.$id`
+EOF
+    rm $TMPDIR/timecloud.*.$id
+}

@@ -1,0 +1,259 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+#######################
+## Search into maildirs
+# using mairix
+search() {
+    { which mairix > /dev/null } || { return 1 }
+    id=$RANDOM
+    rc=$TMPDIR/search.conf.$id
+    typeset -al expr
+    typeset -al fold
+    # intelligent parse of args, position independent
+    # check if its a folder, if not is an expression
+    mlstr="all folders"; ml=""; c=0
+    basedir=$MAILDIRS
+    # check if the name of a maildir is among params
+    for p in ${PARAM}; do
+	c=$(( $c + 1 ))
+	func "checking param: ${p}"
+	if [ -r ${p} ]; then
+
+	    { maildircheck ${p} } && { 
+		fold+=(${p})
+		{ test ${#fold} = 1 } && {
+		    # base path is the dir of the first folder
+		    pushd `dirname ${p}`
+		    basedir=`pwd`
+		    popd }
+	    }
+	    
+        elif [ -r ${MAILDIRS}/${p} ]; then
+
+	    { maildircheck ${MAILDIRS}/${p} } && { fold+=(${MAILDIRS}/${p}) }
+
+	else # not a folder, add it to expressions array
+	    expr+=(${p})
+	fi
+    done
+
+
+    # now fold is an array of specified folders
+    # expr is an array of specified search expressions
+
+
+    # to search only one maildir then we need to index it
+    # separate from the rest of the maildirs
+    if [ ${#fold} != 0 ]; then
+	{ test ${#expr} = 0 } && {
+	    error "no search expression given for folders ${fold[@]}"
+	    return 1 }
+	# forge the folder string for mairix conf
+	folders=""; for f in ${fold}; do folders="$folders`basename $f`:"; done
+	cat <<EOF > $rc
+base=$basedir
+database=$TMPDIR/search.db.$id
+maildir=${folders}
+mfolder=$TMPDIR/search.result.$id
+mformat=maildir
+EOF
+
+	exitcode=1
+	act "Indexing ${folders}"
+	mairix -F -f $rc 2> /dev/null
+	{ test $? = 0 } && { 
+	    act "Searching for: ${expr}"
+	    found=`mairix -F -f $rc ${=expr} 2> /dev/null | awk '{ print $2}'`
+	    if [ $found != 0 ]; then
+		mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
+		notice "Found $found matches looking for '$expr' in $folders"
+		find $TMPDIR/search.result.$id
+		cat $rc
+		exitcode=0
+	    else error "No matches found."; fi
+	}
+
+
+	rm -f $rc
+	rm -f $TMPDIR/search.db.$id
+#	rm -rf $TMPDIR/search.result.$id
+	return $exitcode
+
+
+	####################################################
+    else    # no folder specified on commandline, search all
+    # make index if no params given
+	c=0
+	for i in `ls $MAILDIRS`; do
+	# is it a maildir?
+	    { maildircheck $MAILDIRS/${i} } && {
+		c=`expr $c + 1`; ml="$ml:$i" }
+	done
+    fi
+
+    cat <<EOF > $rc
+base=$MAILDIRS
+database=$WORKDIR/search.db
+maildir=${ml}
+mfolder=$TMPDIR/search.result.$id
+mformat=maildir
+EOF
+    # just index
+    { test ${#PARAM} = 0 } && {
+	act "Indexing $c maildirs for search"
+	act "please be patient..."
+	mairix -F -f $rc
+	rm -f $rc
+	exitcode=$?
+	if [ $exitcode = 0 ]; then notice "Done."
+	else error "Error, indexing aborted."; fi
+	rm -f $rc
+	return $exitcode
+    }
+    act "Searching $mlstr for: ${expr}"
+    exitcode=1
+    found=`mairix -F -f $rc ${=expr} 2> /dev/null | awk '{print $2}'`
+    if [ $CALLMUTT = 1 ]; then
+
+	if [ $found != 0 ]; then
+	    mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
+	    notice "Found $found matches looking for '$expr' in all mail folders"
+	    exitcode=0
+	else error "Nothing found matching '$expr'"; fi
+
+	rm -rf $TMPDIR/search.*.$id
+	rm -f $rc
+	return $exitcode
+
+    else ### if not calling mutt, internal use mode:
+	# print out the full path to the results maildir
+	# return number of found hits
+	echo $TMPDIR/search.result.$id
+	return $found
+    fi
+}
+
+
+backup() {
+    id=$RANDOM
+    rc=$TMPDIR/backup.conf.$id
+    typeset -al expr
+    typeset -al fold
+
+    src=""; dst=""
+    basedir=$MAILDIRS
+    # check if the name of a maildir is among params
+    # we need at least 2 maildirs, the second is the destination
+    for p in ${PARAM}; do
+	c=$(( $c + 1 ))
+
+	if [ $c = ${#PARAM} ]; then
+	    # last one is always the destination
+	    func "destination is ${p}"
+	    fold+=(${p})
+
+	elif [ -r ${p} ]; then
+
+	    { maildircheck ${p} } && {
+		func "param ${p} is a maildir"
+		fold+=(${p})
+		{ test ${#fold} = 1 } && {
+		    # base path is the dir of the first folder
+		    pushd `dirname ${p}`
+		    basedir=`pwd`
+		    popd }
+	    }
+	    
+        elif [ -r ${MAILDIRS}/${p} ]; then
+
+	    { maildircheck ${MAILDIRS}/${p} } && {
+		func "param ${p} is a jaro maildir"
+		fold+=(${MAILDIRS}/${p})
+	    }
+
+	else # not a folder, add it to expressions array
+	    func "param ${p} is an expression"
+	    expr+=(${p})
+	fi
+    done
+
+    { test ${#fold} -lt 2 } && {
+	error "Not enough folders specified for backup: minimum is 2"
+	act "When specifying more than 2, the last one is the destination"
+	return 1
+    }
+
+    dst=${fold[${#fold}]}
+    { test -r $dst } && {
+	error "Backup destination already exists: $dst"
+	return 1 }
+
+    maildirmake "${dst}"
+
+    { test ${#expr} = 0 } && {
+	error "No expression set for backup, please indicate what you want to backup"
+	act "For example: d:10y-2y (all mails older than 1 year up to 10 years ago"
+	act "Or a simple search string, all expressions can be verified using search."
+	return 1
+    }
+
+    # forge the folder string for mairix conf
+    folders=""
+    for f in ${fold}; do
+	{ test $f = $dst } || { 
+	    folders="$folders`basename $f`:" }
+    done
+
+    notice "Backup of all mails in '$folders' matching expression '$expr'"
+
+    act "Indexing folders"
+    cat <<EOF > $rc
+base=$basedir
+database=$TMPDIR/backup.db.$id
+maildir=${folders}
+mfolder=$dst
+mformat=maildir
+EOF
+    mairix -F -f $rc 2> /dev/null
+    act "Moving matches to $dst"
+    pushd `dirname $dst`; basedir=`pwd`; popd
+    rm -f $rc; cat <<EOF > $rc
+base=$basedir
+database=$TMPDIR/backup.db.$id
+maildir=${folders}
+mfolder=$dst
+mformat=maildir
+EOF
+    found=`mairix -F -f $rc -H ${expr} 2> /dev/null | awk '{print $2}'`
+    notice "$found matches found, destination folder size is `du -hs $basedir/$dst | awk '{print $1}'`"
+    # invert the order of folders to start with destination in rmdupes
+    typeset -al PARAM
+    c=$(( ${#fold} ))
+    while [ $c -gt 0 ]; do
+	func "${fold[$c]}"
+	PARAM+=(${fold[$c]})
+	c=$(( $c - 1 ))
+    done
+    QUIET=1
+    rmdupes
+}

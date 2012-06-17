@@ -52,10 +52,8 @@ int main (int argc, char **argv) {
     
 #endif
     free_rfc822(parsed);
-  } else {
-    printf("Error parsing %s\n",argv[1]);
-    exit(1);
   }
+
   exit(0);
 }
 
