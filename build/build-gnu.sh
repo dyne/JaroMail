@@ -49,7 +49,7 @@ case $distro in
 		mairix/writer.o mairix/dates.o mairix/dirscan.o \
 		mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
 		mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o \
-		-lz
+		-lz -lbz2
 	echo "fetchdate"
 	
 
