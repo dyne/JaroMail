@@ -33,6 +33,7 @@ QUIET=0
 DEBUG=0
 DRYRUN=0
 CLEANEXIT=1
+CALLMUTT=1
 TMPRAM=0
 
 # which command to use when creating dirs
@@ -1469,13 +1470,24 @@ EOF
     act "Searching $mlstr for: ${expr}"
     exitcode=1
     found=`mairix -F -f $rc ${=expr} 2> /dev/null | awk '{print $2}'`
-    if [ $found != 0 ]; then
-	mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
-	notice "Found $found matches looking for '$expr' in all mail folders"
-	exitcode=0
-    else error "Nothing found matching '$expr'"; fi
-    rm -rf $TMPDIR/search.*.$id
-    rm -f $rc
+    if [ $CALLMUTT = 1 ]; then
+
+	if [ $found != 0 ]; then
+	    mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
+	    notice "Found $found matches looking for '$expr' in all mail folders"
+	    exitcode=0
+	else error "Nothing found matching '$expr'"; fi
+
+	rm -rf $TMPDIR/search.*.$id
+	rm -f $rc
+	return $exitcode
+
+    else ### if not calling mutt, internal use mode:
+	# print out the full path to the results maildir
+	# return number of found hits
+	echo $TMPDIR/search.result.$id
+	return $found
+    fi
 }
 ##############
 ## Open a File
@@ -1575,7 +1587,7 @@ mfolder=$dst
 mformat=maildir
 EOF
     mairix -F -f $rc 2> /dev/null
-    act "Copying matches to $dst"
+    act "Moving matches to $dst"
     pushd `dirname $dst`; basedir=`pwd`; popd
     rm -f $rc; cat <<EOF > $rc
 base=$basedir
@@ -1586,9 +1598,16 @@ mformat=maildir
 EOF
     found=`mairix -F -f $rc -H ${expr} 2> /dev/null | awk '{print $2}'`
     notice "$found matches found, destination folder size is `du -hs $basedir/$dst | awk '{print $1}'`"
-
-    # TODO: remove matched messages from source folders using rmdupes
-
+    # invert the order of folders to start with destination in rmdupes
+    typeset -al PARAM
+    c=$(( ${#fold} ))
+    while [ $c -gt 0 ]; do
+	func "${fold[$c]}"
+	PARAM+=(${fold[$c]})
+	c=$(( $c - 1 ))
+    done
+    QUIET=1
+    rmdupes
 }
 
 rmdupes() {
@@ -1626,7 +1645,6 @@ merge() {
     for i in `find ${src}/new -type f`; do mv $i ${dst}/new/; c=`expr $c + 1`; done
     for i in `find ${src}/tmp -type f`; do mv $i ${src}/tmp/; c=`expr $c + 1`; done
     act "$c mails succesfully moved."
-    rmdupes ${dst}
     notice "Operation completed, you can now safely remove ${src}"
 }
 
