@@ -2,6 +2,7 @@
 
 * GTD
  + Integration with org-remember via org-protocol
+   or maybe just to taskwarrior
 
 * Anonymizer
  + Built-in support for Mixmaster
@@ -15,6 +16,7 @@
 
 * Stats
  + Have some fancy statistics
+   use timecloud for a jquery visualization
 
 * Speedmail or Quickmail
   write down a mail from commandline and send it right away (if online)

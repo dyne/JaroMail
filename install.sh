@@ -212,7 +212,12 @@ cp -a src/procmail/* $PROCMAILDIR
 ${=mkdir} $MUTTDIR
 cp -a src/mutt/* $MUTTDIR
 
+# also timecloud
+${=mkdir} $WORKDIR/timecloud
+cp -a src/timecloud/* $WORKDIR/timecloud
+
 cp src/fetchaddr $WORKDIR/bin/
+cp src/fetchdate $WORKDIR/bin/
 
 case $OS in
 	MAC) cp -a build/osx/* $WORKDIR/bin ;;

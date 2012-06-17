@@ -6,7 +6,7 @@
  88 88.  .88 88       88.  .88 88  88  88 88.  .88 88 88
  88 `88888P8 dP       `88888P' dP  dP  dP `88888P8 dP dP
  88~ooooooooooooooooooooooooooooooooooooooooooooooooooooo
-odP   your humble and faithful electronic postman   v 0.9
+odP   your humble and faithful electronic postman   v 1.0
 
 A commandline tool to easily and privately handle your e-mail
 
@@ -15,7 +15,35 @@ Homepage with more information and links to the manual:
 	      	   	             http://jaromail.dyne.org
 
 
-* Build
+
+* INSTALL
+
+Use the install script.
+
+It will check for all requirements on your system to be satisfied.
+
+Give it a path as argument if you want to install your Jaro Mail
+directory into something different than Mail inside your Home.
+
+./install.sh ./Testing
+
+will install a new Jaro Mail instance into a new Testing folder
+
+Jaro Mail is completely reentrant: if you install it in multiple
+locations you can have completely separated setups, with multiple
+identities and different filters.
+
+* USAGE instructions
+
+See the commandline help:
+
+ jaro -h
+
+and make sure to read the manual: it contains a lot of useful tips!
+
+
+
+* BUILD (not necessary for OSX binary packages)
 
 Use the build scripts in build/
 
@@ -23,25 +51,16 @@ You will need a compiler installed (XCode on Apple/OSX)
 
 But if you use Apple/OSX you can simply download the binary.
 
-* Install
+If you are building then, first enter the build subdir
 
-Use the install script.
-
-It will check for all requirements on your system to be satisfied.
-
-Give it a path as argument if you want to install your Jaro Mail
-directory into something different than ~/Mail, this way you can have
-completely separated setups with multiple identities and filters.
-
-* Use
-
-See the commandline help:
-
- jaro -h
+cd build
+./build-gnu.sh (or osx)
 
 A Manual is in the works
 
-* Developers
+
+
+* DEVELOPERS
 
 All revisioned in Git, see http://code.dyne.org/jaromail
 
@@ -53,14 +72,18 @@ Patches welcome.
 
 Come on channel #dyne on http://hinezumi.im to get in touch with devs
 
-* Donate
+
+
+* DONATE
 
 Money donations are very welcome and well needed, they will encourage
 further development even beyond my own needs for this software.
 
  http://dyne.org/donate
 
-* License
+
+
+* LICENSE
 
 # Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
 #

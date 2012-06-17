@@ -1,0 +1,44 @@
+<html>
+ <head>
+      <script type="text/javascript" charset="utf-8" src="jquery.min.js"></script>
+      <script type="text/javascript" charset="utf-8" src="jquery.sparkline.min.js" ></script>
+      <script type="text/javascript" charset="utf-8" src="jquery-ui.min.js"></script>
+      <script type="text/javascript" charset="utf-8" src="jquery.event.wheel.js"></script>
+      <script type="text/javascript" charset="utf-8" src="tagcloud.js"></script>
+      <script type="text/javascript" charset="utf-8" src="timecloud.js"></script>
+      <script type="text/javascript" charset="utf-8" src="jaromail.js"></script>
+      <script type="text/javascript">
+	$(document).ready(function() {
+	$("#timecloud").timecloud({
+	"timecloud":jaromail,
+	"start":-1,
+	"winSize":5,
+	"steps":1,
+	"playBack":false,
+	"play":false,
+	"sparklineStyle": {
+	type:'line',
+        lineColor:'Navy',
+        height:'100px',
+        chartRangeMin: '0',
+        chartRangeMax: '200',
+        width:'300px' }
+	});
+	});
+</script>
+
+      <style type="text/css">
+         * { margin:  0; padding: 0; font-family: Georgia,Garamond,"Times New Roman",serif;}
+         #content {width: 90%; margin-left: auto ; margin-right: auto ;}
+      </style>
+ </head>
+ <body>
+      <div id="content">
+         <div id="header">
+            <h1>Jaro Mail TimeCloud</h1>
+            <div id="timecloud" />
+         </div>
+      </div>
+
+ </body>
+</html>

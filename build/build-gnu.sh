@@ -4,6 +4,8 @@ cd ..
 
 distro=unknown
 
+cflags="-O2"
+
 which apt-get && distro=debian
 
 # no other distro supported atm
@@ -29,18 +31,33 @@ case $distro in
 	    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
 
 	echo "All dependencies installed"
-
+	cd src
 	echo -n "Compiling the address parser... "
 
-	cd src
-	echo -n "fetchaddr "
-	[ -x fetchaddr ] || \
-	    gcc -Os -c -static fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-	    gcc -Os -static -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o
+
+	echo "fetchaddr"
+	    gcc $cflags -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+	    gcc $cflags -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o
+
+	echo -n "Compiling the date parser... "
+	    gcc $cflags -I mairix -c fetchdate.c
+	    gcc $cflags -DHAS_STDINT_H -DHAS_INTTYPES_H -DUSE_GZIP_MBOX \
+		-o fetchdate fetchdate.o \
+	        mairix/datescan.o mairix/db.o mairix/dotlock.o \
+	        mairix/expandstr.o mairix/glob.o mairix/md5.o \
+		mairix/nvpscan.o mairix/rfc822.o mairix/stats.o \
+		mairix/writer.o mairix/dates.o mairix/dirscan.o \
+		mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
+		mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o \
+		-lz
+	echo "fetchdate"
+	
 
 	cd - > /dev/null
 
 	cp src/fetchaddr build/gnu/
+	cp src/fetchdate build/gnu/
+
 	echo
 	echo "Compiling the search engine..."
 	cd src/mairix

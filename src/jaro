@@ -42,6 +42,10 @@ mkdir="`which mkdir` -m 700 -p"
 datestamp=`date '+%d%b%y'`
 ##########################
 
+# # # # SQL
+# command
+SQL=sqlite3
+
 
 PARAM=()
 typeset -A global_opts
@@ -56,6 +60,9 @@ list=whitelist
 # global variables for accounts
 typeset -h name login host protocol port password auth folders accountopt
 
+# global array for maildirs (filled by list_maildirs)
+typeset -al maildirs
+    
 # global variable for exit code
 typeset exitcode
 exitcode=0
@@ -461,9 +468,10 @@ maildircheck() {
 	error "Directory not writable: $1"
 	return 1 }
     { test -r $1/cur } \
-	&& { test -r $1/new } \
-	&& { test -r $1/tmp } \
 	&& { return 0 } # Yes is a maildir
+# shortened test to speedup
+#	&& { test -r $1/new } \
+#	&& { test -r $1/tmp } \
     func "Not a maildir: $1"
     return 1
 }
@@ -835,6 +843,15 @@ EOF
     return 0
 }
 
+list_maildirs() {
+    maildirs=()
+    for m in `find $MAILDIRS -type d`; do
+	maildircheck $m
+	{ test $? = 0 } && { maildirs+=(`basename $m`) }
+    done
+    return ${#maildirs}
+}
+
 stats() {
     # make index of all maildirs
     notice "Maildirs status"
@@ -856,6 +873,70 @@ stats() {
     { test ${#empty} != 0 } && { emptystr="(${#empty} are empty)" }
     notice "Total maildirs: ${#ml} $emptystr"
     return 0
+}
+
+timecloud() {
+    id=$RANDOM
+    list_maildirs
+    notice "Computing timecloud statistics on ${#maildirs} maildirs"
+    func "Creating temporary database"
+    cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id
+CREATE TABLE stats
+(
+  date    text collate nocase,
+  tag     text collate nocase,
+  hits    int
+);
+EOF
+    { test $? != 0 } && {
+	error "Error creating temporary timecloud database."
+	return 1 }
+    
+    for m in ${maildirs}; do
+	for f in `find $MAILDIRS/${m} -type f`; do
+	    timestamp=`fetchdate "%Y-%m-%d" ${f}`
+	    cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id > $TMPDIR/timecloud.select.$id
+SELECT * FROM stats
+WHERE tag IS "${m}" AND date IS "${timestamp}";
+EOF
+	    res=`cat $TMPDIR/timecloud.select.$id`
+	    if [ "$res" = "" ]; then
+		# new tag
+		cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id
+INSERT INTO stats (date, tag, hits)
+VALUES ("${timestamp}", "${m}", 1);
+EOF
+	    else
+		cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id
+UPDATE stats SET hits = hits + 1
+WHERE tag IS "${m}" AND date IS "${timestamp}";
+EOF
+	    fi
+	done
+    done
+    # gather results from the database
+    cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id > $TMPDIR/timecloud.results.$id
+.separator \t
+SELECT * FROM stats ORDER BY date;
+EOF
+    # format the results into a JSON string
+    awk 'BEGIN { date=0; printf "[" }
+{ if(date != $1) {
+    if( date != 0 ) printf "]],"
+    date=$1
+    printf "[\"" date "\",["
+    printf "[\"" $2 "\",\"" $3 "\"]"
+  } else {
+    printf ",[\"" $2 "\",\"" $3 "\"]"
+  }
+}
+END { print "]]];" }
+'  $TMPDIR/timecloud.results.$id > $TMPDIR/timecloud.json.$id
+    ${=mkdir} $WORKDIR/timecloud
+    cat <<EOF > $WORKDIR/timecloud/jaromail.js
+var jaromail=`cat $TMPDIR/timecloud.json.$id`
+EOF
+    rm $TMPDIR/timecloud.*.$id
 }
 
 ######
@@ -1206,7 +1287,6 @@ EOF
 
 ###################
 # Jaro Brother DB
-SQL=sqlite3
 create_addressbook() {
     { test -r $WORKDIR/addressbook } && {
 	error "Addressbook already exists: $WORKDIR/addressbook"
@@ -1798,7 +1878,9 @@ main()
     subcommands_opts[send]=""
     subcommands_opts[peek]=""
     subcommands_opts[update]=""
+
     subcommands_opts[stats]=""
+    subcommands_opts[timecloud]=""
 
     subcommands_opts[search]=""
     subcommands_opts[addr]=""
@@ -1911,7 +1993,10 @@ main()
 	update)  update ;;
 
 	search)  CLEANEXIT=0; search ${PARAM} ;;
+
 	stats)   CLEANEXIT=0; stats ;;
+	timecloud)   CLEANEXIT=0; timecloud ;;
+
 	addr)    CLEANEXIT=0; address ${PARAM} ;;
 	query)   CLEANEXIT=0; query ${PARAM} ;;
 	learn)   CLEANEXIT=0; learn ${PARAM} ;;

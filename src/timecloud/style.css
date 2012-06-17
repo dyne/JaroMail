@@ -1,0 +1,42 @@
+/* various containers */
+.timecloud {font-size: 12px;}
+.tagcloud { background-color: #ffd; }
+.control-container { margin-top: 2em; }
+
+/* slider skin */
+.ui-slider { position: relative; text-align: left; }
+.ui-slider .ui-slider-handle { position: absolute; z-index: 2; cursor: default; }
+.ui-slider .ui-slider-range { position: absolute; z-index: 1; }
+
+.overview .ui-slider { height:23px; top: -25px;}
+.overview .ui-slider-range { background:#50A029 ; height:27px; opacity:0.3; position:absolute; top:-2px; border-left: 1px solid black; border-right: 1px solid black; padding-bottom: 4px; border-bottom: 1px dashed #000}
+.overview .ui-slider-handle { height:27px; opacity:0.8; position:absolute; top:-2px; width:4px; z-index:1; background-position:center center; background-repeat:no-repeat;}
+.left { margin-left: -4px; background-image:url(i/slider-handle-left.png);}
+.right { margin-left: 2px; background-image:url(i/slider-handle-right.png);}
+
+.speed { background-image:url(i/slider-bg.png); background-position:center center; background-repeat:no-repeat; height:15px; width:55px; left: 65px; top: -1.3em; }
+.speed .ui-slider-handle { background-image:url(i/slider-handle.png); background-position:center center; background-repeat:no-repeat; height:15px; left:0; position:absolute; top:0; width:12px; z-index:1; }
+.ui-speed-label { left:0; position:absolute; top:1.7em; font-size: 9px;}
+
+/* sparkline skin */
+.sparkline-container { height:27px; }
+.sparkline-label { position: relative; font-size: .8em; text-align: right; width: 40px; left: -40px; }
+.min, .max { position: absolute; }
+.min { bottom: -27px; right:0px; }
+.max { top: 0px; right:0px; }
+.startdate {float: left;}
+.enddate {float: right;}
+
+/* gui controls */
+.text-control { margin-right: .5em; margin-top: 1em; color: blue; cursor:pointer; text-decoration: underline; background: #eee;}
+.selected {background:Navy ; color: yellow; opacity:0.3; text-decoration: none;}
+
+/* tagcloud style */
+ul.tagcloud-list { font-size: 100%; font-weight: bold; padding: 2px; }
+li.tagcloud-base { font-size: 24px; display: inline; white-space: nowrap; }
+a.tagcloud-anchor { text-decoration: none; color: #00f;}
+a.tagcloud-anchor:hover { background-color: #ddd; }
+a.tagcloud-earliest { color: #ccc; }
+a.tagcloud-earlier { color: #99c; }
+a.tagcloud-later { color: #99f; }
+a.tagcloud-latest { color: #00f; }

@@ -1,0 +1,154 @@
+jQuery UI Timecloud
+
+Copyright© 2008-2009 Stefan Marsiske <my name at gmail.com>
+
+Dual licensed under the MIT and GPLv3 licenses.
+
+Depends
+    * Jquery 1.3+
+    * JQuery UI 1.6rc6+
+    * JQuery Sparklines
+    * tagcloud.js
+    * JQuery $.event.special.wheel
+    * excanvas – for ie8 support
+
+All these dependencies are packaged in the include/ directory of the sources.
+
+News
+* updated to work with jquery 1.3+ and jquery-ui 1.6rc6
+
+Examples
+Live
+    * development activities of the Tikiwiki project 
+     http://www.ctrlc.hu/timecloud/examples/subversion/svn-timecloud.html
+
+    * a visualization of your delicious tags 
+     http://www.ctrlc.hu/timecloud/examples/delicious/delicious.html
+ 
+Code
+under examples/ you'll find
+    * a general example of visualizing subversion development activities 
+    * another example visualizing your delicious tags over time 
+
+Easy code
+Timecloud displays an animated tagcloud. You can attach your timecloud as easily as this:
+
+   $("#timecloud").timecloud({"timecloud":data});
+
+Options
+
+Timecloud has quite a few options to set, these can be passed like the ‘timecloud’ parameter in the above example. The following options are available for controlling the behavious and looks of the timecloud:
+
+    * timecloud this contains the sparse timecloud data, mandatory
+    * start (0) defines index of first frame to render in the above timecloud
+      list, negative values start from the end.
+    * winSize (30) sets the initial number of days to capture in a frame
+    * steps (1) defines how many days to skip from frame to frame
+    * timeout (200us) sets the interval between frames in animation
+    * playBack (false) whether to play backwards or forwards
+    * play (false) whether to play/pause the animation
+    * urlprefix see urlpostfix
+    * urlpostfix together with urlprefix and the tag, you can compose an URL which is used as a target link for the tags in the tagcloud.
+    * sparklineStyle defines the layout for the sparklines, defaults to:
+
+   { type:'line', lineColor:'Navy', height:'30px', width:'800px', chartRangeMin: '0' }
+
+Dataformat
+Timecloud expects the data to be displayed in the ‘timecloud’ option:
+
+   $("#timecloud").timecloud({"timecloud":data});
+
+Here ‘data’ is a JSON encoded list of lists containing and sorted by days and weighted words (tags). It looks like this:
+
+   [["YYYY-MM-DD",[["TAG1","WEIGHT1"],
+                   ["TAG2","WEIGHT2"],
+                   ...
+                  ]
+    ],
+    ["YYYY-MM-DD",[....]]
+   ]
+
+or a live example:
+
+   [["2008-11-01",[["Visualization","5"]]],
+    ["2008-11-02",[["Javascript","2"],["Visualization","3"]]],
+    ["2008-11-06",[["Javascript","1"],["Visualization","1"]]]]
+
+One nice thing is, that the list needn’t be consecutive, only sorted in ascending order. All missing dates will be treated as not containing any tags. This is handy when doing SQL queries over timelogs for example, you don’t have entries for every day.
+
+An example how to prepare such a data-set is explained later.
+
+For making all this run, we need to include the dependencies in the section of our document.
+
+ <html><head>
+      <!--[if IE]><script language="javascript" type="text/javascript" src="../../include/excanvas.js"></script><![endif]-->
+      <script type="text/javascript" charset="utf-8" src="include/jquery.js"></script>
+      <script type="text/javascript" charset="utf-8" src="include/jquery.sparkline.js" ></script>
+      <script type="text/javascript" charset="utf-8" src="include/jquery-ui-p.min.js"></script>
+      <script type="text/javascript" charset="utf-8" src="include/jquery.event.wheel.js"></script>
+      <script type="text/javascript" charset="utf-8" src="include/tagcloud.js"></script>
+      <script type="text/javascript" charset="utf-8" src="timecloud.js"></script>
+
+we have also a stylesheet for our widget:
+
+      <link href="style.css" rel="stylesheet" type="text/css" />
+
+A live example would be a small PHP script which fetches all your delicious bookmarks, and spits out a list of tags attached to the days they were used:
+
+      <script type="text/javascript">
+         $(document).ready(function() {
+            var query="delicious.php?op=timecloud";
+            $.getJSON(query,function(data) { $("#loading").hide(); $("#timecloud").timecloud({"timecloud":data}); });
+         })
+      </script>
+ </head>
+
+The last thing we need, is some element we can attach our timecloud to:
+
+   <body>
+      <div id="timecloud" /> 
+   </body>
+ </head>
+
+for complete examples, see the source there is a live delicious timecloud and a subversion author timecloud example.
+How to develop a dataset suitable for a timecloud.
+
+Below I outline a short procedure to create a data set suitable for displaying as a timecloud. The below however should mostly work on UNIX systems only. In our example we try to create a timecloud for our historical data in subversion. We will display the weight of the developers in a certain timeframe for a project. For all files consult the contents of the examples/subversion directory in the sources.
+
+remember the format?
+
+   [["YYYY-MM-DD",[["TAG1","WEIGHT1"],["TAG2","WEIGHT2"],...]],["YYYY-MM-DD",[....]]]
+
+that’s what we’re going to produce now. with a twist, we will make it into a javascript variable, so that you can simply include this file in you html and have the data readily available. Imagine we have a list raw.data, like this
+
+   2008-11-21 TAG1
+   2008-11-21 TAG2
+   2008-11-21 TAG2
+
+in the examples the subversion/utils directory contains an svn2tc.xsl template, which produces such out put if applied on subversion historical logs:
+
+   svn log --xml --verbose | xsltproc svn2tc.xsl - |
+
+(note, that all lines end with pipes, like it would be one long line) If we would like to display the tags weight over the days, we need this data to be sorted by ascending dates:
+
+   sort -n raw.dates |
+
+furthermore we would like to have the sum of each tag and each tag only once in our list:
+
+   uniq -c -f 1 |
+
+so we invoke the UNIX uniq command and tell it to count the distinct tags per day. unfortunately it gives us such an output:
+
+         1 2008-11-21 TAG1
+         2 2008-11-21 TAG2
+
+which needs to be converted into our list format above, for which i resorted to some awk. To put it short the tool below takes any file similar to the uniq output and converts it to a javascript array variable:
+
+   var timeclouddata=[["2008-11-21", [["TAG1", "1"],["TAG2", "2"]]]];
+
+this you can then pass to
+
+   $("#timecloud").timecloud({"timecloud":timeclouddata});
+
+have fun, s.
+
