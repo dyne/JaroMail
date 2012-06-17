@@ -591,7 +591,18 @@ that are older than 365 days and store them into the "ml.yearsago"
 maildir which for instance could be present on an external usb
 hard-disk or any other backup device, helping us to save space on the
 desktop in use.
-
+#+BEGIN_EXAMPLE
+  check("2w-1w");
+  check("4m-1w");
+  check("2002-2003");
+  check("may2002-2003");
+  check("2002may-2003");
+  check("feb98-15may99");
+  check("feb98-15may1999");
+  check("2feb98-1y");
+  check("02feb98-1y");
+  check("970617-20010618");
+#+END_EXAMPLE
 *Caveat*: this system determines the date of emails from the time
 stamp of files, not from the Date: field in their headers nor from the
 time they were received. We need help to overcome this imperfection, a
