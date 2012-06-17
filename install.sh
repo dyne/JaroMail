@@ -202,6 +202,15 @@ else
     error "Existing configuration $WORKDIR/Accounts skipped"
 fi
 
+# our own libraries
+act "Compiling Jaro Mail ZLibs"
+${=mkdir} $WORKDIR/zlibs
+rm -f $WORKDIR/zlibs/*
+cp -a src/zlibs/* $WORKDIR/zlibs
+for z in `find $WORKDIR/zlibs -type f`; do
+    zcompile -R ${z}
+done
+
 # procmail is entirely generated
 # so overwriting it won't hurt
 act "Installing procmail scripts"
@@ -212,9 +221,9 @@ cp -a src/procmail/* $PROCMAILDIR
 ${=mkdir} $MUTTDIR
 cp -a src/mutt/* $MUTTDIR
 
-# also timecloud
-${=mkdir} $WORKDIR/timecloud
-cp -a src/timecloud/* $WORKDIR/timecloud
+# all statistics
+${=mkdir} $WORKDIR/.stats
+cp -a src/stats/* $WORKDIR/.stats
 
 cp src/fetchaddr $WORKDIR/bin/
 cp src/fetchdate $WORKDIR/bin/
