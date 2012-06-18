@@ -99,6 +99,14 @@ if ! [ -r $WORKDIR/Mutt.txt ]; then
 # Mutt specific customizations
 # uncomment and fill in with your settings
 
+## dark background (uncomment to switch)
+# source \$HOME/Mail/jaro/.mutt/colors-solarized-dark-256
+# source \$HOME/Mail/jaro/.mutt/colors-solarized-dark-16
+
+## light background (uncomment to switch)
+# source \$HOME/Mail/jaro/.mutt/colors-solarized-light-256
+# source \$HOME/Mail/jaro/.mutt/colors-solarized-light-16
+
 # set locale=""                   # system default locale ("C")
 # set signature='~/.signature'    # signature file
 # set pgp_sign_as="0xC2B68E39"    # UserID/KeyID for signing

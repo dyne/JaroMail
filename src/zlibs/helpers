@@ -151,62 +151,49 @@ ramdisk() {
 # CERT
 # downloads and/or installs certificates
 cert() {
-    if [ -z $1 ]; then
-	error "Certificate handler called without an argument"
-	return 1;
+
+    act "Downloading all known certificates (needs Internet connectivity)"
+
+#	gmail)
+    cc=Equifax_Secure_Certificate_Authority
+    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
+	
+	curl -o $WORKDIR/certs/${cc}.pem \
+	    "https://www.geotrust.com/resources/root_certificates/certificates/${cc}.cer"
+	openssl x509 -in \
+	    $WORKDIR/certs/${cc}.pem -fingerprint \
+	    -subject -issuer -serial -hash -noout
     fi
+    notice "Google CA succesfully installed"
 
-    certificate="$1"
+#	dyne|autistici|freaknet)
+    cc=Autistici_Certificate_Authority
+    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
+	curl -o $WORKDIR/certs/${cc}.pem \
+	    "http://ca.autistici.org/ca.pem"
+	openssl x509 -in \
+	    $WORKDIR/certs/${cc}.pem \
+	    -fingerprint -subject -issuer -serial -hash -noout
+    fi
+    notice "Aut/Inv CA succesfully installed"
 
-    case $certificate in
-	gmail)
-	    cc=Equifax_Secure_Certificate_Authority
-	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
+#	riseup)
+    cc=RiseupCA
+    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
+	curl -o $WORKDIR/certs/${cc}.pem "https://help.riseup.net/assets/43052/RiseupCA.pem"
+	openssl x509 -in \
+	    $WORKDIR/certs/${cc}.pem \
+	    -fingerprint -subject -issuer -serial -hash -noout
+    fi
+    notice "Riseup CA succesfully installed"
 
-		curl -o $WORKDIR/certs/${cc}.pem \
-		    "https://www.geotrust.com/resources/root_certificates/certificates/${cc}.cer"
-		openssl x509 -in \
-		    $WORKDIR/certs/${cc}.pem -fingerprint \
-		    -subject -issuer -serial -hash -noout
-	    fi
-	    ;;
-	dyne|autistici|freaknet)
-	    cc=Autistici_Certificate_Authority
-	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
-		curl -o $WORKDIR/certs/${cc}.pem \
-		    "http://ca.autistici.org/ca.pem"
-		openssl x509 -in \
-		    $WORKDIR/certs/${cc}.pem \
-		    -fingerprint -subject -issuer -serial -hash -noout
-	    fi
-	    ;;
-	riseup)
-	    cc=RiseupCA
-	    if ! [ -r $WORKDIR/certs/${cc}.pem ]; then
-		curl -o $WORKDIR/certs/${cc}.pem "https://help.riseup.net/assets/43052/RiseupCA.pem"
-		openssl x509 -in \
-		    $WORKDIR/certs/${cc}.pem \
-		    -fingerprint -subject -issuer -serial -hash -noout
-	    fi
-	    ;;
-	*)
-	    cc="`basename $certificate`"
-	    curl -o "$WORKDIR/certs/${cc}" "$certificate"
-	    if [ $? != 0 ]; then
-		error "Error downloading certificate: $certificate"
-		return 1
-	    fi
-	    openssl x509 -in \
-		"$WORKDIR/certs/${cc}" \
-		-fingerprint -subject -issuer -serial -hash -noout
-	    ;;
-    esac
     act "refreshing certificates"
     c_rehash $WORKDIR/certs > /dev/null
     if [ $? != 0 ]; then
 	error "Error refreshing certificates in $WORKDIR/certs"
 	c_rehash $WORKDIR/certs
     fi
+    notice "Done importing most common certificates."
     return 0
 }
 

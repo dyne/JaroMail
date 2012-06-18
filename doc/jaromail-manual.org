@@ -32,14 +32,15 @@ this manual is made available on http://files.dyne.org/jaromail/jaromail-manual.
 
    + Easy to deploy and use
    + Targets intensive usage of mailinglists
-   + Integrates addressbook and whitelisting
-   + Generates Procmail and Sieve filters
-   + Encrypts password storage (keyrings)
-   + Provides advanced maildir tools
+   + Does whitelisting and integrates addressbooks
+   + Can do search and backup by expressions
+   + Automatically generates filtering rules
+   + Computes and shows statistics on mail traffic
+   + Encrypts password storage (using keyrings)
+   + Provides advanced maildir management tools
    + Defers connections for off-line operations
    + Checks SSL certificates over (imap, smtp)
-   + Supports strong encryption (GnuPG)
-   + Is Based on solid GNU and BSD technology
+   + Supports strong encryption messaging (GnuPG)
    + Is Multi platform: GNU/Linux/BSD, Apple/OSX
    + Old school, used by its author for the past 10 years
 
@@ -85,7 +86,7 @@ and actions involved in managing one's email communication:
  | MTA     | Mail Transport Agent | [[http://www.fetchmail.info][Fetchmail]] |
  |         | Filtering Agent      | [[http://www.procmail.org][Procmail]]  |
  | SMTP    | Mail Delivery Agent  | [[http://msmtp.sourceforge.net][MSmtp]]     |
-
+ |         | Search engine        | [[http://www.rpcurnow.force9.co.uk/mairix/][Mairix]]    |
 #+LATEX: \pagebreak
 
 * Setup
@@ -389,13 +390,14 @@ whenever possible.
 
   After the indexing is done, you can use the command *jaro search*
   followed by any number of arguments to run the search. This is not a
-  glob match, but an absolute match on the single words. More than one
-  word is aloud to refine the match (they are all AND'ed together),
-  plus a number of tricks can be done: every single word following the
-  command can be a particular expression that indicates in which
-  header to search and for what. Here below a short reference of
-  possible expressions:
+  glob match, but an absolute match on the single words.
 
+  More than one word is aloud to refine the match (they are all AND'ed
+  together), plus a number of tricks can be done: every single word
+  following the command can be a particular expression that indicates
+  in which header to search and for what.
+
+  Here below a short reference of possible expressions:
 
   | word          | match word in message body and major headers                           |
   | t:word        | match word in To: header                                               |
@@ -418,7 +420,13 @@ whenever possible.
   | s:^substring= | match left-anchored substring in any word in Subject:                  |
   | s:substring=2 | match substring with <=2 errors in any word in Subject:                |
 
+  Besides expression, you can also use names of maildirs that you want
+  to search: they can be in any position following the *jaro search*
+  command. If no maildir was specified then the search is performed on
+  all stored maildirs.
 
+  At last, for a reference on how the date range works in search
+  expressions, you can look into the *backup* section in this manual.
 
 * Security
 
@@ -509,6 +517,7 @@ above the average.
 
 For more information about Tomb please refer to its own documentation.
 
+
 * Storage and backup
 
 
@@ -584,34 +593,30 @@ of any interest, but still might be useful to be retrieved just in
 case, Jaro Mail implements a function that will move all messages
 older than a certain date out of a maildir folder into another.
 
-: $ jaro backup ml.recent ml.yearsago 365
+: $ jaro backup ml.recent ml.yearsago d:5y-1y
 
 The above command will move out of the "ml.recent" maildir all e-mails
-that are older than 365 days and store them into the "ml.yearsago"
-maildir which for instance could be present on an external usb
-hard-disk or any other backup device, helping us to save space on the
-desktop in use.
-#+BEGIN_EXAMPLE
-  check("2w-1w");
-  check("4m-1w");
-  check("2002-2003");
-  check("may2002-2003");
-  check("2002may-2003");
-  check("feb98-15may99");
-  check("feb98-15may1999");
-  check("2feb98-1y");
-  check("02feb98-1y");
-  check("970617-20010618");
-#+END_EXAMPLE
-*Caveat*: this system determines the date of emails from the time
-stamp of files, not from the Date: field in their headers nor from the
-time they were received. We need help to overcome this imperfection, a
-string parser for dates would be a welcome contribution, meanwhile
-users should be aware that if a maildir was copied around filesystems
-updating the timestamps of its files they will lose date information
-useful to the backup function and all mails will result more recent
-than they are.
+that are older than 1 year (up to 5 years before, can be more) and
+stores them into the "ml.yearsago" maildir which for instance could be
+present on an external usb hard-disk or any other backup device,
+helping us to save space on the desktop in use.
 
+:  jaro backup unsorted may98-may99 unsorted.week.old
+
+
+Will move all emails found in any folder that are dated between May
+1998 and May 1999. Here below more examples of date range expressions:
+
+#+BEGIN_EXAMPLE
+  d:2002-2003
+  d:may2002-2003
+  d:2002may-2003
+  d:feb98-15may99
+  d:feb98-15may1999
+  d:2feb98-1y
+  d:02feb98-1y
+  d:970617-20010618
+#+END_EXAMPLE
 
 ** Filter a maildir
 
@@ -666,10 +671,10 @@ licenses, or available in the public domain.
 
 ** Jaro Mail credits
 
-Jaro Mail is written and maintained by Jaromil, it started from the
-intention to share his own 10 years old e-mail setup, encouraged by
-the typical geek attitude of exchanging configuration files between
-friends.
+Jaro Mail is written and maintained by Denis Roio (aka Jaromil) it
+started from the intention to share his own 10 years old e-mail setup,
+encouraged by the geek tradition of exchanging configuration files
+between friends.
 
 The RFC 822 address parser (fetchaddr) is originally written by
 Michael Elkins for the Mutt MUA.
@@ -677,8 +682,8 @@ Michael Elkins for the Mutt MUA.
 The gateway to Apple/OSX addressbook (ABQuery) was written by Brendan
 Cully and just slightly updated for our distribution.
 
-Thanks also go to Anatole Shaw for the help testing and debugging Jaro
-Mail.
+Thanks also go to Alvise Gottieri and Anatole Shaw for early testing
+and debugging.
 
 ** Mutt credits
 
@@ -697,6 +702,33 @@ have been helpful with the development of Mutt.
  Copyright (C) 2000-2004 Edmund Grimley Evans <edmundo@rano.org>
  Copyright (C) 2006-2008 Rocco Rutte <pdmef@gmx.net>
 #+END_EXAMPLE
+
+** Mairix credits
+Jaro Mail includes a search engine for e-mails that is also licensed
+GNU GPL v2. Here below the names of the copyright holders and all
+those who have written it:
+
+#+BEGIN_EXAMPLE
+ Copyright (C) Richard P. Curnow  2002,2003,2004,2005,2006,2007,2008
+ Copyright (C) Sanjoy Mahajan 2005
+ Copyright (C) James Cameron 2005
+ Copyright (C) Paul Fox 2006
+#+END_EXAMPLE
+
+Mairix received contributions from: Anand Kumria André Costa, Andreas
+Amann, Andre Costa, Aredridel, Balázs Szabó, Bardur Arantsson,
+Benj. Mako Hill, Chris Mason, Christoph Dworzak, Christopher Rosado,
+Chung-chieh Shan, Claus Alboege, Corrin Lakeland, Dan Egnor, Daniel
+Jacobowitz, Dirk Huebner, Ed Blackman, Emil Sit, Felipe Gustavo de
+Almeida, Ico Doornekamp, Jaime Velasco Juan, James Leifer, Jerry
+Jorgenson, Joerg Desch, Johannes Schindelin, Johannes Weißl, John
+Arthur Kane, John Keener, Jonathan Kamens, Josh Purinton, Karsten
+Petersen, Kevin Rosenberg, Mark Hills, Martin Danielsson, Matthias
+Teege, Mikael Ylikoski, Mika Fischer, Oliver Braun, Paramjit Oberoi,
+Paul Fox, Peter Chines, Peter Jeremy, Robert Hofer, Roberto Boati,
+Samuel Tardieu, Sanjoy Mahajan, Satyaki Das, Steven Lumos, Tim Harder,
+Tom Doherty, Vincent Lefevre, Vladimir V. Kisil, Will Yardley,
+Wolfgang Weisselberg.
 
 ** Fetchmail credits
 
@@ -730,6 +762,36 @@ General Public License as published by the Free Software Foundation;
 either version 3 of the License, or (at your option) any later
 version.
 
+** Statistics modules
+   We are including some (experimental, still) modules for statistical
+   visualization using JQuery libraries. The first module inspiring us
+   to implement such a functionality is Timecloud, then other modules
+   followed.
+
+#+BEGIN_EXAMPLE
+   Timecloud is Copyright (C) 2008-2009 by Stefan Marsiske
+   Dual licensed under the MIT and GPLv3 licenses.
+
+   TagCloud version 1.1.2
+   (c) 2006 Lyo Kato <lyo.kato@gmail.com>
+   TagCloud is freely distributable under the terms of an MIT-style license.
+
+   ExCanvas is Copyright 2006 Google Inc.
+   Licensed under the Apache License, Version 2.0 (the "License");
+
+   jQuery project is distributed by the JQuery Foundation under the
+   terms of either the GNU General Public License (GPL) Version 2.
+
+   The Sizzle selector engine (which is included inside the jQuery
+   library) is held by the Dojo Foundation and is licensed under the
+   MIT, GPL, and BSD licenses.
+
+   JQuery.sparkline 2.0 is licensed under the New BSD License
+
+   Visualize.JQuery is written by Scott Jehl
+   Copyright (c) 2009 Filament Group 
+   licensed under MIT (filamentgroup.com/examples/mit-license.txt)
+#+END_EXAMPLE
 * Appendix
 
 ** Configuration examples

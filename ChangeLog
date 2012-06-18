@@ -1,22 +1,39 @@
+Jaro Mail 1.0 - 18 June 2012 - E-Data addict
+
+	Software development went forward in a rather passionate way,
+	mostly motivated by the author's need to backup his rather big
+	archive of e-mails. So this release's focus is on stability,
+	search and backup features and a rather deep refactoring of the
+	codebase.
+
+	Mairix has been added as an integrated search engine.
+
+	Backup is possible also using search expressions (see manual)
+
+	Some new modules in statistics implement jquery reports.
+
+	Code is modularized in pre-compiled zsh modules.
+
+	Extensive testing has proven the whole setup to be stable and
+	ready for production use, hence the 1.0 release.
+
 Jaro Mail 0.9 - 06 May 2012 - The rush of the unemployed
 
-	After getting recently unemployed because of European
-	austerity cuts (and because of not working in a bank),
-	Jaromil followed up with a full pijama coding session
-	that lasted about a week, hammering out most issues
-	that make now this software enter BETA stage, while
-	starting to use it for real.
+	After getting recently unemployed because of European austerity
+	cuts (and because of not working in a bank), Jaromil followed up
+	with a full pijama coding session that lasted about a week,
+	hammering out most issues that make now this software enter BETA
+	stage, while starting to use it for real.
 
-	This is the first public release of Jaro Mail,
-	it comes with a User Manual and lots of usability
-	fixes over the previous, it was tested on GNU and OSX
-	operating systems.
+	This is the first public release of Jaro Mail, it comes with a
+	User Manual and lots of usability fixes over the previous, it was
+	tested on GNU and OSX operating systems.
 
 
 Jaro Mail 0.1 - 29 May 2012 - Initial release
-	After a dozen years of development and use,
-	Jaromil releases his own e-mail and mailinglist
-	desktop setup.
-	While doing so, J. asked his friend and PhD colleague
-	Max Kazemzadeh how he should call it, and Max replied:
-	Jaro Mail! :^D
+
+	After a dozen years of development and use, Jaromil releases his
+	own e-mail and mailinglist desktop setup.
+
+	While doing so, J. asked his friend and PhD colleague Max
+	Kazemzadeh how he should call it, and Max replied: Jaro Mail! :^D
