@@ -25,7 +25,7 @@
 
 stats() {
     # make index of all maildirs
-    notice "Maildirs status"
+    notice "Maildirs statistics"
     case ${PARAM[1]} in
 
 	timecloud) timecloud ;;
@@ -34,22 +34,25 @@ stats() {
 
 	*) # simple stats
 	    typeset -alU ml
-	    typeset -al empty
 	    list_maildirs
+	    oldpfx=""
+	    grandtot=0
 	    for i in ${maildirs}; do
-		cur=`ls $MAILDIRS/$i/cur | wc -l`
-		new=`ls $MAILDIRS/$i/cur | wc -l`
-		tot=$(( $cur + $new ))
-		ml+=("$tot\t:: $i\t ($cur/$new)")
+		pfx=`echo $i | cut -d. -f1`
+		if [ "$pfx" = "$oldpfx" ]; then continue
+		else oldpfx=$pfx; fi
+		tot=`find $MAILDIRS/$pfx* -type f | wc -l`
+		{ test $tot -gt 0 } && { 
+		    ml+=("$tot\t:: $pfx")
+		    grandtot=$(( $grandtot + $tot ))
+		}
 	    done
-	    for m in ${ml}; do
-		{ test ${m[1]} = "0" } && { 
-		    empty+=${m}
-		    continue }
+	    for m in ${(O)ml}; do
 		print "    ${m}"
 	    done
-	    { test ${#empty} != 0 } && { emptystr="(${#empty} are empty)" }
-	    notice "Total maildirs: ${#ml} $emptystr"
+	    notice "Total maildirs: ${#ml}"
+	    act "Total e-mails stored: ${grandtot}"
+	    act "Storage occupation: `du -hs $MAILDIRS | awk '{print $1}'`"
 	    ;;
     esac
     return 0
@@ -77,21 +80,22 @@ EOF
     for m in ${maildirs}; do
 	for f in `find $MAILDIRS/${m} -type f`; do
 	    timestamp=`fetchdate "%Y-%U" ${f}`
+	    mdir=`echo $m|cut -d. -f1`
 	    cat <<EOF | ${SQL} -batch $db > $sql
 SELECT * FROM stats
-WHERE ml IS "${m}" AND date IS "${timestamp}";
+WHERE ml IS "${mdir}" AND date IS "${timestamp}";
 EOF
 	    res=`cat $sql`
 	    if [ "$res" = "" ]; then
 		# new tag
 		cat <<EOF | ${SQL} -batch $db
 INSERT INTO stats (date, ml, hits)
-VALUES ("${timestamp}", "${m}", 1);
+VALUES ("${timestamp}", "${mdir}", 1);
 EOF
 	    else
 		cat <<EOF | ${SQL} -batch $db
 UPDATE stats SET hits = hits + 1
-WHERE ml IS "${m}" AND date IS "${timestamp}";
+WHERE ml IS "${mdir}" AND date IS "${timestamp}";
 EOF
 	    fi
 	done
@@ -121,14 +125,24 @@ EOF
 	<tbody>
 
 EOF
+    prevmdir=""
     for m in ${maildirs}; do
-	echo -n "<tr><th scopre=\"row\">$m</th>" >> $table
+	mdir=`echo $m|cut -d. -f1`
+	# skip duplicates
+	if [ "$prevmdir" = "$mdir" ]; then continue
+	else prevmdir=$mdir; fi
+
+	echo -n "<tr><th scopre=\"row\">$mdir</th>" >> $table
 	for w in ${week}; do
 	    cat <<EOF | ${SQL} -batch $db > $sql
 SELECT hits FROM stats
-WHERE ml IS "${m}" AND date IS "${w}";
+WHERE ml IS "${mdir}" AND date IS "${w}";
 EOF
-	echo -n "<td>`cat $sql`</td>" >> $table
+	    sum=0
+	    for h in `cat $sql`; do
+		sum=$(( $sum + $h ))
+	    done
+	    echo -n "<td>$sum</td>" >> $table
 	done
 	echo "</tr>" >> $table
     done

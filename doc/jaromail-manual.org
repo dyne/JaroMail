@@ -204,7 +204,7 @@ Jaro Mail and are listed in order of priority:
 | *known*        | Mails whose sender is known (Whitelist)          |
 | *priv*         | Unknown sender, we are the explicit destination  |
 | *unsorted*     | Unknown sender, we are in cc: or somehow reached |
-| *ml.unsorted*  | From a mailinglist that we haven't filtered yet  |
+| *unsorted.ml*  | From a mailinglist that we haven't filtered yet  |
 | *zz.blacklist* | Mails whose sender is not desired (Blacklist)    |
 
 The advantage using such a folder organization is that every time we
@@ -773,7 +773,7 @@ options keep
 
 # Imap folders
 # uncommend to provide a list of folders to be fetched
-# folders INBOX, known, priv, lists, ml.unsorted, unsorted
+# folders INBOX, known, priv, lists, unsorted, unsorted.ml
 #+END_EXAMPLE
 
 *** Accounts/smtp.default

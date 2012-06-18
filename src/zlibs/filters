@@ -42,7 +42,7 @@ update() {
     maildirmake $MAILDIRS/priv
     maildirmake $MAILDIRS/postponed
     maildirmake $MAILDIRS/unsorted
-    maildirmake $MAILDIRS/ml.unsorted
+    maildirmake $MAILDIRS/unsorted.ml
     ${=mkdir} $MAILDIRS/outbox
 
     ######
@@ -215,16 +215,16 @@ EOF
 * ? test \$PMSRC/pf-save.rc
 { INCLUDERC=\$PMSRC/pf-save.rc }
 
-# if its an unknown mailinglist, save it into ml.unsorted
+# if its an unknown mailinglist, save it into unsorted.ml
 :0
 * ^(List-Id|X-(Mailing-)?List):
-ml.unsorted/
+unsorted.ml/
 
 EOF
 
     # MUTT (generate mailboxes priority this parser)
     echo " \\" >> $MUTTDIR/mboxes
-    echo " +ml.unsorted +unsorted" >> $MUTTDIR/mboxes
+    echo " +unsorted.ml +unsorted" >> $MUTTDIR/mboxes
 
     uniq $MUTTDIR/mboxes > $TMPDIR/mboxes
     mv $TMPDIR/mboxes $MUTTDIR/mboxes
