@@ -129,6 +129,9 @@ if [ -d $WORKDIR/zlibs ]; then
 	func "Loading zlib: ${z}"
 	. ${z}
     done
+    act "full set of auxiliary functions loaded"
+elif [ $1 = source ]; then
+    act "limited set of auxiliary functions loaded"
 else
     error "No ZLibs found in $WORKDIR/zlibs"
     error "This installation of Jaro Mail is broken."
