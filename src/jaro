@@ -122,19 +122,18 @@ ${=mkdir} $WORKDIR
 chmod 700 $WORKDIR
 
 PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
-{ test -r $WORKDIR/zlibs/accounts } && {
+
 # load our ZLibs
-. $WORKDIR/zlibs/accounts
-. $WORKDIR/zlibs/addressbook
-. $WORKDIR/zlibs/cmdline
-. $WORKDIR/zlibs/email
-. $WORKDIR/zlibs/helpers
-. $WORKDIR/zlibs/locking
-. $WORKDIR/zlibs/maildirs
-. $WORKDIR/zlibs/password
-. $WORKDIR/zlibs/search
-. $WORKDIR/zlibs/stats
-}
+if [ -d $WORKDIR/zlibs ]; then
+    for z in `find $WORKDIR/zlibs/ -type f | grep -v '.zwc$'`; do
+	func "Loading zlib: ${z}"
+	. ${z}
+    done
+else
+    error "No ZLibs found in $WORKDIR/zlibs"
+    error "This installation of Jaro Mail is broken."
+    exit 1
+fi
 
 # temporary directory
 TMPDIR=$WORKDIR/tmp
