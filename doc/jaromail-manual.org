@@ -14,6 +14,7 @@
 #+LATEX_HEADER: \usepackage{float}
 
 
+
 * Introduction
 
 Jaro Mail is an integrated suite of interoperable tools to manage
@@ -30,7 +31,9 @@ this manual is made available on http://files.dyne.org/jaromail/jaromail-manual.
 
 ** Features
 
-   + Easy to deploy and use
+[[file:jaromail-shot.jpg]]
+
+   + Minimalistic  interface with automatic threading
    + Targets intensive usage of mailinglists
    + Does whitelisting and integrates addressbooks
    + Can do search and backup by expressions
@@ -38,13 +41,12 @@ this manual is made available on http://files.dyne.org/jaromail/jaromail-manual.
    + Computes and shows statistics on mail traffic
    + Encrypts password storage (using keyrings)
    + Provides advanced maildir management tools
+   + Stores e-mails locally in a reliable and long lasting format
    + Defers connections for off-line operations
    + Checks SSL certificates over (imap, smtp)
    + Supports strong encryption messaging (GnuPG)
    + Is Multi platform: GNU/Linux/BSD, Apple/OSX
    + Old school, used by its author for the past 10 years
-
-[[file:jaromail-shot-1.0.jpg]]
 
 ** Vision
 
@@ -602,22 +604,13 @@ stores them into the "ml.yearsago" maildir which for instance could be
 present on an external usb hard-disk or any other backup device,
 helping us to save space on the desktop in use.
 
-:  jaro backup unsorted may98-may99 unsorted.week.old
+:  jaro backup unsorted d:may98-may99 unsorted.week.old
 
 
 Will move all emails found in any folder that are dated between May
 1998 and May 1999. Here below more examples of date range expressions:
+d:2002-2003 d:may2002-2003 d:2002may-2003 d:feb98-15may99 d:feb98-15may1999 d:2feb98-1y d:02feb98-1y d:970617-20010618
 
-#+BEGIN_EXAMPLE
-  d:2002-2003
-  d:may2002-2003
-  d:2002may-2003
-  d:feb98-15may99
-  d:feb98-15may1999
-  d:2feb98-1y
-  d:02feb98-1y
-  d:970617-20010618
-#+END_EXAMPLE
 
 ** Filter a maildir
 
