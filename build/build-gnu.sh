@@ -38,8 +38,17 @@ case $distro in
 	echo "fetchaddr"
 	    gcc $cflags -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
 	    gcc $cflags -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o
+	cd - > /dev/null
+
+	echo "Compiling the search engine..."
+	cd src/mairix
+	./configure
+	make > /dev/null
+	cd - > /dev/null
+
 
 	echo -n "Compiling the date parser... "
+	cd src
 	    gcc $cflags -I mairix -c fetchdate.c
 	    gcc $cflags -DHAS_STDINT_H -DHAS_INTTYPES_H -DUSE_GZIP_MBOX \
 		-o fetchdate fetchdate.o \
@@ -49,22 +58,13 @@ case $distro in
 		mairix/writer.o mairix/dates.o mairix/dirscan.o \
 		mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
 		mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o \
-		-lz -lbz2
+		-lz
 	echo "fetchdate"
-	
-
 	cd - > /dev/null
 
+	cp src/mairix/mairix build/gnu/
 	cp src/fetchaddr build/gnu/
 	cp src/fetchdate build/gnu/
-
-	echo
-	echo "Compiling the search engine..."
-	cd src/mairix
-	./configure
-	make > /dev/null
-	cd - > /dev/null
-	cp src/mairix/mairix build/gnu/
 
 	echo "Compiling gnome-keyring"
 	cd src/gnome-keyring

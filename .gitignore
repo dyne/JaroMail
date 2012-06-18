@@ -3,6 +3,7 @@
 *.zwc
 dotlock
 fetchaddr
+fetchdate
 src/mairix/Makefile
 src/mairix/config.log
 src/mairix/mairix

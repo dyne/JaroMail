@@ -204,8 +204,8 @@ fi
 
 # our own libraries
 act "Compiling Jaro Mail ZLibs"
+{ test -d ${WORKDIR}/zlibs } && { rm -f $WORKDIR/zlibs/* }
 ${=mkdir} $WORKDIR/zlibs
-rm -f $WORKDIR/zlibs/*
 cp -a src/zlibs/* $WORKDIR/zlibs
 for z in `find $WORKDIR/zlibs -type f`; do
     zcompile -R ${z}

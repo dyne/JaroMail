@@ -122,7 +122,7 @@ ${=mkdir} $WORKDIR
 chmod 700 $WORKDIR
 
 PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
-
+{ test -r $WORKDIR/zlibs/accounts } && {
 # load our ZLibs
 . $WORKDIR/zlibs/accounts
 . $WORKDIR/zlibs/addressbook
@@ -134,6 +134,7 @@ PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
 . $WORKDIR/zlibs/password
 . $WORKDIR/zlibs/search
 . $WORKDIR/zlibs/stats
+}
 
 # temporary directory
 TMPDIR=$WORKDIR/tmp
@@ -209,6 +210,96 @@ TRAPINT() {
 	else exit 1; fi
 }
 
+ 
+check_bin() {
+    # check for required programs
+    for req in pinentry fetchmail procmail mutt; do
+	which $req >/dev/null
+	{ test $? != 0 } && {
+	    error "Cannot find $req. Please install it."
+	    return 1
+	}
+    done
+
+    # which wipe command to use
+    which wipe > /dev/null
+    { test $? = 0 } && {
+	rm="wipe -f -s -q -R /dev/urandom"; return 0 }
+    which srm > /dev/null
+    { test $? = 0 } && {
+	rm="srm -m"; return 0 }
+    rm="rm -f"
+    return 0
+}
+
+
+option_is_set() {
+    #First argument, the option (something like "-s")
+    #Second (optional) argument: if it's "out", command will print it out 'set'/'unset'
+    #                       This is useful for if conditions
+    #Return 0 if is set, 1 otherwise
+    [[ -n ${(k)opts[$1]} ]];
+    r=$?
+    if [[ $2 == out ]]; then
+	if [[ $r == 0 ]]; then
+	    echo 'set'
+	else
+	    echo 'unset'
+	fi
+    fi
+    return $r;
+}
+option_value() {
+    #First argument, the option (something like "-s")
+    <<< ${opts[$1]}
+}
+
+
+usage() {
+    cat <<EOF
+Jaro Mail $VERSION - your humble and faithful electronic postman
+
+ Copyright (C) 2010-2012 Dyne.org Foundation, License GNU GPL v3+
+ This is free software: you are free to change and redistribute it
+ The latest Jaro Mail sourcecode is on <http://jaromail.dyne.org>
+
+Synopsis: jaro [options] [command] [command-options]
+
+Main commands:
+
+ fetch  download unread emails from [account]
+ send   send all mails queued in the outbox
+ peek   look into the [account] mailbox without downloading
+
+Options:
+
+ -a     use a particular account instead of default (keyword)
+ -l     whitelist or blacklist to use with learn/query/forget
+ -h     print this help
+ -v     version information for this tool
+ -q     run quietly without printing informations
+ -n     dry run, show operations without executing them
+ -D     print debugging information at runtime
+
+Maintenance commands:
+
+ passwd   reset password for the account in use
+
+ update   refresh configurations
+ queue    add a mail into outbox
+
+ addr     look for a matching address in list
+ query    read mail from stdin, return 0 if known to list
+ learn    learn addresses from mails piped in stdin
+ forget   remove addresses found in mails piped in stdin
+
+ backup   move all mails older than N days from a maildir to another
+ rmdupes  remove all duplicate mails into a maildir
+ merge    merge a maildir into another, removing all duplicates
+
+Please report bugs on <http://bugs.dyne.org>.
+EOF
+}
 
 # TODO: For more informations on Jaro Mail read the manual: man jaro
 
