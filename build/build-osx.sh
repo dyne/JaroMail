@@ -15,15 +15,15 @@
 
 # and local natives: fetchmail, procmail...
 
-cd ..
+cflags="-O2"
 
-source src/jaro source
+cd ..
 
 mkdir -p build/osx/dylib
 
 copydeps() {
 	# copy a binary and all dependencies until 3rd level
-	act "`basename $1`"
+	print "`basename $1`"
 
 	tmp="/tmp/build_`basename $1`";
 	rm -f $tmp; touch $tmp
@@ -55,7 +55,7 @@ copydeps() {
 	for d in `cat $tmp | sort | uniq`; do
 		if ! [ -r build/osx/dylib/`basename $d` ]; then
 			cp $d build/osx/dylib/
-			act "`basename $d`"
+			print "`basename $d`"
 		fi
 	done
 	if ! [ -r build/osx/`basename $1` ]; then
@@ -72,35 +72,68 @@ EOF
 	fi
 }
 
-notice "Building Jaro Mail binary stash for Apple/OSX"
+print "Building Jaro Mail binary stash for Apple/OSX"
 
 if ! [ -r /opt/local/bin/port ]; then
-	error "MacPorts not found in /opt/local. Operation aborted."
+	print "MacPorts not found in /opt/local. Operation aborted."
 	return 1
 fi
-act "Address book query"
+print "Address book query"
 cd src/ABQuery
 xcodebuild > /dev/null
 cd -
 cp src/ABQuery/build/Release/lbdb-ABQuery build/osx/ABQuery
 cd src
-act "Address parser"
-cc -O2 -c -m32 fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-cc -O2 -m32 -o fetchaddr.32 fetchaddr.o helpers.o rfc2047.o rfc822.o;
-cc -O2 -c -m64 fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-cc -O2 -m64 -o fetchaddr.64 fetchaddr.o helpers.o rfc2047.o rfc822.o;
+print "Address parser"
+cc $cflags -c -m32 fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+cc $cflags -m32 -o fetchaddr.32 fetchaddr.o helpers.o rfc2047.o rfc822.o;
+cc $cflags -c -m64 fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+cc $cflags -m64 -o fetchaddr.64 fetchaddr.o helpers.o rfc2047.o rfc822.o;
 lipo -arch i386 fetchaddr.32 -arch x86_64 fetchaddr.64 -output fetchaddr -create
 rm -f *.32 *.64
 cd -
 cd src/mairix
-act "Search engine"
-CFLAGS="-O2 -m32" ./configure > /dev/null ; make 2>&1 > /dev/null
+print "Search engine and date parser"
+# mairix 32
+make clean
+CFLAGS="$cflags -m32" ./configure --disable-gzip-mbox --disable-bzip-mbox \
+    > /dev/null ; make 2>&1 > /dev/null
+cd - > /dev/null; cd src
+# fetchdate 32
+gcc $cflags -m32 -I mairix -c fetchdate.c
+gcc $cflags -m32 -DHAS_STDINT_H -DHAS_INTTYPES_H \
+    -o fetchdate fetchdate.o \
+    mairix/datescan.o mairix/db.o mairix/dotlock.o \
+    mairix/expandstr.o mairix/glob.o mairix/md5.o \
+    mairix/nvpscan.o mairix/rfc822.o mairix/stats.o \
+    mairix/writer.o mairix/dates.o mairix/dirscan.o \
+    mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
+    mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o
+cp fetchdate fetchdate.32
+cd - > /dev/null; cd src/mairix
+# mairix 64
 cp mairix mairix.32 && make clean > /dev/null
-CFLAGS="-O2 -m64" ./configure > /dev/null ; make 2>&1 > /dev/null
+CFLAGS="$cflags -m64" ./configure --disable-gzip-mbox --disable-bzip-mbox \
+    > /dev/null ; make 2>&1 > /dev/null
+# fetchdate 64
+cd - > /dev/null; cd src
+gcc $cflags -m64 -I mairix -c fetchdate.c
+gcc $cflags -m64 -DHAS_STDINT_H -DHAS_INTTYPES_H \
+    -o fetchdate fetchdate.o \
+    mairix/datescan.o mairix/db.o mairix/dotlock.o \
+    mairix/expandstr.o mairix/glob.o mairix/md5.o \
+    mairix/nvpscan.o mairix/rfc822.o mairix/stats.o \
+    mairix/writer.o mairix/dates.o mairix/dirscan.o \
+    mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
+    mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o
+cp fetchdate fetchdate.64
+cd - > /dev/null; cd src/mairix
 cp mairix mairix.64 
 lipo mairix.32 mairix.64 -create -output mairix 2>&1 > /dev/null
-cd -
-
+cd - > /dev/null; cd src
+lipo fetchdate.32 fetchdate.64 -create -output fetchdate 2>&1 > /dev/null
+cd - > /dev/null
+cp src/fetchdate build/osx/
 cp src/fetchaddr build/osx/
 cp src/mairix/mairix build/osx/
 copydeps bin/mutt
@@ -109,8 +142,6 @@ copydeps bin/msmtp
 copydeps bin/gpg
 copydeps bin/pinentry
 copydeps bin/lynx
-copydeps libexec/gnubin/find
-copydeps libexec/gnubin/stat
 
 mv build/osx/mutt_dotlock \
    build/osx/dotlock
