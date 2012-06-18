@@ -44,6 +44,7 @@ this manual is made available on http://files.dyne.org/jaromail/jaromail-manual.
    + Is Multi platform: GNU/Linux/BSD, Apple/OSX
    + Old school, used by its author for the past 10 years
 
+[[file:jaromail-shot-1.0.jpg]]
 
 ** Vision
 
