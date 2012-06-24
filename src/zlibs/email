@@ -67,7 +67,7 @@ fetchall() {
 	account=`basename $i`
 	type=`echo $account | cut -d. -f1`
 	func "fetchall: $account type $type"
-	fetch
+	fetch $account.$type
 	if [ $? != 0 ]; then res=1; fi
 	# returns an error if just one of the accounts did
     done
@@ -78,10 +78,17 @@ fetch() {
 
     typeset -al all
 
+    # argument is account type.name
+    { test $1 } && {
+	type=`echo $1 | cut -d. -f1`
+	account=`echo $1 | cut -d. -f2`
+	func "fetch type $type account $account"
+    }
     # recursion here
     { test $account = default } && { fetchall; return $? }
 
-    read_account "$account"
+    read_account $type
+
     if [ $? != 0 ]; then
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
@@ -295,4 +302,3 @@ EOF
     mutt -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
     return $?
 }
-
