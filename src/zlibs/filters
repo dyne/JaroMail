@@ -57,10 +57,10 @@ set spoolfile = $MAILDIRS/known/
 set record = $MAILDIRS/sent/
 set postponed= $MAILDIRS/postponed/
 set tmpdir = $WORKDIR/cache
-set sendmail = "$WORKDIR/bin/jaro queue"
+set sendmail = "$WORKDIR/bin/jaro -q queue"
 set header_cache= $WORKDIR/cache
 set maildir_header_cache_verify=no
-set editor = "$WORKDIR/bin/jaro edit"
+set editor = "$WORKDIR/bin/jaro -q edit"
 set mailcap_path = "$WORKDIR/.mutt/mailcap:$WORKDIR/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
 
 # Little Brother Database
@@ -214,6 +214,11 @@ EOF
 * PF_DEST ?? .
 * ? test \$PMSRC/pf-save.rc
 { INCLUDERC=\$PMSRC/pf-save.rc }
+
+# if its a mailinglist bounce, save it to zz.bounces
+:0
+* ^Sender: mailman-bounce@
+zz.bounces/
 
 # if its an unknown mailinglist, save it into unsorted.ml
 :0

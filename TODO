@@ -22,8 +22,12 @@
   write down a mail from commandline and send it right away (if online)
   doesn't uses Mutt to generate the mail body
   but might read Mutt.txt configuration for headers and such
-  
+
+* Filtering
+   filter out bounces in some zz.bounces - header:
+: Sender: mailman-bounces@
 
 * DONE Maildirs
  + Remove duplicates from maildirs (garbage collection)
  + Backup system with expiration date
+

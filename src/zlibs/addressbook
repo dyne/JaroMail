@@ -116,7 +116,7 @@ query() {
 learn() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
     tmp=$TMPDIR/learn.$datestamp.$RANDOM
-    from="`tee $tmp | formail -xFrom: | sed -e 's/\"//g'`"
+    from="`tee -i $tmp | formail -xFrom: | sed -e 's/\"//g'`"
     if [ -z ${PARAM[1]} ]; then
 	email="`cat $tmp | ${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
     else

@@ -103,11 +103,10 @@ EOF
 	####################################################
     else    # no folder specified on commandline, search all
     # make index if no params given
-	c=0
-	for i in `ls $MAILDIRS`; do
-	# is it a maildir?
-	    { maildircheck $MAILDIRS/${i} } && {
-		c=`expr $c + 1`; ml="$ml:$i" }
+	list_maildirs
+	for i in ${maildirs}; do
+	    # exclude zz. trash from search
+	    { test ${i[1,2]} != 'zz' } && { ml="$ml:$i" }
 	done
     fi
 
@@ -120,7 +119,7 @@ mformat=maildir
 EOF
     # just index
     { test ${#PARAM} = 0 } && {
-	act "Indexing $c maildirs for search"
+	act "Indexing ${#maildirs} maildirs for search"
 	act "please be patient..."
 	mairix -F -f $rc
 	rm -f $rc

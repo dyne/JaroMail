@@ -59,6 +59,7 @@ maildirmake() {
 }
 
 
+# fills up all maildirs array
 list_maildirs() {
     maildirs=()
     for m in `find $MAILDIRS -type d`; do
