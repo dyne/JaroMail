@@ -141,6 +141,11 @@ PF_RECURSE = yes
 * ? \$JARO -l blacklist -q query from:
 zz.blacklist/
 
+# if its a mailinglist bounce, save it to zz.bounces
+:0
+* ^Sender: mailman-bounce
+zz.bounces/
+
 # filters generated from Filters.txt
 :0
 * ? test \$PMSRC/pf-chkto.rc
@@ -215,10 +220,6 @@ EOF
 * ? test \$PMSRC/pf-save.rc
 { INCLUDERC=\$PMSRC/pf-save.rc }
 
-# if its a mailinglist bounce, save it to zz.bounces
-:0
-* ^Sender: mailman-bounce@
-zz.bounces/
 
 # if its an unknown mailinglist, save it into unsorted.ml
 :0
