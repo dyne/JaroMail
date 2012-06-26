@@ -66,116 +66,115 @@ fetchall() {
     for i in `find $WORKDIR/Accounts -type f | grep -v README`; do
 	account=`basename $i`
 	type=`echo $account | cut -d. -f1`
-	func "fetchall: $account type $type"
-	fetch $account.$type
+	account=`echo $account | cut -d. -f2`
+	fetch $type $account
 	if [ $? != 0 ]; then res=1; fi
 	# returns an error if just one of the accounts did
     done
     return $res
 }
 fetch() {
+
+    func "Fetch account ${@}"
+    # recursion here
+    { test ${#@} = 0 } && { fetchall; return $? }
+
     adir=$WORKDIR/Accounts
 
     typeset -al all
 
-    # argument is account type.name
-    { test $1 } && {
-	type=`echo $1 | cut -d. -f1`
-	account=`echo $1 | cut -d. -f2`
-	func "fetch type $type account $account"
-    }
-    # recursion here
-    { test $account = default } && { fetchall; return $? }
+    read_account ${=@}
 
-    read_account $type
-
-    if [ $? != 0 ]; then
+    { test  $? != 0 } && {
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
-    fi
+    }
 
-    if [ "$type" = "smtp" ]; then # we skip smtp in fetch
-	return 0; fi
+    # fetch works with imap and pop, skip smtp
+    { test "$type" = "smtp" } && { return 0 }
 
     if ! [ -r $PROCMAILDIR/rc ]; then
 	act "updating procmail configuration"
-	update
+	{ test $DRYRUN != 1 } && { update }
     fi
 
     notice "Fetching mails for $name"
-    ask_password $login $host
-    { test $? != 0 } && {
-	error "Error retrieving password for $login on $host"
-	unset password all; return 1
-    }
+    { test $DRYRUN != 1 } && {
+	ask_password $login $host
+	{ test $? != 0 } && {
+	    error "Error retrieving password for $login on $host"
+	    unset password all; return 1
+	}
 
-    tmp=$TMPDIR/$host.fetch.$RANDOM
-    newlock $tmp
-    cat <<EOF > $tmp
+	tmp=$TMPDIR/$host.fetch.$RANDOM
+	newlock $tmp
+	cat <<EOF > $tmp
 poll $host with proto IMAP user "$login" there with password "$password"
 EOF
-    unset password
-
-    if ! [ -z $accountopt ]; then # add option configuration
-	echo "${accountopt}" >> $tmp; fi
-
-    if ! [ -z $folders ]; then # add folder configuration
-	echo "folder ${folders}" >> $tmp; fi
-
-    cat <<EOF >> $tmp
+	unset password
+	
+	if ! [ -z $accountopt ]; then # add option configuration
+	    echo "${accountopt}" >> $tmp; fi
+	
+	if ! [ -z $folders ]; then # add folder configuration
+	    echo "folder ${folders}" >> $tmp; fi
+	
+	cat <<EOF >> $tmp
 ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 EOF
-    if [ "$cert" = "check" ]; then
-	cat <<EOF >> $tmp
+	if [ "$cert" = "check" ]; then
+	    cat <<EOF >> $tmp
 sslcertck sslcertpath '$WORKDIR/certs'
 EOF
-    fi
-    cat <<EOF >> $tmp
+	fi
+	cat <<EOF >> $tmp
 antispam 571 550 501 554
 EOF
-
+	
 	# try login without doing anything
-    fetchmail -c -f $tmp
+	fetchmail -c -f $tmp
 	# examine result
-    case $? in
-	1)
-	    notice "No mails for $name"
-	    unlink $tmp
-	    return 1
+	case $? in
+	    1)
+		notice "No mails for $name"
+		unlink $tmp
+		return 1
 		;;
-	2)
-	    error "Invalid or unknown certificate for $host"
-	    unlink $tmp
-	    return 1
-	    ;;
-	3)
-	    error "Invalid password for user $login at $host"
-	    unlink $tmp
-	    return 1
-	    ;;
-	*) ;;
-    esac
-
+	    2)
+		error "Invalid or unknown certificate for $host"
+		unlink $tmp
+		return 1
+		;;
+	    3)
+		error "Invalid password for user $login at $host"
+		unlink $tmp
+		return 1
+		;;
+	    *) ;;
+	esac
+	
 	# archive old procmail log
-    if [ -r $WORKDIR/log/procmail.log ]; then
-	newlock $WORKDIR/log/procmail-${datestamp}.log
-	cat $WORKDIR/log/procmail.log \
-	    >> $WORKDIR/log/procmail-${datestamp}.log
-	rm -f $WORKDIR/log/procmail.log
-	unlock $WORKDIR/log/procmail-${datestamp}.log
-    fi
-    act "please wait while downloading mails..."
-
-    cat $tmp | fetchmail -f $tmp
+	if [ -r $WORKDIR/log/procmail.log ]; then
+	    newlock $WORKDIR/log/procmail-${datestamp}.log
+	    cat $WORKDIR/log/procmail.log \
+		>> $WORKDIR/log/procmail-${datestamp}.log
+	    rm -f $WORKDIR/log/procmail.log
+	    unlock $WORKDIR/log/procmail-${datestamp}.log
+	fi
+	act "please wait while downloading mails..."
+	
+	cat $tmp | fetchmail -f $tmp
 	# TODO: substitute this with cat conf | fetchmail -f -
 	# to avoid writing the password in clear on filesystem
+	
+	unlink $tmp
+	
+	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
+	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+	notice "$total emails fetched"
+	echo "${briefing}"
 
-    unlink $tmp
-
-    total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
-    briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
-    notice "$total emails fetched"
-    echo "${briefing}"
+    } # DRYRUN
 
     return 0
 }
@@ -196,28 +195,28 @@ send() {
 	return 0
     fi
 
-    read_account smtp
-    if [ $? != 0 ]; then
+    read_account smtp ${=@}
+    { test  $? != 0 } && {
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
-    fi
-
-    notice "Sending out ${mailnum} mails via $name"
-
-    # defaults
-    [ -z $auth ] && auth=plain
-    [ -z $port ] && port=25
-
-
-    ask_password $login $host
-    { test $? != 0 } && {
-	error "Error retrieving password for $login on $host"
-	unset password all; return 1
     }
 
-    tmp=$TMPDIR/$host.send.$RANDOM
-    newlock $tmp
-    cat <<EOF > $tmp
+    notice "Sending out ${mailnum} mails via ${type}.${account}"
+
+    # defaults
+    { test -z $auth } && { auth=plain }
+    { test -z $port } && { port=25 }
+
+    { test $DRYRUN != 1 } && {
+	ask_password $login $host
+	{ test $? != 0 } && {
+	    error "Error retrieving password for $login on $host"
+	    unset password all; return 1
+	}
+	
+	tmp=$TMPDIR/$host.send.$RANDOM
+	newlock $tmp
+	cat <<EOF > $tmp
 account default
 from ${email}
 user ${login}
@@ -230,26 +229,27 @@ logfile ${WORKDIR}/log/msmtp.log
 auth ${auth}
 password ${password}
 EOF
-    unset password
-
-    for mail in `find $MAILDIRS/outbox -name "*.mail"`; do
-       smtp=`echo ${mail} | sed -e 's/mail/msmtp/'`
-       lock ${smtp}
-       recipients="`cat ${smtp}`"
-       act "To: ${recipients}"
-       msmtp -C $tmp -- ${=recipients} < "${mail}"
-       if [ $? != 0 ]; then
-	   error "Error sending mail, skipped"
-	   unlock ${smtp}
-       else
-	   act "Mail sent succesfully"
+	unset password
+	
+	for mail in `find $MAILDIRS/outbox -name "*.mail"`; do
+	    smtp=`echo ${mail} | sed -e 's/mail/msmtp/'`
+	    lock ${smtp}
+	    recipients="`cat ${smtp}`"
+	    act "To: ${recipients}"
+	    msmtp -C $tmp -- ${=recipients} < "${mail}"
+	    if [ $? != 0 ]; then
+		error "Error sending mail, skipped"
+		unlock ${smtp}
+	    else
+		act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
-	   cat ${mail} | $WORKDIR/bin/jaro -l whitelist -q learn to:
-	   ${=rm} ${mail} &
-	   unlink ${smtp} &
-       fi
-    done
-    unlink $tmp
+		cat ${mail} | $WORKDIR/bin/jaro -l whitelist -q learn to:
+		${=rm} ${mail} &
+		unlink ${smtp} &
+	    fi
+	done
+	unlink $tmp
+    } # DRYRUN
     return 0
 }
 
@@ -257,11 +257,11 @@ EOF
 # PEEK
 # this function will open the MTA to the imap server without fetching mails locally
 peek() {
-    read_account imap
-    if [ $? != 0 ]; then
+    read_account imap ${account}
+    { test  $? != 0 } && {
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
-    fi
+    }
 
     notice "Peek into remote imap account $name"
 
@@ -281,24 +281,28 @@ peek() {
     # escape at sign in login
     ilogin=`echo $login | sed 's/@/\\@/'`
 
-    ask_password $login $host
-    { test $? != 0 } && {
-	error "Error retrieving password for $login on $host"
-	unset password all; return 1
-    }
-    tmp=$TMPDIR/$host.peek.$RANDOM
-    newlock $tmp
-    cat <<EOF >> $tmp
+    { test $DRYRUN != 1 } && {
+
+	ask_password $login $host
+	{ test $? != 0 } && {
+	    error "Error retrieving password for $login on $host"
+	    unset password all; return 1
+	}
+	tmp=$TMPDIR/$host.peek.$RANDOM
+	newlock $tmp
+	cat <<EOF >> $tmp
 set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
-    unset password
-    echo "source $tmp" >> $MUTTDIR/password
-    (sleep 1;
-	cp /dev/null $MUTTDIR/password
-	cp /dev/null $tmp
-	unlink $tmp
-    ) &
-    mutt -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
+	unset password
+	echo "source $tmp" >> $MUTTDIR/password
+	(sleep 1;
+	    cp /dev/null $MUTTDIR/password
+	    cp /dev/null $tmp
+	    unlink $tmp
+	) &
+	mutt -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
+
+    } # DRYRUN
     return $?
 }

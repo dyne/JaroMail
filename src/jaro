@@ -53,7 +53,7 @@ typeset -A opts
 
 # global variable for account selection
 typeset -h account
-account=default
+# account=default
 typeset -h list
 list=whitelist
 
@@ -429,14 +429,18 @@ main()
 	cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
 	echo
     fi
-    if option_is_set -a; then account=`option_value -a`; fi
-    if option_is_set -l; then list=`option_value -l`; fi
-    { option_is_set -h } && { CLEANEXIT=0; usage; return 0 }
-    { option_is_set -v } && { CLEANEXIT=0;
-	cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'; return 0 }
-    if option_is_set -q; then QUIET=1; fi
-    if option_is_set -D; then func "Debug messages ON"; DEBUG=1; fi
-    if option_is_set -n; then act "Dry run, show operations without executing them."; DRYRUN=1; fi
+    { option_is_set -a } && { account=`option_value -a` }
+    { option_is_set -l } && { list=`option_value -l` }
+    { option_is_set -h } && { CLEANEXIT=0
+	usage; return 0 }
+    { option_is_set -v } && { CLEANEXIT=0
+	cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'
+	return 0 }
+    { option_is_set -q } && { QUIET=1 }
+    { option_is_set -D } && { DEBUG=1
+	func "Debug messages ON" }
+    { option_is_set -n } && { DRYRUN=1
+	act "Dry run, show operations without executing them." }
 
     case "$subcommand" in
 	queue)   queue ${PARAM} ;;
@@ -464,9 +468,8 @@ main()
 	merge)   merge ${PARAM} ;;
 	filter)  filter ${PARAM} ;;
 
-	passwd)  read_account;
-	    { test $? = 0 } && { new_password ${PARAM} }
-	    ;;
+	passwd)  change_password ${PARAM} ;;
+
 	cert)    cert ${PARAM} ;;
 
 	ramdisk) ramdisk ${PARAM} ;;

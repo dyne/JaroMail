@@ -37,15 +37,42 @@ EOF
     fi
 }
 
-
+list_accounts() {
+    for a in `find $WORKDIR/Accounts -type f | grep -v README | sed 's/.txt//'`; do
+	act -n "`basename $a`\t :: "
+	awk '
+/^name/ { for(i=2;i<=NF;i++) printf "%s ", $i }
+/^email/ { printf "<%s>", $2 }
+/^host/ { printf " on %s", $2 }
+{next}' $a.txt
+	echo " (`basename $a | cut -d. -f1`)"
+    done
+}	
 
 # arg 1 : account type, es: imap or smtp
 # -a defines which account name other than 'default'
 read_account() {
     typeset -al all
-    type=$1
+
+    # parse arguments
+    { test "$1" != "" } && { account=$1 }
+
+    account=".${account}"
+    type=`echo ${account} | cut -d. -f2`
+    account=`echo ${account} | cut -d. -f3`
+
+    { test "$2" != "" } && { account=$2 }
+
+    { test "$type" = "default" } && {
+	error "No account type specified"
+	act "Available accounts (excluding symbolic links, omit final .txt):"
+	list_accounts
+	return 1
+    }
+    { test "$account" = "" } && { account=default }
+
     # find the file
-    func "read_account looking for \"$account\""
+    func "read_account looking for ${type} ${account}"
     for a in `find $WORKDIR/Accounts -name "$type.$account*"`; do
 	func "found account: $a"
 	all+=($a)
@@ -55,15 +82,7 @@ read_account() {
 	act "Refine your argument using '-a type.account'"
 	act "For instance adding to the commandline: -a imap.default"
 	act "Available accounts (excluding symbolic links, omit final .txt):"
-	for a in `find $WORKDIR/Accounts -type f | grep -v README | sed 's/.txt//'`; do
-	    act -n "`basename $a`\t :: "
-	    awk '
-/^name/ { for(i=2;i<=NF;i++) printf "%s ", $i }
-/^email/ { printf "<%s>", $2 }
-/^host/ { printf " on %s", $2 }
-{next}' $a.txt
-	    echo " (`basename $a | cut -d. -f1`)"
-	done
+	list_accounts
 	return 1
     elif [ ${#all} != 1 ]; then
 	error "Too many $type accounts named $account"
@@ -273,4 +292,13 @@ EOF
 	    error "Unknown system, can't figure out how to handle passwords"
 	    return 1
     esac
+}
+
+change_password() {
+
+    read_account ${=PARAM}
+
+    { test $? = 0 } && { test $DRYRUN != 1 } && {
+	new_password }
+
 }
