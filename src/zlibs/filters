@@ -201,15 +201,23 @@ known/
 EOF
 
     #######
-cat <<EOF >> $PROCMAILDIR/rc
+    cat <<EOF >> $PROCMAILDIR/rc
 # filters generated from Accounts
 :0
 * ? test \$PMSRC/pf-chkto.rc
 {
 EOF
-    for f in `cat $WORKDIR/Accounts/* | awk '/^email/ { print $2 }'`; do
-	echo "ADDR=${f}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc"  >> $PROCMAILDIR/rc
-	func "private account: <${f}>"
+    typeset -alU recv
+    for f in `find $WORKDIR/Accounts/ -type f | grep -v 'smtp'`; do
+	for addr in `cat $f | awk '
+    /^email/ { print $2 }
+    /^alias/ { print $2 }
+    '`; do func "email $addr in `basename $f`"; recv+=($addr); done
+    done
+    for rr in ${recv}; do \
+	echo "ADDR=${rr}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc" \
+	>> $PROCMAILDIR/rc
+	act "private account: <${rr}>"
     done
 
     cat <<EOF >> $PROCMAILDIR/rc
@@ -249,4 +257,3 @@ EOF
 EOF
     return 0
 } # end of update()
-
