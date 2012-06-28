@@ -53,7 +53,8 @@ list_accounts() {
 # -a defines which account name other than 'default'
 read_account() {
     typeset -al all
-
+    unset name email host login transport \
+	port auth cert options folders
     # parse arguments
     { test "$1" != "" } && { account=$1 }
 
@@ -67,8 +68,7 @@ read_account() {
 	error "No account type specified"
 	act "Available accounts (excluding symbolic links, omit final .txt):"
 	list_accounts
-	return 1
-    }
+	return 1 }
     { test "$account" = "" } && { account=default }
 
     # find the file
@@ -107,7 +107,6 @@ read_account() {
     /^login/ { printf "login=\"%s\";", $2 }
     /^transport/ { printf "transport=\"%s\";", $2 }
     /^port/ { printf "port=\"%s\";", $2 }
-    /^password/ { printf "password=\"%s\";", $2 }
     /^auth/ { printf "auth=\"%s\";", $2 }
     /^cert/ { printf "cert=\"%s\";", $2 }
     /^options/ { printf "accountopt=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }

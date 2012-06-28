@@ -146,6 +146,22 @@ ramdisk() {
     esac
 }
 
+human_size() {
+    { test $1 -gt 0 } || {
+	error "human_size() called with zero argument"
+	return 1 }
+    # megabytes
+    { test $1 -gt 1048576 } && {
+	print -n "$(( $1 / 1024 / 1024 )) MB"
+	return 0}
+    # kilobytes
+    { test $1 -gt 1024 } && {
+	print -n "$(( $1 / 1024 )) KB"
+	return 0}
+    # bytes
+    print -n "$1 Bytes"
+    return 0
+}
 
 ######
 # CERT

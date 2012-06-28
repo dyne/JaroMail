@@ -67,6 +67,12 @@ typeset -al maildirs
 typeset exitcode
 exitcode=0
 
+# global variable for infos on imap folder
+# format: name;num_of_messages;size_in_bytes
+# last entry is grand_total_in_bytes ${imap_info[${#imap_info}]}
+typeset -alU imap_info
+
+
 autoload colors; colors
 
 # standard output message routines
@@ -145,8 +151,7 @@ case $OS in
 	touch /dev/shm/jaromail.test.tmp > /dev/null
 	{ test $? = 0 } && {
 	# we can use volatile ram
-	    rm -f /dev/shm/jaromail.test.tmp
-	    TMPDIR=/dev/shm/jaromail.$USER
+	    TMPDIR=/dev/shm/tmp.jaromail.$USER
 	    TMPRAM=1
 	}
 	;;

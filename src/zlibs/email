@@ -98,8 +98,32 @@ fetch() {
 	{ test $DRYRUN != 1 } && { update }
     fi
 
-    notice "Fetching mails for $name"
+    notice "Examining mailbox for $name <$email> on $host"
+
+    # check if its online
+    timeout 2 netcat -z ${host} ${port} > /dev/null
+    { test $? = 0 } || {
+	error "server is off-line or unreachable, skipped"
+	return 1 }
+
+    ask_password $login $host
+
+
+    # skip getting size if Gmail
+    # (imap there lacks support for RFC822.SIZE)
+#    { test "$host" != "imap.gmail.com" } && {
+    get_imap_info
+    { test ${imap_info[${#imap_info}]} = 0 } && {
+	# imap account is empty
+	return 0 }
+    notice "Total occupation is `human_size ${imap_info[${#imap_info}]}`"
+#    }
+    # this puts total size in $imap_info
+
     { test $DRYRUN != 1 } && {
+
+	{ test ${imap_info[${#imap_info}]} -eq 0 } && { return 0 }
+
 	ask_password $login $host
 	{ test $? != 0 } && {
 	    error "Error retrieving password for $login on $host"
@@ -112,13 +136,13 @@ fetch() {
 poll $host with proto IMAP user "$login" there with password "$password"
 EOF
 	unset password
-	
+
 	if ! [ -z $accountopt ]; then # add option configuration
 	    echo "${accountopt}" >> $tmp; fi
-	
+
 	if ! [ -z $folders ]; then # add folder configuration
 	    echo "folder ${folders}" >> $tmp; fi
-	
+
 	cat <<EOF >> $tmp
 ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
 EOF
@@ -130,7 +154,7 @@ EOF
 	cat <<EOF >> $tmp
 antispam 571 550 501 554
 EOF
-	
+
 	# try login without doing anything
 	fetchmail -c -f $tmp
 	# examine result
@@ -152,7 +176,7 @@ EOF
 		;;
 	    *) ;;
 	esac
-	
+
 	# archive old procmail log
 	if [ -r $WORKDIR/log/procmail.log ]; then
 	    newlock $WORKDIR/log/procmail-${datestamp}.log
@@ -162,13 +186,13 @@ EOF
 	    unlock $WORKDIR/log/procmail-${datestamp}.log
 	fi
 	act "please wait while downloading mails..."
-	
+
 	cat $tmp | fetchmail -f $tmp
 	# TODO: substitute this with cat conf | fetchmail -f -
 	# to avoid writing the password in clear on filesystem
-	
+
 	unlink $tmp
-	
+
 	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
 	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
 	notice "$total emails fetched"
@@ -213,7 +237,7 @@ send() {
 	    error "Error retrieving password for $login on $host"
 	    unset password all; return 1
 	}
-	
+
 	tmp=$TMPDIR/$host.send.$RANDOM
 	newlock $tmp
 	cat <<EOF > $tmp
@@ -230,7 +254,7 @@ auth ${auth}
 password ${password}
 EOF
 	unset password
-	
+
 	for mail in `find $MAILDIRS/outbox -name "*.mail"`; do
 	    smtp=`echo ${mail} | sed -e 's/mail/msmtp/'`
 	    lock ${smtp}
