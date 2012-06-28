@@ -39,7 +39,7 @@ search() {
 	func "checking param: ${p}"
 	if [ -r ${p} ]; then
 
-	    { maildircheck ${p} } && { 
+	    { maildircheck ${p} } && {
 		fold+=(${p})
 		{ test ${#fold} = 1 } && {
 		    # base path is the dir of the first folder
@@ -47,8 +47,8 @@ search() {
 		    basedir=`pwd`
 		    popd }
 	    }
-	    
-        elif [ -r ${MAILDIRS}/${p} ]; then
+
+	elif [ -r ${MAILDIRS}/${p} ]; then
 
 	    { maildircheck ${MAILDIRS}/${p} } && { fold+=(${MAILDIRS}/${p}) }
 
@@ -79,20 +79,22 @@ mformat=maildir
 EOF
 
 	exitcode=1
-	act "Indexing ${folders}"
-	mairix -F -f $rc 2> /dev/null
-	{ test $? = 0 } && { 
-	    act "Searching for: ${expr}"
-	    found=`mairix -F -f $rc ${=expr} 2> /dev/null | awk '{ print $2}'`
-	    if [ $found != 0 ]; then
-		mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
-		notice "Found $found matches looking for '$expr' in $folders"
-		find $TMPDIR/search.result.$id
-		cat $rc
-		exitcode=0
-	    else error "No matches found."; fi
-	}
+	{ test $DRYRUN != 1 } && {
+	    act "Indexing ${folders}"
+	    mairix -F -f $rc 2> /dev/null
+	    { test $? = 0 } && {
+		act "Searching for: ${expr}"
+		found=`mairix -F -f $rc ${=expr} 2> /dev/null | awk '{ print $2}'`
+		if [ $found != 0 ]; then
+		    mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
+		    notice "Found $found matches looking for '$expr' in $folders"
+		    find $TMPDIR/search.result.$id
+		    cat $rc
+		    exitcode=0
+		else error "No matches found."; fi
+	    }
 
+	} # DRYRUN
 
 	rm -f $rc
 	rm -f $TMPDIR/search.db.$id
@@ -119,6 +121,12 @@ mformat=maildir
 EOF
     # just index
     { test ${#PARAM} = 0 } && {
+	{ test $DRYRUN = 1 } && {
+	    act "Would index ${#maildirs} maildirs:"
+	    act "${maildirs}"
+	    act "Dry run exit."
+	    return 0
+	}
 	act "Indexing ${#maildirs} maildirs for search"
 	act "please be patient..."
 	mairix -F -f $rc
@@ -129,8 +137,16 @@ EOF
 	rm -f $rc
 	return $exitcode
     }
+
+    { test $DRYRUN = 1 } && {
+	act "Would search $mlstr for: ${expr}"
+	act "Dry run exit."
+	return 0
+    }
+
     act "Searching $mlstr for: ${expr}"
     exitcode=1
+
     found=`mairix -F -f $rc ${=expr} 2> /dev/null | awk '{print $2}'`
     if [ $CALLMUTT = 1 ]; then
 
@@ -182,8 +198,8 @@ backup() {
 		    basedir=`pwd`
 		    popd }
 	    }
-	    
-        elif [ -r ${MAILDIRS}/${p} ]; then
+
+	elif [ -r ${MAILDIRS}/${p} ]; then
 
 	    { maildircheck ${MAILDIRS}/${p} } && {
 		func "param ${p} is a jaro maildir"
@@ -219,7 +235,7 @@ backup() {
     # forge the folder string for mairix conf
     folders=""
     for f in ${fold}; do
-	{ test $f = $dst } || { 
+	{ test $f = $dst } || {
 	    folders="$folders`basename $f`:" }
     done
 
