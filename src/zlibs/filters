@@ -87,7 +87,8 @@ source $WORKDIR/Mutt.txt
 
 EOF
 
-   # making sure we have the minimum mailcap necessary
+    # MUTT MAILCAP
+
 wwwtext=w3m
 { which lynx > /dev/null } && { wwwtext=lynx }
 { which elinks > /dev/null } && { wwwtext=elinks }
@@ -110,6 +111,54 @@ EOF
     read_account imap
 
     switch_identity
+
+    #######
+    # SIEVE
+    act "generating sieve filters"
+    id=$RANDOM
+    sieve=$WORKDIR/sieve.filter
+    rm -f $sieve
+    touch $sieve
+    chmod 600 $sieve
+    cat <<EOF >> $sieve
+require "fileinto";
+
+# blacklist
+if header :contains "From" [
+EOF
+    newlock $TMPDIR/blacklist.sieve.$id
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook \
+	>> $TMPDIR/blacklist.sieve.$id
+SELECT email FROM blacklist;
+EOF
+    typeset -alU blacklist
+    for i in `cat $TMPDIR/blacklist.sieve.$id`; do
+	blacklist+=($i); done
+    unlink $TMPDIR/blacklist.sieve.$id
+    c=${#blacklist}
+    for b in $blacklist; do
+	print -n "\"$b\"" >> $sieve
+	c=$(( $c - 1 ))
+	{ test $c != 0 } && { print -n "," >> $sieve }
+	print >> $sieve
+    done
+
+cat <<EOF >> $sieve
+]
+{ fileinto "zz.blacklist"; stop; }
+
+# bounces
+if header :contains "Sender" "mailman-bounces" {
+    fileinto "zz.bounces";
+    stop;
+}
+
+# filters
+EOF
+
+# continue later on while we parse filters
+
+
 
     ##########
     # PROCMAIL
@@ -155,7 +204,12 @@ EOF
     #######
     echo "# filters generated from Filters.txt" >> $PROCMAILDIR/rc
 
-    for f in `cat $WORKDIR/Filters.txt | awk '/^#/ {next} /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
+    typeset -alU filter_from
+    typeset -alU filter_to
+
+    for f in `cat $WORKDIR/Filters.txt | awk '
+    /^#/ {next}
+    /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
 	header="${f[(ws:;:)1]}"
 	address="${f[(ws:;:)2]}"
 	action="${f[(ws:;:)3]}"
@@ -166,12 +220,14 @@ EOF
 		    >> $PROCMAILDIR/rc
 		func "messages to <${address}> in folder: ${destination}"
 		maildirmake $MAILDIRS/$destination
+		filter_to+=($address)
 		;;
 	    from)
 		print "ADDR=${address}\tDEST=${destination}/\tINCLUDERC=\$PMSRC/pf-check.rc" \
 		    >> $PROCMAILDIR/rc
 		func "messages from <${address}> in folder: {$destination}"
 		maildirmake $MAILDIRS/$destination
+		filter_from+=($address)
 		;;
 	    *)
 		error "unsupported filter: $header (skipped)"
@@ -182,7 +238,82 @@ EOF
 	echo -n " +${destination} " >> $MUTTDIR/mboxes
     done
 
-    # if the sender is known (ldbd recognizes it) then put mail in high priority 'known'
+    # now do the sieve
+    { test ${#filter_to} -gt 0 } && {
+	cat <<EOF >> $sieve
+# filter to
+if header :contains "To" [
+EOF
+	c=${#filter_to}
+	for f in $filter_to; do
+	    print -n "\"$f\"" >> $sieve
+	    c=$(( $c - 1 ))
+	    { test $c != 0 } && { print -n "," >> $sieve }
+	    print >> $sieve
+	done
+	cat <<EOF >> $sieve
+]
+{ fileinto "filters"; stop; }
+
+EOF
+    }
+
+    { test ${#filter_from} -gt 0 } && {
+	cat <<EOF >> $sieve
+# filter from
+if header :contains "From" [
+EOF
+	c=${#filter_from}
+	for f in $filter_from; do
+	    print -n "\"$f\"" >> $sieve
+	    c=$(( $c - 1 ))
+	    { test $c != 0 } && { print -n "," >> $sieve }
+	    print >> $sieve
+	done
+	cat <<EOF >> $sieve
+]
+{ fileinto "filters"; stop; }
+
+EOF
+    }
+
+    ##############################################################
+    # if the sender is known (ldbd recognizes it) then put mail in
+    # high priority 'known' (procmail) or INBOX (sieve)
+
+
+
+#### SIEVE
+
+cat <<EOF >> $sieve
+# whitelist
+if header :contains "From" [
+EOF
+newlock $TMPDIR/whitelist.sieve.$id
+cat <<EOF | ${SQL} -batch $WORKDIR/addressbook \
+    >> $TMPDIR/whitelist.sieve.$id
+SELECT email FROM whitelist;
+EOF
+typeset -alU whitelist
+for i in `cat $TMPDIR/whitelist.sieve.$id`; do
+    whitelist+=($i); done
+unlink $TMPDIR/whitelist.sieve.$id
+c=${#whitelist}
+for w in $whitelist; do
+    print -n "\"$w\"" >> $sieve
+    c=$(( $c - 1 ))
+    { test $c != 0 } && { print -n "," >> $sieve }
+    print >> $sieve
+done
+cat <<EOF >> $sieve
+]
+{ fileinto "INBOX"; stop; }
+
+EOF
+
+
+#### PROCMAIL
+
     cat <<EOF >> $PROCMAILDIR/rc
 }
 
@@ -207,6 +338,10 @@ EOF
 * ? test \$PMSRC/pf-chkto.rc
 {
 EOF
+    cat <<EOF >> $sieve
+# sent to our own address
+if header :contains "To" [
+EOF
     typeset -alU recv
     for f in `find $WORKDIR/Accounts/ -type f | grep -v 'smtp'`; do
 	for addr in `cat $f | awk '
@@ -214,11 +349,27 @@ EOF
     /^alias/ { print $2 }
     '`; do func "email $addr in `basename $f`"; recv+=($addr); done
     done
+    c=${#recv}
     for rr in ${recv}; do \
-	echo "ADDR=${rr}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc" \
+
+	# procmail
+	print "ADDR=${rr}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc" \
 	>> $PROCMAILDIR/rc
+
+	# sieve
+	print -n "\"${rr}\"" >> $sieve
+	c=$(( $c - 1 ))
+	{ test $c != 0 } && { print -n "," >> $sieve }
+	print >> $sieve
+	
 	act "private account: <${rr}>"
     done
+
+    cat <<EOF >> $sieve
+]
+{ fileinto "priv"; stop; }
+
+EOF
 
     cat <<EOF >> $PROCMAILDIR/rc
 }
@@ -244,7 +395,7 @@ EOF
     mv $TMPDIR/mboxes $MUTTDIR/mboxes
     rm -f $TMPDIR/mboxes
 
-    # conclude
+    # conclude procmail
     cat <<EOF >> $PROCMAILDIR/rc
 
 # if got here, go to unsorted
@@ -255,5 +406,18 @@ EOF
 # End of generated procmail rc
 #
 EOF
+
+
+    # conclude sieve
+cat <<EOF >> $sieve
+# flagged as spam
+if header :is "X-Spam-Flag" "YES" {
+    fileinto "zz.spam";
+    stop;
+}
+
+fileinto "unsorted";
+EOF
+
     return 0
 } # end of update()
