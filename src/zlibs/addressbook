@@ -90,8 +90,8 @@ address() {
     matches="${matches}\n`search_name ${PARAM[1]}`"
 
     # mutt query requires something like this
-    echo "jaro: `echo $matches | wc -l` matches"
-    echo "$matches" | awk '
+    print "jaro: `print $matches | wc -l` matches"
+    print "$matches" | awk '
 { printf "%s\t", $1
   for(i=2;i<=NF;i++) {
     sub("<","",$i)
@@ -144,7 +144,7 @@ list_addresses() {
 SELECT * FROM $list;
 EOF
 
-    echo ".dump" | ${SQL} -batch $WORKDIR/addressbook \
+    print ".dump" | ${SQL} -batch $WORKDIR/addressbook \
 	| bzip2 > $WORKDIR/addressbook.bz2
     notice "Backup of all addressbook created"
     act -n ""; ls -lh $WORKDIR/addressbook.bz2

@@ -45,7 +45,7 @@ list_accounts() {
 /^email/ { printf "<%s>", $2 }
 /^host/ { printf " on %s", $2 }
 {next}' $a.txt
-	echo " (`basename $a | cut -d. -f1`)"
+	print " (`basename $a | cut -d. -f1`)"
     done
 }	
 
@@ -59,8 +59,8 @@ read_account() {
     { test "$1" != "" } && { account=$1 }
 
     account=".${account}"
-    type=`echo ${account} | cut -d. -f2`
-    account=`echo ${account} | cut -d. -f3`
+    type=`print ${account} | cut -d. -f2`
+    account=`print ${account} | cut -d. -f3`
 
     { test "$2" != "" } && { account=$2 }
 
@@ -87,8 +87,8 @@ read_account() {
     elif [ ${#all} != 1 ]; then
 	error "Too many $type accounts named $account"
 	act -n ""
-	for i in ${=all}; do echo -n "`basename ${i}` "; done
-	echo; error "Refine your account keyword using -a option"
+	for i in ${=all}; do print -n "`basename ${i}` "; done
+	print; error "Refine your account keyword using -a option"
 	return 1
     fi
 
@@ -191,7 +191,7 @@ ask_password() {
 	    ###################
 	    # USE GNOME KEYRING
 	    { test $GNOMEKEY = 1 } && {
-		echo "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" \
+		print "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" \
 		    | $WORKDIR/bin/jaro-gnome-keyring check
 		if [ $? != 0 ]; then # its a new password
 		    new_password
@@ -200,7 +200,7 @@ ask_password() {
 			return 1 }
 		else # password found into gnome keyring
 		    act "Using saved password for $1 @ $2"
-		    password=`echo "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" | $WORKDIR/bin/jaro-gnome-keyring get`
+		    password=`print "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" | $WORKDIR/bin/jaro-gnome-keyring get`
 		fi
 		return 0
 	    }

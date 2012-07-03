@@ -27,6 +27,8 @@ get_imap_info() {
     { test "$type" != "imap" } && {
 	error "get_imap_info() called on a non-imap account: $type.$host"
 	return 1 }
+    # skip getting size if Gmail
+    # (imap there lacks support for RFC822.SIZE)
     { test "$host" = "imap.gmail.com" } && {
 	act "skipping IMAP examination on GMail account"
 	return 1 }
@@ -56,10 +58,10 @@ B00001 LOGIN "${login}" "${password}"
 EOF
 	
 	c=$(( $c + 1 ))
-        echo "B0000$c SELECT \"${f}\"" >> $query
+        print "B0000$c SELECT \"${f}\"" >> $query
 	c=$(( $c + 1 ))
-        echo "B0000$c FETCH 1:* (FLAGS RFC822.SIZE)" >> $query
-	echo >> $query
+        print "B0000$c FETCH 1:* (FLAGS RFC822.SIZE)" >> $query
+	print >> $query
 
 	typeset -al res
 	for i in `timeout 5 openssl s_client -starttls imap -quiet \

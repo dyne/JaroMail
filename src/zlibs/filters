@@ -105,7 +105,7 @@ EOF
 
     # just the header, will be completed later in procmail loop
     rm -f $MUTTDIR/mboxes
-    echo -n "mailboxes +priv" > $MUTTDIR/mboxes
+    print -n "mailboxes +priv" > $MUTTDIR/mboxes
 
     # update identity with default
     read_account imap
@@ -202,7 +202,7 @@ zz.bounces/
 EOF
 
     #######
-    echo "# filters generated from Filters.txt" >> $PROCMAILDIR/rc
+    print "# filters generated from Filters.txt" >> $PROCMAILDIR/rc
 
     typeset -alU filter_from
     typeset -alU filter_to
@@ -234,8 +234,8 @@ EOF
 		;;
 	esac
 	# MUTT (generate mailboxes priority this parser)
-	echo  " \\" >> $MUTTDIR/mboxes
-	echo -n " +${destination} " >> $MUTTDIR/mboxes
+	print  " \\" >> $MUTTDIR/mboxes
+	print -n " +${destination} " >> $MUTTDIR/mboxes
     done
 
     # now do the sieve
@@ -388,8 +388,8 @@ unsorted.ml/
 EOF
 
     # MUTT (generate mailboxes priority this parser)
-    echo " \\" >> $MUTTDIR/mboxes
-    echo " +unsorted.ml +unsorted" >> $MUTTDIR/mboxes
+    print " \\" >> $MUTTDIR/mboxes
+    print " +unsorted.ml +unsorted" >> $MUTTDIR/mboxes
 
     uniq $MUTTDIR/mboxes > $TMPDIR/mboxes
     mv $TMPDIR/mboxes $MUTTDIR/mboxes

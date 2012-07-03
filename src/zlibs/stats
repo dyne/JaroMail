@@ -40,7 +40,7 @@ stats() {
 	    grandtot=0
 	    for i in ${maildirs}; do
 		# find maildir prefixes
-		pfx=`echo $i | cut -d. -f1`
+		pfx=`print $i | cut -d. -f1`
 		# is it a new prefix?
 		{ test "$pfx" = "$oldpfx" } && { continue }
 		oldpfx=$pfx
@@ -98,7 +98,7 @@ EOF
     for m in ${maildirs}; do
 	for f in `find $MAILDIRS/${m} -type f`; do
 	    timestamp=`fetchdate "%Y-%U" ${f}`
-	    mdir=`echo $m|cut -d. -f1`
+	    mdir=`print $m|cut -d. -f1`
 	    cat <<EOF | ${SQL} -batch $db > $sql
 SELECT * FROM stats
 WHERE ml IS "${mdir}" AND date IS "${timestamp}";
@@ -135,7 +135,7 @@ SELECT date FROM stats ORDER BY date;
 EOF
     for w in `cat $sql | uniq`; do
 	week+=($w)
-	echo "<th scope=\"col\">${w}</th>" >> $table
+	print "<th scope=\"col\">${w}</th>" >> $table
     done
     cat <<EOF >> $table
 		</tr>
@@ -145,12 +145,12 @@ EOF
 EOF
     prevmdir=""
     for m in ${maildirs}; do
-	mdir=`echo $m|cut -d. -f1`
+	mdir=`print $m|cut -d. -f1`
 	# skip duplicates
 	if [ "$prevmdir" = "$mdir" ]; then continue
 	else prevmdir=$mdir; fi
 
-	echo -n "<tr><th scopre=\"row\">$mdir</th>" >> $table
+	print -n "<tr><th scopre=\"row\">$mdir</th>" >> $table
 	for w in ${week}; do
 	    cat <<EOF | ${SQL} -batch $db > $sql
 SELECT hits FROM stats
@@ -160,9 +160,9 @@ EOF
 	    for h in `cat $sql`; do
 		sum=$(( $sum + $h ))
 	    done
-	    echo -n "<td>$sum</td>" >> $table
+	    print -n "<td>$sum</td>" >> $table
 	done
-	echo "</tr>" >> $table
+	print "</tr>" >> $table
     done
 
     cat <<EOF >> $table
@@ -172,7 +172,7 @@ EOF
     cp $WORKDIR/.stats/visualize/header.html \
 	$WORKDIR/.stats/index.html
     cat $table >> $WORKDIR/.stats/index.html
-    echo "</body>\n</html>\n" >> $WORKDIR/.stats/index.html
+    print "</body>\n</html>\n" >> $WORKDIR/.stats/index.html
 }
 
 timecloud() {

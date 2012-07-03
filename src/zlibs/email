@@ -49,7 +49,7 @@ queue() {
     mailfile="$base.mail"
     msmtpfile="$base.msmtp"
     # Write command line to $MSMTPFILE
-    echo "$@" > "$msmtpfile"
+    print "$@" > "$msmtpfile"
     lock $msmtpfile
     # Write the mail to $MAILFILE
     cat > "$mailfile"
@@ -65,8 +65,8 @@ fetchall() {
     res=0
     for i in `find $WORKDIR/Accounts -type f | grep -v README`; do
 	account=`basename $i`
-	type=`echo $account | cut -d. -f1`
-	account=`echo $account | cut -d. -f2`
+	type=`print $account | cut -d. -f1`
+	account=`print $account | cut -d. -f2`
 	fetch $type $account
 	if [ $? != 0 ]; then res=1; fi
 	# returns an error if just one of the accounts did
@@ -108,27 +108,17 @@ fetch() {
 
     ask_password $login $host
 
-
-    # skip getting size if Gmail
-    # (imap there lacks support for RFC822.SIZE)
-#    { test "$host" != "imap.gmail.com" } && {
-    get_imap_info
-    { test ${imap_info[${#imap_info}]} = 0 } && {
-	# imap account is empty
-	return 0 }
-    notice "Total occupation is `human_size ${imap_info[${#imap_info}]}`"
-#    }
     # this puts total size in $imap_info
+    get_imap_info
+
+    # return here if the imap folders are all empty
+    { test ${imap_info[${#imap_info}]} = 0 } && { 
+	act "Mailbox is empty, nothing to fetch."
+	return 0 }
+
+    notice "Total occupation is `human_size ${imap_info[${#imap_info}]}`"
 
     { test $DRYRUN != 1 } && {
-
-	{ test ${imap_info[${#imap_info}]} -eq 0 } && { return 0 }
-
-	ask_password $login $host
-	{ test $? != 0 } && {
-	    error "Error retrieving password for $login on $host"
-	    unset password all; return 1
-	}
 
 	tmp=$TMPDIR/$host.fetch.$RANDOM
 	newlock $tmp
@@ -138,10 +128,10 @@ EOF
 	unset password
 
 	if ! [ -z $accountopt ]; then # add option configuration
-	    echo "${accountopt}" >> $tmp; fi
+	    print "${accountopt}" >> $tmp; fi
 
 	if ! [ -z $folders ]; then # add folder configuration
-	    echo "folder ${folders}" >> $tmp; fi
+	    print "folder ${folders}" >> $tmp; fi
 
 	cat <<EOF >> $tmp
 ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
@@ -196,7 +186,7 @@ EOF
 	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
 	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
 	notice "$total emails fetched"
-	echo "${briefing}"
+	print "${briefing}"
 
     } # DRYRUN
 
@@ -256,7 +246,7 @@ EOF
 	unset password
 
 	for mail in `find $MAILDIRS/outbox -name "*.mail"`; do
-	    smtp=`echo ${mail} | sed -e 's/mail/msmtp/'`
+	    smtp=`print ${mail} | sed -e 's/mail/msmtp/'`
 	    lock ${smtp}
 	    recipients="`cat ${smtp}`"
 	    act "To: ${recipients}"
@@ -303,7 +293,7 @@ peek() {
 	    iproto="imap"  ;;
     esac
     # escape at sign in login
-    ilogin=`echo $login | sed 's/@/\\@/'`
+    ilogin=`print $login | sed 's/@/\\@/'`
 
     { test $DRYRUN != 1 } && {
 
@@ -319,7 +309,7 @@ set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
 	unset password
-	echo "source $tmp" >> $MUTTDIR/password
+	print "source $tmp" >> $MUTTDIR/password
 	(sleep 1;
 	    cp /dev/null $MUTTDIR/password
 	    cp /dev/null $tmp
