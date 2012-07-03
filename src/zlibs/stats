@@ -33,24 +33,42 @@ stats() {
 	weeks) weeks ;;
 
 	*) # simple stats
-	    typeset -alU ml
+	    typeset -al tot
+	    typeset -alU fold
 	    list_maildirs
 	    oldpfx=""
 	    grandtot=0
 	    for i in ${maildirs}; do
+		# find maildir prefixes
 		pfx=`echo $i | cut -d. -f1`
-		if [ "$pfx" = "$oldpfx" ]; then continue
-		else oldpfx=$pfx; fi
-		tot=`find $MAILDIRS/$pfx* -type f | wc -l`
-		{ test $tot -gt 0 } && { 
-		    ml+=("$tot\t:: $pfx")
-		    grandtot=$(( $grandtot + $tot ))
-		}
+		# is it a new prefix?
+		{ test "$pfx" = "$oldpfx" } && { continue }
+		oldpfx=$pfx
+
+		fold+=($pfx)
+		# how big?
+		tot+=("`find $MAILDIRS/$pfx* -type f | wc -l`")
+		grandtot="$(( $grandtot + ${tot[${#tot}]} ))"
 	    done
-	    for m in ${(O)ml}; do
-		print "    ${m}"
+	    # calculate screen size and bigger tot
+	    maxtot=0
+	    for x in $tot; do # find max
+		if [ $x -gt $maxtot ]; then
+		    maxtot=$x; fi
 	    done
-	    notice "Total maildirs: ${#ml}"
+
+	    c=0
+	    for f in ${fold}; do
+		c=$(( $c + 1 ))
+		sbar=""
+	    # Euclides: cols : x = maxtot : tot
+		cols=$(( $COLUMNS - 20 ))
+		bar=$(( $cols * ${tot[$c]} ))
+		bar=$(( $bar / $maxtot ))
+		for b in {0..$bar}; do sbar="${sbar}#"; done
+		print " ${tot[$c]}\t$sbar ${fold[$c]}"
+	    done
+	    notice "Total maildirs: ${#fold}"
 	    act "Total e-mails stored: ${grandtot}"
 	    act "Storage occupation: `du -hs $MAILDIRS | awk '{print $1}'`"
 	    ;;
