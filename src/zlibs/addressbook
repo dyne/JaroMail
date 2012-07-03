@@ -46,6 +46,8 @@ EOF
     { test $? != 0 } && {
 	error "Error creating addressbook database."
 	return 1 }
+    # make sure is private
+    chmod 600 $WORKDIR/addressbook
     return 0
 }
 insert_address() {
@@ -83,6 +85,8 @@ return $?
 }
 address() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    chmod 600 $WORKDIR/addressbook # make sure is private
+
     act "Searching for \"${PARAM[1]}\" in $list"
     { test "$OS" = "MAC" } && {
 	matches=`$WORKDIR/bin/ABQuery ${PARAM[1]}`
@@ -102,6 +106,8 @@ address() {
 }
 query() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    chmod 600 $WORKDIR/addressbook # make sure is private
+
     if [ -z ${PARAM[1]} ]; then
 	email="`${WORKDIR}/bin/fetchaddr -a| awk '{print $1}'`"
     else
@@ -115,6 +121,8 @@ query() {
 
 learn() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    chmod 600 $WORKDIR/addressbook # make sure is private
+
     tmp=$TMPDIR/learn.$datestamp.$RANDOM
     from="`tee -i $tmp | formail -xFrom: | sed -e 's/\"//g'`"
     if [ -z ${PARAM[1]} ]; then
@@ -128,6 +136,8 @@ learn() {
 
 forget() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    chmod 600 $WORKDIR/addressbook # make sure is private
+
     act "Expecting mail from stdin pipe"
     if [ -z ${PARAM[1]} ]; then
 	email="`${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
@@ -137,7 +147,11 @@ forget() {
     remove_address "${email}"
 }
 list_addresses() {
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    chmod 600 $WORKDIR/addressbook # make sure is private
+
     { test ${PARAM[1]} } && { list=${PARAM[1]} }
+
     act "Listing all contents for $list"
     cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook
 .width 32 40
