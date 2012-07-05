@@ -111,9 +111,9 @@ merge() {
     fi
     notice "Merging maildir ${src} into ${dst}"
     c=0
-    for i in `find ${src}/cur -type f`; do mv $i ${dst}/cur/; c=`expr $c + 1`; done
-    for i in `find ${src}/new -type f`; do mv $i ${dst}/new/; c=`expr $c + 1`; done
-    for i in `find ${src}/tmp -type f`; do mv $i ${src}/tmp/; c=`expr $c + 1`; done
+    for i in `find ${src}/cur -type f`; do mv $i ${dst}/cur/; c=$(($c + 1)); done
+    for i in `find ${src}/new -type f`; do mv $i ${dst}/new/; c=$(($c + 1)); done
+    for i in `find ${src}/tmp -type f`; do mv $i ${src}/tmp/; c=$(($c + 1)); done
     act "$c mails succesfully moved."
     notice "Operation completed, you can now safely remove ${src}"
 }
@@ -133,6 +133,13 @@ filter() {
 	unlock $WORKDIR/log/procmail-${datestamp}.log
     fi
 
+    prc=$PROCMAILDIR/rc
+    { test $TMPRAM = 1 } && { # accelerate using ramdisk if present
+	pdir=$TMPDIR/filter.procmail.$RAND
+	cp -r $PROCMAILDIR $TMPDIR/$pdir
+	prc=$TMPDIR/$pdir/rc
+    }
+
     for folder in ${=PARAM}; do
 	typeset -al fall
 	{ test ! -r $folder } && { folder=$MAILDIRS/$folder }
@@ -142,7 +149,7 @@ filter() {
 	for m in `find $folder -type f`; do fall+=($m); done
 	# then process it, this way ignoring new mails send to same folder
 	for n in ${=fall}; do
-	    cat $n | procmail -m $PROCMAILDIR/rc
+		cat $n | procmail -m $prc
 	done
 	unset fall
     done
