@@ -95,8 +95,12 @@ EOF
 	error "Error creating temporary week stats database."
 	return 1 }
 
+    act "gathering timestamps..."
     for m in ${maildirs}; do
-	for f in `find $MAILDIRS/${m} -type f`; do
+	func "  ${m}"
+	rm -rf $TMPDIR/weekstats.db.mdir
+	cp -r $MAILDIRS/${m} $TMPDIR/weekstats.db.mdir
+	for f in `find $TMPDIR/weekstats.db.mdir -type f`; do
 	    timestamp=`fetchdate "%Y-%U" ${f}`
 	    mdir=`print $m|cut -d. -f1`
 	    cat <<EOF | ${SQL} -batch $db > $sql
@@ -118,7 +122,9 @@ EOF
 	    fi
 	done
     done
-    # gather results from the database
+    # render results from the database
+    act "rendering results..."
+
     table=$WORKDIR/.stats/jaromail.html
     ${=mkdir} $WORKDIR/.stats
 

@@ -154,6 +154,10 @@ name To Be Configured
 # Email address (default is same as login)
 email unknown@gmail.com
 
+# Aliases also received on this mail
+# alias mimesis@gmail.com
+# alias nemesis@gmail.com
+
 # Internet address
 host imap.gmail.com
 
@@ -178,8 +182,14 @@ port 993
 options keep
 
 # Imap folders
-# uncommend to provide a list of folders to be fetched
+# uncomment to provide a list of folders to be fetched
 # folders INBOX, known, priv, lists, ml.unsorted, unsorted
+
+# Remote sieve
+# command to upload a sieve filter to the server
+# %% will be filled in automatically with our file
+# remote_sieve_cmd scp %% assata.dyne.org:/var/mail/sieve-scripts/email
+
 
 #
 # The password field will be filled in automatically
@@ -239,12 +249,12 @@ cp src/fetchdate $WORKDIR/bin/
 case $OS in
 	MAC) cp -a build/osx/* $WORKDIR/bin ;;
 	GNU) cp -a build/gnu/* $WORKDIR/bin
-rm -f $WORKDIR/bin/dotlock
-cat <<EOF > $WORKDIR/bin/dotlock
+#rm -f $WORKDIR/bin/dotlock
+#cat <<EOF > $WORKDIR/bin/dotlock
 #!/usr/bin/env zsh
-mutt_dotlock \${=@}
-EOF
-chmod a+x $WORKDIR/bin/dotlock
+#mutt_dotlock \${=@}
+#EOF
+#chmod a+x $WORKDIR/bin/dotlock
 ;;
 esac
 

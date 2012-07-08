@@ -355,8 +355,8 @@ what you delete here will be removed from the server and won't be
 there when you download it from home.
 
 This functionality can be also very useful if you are from a slow
-connection and need to delete some email that is clogging your mailbox
-and that you are not able to download because of its size.
+connection and need to delete some email that is clogging it and that
+you are not able to download because of its size.
 
 
 ** Send emails whenever possible

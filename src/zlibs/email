@@ -28,7 +28,7 @@ queue() {
 
     # add mails to the sendout queue
     ${=mkdir} $MAILDIRS/outbox
-    cd $MAILDIRS/outbox || return 1
+    pushd $MAILDIRS/outbox
     notice "Adding mail to the outbox queue"
     # Create new unique filenames of the form
     # MAILFILE:  ccyy-mm-dd-hh.mm.ss[-x].mail
@@ -54,7 +54,7 @@ queue() {
     # Write the mail to $MAILFILE
     cat > "$mailfile"
     unlock $msmtpfile
-    cd -
+    popd
     return 0
 }
 
