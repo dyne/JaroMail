@@ -70,19 +70,27 @@ autostart() {
 # however the default is nano if nothing else is choosen.
 editor() {
     { test ${EDITOR} } && {
-	${=EDITOR} ${PARAM[1]}
+	case ${EDITOR} in
+	# refine settings for email
+	    vi|vim) vim -c 'set fo=tcrq' -c 'set tw=76' ${=PARAM} ;;
+	    emacs) emacsclient -a emacs ${=PARAM} ;;
+	    *) ${=EDITOR} ${=PARAM} ;;
+	esac
 	return $? }
+    # if we are here we need to guess
     case $OS in
-	MAC) open -t ${PARAM[1]} ;;
+	MAC) open -t ${=PARAM} ;;
 	GNU)
+	    { ps ax|grep '[e]macs' } && { emacsclient -a ${=PARAM} }
+	    { ps ax|grep '[v]im' } && { vim -c 'set fo=tcrq' -c 'set tw=76' ${=PARAM} }
 	    { which nano > /dev/null } && {
-		nano -m -S -Q ">" -I -E -D -T 4 -U -W -c -i -k -r 72 ${PARAM[1]} }
+		nano -m -S -Q ">" -I -E -D -T 4 -U -W -c -i -k -r 72 ${=PARAM} }
 	    error "No editor found, please configure the EDITOR environment variable."
-	    sleep 3
 	    ;;
     esac
     return $?
 }
+
 
 ##############
 ## Open a File

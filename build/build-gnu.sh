@@ -29,9 +29,9 @@ case $distro in
 	which gcc || sudo apt-get install gcc
 	which bison || sudo apt-get install bison
 	which flex || sudo apt-get install flex
+	which sqlite3 || sudo apt-get install sqlite3
 	[ -r /usr/share/doc/libgnome-keyring-dev/copyright ] || \
 	    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
-
 	echo "All dependencies installed"
 	cd src
 	echo -n "Compiling the address parser... "
