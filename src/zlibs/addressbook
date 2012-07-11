@@ -57,7 +57,9 @@ INSERT INTO $list (email, name)
 VALUES ("${1}", "${2}");
 EOF
     { test $? != 0 } && {
-	func "address already present in $list" }
+	func "address already present in $list"
+	return 1
+    }
     return $0
 }
 remove_address() {
@@ -94,7 +96,7 @@ address() {
     matches="${matches}\n`search_name ${PARAM[1]}`"
 
     # mutt query requires something like this
-    print "jaro: `print $matches | wc -l` matches"
+    print "jaro: $((`print $matches | wc -l` -1)) matches"
     print "$matches" | awk '
 { printf "%s\t", $1
   for(i=2;i<=NF;i++) {
@@ -162,6 +164,66 @@ EOF
 	| bzip2 > $WORKDIR/addressbook.bz2
     notice "Backup of all addressbook created"
     act -n ""; ls -lh $WORKDIR/addressbook.bz2
+}
+
+
+# import addresbook email from VCard
+import_vcard() {
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    chmod 600 $WORKDIR/addressbook # make sure is private
+
+
+    { test -r ${PARAM[1]} } || {
+	error "File not found: import ${PARAM[1]}"
+	return 1
+    }
+
+    vcard=${PARAM[1]}
+    head -n1 $vcard | grep '^BEGIN:VCARD' > /dev/null
+
+    { test $? = 0 } || {
+	error "File to import is not a VCard: $vcard"
+	return 1
+    }
+
+    notice "Import in addressbook VCard ${vcard}"
+    tmp=$TMPDIR/import.$datestamp.$RANDOM
+
+    cat ${vcard} | awk '
+BEGIN { newcard=0; c=0; name=""; email=""; }
+/^BEGIN:VCARD/ { newcard=1 }
+/^FN:/ { if(newcard = 1) name=$0 }
+/^EMAIL/ { if(newcard = 1) email=$0 }
+/^END:VCARD/ {
+  if(newcard = 1) {
+    newcard=0
+    if(email != "") {
+      c+=1
+      print name
+      print email
+      print "# " c 
+    }
+    email=""
+    next
+  }
+}
+' | cut -d: -f2  > $tmp
+
+    addresses=`cat $tmp`
+    newa=1; _name=""; _email=""
+    for a in ${(f)addresses}; do
+	{ test "${a[1]}" = "#" } && {
+	    newa=1;
+	    insert_address "${_email}" "${_name}"
+	    { test $? = 0 } && { act "${a} ${_name} <${_email}>" }
+
+	    continue }
+	{ test $newa -eq 1 } && {
+	    # (V) makes special chars visible, we need to remove them..
+	    _name=`echo ${(V)a} | cut -d^ -f1`; newa=0; continue }
+	{ test $newa -eq 0 } && { _email=`echo ${(V)a} | cut -d^ -f1` }
+    done
+    rm -f $tmp
 }
 
 ###################
