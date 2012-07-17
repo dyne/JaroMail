@@ -94,7 +94,7 @@ wwwtext=w3m
 { which elinks > /dev/null } && { wwwtext=elinks }
 cat <<EOF > $MUTTDIR/mailcap
 text/html; ${wwwtext} -dump %s; nametemplate=%s.html; copiousoutput
-application/*; a=$WORKDIR/tmp/attach-$RANDOM$RANDOM && cp %s \$a && jaro open \$a
+application/*; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && jaro open \$a/\$f
 text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
   && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
 text/plain; cat %s

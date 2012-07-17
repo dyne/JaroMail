@@ -95,14 +95,12 @@ editor() {
 ##############
 ## Open a File
 open_file() {
-    a=$WORKDIR/cache/attach-$RANDOM$RANDOM
-    cp ${PARAM[1]} $a
     case $OS in
 	GNU)
-	    # TODO
+	    sensible-browser ${=PARAM} &
 	    ;;
 	MAC)
-	    open -g $a
+	    open -g ${=PARAM}
 	    ;;
     esac
 }
