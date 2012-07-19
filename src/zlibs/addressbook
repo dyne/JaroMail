@@ -83,7 +83,7 @@ search_email() {
 SELECT rowid FROM $list
 WHERE email IS "${1}";
 EOF
-return $?
+	return $?
 }
 address() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
@@ -189,6 +189,9 @@ import_vcard() {
     notice "Import in addressbook VCard ${vcard}"
     tmp=$TMPDIR/import.$datestamp.$RANDOM
 
+    # parse the vcard and print a simple name and email list
+    # each value on a single line, entry tuples followed by a #
+    # we skip entries that don't have an email
     cat ${vcard} | awk '
 BEGIN { newcard=0; c=0; name=""; email=""; }
 /^BEGIN:VCARD/ { newcard=1 }
@@ -209,13 +212,18 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 }
 ' | cut -d: -f2  > $tmp
 
+    # now parse the temporary list of name and emails
     addresses=`cat $tmp`
     newa=1; _name=""; _email=""
     for a in ${(f)addresses}; do
 	{ test "${a[1]}" = "#" } && {
-	    newa=1;
-	    insert_address "${_email}" "${_name}"
-	    { test $? = 0 } && { act "${a} ${_name} <${_email}>" }
+	    newa=1; # its the end of the entry
+	    # check if we have this email already
+	    foundemail=`search_email "${_email}"`
+	    { test "$foundemail" != "" } && {
+		insert_address "${_email}" "${_name}"
+		act "${a} ${_name} <${_email}>"
+	    }
 
 	    continue }
 	{ test $newa -eq 1 } && {
