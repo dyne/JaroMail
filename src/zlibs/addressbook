@@ -62,6 +62,14 @@ EOF
     }
     return $0
 }
+update_name() {
+    func "update address: $1, $2"
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
+UPDATE $list SET name="${2}" WHERE email LIKE "${1}";
+EOF
+    { test $? != 0 } && {
+	func "address not found or error occurred" }
+}    
 remove_address() {
     func "remove address <$1> from $list"
     cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
@@ -159,11 +167,6 @@ list_addresses() {
 .width 32 40
 SELECT * FROM $list;
 EOF
-
-    print ".dump" | ${SQL} -batch $WORKDIR/addressbook \
-	| bzip2 > $WORKDIR/addressbook.bz2
-    notice "Backup of all addressbook created"
-    act -n ""; ls -lh $WORKDIR/addressbook.bz2
 }
 
 
@@ -213,14 +216,17 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 ' | cut -d: -f2  > $tmp
 
     # now parse the temporary list of name and emails
+    # made of name, email and a hash for each, newline separated
     addresses=`cat $tmp`
+    ${=rm} $tmp
+
     newa=1; _name=""; _email=""
     for a in ${(f)addresses}; do
 	{ test "${a[1]}" = "#" } && {
 	    newa=1; # its the end of the entry
 	    # check if we have this email already
 	    foundemail=`search_email "${_email}"`
-	    { test "$foundemail" != "" } && {
+	    { test "$foundemail" = "" } && {
 		insert_address "${_email}" "${_name}"
 		act "${a} ${_name} <${_email}>"
 	    }
@@ -231,7 +237,136 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 	    _name=`echo ${(V)a} | cut -d^ -f1`; newa=0; continue }
 	{ test $newa -eq 0 } && { _email=`echo ${(V)a} | cut -d^ -f1` }
     done
-    rm -f $tmp
+    notice "Done importing addresses"
 }
 
+# export addressbook to vcard
+export_vcard() {
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    chmod 600 $WORKDIR/addressbook # make sure is private
+
+    act "Export addressbook into vCard $WORKDIR/addressbook.vcf"
+    tmp=$TMPDIR/export.$datestamp.$RANDOM
+
+    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook \
+	| grep -v '^email' > $tmp
+.width 40 100
+.mode list
+.separator '|'
+SELECT email, name FROM $list;
+EOF
+
+    addresses=`cat $tmp`
+    ${=rm} $tmp
+
+    rm -f $WORKDIR/addressbook.vcf
+    touch $WORKDIR/addressbook.vcf
+    for a in ${(f)addresses}; do
+	_email=`echo $a | cut -d'|' -f1`
+	# remove from name all what is an email between brackets
+	# crop (trim) all beginning and ending whitespaces from name
+	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//' | sed 's/^[ \t]*//;s/[ \t]*$//'`
+	{ test "${_email}" != "" } && {
+	    cat <<EOF >> $WORKDIR/addressbook.vcf
+BEGIN:VCARD
+VERSION:3.0
+FN:${_name}
+EMAIL;TYPE=HOME:${_email// /}
+END:VCARD
+EOF
+	}
+    done
+
+}
+
+export_abook() {
+    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
+    chmod 600 $WORKDIR/addressbook # make sure is private
+
+    act "Export addressbook into ABook $WORKDIR/addressbook.abook"
+    tmp=$TMPDIR/abook.$datestamp.$RANDOM
+
+
+    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook \
+	| grep -v '^email' > $tmp
+.width 40 100
+.mode list
+.separator '|'
+SELECT email, name FROM $list;
+EOF
+
+    addresses=`cat $tmp`
+    ${=rm} $tmp
+
+    rm -f $WORKDIR/addressbook.abook
+    cat <<EOF > $WORKDIR/addressbook.abook
+# abook addressbook file
+
+[format]
+program=jaromail
+version=1.0
+
+EOF
+    c=0
+    for a in ${(f)addresses}; do
+	_email=`echo $a | cut -d'|' -f1`
+	# remove from name all what is an email between brackets
+	# crop (trim) all beginning and ending whitespaces from name
+	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//' | sed 's/^[ \t]*//;s/[ \t]*$//'`
+	{ test "${_email}" != "" } && {
+	    cat <<EOF >> $WORKDIR/addressbook.abook
+[${c}]
+name=${_name}
+email=${_email}
+
+EOF
+	    c=$(( $c + 1 ))
+	}
+    done
+    abook --datafile $WORKDIR/addressbook.abook
+
+    tmp=$TMPDIR/abook.$datestamp.$RANDOM
+    
+    abook --convert --infile $WORKDIR/addressbook.abook \
+	--outformat spruce | awk '
+BEGIN { c=0; name=""; email=""; }
+/^#/ { if(email != "") {
+          c+=1
+          print name
+          print email
+          print "# " c
+       }
+       email=""
+       next
+     }
+/^Name:/ { name=$0 }
+/^Email:/ { email=$0 }
+' > $tmp
+    addresses=`cat $tmp`
+    ${=rm} $tmp
+
+    # move addressbook to old
+    mv $WORKDIR/addressbook $WORKDIR/addressbook.old
+    func "Recreating the addressbook database"
+    create_addressbook
+
+    touch $tmp
+    newa=1; _name=""; _email=""
+    for a in ${(f)addresses}; do
+
+	{ test "${a[1]}" = "#" } && {
+	    newa=1; #its the end of the entry
+	    print "INSERT INTO $list (email, name) VALUES (\"${_email}\", \"${_name}\");" >> $tmp
+	    continue }
+
+	{ test $newa -eq 1 } && {
+	    _name=`echo ${a} | cut -d: -f2`; newa=0; continue }
+	{ test $newa -eq 0 } && { _email=`echo ${a// /} | cut -d: -f2` }
+
+    done
+    func "Inserting the updated addressbook"
+    cat $tmp | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
+    ${=rm} $tmp
+}
+    
 ###################

@@ -347,6 +347,8 @@ main()
     subcommands_opts[forget]=""
     subcommands_opts[list]=""
     subcommands_opts[import]=""
+    subcommands_opts[export]=""
+    subcommands_opts[abook]=""
 
     subcommands_opts[edit]=""
     subcommands_opts[open]=""
@@ -465,6 +467,8 @@ main()
 	forget)  CLEANEXIT=0; forget ${PARAM} ;;
 	list)    CLEANEXIT=0; list_addresses ${PARAM} ;;
 	import)  import_vcard ${PARAM} ;;
+	"export")  export_vcard ${PARAM} ;;
+	abook)   export_abook ${PARAM} ;;
 
 	edit)    CLEANEXIT=0; editor ${PARAM} ;;
 	open)    CLEANEXIT=0; open_file ${PARAM} ;;
