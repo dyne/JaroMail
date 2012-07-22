@@ -283,7 +283,10 @@ export_abook() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
     chmod 600 $WORKDIR/addressbook # make sure is private
 
-    act "Export addressbook into ABook $WORKDIR/addressbook.abook"
+    if [ -z ${PARAM[1]} ]; then	list=whitelist
+    else list=${PARAM[1]}; fi
+
+    act "Editing addressbook $list"
     tmp=$TMPDIR/abook.$datestamp.$RANDOM
 
 
@@ -346,11 +349,18 @@ BEGIN { c=0; name=""; email=""; }
     ${=rm} $tmp
 
     # move addressbook to old
-    mv $WORKDIR/addressbook $WORKDIR/addressbook.old
-    func "Recreating the addressbook database"
-    create_addressbook
+    act "Updating the addressbook database"
+    cat <<EOF > $tmp
+DROP TABLE $list;
+CREATE TABLE $list
+(
+  email   text collate nocase,
+  name    text collate nocase unique,
+  hits    int
+);
 
-    touch $tmp
+EOF
+
     newa=1; _name=""; _email=""
     for a in ${(f)addresses}; do
 
@@ -367,6 +377,7 @@ BEGIN { c=0; name=""; email=""; }
     func "Inserting the updated addressbook"
     cat $tmp | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
     ${=rm} $tmp
+    notice "Addressbook updated"
 }
     
 ###################
