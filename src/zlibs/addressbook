@@ -134,7 +134,8 @@ learn() {
     chmod 600 $WORKDIR/addressbook # make sure is private
 
     tmp=$TMPDIR/learn.$datestamp.$RANDOM
-    from="`tee -i $tmp | formail -xFrom: | sed -e 's/\"//g'`"
+    from="`tee -i $tmp | formail -xFrom: | sed -e 's/\"//g;s/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`"
+
     if [ -z ${PARAM[1]} ]; then
 	email="`cat $tmp | ${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
     else
@@ -265,7 +266,7 @@ EOF
 	_email=`echo $a | cut -d'|' -f1`
 	# remove from name all what is an email between brackets
 	# crop (trim) all beginning and ending whitespaces from name
-	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//' | sed 's/^[ \t]*//;s/[ \t]*$//'`
+	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
 	{ test "${_email}" != "" } && {
 	    cat <<EOF >> $WORKDIR/addressbook.vcf
 BEGIN:VCARD
@@ -315,7 +316,7 @@ EOF
 	_email=`echo $a | cut -d'|' -f1`
 	# remove from name all what is an email between brackets
 	# crop (trim) all beginning and ending whitespaces from name
-	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//' | sed 's/^[ \t]*//;s/[ \t]*$//'`
+	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
 	{ test "${_email}" != "" } && {
 	    cat <<EOF >> $WORKDIR/addressbook.abook
 [${c}]
