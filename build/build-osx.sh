@@ -15,7 +15,8 @@
 
 # and local natives: fetchmail, procmail...
 
-cflags="-O2"
+cc="clang"
+cflags="-arch x86_64 -arch i386 -O2"
 
 cd ..
 
@@ -79,29 +80,27 @@ if ! [ -r /opt/local/bin/port ]; then
 	return 1
 fi
 print "Address book query"
-cd src/ABQuery
+pushd src/ABQuery
 xcodebuild > /dev/null
-cd -
+popd
 cp src/ABQuery/build/Release/lbdb-ABQuery build/osx/ABQuery
-cd src
+pushd src
 print "Address parser"
-cc $cflags -c -m32 fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-cc $cflags -m32 -o fetchaddr.32 fetchaddr.o helpers.o rfc2047.o rfc822.o;
-cc $cflags -c -m64 fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-cc $cflags -m64 -o fetchaddr.64 fetchaddr.o helpers.o rfc2047.o rfc822.o;
-lipo -arch i386 fetchaddr.32 -arch x86_64 fetchaddr.64 -output fetchaddr -create
-rm -f *.32 *.64
-cd -
-cd src/mairix
+$cc ${=cflags} -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+$cc ${=cflags} -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
+popd
+# mairix
+pushd src/mairix
 print "Search engine and date parser"
-# mairix 32
 make clean
-CFLAGS="$cflags -m32" ./configure --disable-gzip-mbox --disable-bzip-mbox \
+CC="$cc" CFLAGS="${=cflags}" ./configure --disable-gzip-mbox --disable-bzip-mbox \
     > /dev/null ; make 2>&1 > /dev/null
-cd - > /dev/null; cd src
-# fetchdate 32
-gcc $cflags -m32 -I mairix -c fetchdate.c
-gcc $cflags -m32 -DHAS_STDINT_H -DHAS_INTTYPES_H \
+popd
+
+# fetchdate
+pushd src
+$cc ${=cflags} -I mairix -c fetchdate.c
+$cc ${=cflags} -DHAS_STDINT_H -DHAS_INTTYPES_H \
     -o fetchdate fetchdate.o \
     mairix/datescan.o mairix/db.o mairix/dotlock.o \
     mairix/expandstr.o mairix/glob.o mairix/md5.o \
@@ -109,30 +108,7 @@ gcc $cflags -m32 -DHAS_STDINT_H -DHAS_INTTYPES_H \
     mairix/writer.o mairix/dates.o mairix/dirscan.o \
     mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
     mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o
-cp fetchdate fetchdate.32
-cd - > /dev/null; cd src/mairix
-# mairix 64
-cp mairix mairix.32 && make clean > /dev/null
-CFLAGS="$cflags -m64" ./configure --disable-gzip-mbox --disable-bzip-mbox \
-    > /dev/null ; make 2>&1 > /dev/null
-# fetchdate 64
-cd - > /dev/null; cd src
-gcc $cflags -m64 -I mairix -c fetchdate.c
-gcc $cflags -m64 -DHAS_STDINT_H -DHAS_INTTYPES_H \
-    -o fetchdate fetchdate.o \
-    mairix/datescan.o mairix/db.o mairix/dotlock.o \
-    mairix/expandstr.o mairix/glob.o mairix/md5.o \
-    mairix/nvpscan.o mairix/rfc822.o mairix/stats.o \
-    mairix/writer.o mairix/dates.o mairix/dirscan.o \
-    mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
-    mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o
-cp fetchdate fetchdate.64
-cd - > /dev/null; cd src/mairix
-cp mairix mairix.64 
-lipo mairix.32 mairix.64 -create -output mairix 2>&1 > /dev/null
-cd - > /dev/null; cd src
-lipo fetchdate.32 fetchdate.64 -create -output fetchdate 2>&1 > /dev/null
-cd - > /dev/null
+popd
 cp src/fetchdate build/osx/
 cp src/fetchaddr build/osx/
 cp src/mairix/mairix build/osx/
