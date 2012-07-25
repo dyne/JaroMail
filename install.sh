@@ -36,9 +36,12 @@ MUTTDIR=$WORKDIR/.mutt
 
 source src/jaro source
 
+bin=1
 { test -r src/fetchaddr } || {
-    error "Jaro Mail was not built yet. Look into the build/ directory before installing."
-    exit 1
+    error "Jaro Mail was not built yet."
+    error "Only scripts will be installed or updated"
+    error "Look into the build/ directory for scripts to build binaries."
+    bin=0
 }
 
 # make sure the directory is private
@@ -243,10 +246,11 @@ cp -a src/mutt/* $MUTTDIR
 ${=mkdir} $WORKDIR/.stats
 cp -a src/stats/* $WORKDIR/.stats
 
-cp src/fetchaddr $WORKDIR/bin/
-cp src/fetchdate $WORKDIR/bin/
+{ test $bin = 1 } && {
+    cp src/fetchaddr $WORKDIR/bin/
+    cp src/fetchdate $WORKDIR/bin/
 
-case $OS in
+    case $OS in
 	MAC) cp -a build/osx/* $WORKDIR/bin ;;
 	GNU) cp -a build/gnu/* $WORKDIR/bin
 #rm -f $WORKDIR/bin/dotlock
@@ -255,8 +259,9 @@ case $OS in
 #mutt_dotlock \${=@}
 #EOF
 #chmod a+x $WORKDIR/bin/dotlock
-;;
-esac
+	    ;;
+    esac
+}
 
 # generate initial configuration
 MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update -q
@@ -281,8 +286,10 @@ act "    $WORKDIR/bin"
 # OS specific post install rules
 case $OS in
 	GNU)
-	{ test -r src/gnome-keyring/jaro-gnome-keyring } && {
-	    cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
+	{ test $bin = 1 } && {
+	    { test -r src/gnome-keyring/jaro-gnome-keyring } && {
+		cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
+	    }
 	}
 	;;
 	MAC) open $WORKDIR ;;
