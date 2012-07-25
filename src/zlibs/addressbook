@@ -327,6 +327,11 @@ EOF
 	    c=$(( $c + 1 ))
 	}
     done
+    which abook > /dev/null
+    { test $? != 0 } && {
+	error "ABook not found, $list exported in $WORKDIR/addressbook.abook"
+	return 1
+    }
     abook --datafile $WORKDIR/addressbook.abook
 
     tmp=$TMPDIR/abook.$datestamp.$RANDOM
