@@ -98,8 +98,9 @@ case $distro in
 	which gcc || sudo yum install gcc
 	which bison || sudo yum install bison
 	which flex || sudo yum install flex
-	{ test -r /usr/share/doc/libgnome-keyring-3.2.0/COPYING } && {
-	    sudo yum install glib2-devel libgnome-keyring-devel }
+	if [ -r /usr/share/doc/libgnome-keyring-3.2.0/COPYING ]; then
+	    sudo yum install glib2-devel libgnome-keyring-devel
+	fi
 
 	echo "All dependencies installed"
 	cd src
