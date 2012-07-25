@@ -420,11 +420,6 @@ EOF
 
     # conclude sieve
 cat <<EOF >> $sieve
-# flagged as spam
-if header :is "X-Spam-Flag" "YES" {
-    fileinto "zz.spam";
-    stop;
-}
 
 fileinto "unsorted";
 EOF
