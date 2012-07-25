@@ -148,7 +148,7 @@ cat <<EOF >> $sieve
 { fileinto "zz.blacklist"; stop; }
 
 # bounces
-if header :contains "Sender" "mailman-bounces" {
+if header :contains "Sender" "mailman-bounce" {
     fileinto "zz.bounces";
     stop;
 }
@@ -278,7 +278,7 @@ EOF
     }
 
     ##############################################################
-    # if the sender is known (ldbd recognizes it) then put mail in
+    # if the sender is known (whitelist) then put mail in
     # high priority 'known' (procmail) or INBOX (sieve)
 
 
@@ -309,6 +309,12 @@ cat <<EOF >> $sieve
 ]
 { fileinto "INBOX"; stop; }
 
+# spam
+if header :is "X-Spam-Flag" "YES" {
+    fileinto "zz.spam";
+    stop;
+}
+
 EOF
 
 
@@ -328,6 +334,10 @@ EOF
 * ? \$JARO -l whitelist -q query from:
 known/
 
+# spam filters
+:0 w:
+* ^X-Spam-Flag: YES
+zz.spam/
 
 EOF
 
