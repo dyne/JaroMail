@@ -15,10 +15,13 @@
 
 # and local natives: fetchmail, procmail...
 
-cc="clang"
-cflags="-arch x86_64 -arch i386 -O2"
+builddir=`pwd`
 
-cd ..
+cc="${builddir}/clang-static-osx.sh"
+#cflags="-arch x86_64 -arch i386 -O2"
+
+
+pushd ..
 
 mkdir -p build/osx/dylib
 
@@ -29,20 +32,20 @@ copydeps() {
 	tmp="/tmp/build_`basename $1`";
 	rm -f $tmp; touch $tmp
 
-	libs=`otool -L /opt/local/$1 | awk '
-		/^\/opt/ {next} /\/opt\/local/ {print $1}'`
+	libs=`otool -L $1 | awk '
+		/^\// {next} /\/opt\/local/ {print $1}'`
 
 	for p1 in ${(f)libs}; do
 		echo "$p1" >> $tmp
 		# second pass
 		libs2=`otool -L $p1 | awk '
-			/^\/opt/ {next} /\/opt\/local/ {print $1}'`
+			/^\// {next} /\/opt\/local/ {print $1}'`
 
 		for p2 in ${(f)libs2}; do
 			echo "$p2" >> $tmp
 			# third pass
 			libs3=`otool -L $p2 | awk '
-				/^\/opt/ {next} /\/opt\/local/ {print $1}'`
+				/^\// {next} /\/opt\/local/ {print $1}'`
 
 			for p3 in ${(f)libs3}; do
 				echo "$p3" >> $tmp
@@ -50,16 +53,15 @@ copydeps() {
 		done # 2nd
 	done # 1st
 
-	if ! [ -r build/osx/`basename $1`.bin ]; then
-		cp /opt/local/$1 build/osx/`basename $1`.bin
-	fi
+	{ test -r build/osx/`basename $1`.bin } || {
+		cp $1 build/osx/`basename $1`.bin }
 	for d in `cat $tmp | sort | uniq`; do
 		if ! [ -r build/osx/dylib/`basename $d` ]; then
 			cp $d build/osx/dylib/
 			print "`basename $d`"
 		fi
 	done
-	if ! [ -r build/osx/`basename $1` ]; then
+	{ test -r build/osx/`basename $1` } || {
 		# create a wrapper
 		cat <<EOF > build/osx/`basename $1`
 #!/usr/bin/env zsh
@@ -70,7 +72,7 @@ DYLD_LIBRARY_PATH=\$PDIR/bin/dylib:\$DYLD_LIBRARY_PATH
 \$PDIR/bin/`basename $1`.bin \${=@}
 EOF
 		chmod +x build/osx/`basename $1`
-	fi
+	}
 }
 
 print "Building Jaro Mail binary stash for Apple/OSX"
@@ -79,28 +81,36 @@ if ! [ -r /opt/local/bin/port ]; then
 	print "MacPorts not found in /opt/local. Operation aborted."
 	return 1
 fi
+
+
+# build apple addressbook query
 print "Address book query"
 pushd src/ABQuery
 xcodebuild > /dev/null
 popd
 cp src/ABQuery/build/Release/lbdb-ABQuery build/osx/ABQuery
+
+
+# build our own address parser
 pushd src
 print "Address parser"
-$cc ${=cflags} -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-$cc ${=cflags} -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
+$cc -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+$cc -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
 popd
-# mairix
+
+
+# build mairix
 pushd src/mairix
 print "Search engine and date parser"
-make clean
-CC="$cc" CFLAGS="${=cflags}" ./configure --disable-gzip-mbox --disable-bzip-mbox \
+CC="$cc" LD=/usr/bin/ld CPP=/usr/bin/cpp \
+    ./configure --disable-gzip-mbox --disable-bzip-mbox \
     > /dev/null ; make 2>&1 > /dev/null
 popd
 
-# fetchdate
+# build our own fetchdate
 pushd src
-$cc ${=cflags} -I mairix -c fetchdate.c
-$cc ${=cflags} -DHAS_STDINT_H -DHAS_INTTYPES_H \
+$cc -I mairix -c fetchdate.c
+$cc -DHAS_STDINT_H -DHAS_INTTYPES_H \
     -o fetchdate fetchdate.o \
     mairix/datescan.o mairix/db.o mairix/dotlock.o \
     mairix/expandstr.o mairix/glob.o mairix/md5.o \
@@ -109,16 +119,33 @@ $cc ${=cflags} -DHAS_STDINT_H -DHAS_INTTYPES_H \
     mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
     mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o
 popd
+
+# build our own msmtp
+# port deps: libidn ...
+pushd src/msmtp
+print "SMTP Simple mail transport protocol agent"
+CC="$cc" LD=/usr/bin/ld CPP=/usr/bin/cpp \
+    ./configure --without-macosx-keyring --without-gnome-keyring \
+    > /dev/null ; make 2>&1 > /dev/null
+popd
+
+ #  CFLAGS="${=cflags}" \
+
+
+# copy all binaries built
 cp src/fetchdate build/osx/
 cp src/fetchaddr build/osx/
 cp src/mairix/mairix build/osx/
-copydeps bin/mutt
-copydeps bin/mutt_dotlock
-copydeps bin/msmtp
-copydeps bin/gpg
-copydeps bin/pinentry
-copydeps bin/lynx
+cp src/msmtp/src/msmtp build/osx/
+copydeps /opt/local/bin/mutt
+copydeps /opt/local/bin/mutt_dotlock
+mv build/osx/mutt_dotlock build/osx/dotlock
+copydeps build/osx/msmtp
+copydeps /opt/local/bin/gpg
+copydeps /opt/local/bin/pinentry
+copydeps /opt/local/bin/lynx
 
-mv build/osx/mutt_dotlock \
-   build/osx/dotlock
 
+
+
+popd
