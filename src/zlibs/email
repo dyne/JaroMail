@@ -101,7 +101,7 @@ fetch() {
     notice "Examining mailbox for $name <$email> on $host"
 
     # check if its online
-    timeout 2 netcat -z ${host} ${port} > /dev/null
+    nc -w 8 -z ${host} ${port} > /dev/null
     { test $? = 0 } || {
 	error "server is off-line or unreachable, skipped"
 	return 1 }
@@ -109,7 +109,8 @@ fetch() {
     ask_password $login $host
 
     # this puts total size in $imap_info
-    get_imap_info
+    # experimental only, commented out for now
+    # get_imap_info
 
     # return here if the imap folders are all empty
     { test ${imap_info[${#imap_info}]} = 0 } && { 
