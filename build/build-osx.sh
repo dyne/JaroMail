@@ -6,8 +6,7 @@
 # mutt
 # sudo port -vc install mutt-devel +gnuregex +gpgme +headercache +imap +pop +sasl +smtp +ssl +tokyocabinet +universal
 
-# gpg
-# sudo port install gpg +universal
+# pinentry
 # sudo port install pinentry +universal
 
 # msmtp
@@ -120,8 +119,14 @@ $cc -DHAS_STDINT_H -DHAS_INTTYPES_H \
     mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o
 popd
 
+# build our own dotlock
+pushd src
+$cc -c dotlock.c
+$cc -o dotlock dotlock.o
+popd
+
 # build our own msmtp
-# port deps: libidn ...
+# port deps: libidn gnutls
 pushd src/msmtp
 print "SMTP Simple mail transport protocol agent"
 CC="$cc" LD=/usr/bin/ld CPP=/usr/bin/cpp \
@@ -137,11 +142,9 @@ cp src/fetchdate build/osx/
 cp src/fetchaddr build/osx/
 cp src/mairix/mairix build/osx/
 cp src/msmtp/src/msmtp build/osx/
+cp src/dotlock build/osx/
 copydeps /opt/local/bin/mutt
-copydeps /opt/local/bin/mutt_dotlock
-mv build/osx/mutt_dotlock build/osx/dotlock
 copydeps build/osx/msmtp
-copydeps /opt/local/bin/gpg
 copydeps /opt/local/bin/pinentry
 copydeps /opt/local/bin/lynx
 
