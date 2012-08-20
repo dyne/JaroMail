@@ -23,8 +23,12 @@
 #include <stdio.h>
 #include <mairix.h>
 
+#define TEST 1
+
 int verbose = 0;
 int do_hardlinks = 0;
+char dateformat[256];
+
 void out_of_mem(char *file, int line, size_t size);
 void report_error(const char *str, const char *filename);
 void emit_int(int x);
@@ -32,14 +36,19 @@ void emit_int(int x);
 static struct rfc822 *parsed;
 
 int main (int argc, char **argv) {
-  if( argc < 3 ) {
-    printf("usage: fetchdate strftime_format filename\n");
+  if( argc < 2 ) {
+    printf("usage: fetchdate filename strftime_format\n");
     printf("see man strftime(5) for format options");
     exit(1);
   }
 
+  if(argc>2)
+    snprintf(dateformat, 255, "%s", argv[2]);
+  else // default date format
+    strcpy(dateformat, "%a, %d %b %Y");
+
   //  printf("Parsing email: %s\n",argv[1]);
-  parsed = make_rfc822(argv[2]);
+  parsed = make_rfc822(argv[1]);
 
   if (parsed) {
     char datebuf[64];
@@ -52,11 +61,11 @@ int main (int argc, char **argv) {
     if (parsed->hdrs.message_id)
       printf("  Message-ID: %s\n", parsed->hdrs.message_id);
     thetm = gmtime(&parsed->hdrs.date);
-    strftime(datebuf, sizeof(datebuf), "%a, %d %b %Y", thetm);
+    strftime(datebuf, sizeof(datebuf), dateformat, thetm);
     printf("  Date:        %s\n", datebuf);
 #else
     thetm = gmtime(&parsed->hdrs.date);
-    strftime(datebuf, sizeof(datebuf), argv[1], thetm);
+    strftime(datebuf, sizeof(datebuf), dateformat, thetm);
 
     /* needed by timecloud:
 

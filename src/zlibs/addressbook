@@ -32,15 +32,13 @@ create_addressbook() {
     cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
 CREATE TABLE whitelist
 (
-  email   text collate nocase,
-  name    text collate nocase unique,
-  hits    int
+  email   text collate nocase unique,
+  name    text collate nocase,
 );
 CREATE TABLE blacklist
 (
-  email   text collate nocase,
-  name    text collate nocase unique,
-  hits    int
+  email   text collate nocase unique,
+  name    text collate nocase,
 );
 EOF
     { test $? != 0 } && {
@@ -62,19 +60,21 @@ EOF
     }
     return $0
 }
-update_name() {
-    func "update address: $1, $2"
-    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
-UPDATE $list SET name="${2}" WHERE email LIKE "${1}";
-EOF
-    { test $? != 0 } && {
-	func "address not found or error occurred" }
-}    
+
+# update_name() {
+#     func "update address: $1, $2"
+#     cat <<EOF | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
+# UPDATE $list SET name="${2}" WHERE email LIKE "${1}";
+# EOF
+#     { test $? != 0 } && {
+# 	func "address not found or error occurred" }
+# }
+
 remove_address() {
     func "remove address <$1> from $list"
     cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
 DELETE FROM $list
-WHERE email LIKE "${1}";
+WHERE email IS "${1}";
 EOF
     { test $? != 0 } && {
 	func "address not found or error occurred" }
@@ -93,9 +93,8 @@ WHERE email IS "${1}";
 EOF
 	return $?
 }
-address() {
+complete() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    chmod 600 $WORKDIR/addressbook # make sure is private
 
     act "Searching for \"${PARAM[1]}\" in $list"
     { test "$OS" = "MAC" } && {
@@ -114,52 +113,68 @@ address() {
   }
   printf "\n" }'
 }
-query() {
+isknown() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    chmod 600 $WORKDIR/addressbook # make sure is private
 
-    if [ -z ${PARAM[1]} ]; then
-	email="`${WORKDIR}/bin/fetchaddr -a| awk '{print $1}'`"
-    else
-	email="`${WORKDIR}/bin/fetchaddr -x ${PARAM[1]} -a| awk '{print $1}'`"
-    fi
+    head="`${WORKDIR}/bin/fetchaddr -x From: -a`"
+
+
+    email="${head[(ws:,:)1]}"
+
     exitcode=1
+
     lookup="`search_email ${email}`"
+
     { test "$lookup" != "" } && { exitcode=0 }
+
     act "Email <$email> found in $list with id $lookup"
 }
 
 learn() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    chmod 600 $WORKDIR/addressbook # make sure is private
 
-    tmp=$TMPDIR/learn.$datestamp.$RANDOM
-    from="`tee -i $tmp | formail -xFrom: | sed -e 's/\"//g;s/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`"
-
-    if [ -z ${PARAM[1]} ]; then
-	email="`cat $tmp | ${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
-    else
-	email="`cat $tmp | ${WORKDIR}/bin/fetchaddr -x ${PARAM[1]}| awk '{print $1}'`"
-    fi
-    ${=rm} $tmp &
-    insert_address "$email" "$from"
+    what=sender
+    { test -z ${PARAM[1]} } || { what=${PARAM[1]} }
+    case ${PARAM[1]} in
+	sender) # simple: one address only on From:
+	    head="`cat | ${WORKDIR}/bin/fetchaddr -x From: -a`"
+	    email="${head[(ws:,:)1]}"
+	    name="${head[(ws:,:)2]}"
+	    insert_address "$email" "$name"
+	    return 0
+	    ;;
+	receiver) # complex: more addresses in To: and Cc:
+	    head="`cat | ${WORKDIR}/bin/fetchaddr -x To: -a`"
+	    for h in ${head}; do
+		email="${h[(ws:,:)1]} )"
+		name="${h[(ws:,:)2]} )"
+		insert_address "$email" "$name"
+	    done
+	    head="`cat | ${WORKDIR}/bin/fetchaddr -x Cc: -a`"
+	    for h in ${head}; do
+		email="${h[(ws:,:)1]} )"
+		name="${h[(ws:,:)2]} )"
+		insert_address "$email" "$name"
+	    done
+	    return 0
+	    ;;
+	*)
+	    error "Unknown learning function: $what" ;;
+    esac
+    return 1
 }
 
 forget() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    chmod 600 $WORKDIR/addressbook # make sure is private
 
     act "Expecting mail from stdin pipe"
-    if [ -z ${PARAM[1]} ]; then
-	email="`${WORKDIR}/bin/fetchaddr| awk '{print $1}'`"
-    else
-	email="`${WORKDIR}/bin/fetchaddr -x ${PARAM[1]}| awk '{print $1}'`"
-    fi
-    remove_address "${email}"
+    head="`${WORKDIR}/bin/fetchaddr -x From:`"
+
+    # forget the email part of the parsed head
+    remove_address "${head[(ws:,:)1]}"
 }
 list_addresses() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    chmod 600 $WORKDIR/addressbook # make sure is private
 
     { test ${PARAM[1]} } && { list=${PARAM[1]} }
 
@@ -174,8 +189,6 @@ EOF
 # import addresbook email from VCard
 import_vcard() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    chmod 600 $WORKDIR/addressbook # make sure is private
-
 
     { test -r ${PARAM[1]} } || {
 	error "File not found: import ${PARAM[1]}"
@@ -244,7 +257,6 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 # export addressbook to vcard
 export_vcard() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    chmod 600 $WORKDIR/addressbook # make sure is private
 
     act "Export addressbook into vCard $WORKDIR/addressbook.vcf"
     tmp=$TMPDIR/export.$datestamp.$RANDOM
@@ -282,7 +294,6 @@ EOF
 
 export_abook() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-    chmod 600 $WORKDIR/addressbook # make sure is private
 
     if [ -z ${PARAM[1]} ]; then	list=whitelist
     else list=${PARAM[1]}; fi
@@ -360,9 +371,8 @@ BEGIN { c=0; name=""; email=""; }
 DROP TABLE $list;
 CREATE TABLE $list
 (
-  email   text collate nocase,
-  name    text collate nocase unique,
-  hits    int
+  email   text collate nocase unique,
+  name    text collate nocase,
 );
 
 EOF

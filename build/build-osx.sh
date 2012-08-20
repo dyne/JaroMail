@@ -134,6 +134,14 @@ CC="$cc" LD=/usr/bin/ld CPP=/usr/bin/cpp \
     > /dev/null ; make 2>&1 > /dev/null
 popd
 
+# build our own mutt
+# port deps: db48 tokyocabinet
+pushd src/mutt-src
+print "MUA Mail user agent"
+CC="$cc" LD=/usr/bin/ld CPP=/usr/bin/cpp CFLAGS="$CFLAGS -I/opt/local/include -L/opt/local/lib" \
+    ./configure --with-ssl --enable-imap --enable-hcache --with-regex --with-tokyocabinet
+popd
+
  #  CFLAGS="${=cflags}" \
 
 

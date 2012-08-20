@@ -97,8 +97,11 @@ int writeout(struct header *h, const char *datefmt,
 	  *c=tolower(*c);
 
       strftime(timebuf, sizeof(timebuf), datefmt, localtime(&timep));
-      printf("%s\t%s\t%s\n", p->mailbox, p->personal && *p->personal ? 
-	     p->personal : "no realname given", timebuf);
+      /* printf("%s\t%s\t%s\n", p->mailbox, p->personal && *p->personal ?  */
+      /* 	     p->personal : "no realname given", timebuf); */
+
+      printf("%s,%s\n", p->mailbox,
+	     p->personal && *p->personal ? p->personal : " ");
 
       rv = 1;
     }

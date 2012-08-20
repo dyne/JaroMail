@@ -124,7 +124,7 @@ WORKDIR=$MAILDIRS/jaro
 ${=mkdir} $MAILDIRS
 ${=mkdir} $WORKDIR
 
-# make sure the directory is private
+# make sure the permissions are private
 chmod 700 $WORKDIR
 
 PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
@@ -281,7 +281,7 @@ Main commands:
 Options:
 
  -a     use a particular account instead of default (keyword)
- -l     whitelist or blacklist to use with learn/query/forget
+ -l     whitelist or blacklist for learn/forget etc.
 
  -h     print this help
  -v     version information for this tool
@@ -296,11 +296,11 @@ Maintenance commands:
  update   refresh configurations
  queue    add a mail into outbox
 
- addr     look for a matching address in list
- query    read mail from stdin, return 0 if known to list
  learn    learn addresses from mails piped in stdin
  forget   remove addresses found in mails piped in stdin
  list     prints out the list of known addresses
+ complete look for a glob matching address in whitelist
+ isknown  read e-mail from stdin, return 0 if sender is known
 
  backup   move mails from a maildir to a new one with search expr
  rmdupes  remove all duplicated e-mails into a maildir
@@ -341,11 +341,13 @@ main()
     subcommands_opts[stat]=""
 
     subcommands_opts[search]=""
-    subcommands_opts[addr]=""
-    subcommands_opts[query]=""
+
     subcommands_opts[learn]=""
     subcommands_opts[forget]=""
     subcommands_opts[list]=""
+    subcommands_opts[complete]=""
+    subcommands_opts[isknown]=""
+
     subcommands_opts[import]=""
     subcommands_opts[export]=""
     subcommands_opts[abook]=""
@@ -461,8 +463,8 @@ main()
 
 	stat)   CLEANEXIT=0; stats ${PARAM} ;;
 
-	addr)    CLEANEXIT=0; address ${PARAM} ;;
-	query)   CLEANEXIT=0; query ${PARAM} ;;
+	complete) CLEANEXIT=0; complete ${PARAM} ;;
+	isknown)   CLEANEXIT=0; isknown ${PARAM} ;;
 	learn)   CLEANEXIT=0; learn ${PARAM} ;;
 	forget)  CLEANEXIT=0; forget ${PARAM} ;;
 	list)    CLEANEXIT=0; list_addresses ${PARAM} ;;
