@@ -210,7 +210,7 @@ send() {
 	return 0
     fi
 
-    read_account smtp ${=@}
+    read_account smtp ${account}
     { test  $? != 0 } && {
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
