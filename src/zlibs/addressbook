@@ -311,7 +311,10 @@ edit_abook() {
     tmp=$TMPDIR/abook.$datestamp.$RANDOM
     newlock $tmp
 
-    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook \
+    tmpread=$TMPDIR/abook.read.$datestamp.$RANDOM
+    newlock $tmpread
+    cp $WORKDIR/addressbook $tmpread
+    cat <<EOF | ${SQL} -column -header -batch $tmpread \
 	| grep -v '^email' > $tmp
 .width 40 100
 .mode list
@@ -320,9 +323,9 @@ SELECT email, name FROM $list;
 EOF
 
     addresses=`cat $tmp`
-    ${=rm} $tmp
-    touch $tmp
+    rm -f $tmp
 
+    unlink $tmpread
 
     cat <<EOF > $tmp
 # abook addressbook file
@@ -353,7 +356,20 @@ EOF
 	error "ABook not found"
 	return 1
     }
-    abook --datafile $tmp
+    # generate abook configuration
+    abookrc=$TMPDIR/abookrc.$datestamp.$RANDOM
+    cat <<EOF > $abookrc
+set autosave=true
+set emailpos=35
+set extra_column=-1
+set mutt_command=jaro
+set sort_field=name
+EOF
+
+    abook --config $abookrc --datafile $tmp
+    # remove config and backup turd
+    ${=rm} ${tmp}~
+    ${=rm} ${abookrc}
 
     tmpspruce=$TMPDIR/abook.spruce.$datestamp.$RANDOM
     newlock $tmpspruce
@@ -376,12 +392,11 @@ BEGIN { c=0; name=""; email=""; }
     addresses=`cat $tmpspruce`
     unlink $tmpspruce
 
-    ${=rm} $tmp
-    touch $tmp
+    rm -f $tmp
 
     # move addressbook to old
     act "Updating the addressbook database"
-    cat <<EOF >> $tmp
+    cat <<EOF > $tmp
 DROP TABLE $list;
 CREATE TABLE $list
 (
