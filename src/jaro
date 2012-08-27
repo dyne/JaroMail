@@ -470,7 +470,7 @@ main()
 	list)    CLEANEXIT=0; list_addresses ${PARAM} ;;
 	import)  import_vcard ${PARAM} ;;
 	"export")  export_vcard ${PARAM} ;;
-	abook)   export_abook ${PARAM} ;;
+	abook)   edit_abook ${PARAM} ;;
 
 	edit)    CLEANEXIT=0; editor ${PARAM} ;;
 	open)    CLEANEXIT=0; open_file ${PARAM} ;;

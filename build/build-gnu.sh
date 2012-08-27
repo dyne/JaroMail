@@ -39,7 +39,7 @@ case $distro in
 
 	echo "fetchaddr"
 	gcc $cflags -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-	    gcc $cflags -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o
+	    gcc $cflags -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o -lbz2
 	cd - > /dev/null
 
 	echo "Compiling the search engine..."
@@ -60,7 +60,7 @@ case $distro in
 	    mairix/writer.o mairix/dates.o mairix/dirscan.o \
 	    mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
 	    mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o \
-	    -lz
+	    -lz -lbz2
 	echo "fetchdate"
 	cd - > /dev/null
 

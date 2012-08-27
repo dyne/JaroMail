@@ -25,6 +25,7 @@
 ###################
 # Jaro Brother DB
 create_addressbook() {
+    func "create addressbook"
     { test -r $WORKDIR/addressbook } && {
 	error "Addressbook already exists: $WORKDIR/addressbook"
 	return 1
@@ -33,12 +34,12 @@ create_addressbook() {
 CREATE TABLE whitelist
 (
   email   text collate nocase unique,
-  name    text collate nocase,
+  name    text collate nocase
 );
 CREATE TABLE blacklist
 (
   email   text collate nocase unique,
-  name    text collate nocase,
+  name    text collate nocase
 );
 EOF
     { test $? != 0 } && {
@@ -80,6 +81,7 @@ EOF
 	func "address not found or error occurred" }
 }
 search_name() {
+    func "search_name from $list like $1"
 	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
 .width 64 128
 SELECT * FROM $list
@@ -87,6 +89,7 @@ WHERE name LIKE "%${1}%";
 EOF
 }
 search_email() {
+    func "search email from $list is $1"
 	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
 SELECT rowid FROM $list
 WHERE email IS "${1}";
@@ -94,6 +97,7 @@ EOF
 	return $?
 }
 complete() {
+    func "complete from $list: ${PARAM[1]}"
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     act "Searching for \"${PARAM[1]}\" in $list"
@@ -114,6 +118,7 @@ complete() {
   printf "\n" }'
 }
 isknown() {
+    func "is known in $list: (string from stdin)"
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     head="`${WORKDIR}/bin/fetchaddr -x From: -a`"
@@ -131,6 +136,7 @@ isknown() {
 }
 
 learn() {
+    func "learn ${PARAM[1]} from mail in stdin"
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     what=sender
@@ -165,6 +171,7 @@ learn() {
 }
 
 forget() {
+    func "forget sender from mail in stdin"
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     act "Expecting mail from stdin pipe"
@@ -174,6 +181,7 @@ forget() {
     remove_address "${head[(ws:,:)1]}"
 }
 list_addresses() {
+    func "list addresses in ${PARAM[1]}"
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     { test ${PARAM[1]} } && { list=${PARAM[1]} }
@@ -188,6 +196,7 @@ EOF
 
 # import addresbook email from VCard
 import_vcard() {
+    func "import VCard from file ${PARAM[1]}"
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     { test -r ${PARAM[1]} } || {
@@ -292,15 +301,15 @@ EOF
 
 }
 
-export_abook() {
+edit_abook() {
     { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
-    if [ -z ${PARAM[1]} ]; then	list=whitelist
-    else list=${PARAM[1]}; fi
+    # take argument even without option -l
+    { test -z ${PARAM[1]} } || { list=${PARAM[1]} }
 
     act "Editing addressbook $list"
     tmp=$TMPDIR/abook.$datestamp.$RANDOM
-
+    newlock $tmp
 
     cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook \
 	| grep -v '^email' > $tmp
@@ -312,9 +321,10 @@ EOF
 
     addresses=`cat $tmp`
     ${=rm} $tmp
+    touch $tmp
 
-    rm -f $WORKDIR/addressbook.abook
-    cat <<EOF > $WORKDIR/addressbook.abook
+
+    cat <<EOF > $tmp
 # abook addressbook file
 
 [format]
@@ -329,7 +339,7 @@ EOF
 	# crop (trim) all beginning and ending whitespaces from name
 	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
 	{ test "${_email}" != "" } && {
-	    cat <<EOF >> $WORKDIR/addressbook.abook
+	    cat <<EOF >> $tmp
 [${c}]
 name=${_name}
 email=${_email}
@@ -340,14 +350,15 @@ EOF
     done
     which abook > /dev/null
     { test $? != 0 } && {
-	error "ABook not found, $list exported in $WORKDIR/addressbook.abook"
+	error "ABook not found"
 	return 1
     }
-    abook --datafile $WORKDIR/addressbook.abook
+    abook --datafile $tmp
 
-    tmp=$TMPDIR/abook.$datestamp.$RANDOM
-    
-    abook --convert --infile $WORKDIR/addressbook.abook \
+    tmpspruce=$TMPDIR/abook.spruce.$datestamp.$RANDOM
+    newlock $tmpspruce
+
+    abook --convert --infile $tmp \
 	--outformat spruce | awk '
 BEGIN { c=0; name=""; email=""; }
 /^#/ { if(email != "") {
@@ -361,18 +372,21 @@ BEGIN { c=0; name=""; email=""; }
      }
 /^Name:/ { name=$0 }
 /^Email:/ { email=$0 }
-' > $tmp
-    addresses=`cat $tmp`
+' > $tmpspruce
+    addresses=`cat $tmpspruce`
+    unlink $tmpspruce
+
     ${=rm} $tmp
+    touch $tmp
 
     # move addressbook to old
     act "Updating the addressbook database"
-    cat <<EOF > $tmp
+    cat <<EOF >> $tmp
 DROP TABLE $list;
 CREATE TABLE $list
 (
   email   text collate nocase unique,
-  name    text collate nocase,
+  name    text collate nocase
 );
 
 EOF
@@ -391,9 +405,13 @@ EOF
 
     done
     func "Inserting the updated addressbook"
-    cat $tmp | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
-    ${=rm} $tmp
+    tmpwrite=$TMPDIR/abook.write.$datestamp.$RANDOM
+    newlock $tmpwrite
+    cp $WORKDIR/addressbook $tmpwrite
+    cat $tmp | ${SQL} -batch $tmpwrite 2> /dev/null
+    unlink $tmp
+    cp $tmpwrite $WORKDIR/addressbook
+    unlink $tmpwrite
     notice "Addressbook updated"
 }
-    
 ###################
