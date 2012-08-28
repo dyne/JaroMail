@@ -1,6 +1,6 @@
 #+TITLE: Jaro Mail
 #+AUTHOR: by Jaromil @ dyne.org
-#+DATE: June 2012
+#+DATE: Sept 2012
 
 #+LaTeX_CLASS: article
 #+LaTeX_CLASS_OPTIONS: [a4,onecolumn,portrait]
@@ -33,19 +33,20 @@ this manual is made available on http://files.dyne.org/jaromail/jaromail-manual.
 
 [[file:jaromail-shot.jpg]]
 
-   + Minimalistic  interface with automatic threading
-   + Targets intensive usage of mailinglists
-   + Does whitelisting and integrates addressbooks
-   + Can do search and backup by expressions
-   + Automatically generates filtering rules
+   + Minimalistic and efficient interface with message threading
+   + Targets intensive usage of e-mails and mailinglists
+   + Stores e-mails locally in a reliable format (maildir)
+   + Integrates whitelisting and blacklisting, local and remote
+   + Can do search and backup by advanced expressions
+   + Automatically generates filter rules (procmail, sieve)
+   + Imports and exports VCard contacts to its addressbook
    + Computes and shows statistics on mail traffic
    + Encrypts password storage (using keyrings)
-   + Provides advanced maildir management tools
-   + Stores e-mails locally in a reliable and long lasting format
+   + Provides advanced maildir management tools (rmdupes, backup)
    + Defers connections for off-line operations
    + Checks SSL certificates over (imap, smtp)
    + Supports strong encryption messaging (GnuPG)
-   + Is Multi platform: GNU/Linux/BSD, Apple/OSX
+   + Multi platform: GNU/Linux/BSD, Apple/OSX
    + Old school, used by its author for the past 10 years
 
 ** Vision
@@ -90,6 +91,8 @@ and actions involved in managing one's email communication:
  |         | Filtering Agent      | [[http://www.procmail.org][Procmail]]  |
  | SMTP    | Mail Delivery Agent  | [[http://msmtp.sourceforge.net][MSmtp]]     |
  |         | Search engine        | [[http://www.rpcurnow.force9.co.uk/mairix/][Mairix]]    |
+ |         | Addressbook          | [[http://abook.sf.net][ABook]]     |
+
 #+LATEX: \pagebreak
 
 * Setup
@@ -200,8 +203,9 @@ the rest.
 ** Folders
 
 First lets start with a categorization of the standard maildirs and a
-brief description for each. The following maildirs are standard in
-Jaro Mail and are listed in order of priority:
+brief description for each. This information is *very important* to
+understand how Jaro Mail works: these maildirs are standard in Jaro
+Mail, here they are listed in order of priority
 
 | Folder         | What goes in there                               |
 |----------------+--------------------------------------------------|
@@ -261,33 +265,41 @@ whitelisted unless you do it explicitly with 'a'.
 
 ** Addressbook
 
-What we call addressbook here basically consists of both the white and
-the blacklist. We store both lists in a unique database file in
-*Mail/jaro/addressbook* (using sqlite3). On Apple/OSX there is also a
-gateway to the system addressbook so all entries there will be
-automatically considered whitelisted in Jaro Mail without the need to
-import them into its database. In future, following usage and feature
-requests, we may add similar support for other addressbook formats
-that people use (abook, vcf etc.)
+What we call addressbook here basically consists of both the whitelist
+and the blacklist. We store both lists in a unique database file in
+*Mail/jaro/addressbook*[fn:sqlite].  In future we may add similar
+support for other addressbook formats that people use (GnuPG keyring,
+Evolution etc.)[fn:appleaddr]
 
-To see what is in the Jaro Mail addressbook and to dump the file for a
-backup the *list* command is available
+[fn:sqlite] Jaro Mail uses sqlite3 as its own database storage
 
-: $ jaro list whitelist
+[fn:appleaddr] On Apple/OSX systems Jaro Mail has access to the Mail.app addressbook, so all contacts known in your Mac will be automatically whitelisted
 
-or
+To edit the addressbook in Jaro Mail the *abook* command is available
+: $ jaro abook
+This will open the current whitelist for edit, but one can append
+"blacklist" to this commandline to open that one instead.
 
-: $ jaro list blacklist
+To quickly dump to the console all names and addresses in the Jaro
+Mail addressbook, one can use the *list* command
+: $ jaro list
+Even more useful to interface with other addressbook software and
+mobile phones, you can use the *export* and *import* functions to
+transport your addressbook formatted as a series of
+VCards[fn:vcard].
+: $ jaro export
+Will create or update the file in *Mail/jaro/addressbook.vcf*. On the
+other hand, the import command will include all entries found in a
+given VCard file that have at least one email address.
+: $ jaro import 00001.vcf
+Imports into the whitelist all contacts found in the 00001.vcf file.
 
-will dump the contents to the terminal and also save the whole
-database in a compressed text file containing a portable sequence of
-SQL commands: *Mail/jaro/addressbook.bz2*
+These functions are fully compatible with import and export of
+contacts in Android mobile phones.
 
-In some close future the addressbook functionality will be expanded to
-permit inclusive syncing between multiple databases and more
-maintainance operations.
+[fn:vcard] A file format standard for electronic business cards, see: http://en.wikipedia.org/wiki/VCard
 
-** In Brief
+** Organization In Brief
 
 Below a recapitulation of keys related to the white and blacklisting
 functionality, to be used in the e-mail index or when an e-mail is
@@ -300,7 +312,15 @@ open inside the mail user agent:
 | Black | *z*         | Add sender address         | From:     |
 | Black | *Z* (shift) | Remove all addresses found | From: Cc: |
 
+And here the addressbook commands that are available from the
+commandline:
 
+| Command | Function                 |
+|---------+--------------------------|
+| abook   | edit the addressbook     |
+| list    | list the addressbook     |
+| export  | export to a VCard file   |
+| import  | import from a VCard file |
 
 * Workflow
 
@@ -319,16 +339,13 @@ will delete them from the server, freeing online space.
 If you have configured the *keep* option, which is the default, Jaro
 Mail will only download the email that you have not yet read and in
 any case it won't delete anything from the server.
-
 : $ jaro
-
 This will open the first folder *known* where all mails from people
 that you know or that you usually exchange mails with are shown.
 
 From there on, pressing *=* or *c* you can change the folder and
 explore your *priv* folder, the mailinglist ones as configured by your
 Filters.txt, as well your *unsorted* mails.
-
 
 ** Write a new mail
 
@@ -341,6 +358,37 @@ name or whatever you remember of it: pressing the *Tab* key a
 completion will help to remind what you are looking for, offering a
 list of options to choose from.
 
+If you are writing an email with attachments (and you are sure their
+size is reasonably small to be circulated via email) you can launch
+Jaro Mail with files as arguments, or even wildcards, and they will be
+automatically set as attachments, you can then specify its recipients
+: $ jaro picture01.jpg jingle02.mp3 ~/myicons/*
+Will send a mail with various separate attachments (using MIME
+encapsulation): a picture, an hopefully small audio file and a list of
+icons which are all the files contained into the myicons/ directory.
+
+After composing the email you will be able to review all those
+attachments and eventually remove some of them by hand: move up and
+down across them and then click [ *D* ] to remove the selected one.
+
+** Reply messages
+
+While browsing through the index of emails in various folders, one can
+reply any of them just by pressing the [ *r* ] key, which will ask if
+the original message should be quoted and then open your favorite
+editor to compose your text.
+
+If the email you are replying has been sent to multiple recipients
+(for instance using multiple addresses in the Cc: or From: fields) one
+can easily include all of them in the reply using the [ *g* ] key
+instead.
+
+It is also possible to forward a message to someone else than the
+sender, for instance to submit it to his or her attention, or that of
+a mailinglist. To do that, you can use the [ *f* ] key which will
+present you with the full message and the possibility to write
+something on top of it, to describe its contents to its new
+recipients.
 
 ** Peek without downloading anything
 
@@ -365,14 +413,47 @@ All the time you write an E-mail, Jaro Mail will save it into your
 outbox folder, waiting for the right moment to send it. In fact you
 will have to tell it the right moment by running the *send* command:
 : $ jaro send
-
 This will authenticate with your SMTP and send all your emails to
 destination. This way even if you are off-line you will always be able
 to write emails and eventually bring them around for sending them
 whenever possible.
 
+** Save important emails for later
 
+Sometimes one can be on the rush while reading emails (local or via
+imap) and flagging them as important can be useful to keep focus on
+priorities. In some cases it is very useful to save such important
+messages locally for later reference, for instance in a folder keeping
+messages that need to be remembered and that will constitute a kind of
+TODO list (a'la GTD).
 
+Jaro Mail implements such functionalities: by pressing the [ *F* ] key
+(shift-f) one can flag an email, which will turn bright-green in the
+index. In addition to that there is a folder called *remember/* where
+one can copy emails on the fly using the [ *R* ] key (shift-r) any
+time. Messages will be duplicated into the remember folder (which of
+course can be opened with the command *jaro remember*) so they can
+also be edited with annotations on the task they refer to, for
+instance using the [ *e* ] key, without affecting the original
+message.
+
+** Workflow in brief
+
+Below a recapitulation of keys commonly used in our workflow
+
+| Key   | Function                             |
+|-------+--------------------------------------|
+| *m*   | Compose a new message                |
+| *Tab* | Complete addresses and folders input |
+| *r*   | Reply to the sender of a message     |
+| *g*   | Group reply to all recipients        |
+| *f*   | Forward a message to new recipients  |
+| *=*   | List all filtered maildir folders    |
+| *c*   | Change to another folder             |
+| *F*   | Flag a message as important          |
+| *R*   | Copy a message to remember           |
+| *s*   | Move a message to another folder     |
+| *C*   | Copy a message to another folder     |
 
 * Searching
 
@@ -383,9 +464,7 @@ whenever possible.
 
   To index all your local mails, or refresh the index, launch the
   *search* command without arguments:
-
 : jaro search
-
   Then wait for a while until the indexing is done. The time to wait
   variates depending from the quantity of mails you have, it can take
   about 10 seconds for 100MB on a fast computer, your mileage may
@@ -486,12 +565,9 @@ the machine is switched off for such an operation.
 
 On *Apple/OSX* systems to enable this feature one must explicitly
 activate the ramdisk using the command
-
 : $ jaro ramdisk open
-
 This will create and mount /Volume/JaroTmp which is 10MB large and
 will be used for our delicate security transactions.
-
 
 On *GNU/Linux* systems this is done automatically if the shared memory
 volume is available and writable (/dev/shm) without the need to use
@@ -565,14 +641,12 @@ Jaro Mail can safely merge two different maildirs basically gathering
 all e-mails stored in them into a unique place. This is done using two
 arguments, both maildir folders: the first is the source and the
 second is the destination e-mails from both will be gathered:
-
 : $ jaro merge ml.saved-mails ml.global-archive
-
-The above command will copy all emails stored inside the maildir
+The above command will move all emails stored inside the maildir
 folder "ml.saved-mails" to the other maildir folder
-"ml.global-archive". Both maildir folders must exist in order for this
-operation to succeed. Upon success, "ml.saved-mails" can be safely
-deleted by the user, if desired.
+"ml.global-archive". Upon success the first argument "ml.saved-mails"
+will be deleted and all its contents will be found in
+"ml.global-archive".
 
 
 ** Remove duplicates from maildir
@@ -582,12 +656,13 @@ occur that a maildir contains duplicates which are also highlighted in
 red in the e-mail index and, if many, can be tedious to eliminate by
 hand. Jaro Mail offers the automatic functionality of removing all
 duplicate emails from a maildir folder using the *rmdupes* command:
-
 : $ jaro rmdupes ml.overflow
-
 Will look for all duplicates emails in the "ml.overlow" maildir,
-matching them by their unique *Message-Id:* header field, and delete
-all duplicates for mails that are present more than once.
+matching them by their unique *Message-Id:* header and a SHA1 hash of
+their content[fn:formail], and delete all duplicates for mails that
+are present more than once.
+
+[fn:formail] The standard utility 'formail -D' is used for this operation
 
 ** Backup mails older than
 
@@ -595,18 +670,13 @@ To facilitate the separate storage of e-mails that are too old to be
 of any interest, but still might be useful to be retrieved just in
 case, Jaro Mail implements a function that will move all messages
 older than a certain date out of a maildir folder into another.
-
 : $ jaro backup ml.recent ml.yearsago d:5y-1y
-
 The above command will move out of the "ml.recent" maildir all e-mails
 that are older than 1 year (up to 5 years before, can be more) and
 stores them into the "ml.yearsago" maildir which for instance could be
 present on an external usb hard-disk or any other backup device,
 helping us to save space on the desktop in use.
-
 :  jaro backup unsorted d:may98-may99 unsorted.week.old
-
-
 Will move all emails found in any folder that are dated between May
 1998 and May 1999. Here below more examples of date range expressions:
 d:2002-2003 d:may2002-2003 d:2002may-2003 d:feb98-15may99 d:feb98-15may1999 d:2feb98-1y d:02feb98-1y d:970617-20010618
@@ -617,12 +687,11 @@ d:2002-2003 d:may2002-2003 d:2002may-2003 d:feb98-15may99 d:feb98-15may1999 d:2f
 If filters are updated or one desires to import a maildir into Jaro
 Mail processing it through its filters, the *filter* command is
 provided to (re)filter a maildir.
-
 : $ jaro filter my-old-maildir
-
-Beware that filtering twice a maildir is likely going to create
-duplicates, which can be later eliminated by using the *rmdupes*
-command explicitly on the maildirs containing them.
+Beware that filtering is a lengthy operation, especially on big
+maildirs: it will first pass all messages found through your filters,
+refiling them to folders (even creating duplicates) and then prune all
+the affected folders to remove the duplicates.
 
 * Acknowledgements
 
