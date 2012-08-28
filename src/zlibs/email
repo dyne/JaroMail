@@ -321,3 +321,12 @@ EOF
     } # DRYRUN
     return $?
 }
+
+later() {
+    func "Saving message from stdin into remember"
+    filename=$USER.$(hostname).$datestamp.$RANDOM
+    func "Filename: $filename"
+    maildircheck ${MAILDIRS}/remember
+    { test $? = 0 } || { maildirmake ${MAILDIRS}/remember }
+    cat > ${MAILDIRS}/remember/new/$filename
+}

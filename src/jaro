@@ -20,8 +20,8 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=1.0
-DATE=Jun/2012
+VERSION=1.1
+DATE=Sept/2012
 JAROMAILEXEC=$0
 typeset -a OLDARGS
 for arg in ${argv}; do OLDARGS+=($arg); done
@@ -265,7 +265,7 @@ usage() {
     cat <<EOF
 Jaro Mail $VERSION - your humble and faithful electronic postman
 
- Copyright (C) 2010-2012 Dyne.org Foundation, License GNU GPL v3+
+ Copyright (C) 2010-2012 by Jaromil @ Dyne.org, License GNU GPL v3+
  This is free software: you are free to change and redistribute it
  The latest Jaro Mail sourcecode is on <http://jaromail.dyne.org>
 
@@ -289,27 +289,36 @@ Options:
  -n     dry run, show operations without executing them
  -D     print debugging information at runtime
 
-Maintenance commands:
+Addressbook commands:
 
- passwd   reset password for the account in use
-
- update   refresh configurations
- queue    add a mail into outbox
+ abook    manual edit the addressbook (white or blacklist)
+ list     prints out the list of known addresses
 
  learn    learn addresses from mails piped in stdin
  forget   remove addresses found in mails piped in stdin
- list     prints out the list of known addresses
- complete look for a glob matching address in whitelist
+
+ complete look for a glob matching string in addressbook
  isknown  read e-mail from stdin, return 0 if sender is known
+
+Maintenance commands:
+
+ passwd reset the stored password for a configured account
+
+ update   refresh configurations
+ queue    add a mail into outbox
 
  backup   move mails from a maildir to a new one with search expr
  rmdupes  remove all duplicated e-mails into a maildir
  merge    merge a maildir into another, removing all duplicates
  filter   passes a maildir through the filters
 
+ ramdisk  open/close activates fast cache in RAM on Mac/OSX
+
+Experimental commands:
+
  stat     prints a statistical overview on stored maildirs
  cert     import most common SSL certificates from the Internet
- ramdisk  open/close activates fast cache in RAM on Mac/OSX
+
 Please report bugs on <http://bugs.dyne.org>.
 EOF
 }
@@ -336,6 +345,7 @@ main()
     subcommands_opts[fetch]=""
     subcommands_opts[send]=""
     subcommands_opts[peek]=""
+
     subcommands_opts[update]=""
 
     subcommands_opts[stat]=""
@@ -355,6 +365,7 @@ main()
     subcommands_opts[edit]=""
     subcommands_opts[open]=""
 
+    subcommands_opts[later]=""
     subcommands_opts[backup]=""
     subcommands_opts[rmdupes]=""
     subcommands_opts[merge]=""
@@ -456,6 +467,8 @@ main()
 	fetch)   fetch ${PARAM} ;;
 	send)    send ${PARAM} ;;
 	peek)    peek ${PARAM} ;;
+
+	later)   later ${PARAM} ;;
 
 	update)  update ;;
 
