@@ -25,13 +25,13 @@
 # returns 0 (success) if yes
 # no in all other cases
 maildircheck() {
-    { test -r $1 } || {	
+    { test -r "$1" } || {
 	error "Maildir not existing: $1"
 	return 1 }
-    { test -w $1 } || {
+    { test -w "$1" } || {
 	error "Directory not writable: $1"
 	return 1 }
-    { test -r $1/cur } \
+    { test -r "$1/cur" } \
 	&& { return 0 } # Yes is a maildir
 # shortened test to speedup
 #	&& { test -r $1/new } \
@@ -42,15 +42,13 @@ maildircheck() {
 
 maildirmake() {
 
-    if [ -z $1 ]; then
+    { test -z "$1" } && {
 	error "internal error: missing argument for maildirmake"
-	return
-    fi
+	return }
 
-    if [ -r $1 ]; then
-	func "maildir exists: $1"
-	return
-    fi
+    { test -r "$1" } && {
+	func "directory exists: $1"
+	return }
 
     ${=mkdir} ${1}/cur
     ${=mkdir} ${1}/new
@@ -83,39 +81,81 @@ list_maildirs() {
 rmdupes() {
     tmp=$TMPDIR/$datestamp.rmdupes.$RANDOM
     newlock $tmp
-    for folder in ${=PARAM}; do
-	{ test ! -r $folder } && { folder=$MAILDIRS/$folder }
-	{ test ! -r $folder } && { error "Maildir not found: $folder"; continue }
-	notice "Removing duplicates in $folder"
+    for folder in ${=@}; do
+	{ test -r "$folder" } || { folder=$MAILDIRS/$folder }
+	{ test -r "$folder" } || {
+	    error "Directory not found: $folder"
+	    continue }
+
+	maildircheck ${folder}
+	{ test $? = 0 } || {
+	    error "Not a maildir folder: $folder"
+	    continue }
+
+	notice "Checking for duplicates in $folder"
 	c=0
 	for i in `find ${folder} -type f`; do
-	    # 5MB should be enough ehre?
-	    formail -D 5000000  $tmp <$i \
+	    # 128MB should be enough ehre?
+	    formail -D 128000000  $tmp <$i \
 		&& rm $i && c=`expr $c + 1`
 	done
     done
     unlink $tmp
-    notice "$c duplicates found and deleted"
+
+    if [ "$c" = "0" ]; then
+	act "No duplicates found"
+    else
+	act "$c duplicates found and deleted"
+    fi
 }
 
 merge() {
     src=${PARAM[1]}
     dst=${PARAM[2]}
-    if ! [ -r ${src}/cur ]; then
-	error "No source maildir found in $src"
-	return 1
-    fi
-    if ! [ -r ${dst}/cur ]; then
-	error "No destination maildir found in $dst"
-	return 1
-    fi
+
+    { test "$src" = "$dst" } && {
+	error "Cannot merge same directory in itself: $src = $dst"
+	return 1 }
+
+    maildircheck $src
+    { test $? = 0 } || {
+	error "Source is not a maildir: $src"
+	return 1 }
+
+    maildircheck $dst
+    { test $? = 0 } || {
+	error "Destination is not a maildir: $dst"
+	return 1 }
+
     notice "Merging maildir ${src} into ${dst}"
     c=0
-    for i in `find ${src}/cur -type f`; do mv $i ${dst}/cur/; c=$(($c + 1)); done
-    for i in `find ${src}/new -type f`; do mv $i ${dst}/new/; c=$(($c + 1)); done
-    for i in `find ${src}/tmp -type f`; do mv $i ${src}/tmp/; c=$(($c + 1)); done
-    act "$c mails succesfully moved."
-    notice "Operation completed, you can now safely remove ${src}"
+    for i in `find ${src}/cur -type f`; do
+	mv $i ${dst}/cur/; c=$(($c + 1))
+	{ test $? = 0 } || {
+	    error "error moving file: $i"
+	    error "merge aborted."
+	    return 1 }
+    done
+    for i in `find ${src}/new -type f`; do
+	mv $i ${dst}/new/; c=$(($c + 1))
+	{ test $? = 0 } || {
+	    error "error moving file: $i"
+	    error "merge aborted."
+	    return 1 }
+    done
+    for i in `find ${src}/tmp -type f`; do
+	mv $i ${dst}/tmp/; c=$(($c + 1))
+	{ test $? = 0 } || {
+	    error "error moving file: $i"
+	    error "merge aborted."
+	    return 1 }
+    done
+    notice "$c mails succesfully moved"
+    act "Removing source directory ${src}"
+    ${=rm} -r ${src}
+    act "Purging duplicates in destination"
+    rmdupes ${dst}
+    act "Done. All mails merged into ${dst}"
 }
 
 # re-sort all maildir through the procmail filters
@@ -139,20 +179,32 @@ filter() {
 	cp -r $PROCMAILDIR $TMPDIR/$pdir
 	prc=$TMPDIR/$pdir/rc
     }
-
+    
+    typeset -al fall
+    
     for folder in ${=PARAM}; do
-	typeset -al fall
-	{ test ! -r $folder } && { folder=$MAILDIRS/$folder }
-	{ test ! -r $folder } && { error "Maildir not found: $folder"; return 1 }
+	{ test -r "$folder" } || { folder=$MAILDIRS/$folder }
+	{ test -r "$folder" } || {
+	    error "Directory not found: $folder"
+	    continue }
+	
+	maildircheck ${folder}
+	{ test $? = 0 } || {
+	    error "Not a maildir folder: $folder"
+	    continue }
+
 	notice "Filtering folder $folder"
 	# first index current state
 	for m in `find $folder -type f`; do fall+=($m); done
-	# then process it, this way ignoring new mails send to same folder
-	for n in ${=fall}; do
-		cat $n | procmail -m $prc
-	done
-	unset fall
     done
+
+    # then process it, this way ignoring new mails send to same folder
+    act "Please wait while filtering ${#fall} maildirs..."
+    for n in ${=fall}; do
+	cat $n | procmail -m $prc
+    done
+    notice "Done filtering"
+    unset fall
 
     total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
     briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
