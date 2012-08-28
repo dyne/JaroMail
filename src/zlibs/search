@@ -219,7 +219,7 @@ backup() {
     }
 
     dst=${fold[${#fold}]}
-    { test -r $dst } && {
+    { test -r "$dst" } && {
 	error "Backup destination already exists: $dst"
 	return 1 }
 

@@ -44,7 +44,7 @@ newlock() { # create locked
 unlock() {
     func "unlock: $1"
     lockpid="`cat ${1}.pid`"
-    { test -r ${1}.pid } && {
+    { test -r "${1}.pid" } && {
 	{ test "$$" != "$lockpid" } && {
 	    error "Unlock attempt by different PID: $1"
 	    error "Created by $lockpid now $$ is trying to unlock"
@@ -53,7 +53,7 @@ unlock() {
 
     $WORKDIR/bin/dotlock -u ${=@}
     { test $? != 0 } && { error "Unable to unlock: $1"; return 1 }
-    { test -r ${1}.pid } && { rm -f ${1}.pid }
+    { test -r "${1}.pid" } && { rm -f ${1}.pid }
     return 0
 }
 unlink() { # delete a file that we are locking
@@ -61,7 +61,7 @@ unlink() { # delete a file that we are locking
     # use with care! this can permanently erase currently locked files
     # only the locking PID should use it on its own locks
 
-    { test -r ${1}.pid } && {
+    { test -r "${1}.pid" } && {
 	lockpid="`cat ${1}.pid`"
 	{ test "$$" != "$lockpid" } && {
 	    error "Unlock attempt by different PID: $1"
@@ -74,7 +74,7 @@ unlink() { # delete a file that we are locking
 	touch ${1}
 	$WORKDIR/bin/dotlock -d -f ${1}
 	{ test $? != 0 } && { error "Unable to unlink: $1"; return 1 }
-	{ test -r ${1}.pid } && { rm -f ${1}.pid }
+	{ test -r "${1}.pid" } && { rm -f ${1}.pid }
     ) &!
     return 0
 }
