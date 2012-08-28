@@ -66,8 +66,8 @@ list_maildirs() {
     /new$/ {next}
     /\/jaro\// {next}
     {print $0}'`; do
-	maildircheck $m
-	{ test $? = 0 } && {
+	
+	{ maildircheck $m } && {
 	    # is a maildir
 	    { test "`find $m -type f`" != "" } && {
 		# and is not empty
@@ -87,8 +87,7 @@ rmdupes() {
 	    error "Directory not found: $folder"
 	    continue }
 
-	maildircheck ${folder}
-	{ test $? = 0 } || {
+	{ maildircheck ${folder} } || {
 	    error "Not a maildir folder: $folder"
 	    continue }
 
@@ -117,13 +116,11 @@ merge() {
 	error "Cannot merge same directory in itself: $src = $dst"
 	return 1 }
 
-    maildircheck $src
-    { test $? = 0 } || {
+    { maildircheck $src } || {
 	error "Source is not a maildir: $src"
 	return 1 }
 
-    maildircheck $dst
-    { test $? = 0 } || {
+    { maildircheck $dst } || {
 	error "Destination is not a maildir: $dst"
 	return 1 }
 
@@ -188,8 +185,7 @@ filter() {
 	    error "Directory not found: $folder"
 	    continue }
 	
-	maildircheck ${folder}
-	{ test $? = 0 } || {
+	{ maildircheck ${folder} } || {
 	    error "Not a maildir folder: $folder"
 	    continue }
 

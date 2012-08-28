@@ -50,8 +50,7 @@ autostart() {
     # or a directory of file
     { test -r "$1" } && {
 	# is it a maildir? then open
-	maildircheck ${1}
-	{ test $? = 0 } && {
+	{ maildircheck ${1} } && {
 	    mutt -F $MUTTDIR/rc ${=muttflags} -f ${1}
 	    return 0 }
 	# is it a regular file? then attach it

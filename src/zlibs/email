@@ -113,7 +113,7 @@ fetch() {
     # get_imap_info
 
     # return here if the imap folders are all empty
-    # { test ${imap_info[${#imap_info}]} = 0 } && { 
+    # { test ${imap_info[${#imap_info}]} = 0 } && {
     # 	act "Mailbox is empty, nothing to fetch."
     # 	return 0 }
 
@@ -333,7 +333,7 @@ later() {
     filename=$USER.${hostname}.$datestamp.$RANDOM
     # hostname was set by the main jaro routine
     func "Filename: $filename"
-    maildircheck ${MAILDIRS}/remember
-    { test $? = 0 } || { maildirmake ${MAILDIRS}/remember }
+
+    { maildircheck ${MAILDIRS}/remember } || { maildirmake ${MAILDIRS}/remember }
     cat > ${MAILDIRS}/remember/new/$filename
 }

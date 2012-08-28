@@ -219,11 +219,11 @@ backup() {
     }
 
     dst=${fold[${#fold}]}
-    { test -r "$dst" } && {
-	error "Backup destination already exists: $dst"
-	return 1 }
-
-    maildirmake "${dst}"
+    if [ -r "$dst" ]; then
+	act "Backup destination already exists: $dst"
+    else
+	maildirmake "${dst}"
+    fi
 
     { test ${#expr} = 0 } && {
 	error "No expression set for backup, please indicate what you want to backup"
