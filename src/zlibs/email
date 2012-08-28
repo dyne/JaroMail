@@ -113,11 +113,11 @@ fetch() {
     # get_imap_info
 
     # return here if the imap folders are all empty
-    { test ${imap_info[${#imap_info}]} = 0 } && { 
-	act "Mailbox is empty, nothing to fetch."
-	return 0 }
+    # { test ${imap_info[${#imap_info}]} = 0 } && { 
+    # 	act "Mailbox is empty, nothing to fetch."
+    # 	return 0 }
 
-    notice "Total occupation is `human_size ${imap_info[${#imap_info}]}`"
+    # notice "Total occupation is `human_size ${imap_info[${#imap_info}]}`"
 
     { test $DRYRUN != 1 } && {
 
@@ -176,6 +176,11 @@ EOF
 	    rm -f $WORKDIR/log/procmail.log
 	    unlock $WORKDIR/log/procmail-${datestamp}.log
 	fi
+
+	# copy addressbook in RAM for speedup
+	newlock $addressbook_tmp
+	cp $WORKDIR/addressbook $addressbook_tmp
+
 	act "please wait while downloading mails..."
 
 	cat $tmp | fetchmail -f $tmp
@@ -183,6 +188,7 @@ EOF
 	# to avoid writing the password in clear on filesystem
 
 	unlink $tmp
+	unlink $addressbook_tmp
 
 	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
 	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
@@ -324,7 +330,8 @@ EOF
 
 later() {
     func "Saving message from stdin into remember"
-    filename=$USER.$(hostname).$datestamp.$RANDOM
+    filename=$USER.${hostname}.$datestamp.$RANDOM
+    # hostname was set by the main jaro routine
     func "Filename: $filename"
     maildircheck ${MAILDIRS}/remember
     { test $? = 0 } || { maildirmake ${MAILDIRS}/remember }

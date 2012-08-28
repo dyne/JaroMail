@@ -26,7 +26,7 @@
 # Jaro Brother DB
 create_addressbook() {
     func "create addressbook"
-    { test -r $WORKDIR/addressbook } && {
+    { test -r "$WORKDIR/addressbook" } && {
 	error "Addressbook already exists: $WORKDIR/addressbook"
 	return 1
     }
@@ -51,7 +51,7 @@ EOF
 }
 insert_address() {
     func "insert address: $1, $2"
-    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
+    cat <<EOF | ${SQL} -batch ${addressbook} 2> /dev/null
 INSERT INTO $list (email, name)
 VALUES ("${1}", "${2}");
 EOF
@@ -73,7 +73,7 @@ EOF
 
 remove_address() {
     func "remove address <$1> from $list"
-    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
+    cat <<EOF | ${SQL} -batch ${addressbook}
 DELETE FROM $list
 WHERE email IS "${1}";
 EOF
@@ -82,7 +82,7 @@ EOF
 }
 search_name() {
     func "search_name from $list like $1"
-	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
+	cat <<EOF | ${SQL} -column -batch ${addressbook}
 .width 64 128
 SELECT * FROM $list
 WHERE name LIKE "%${1}%";
@@ -90,7 +90,7 @@ EOF
 }
 search_email() {
     func "search email from $list is $1"
-	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
+	cat <<EOF | ${SQL} -column -batch ${addressbook}
 SELECT rowid FROM $list
 WHERE email IS "${1}";
 EOF
@@ -98,7 +98,6 @@ EOF
 }
 complete() {
     func "complete from $list: ${PARAM[1]}"
-    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     act "Searching for \"${PARAM[1]}\" in $list"
     { test "$OS" = "MAC" } && {
@@ -119,7 +118,6 @@ complete() {
 }
 isknown() {
     func "is known in $list: (string from stdin)"
-    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     head="`${WORKDIR}/bin/fetchaddr -x From: -a`"
 
@@ -137,7 +135,6 @@ isknown() {
 
 learn() {
     func "learn ${PARAM[1]} from mail in stdin"
-    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     what=sender
     { test -z ${PARAM[1]} } || { what=${PARAM[1]} }
@@ -172,7 +169,6 @@ learn() {
 
 forget() {
     func "forget sender from mail in stdin"
-    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     act "Expecting mail from stdin pipe"
     head="`${WORKDIR}/bin/fetchaddr -x From:`"
@@ -182,12 +178,11 @@ forget() {
 }
 list_addresses() {
     func "list addresses in ${PARAM[1]}"
-    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     { test ${PARAM[1]} } && { list=${PARAM[1]} }
 
     act "Listing all contents for $list"
-    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook
+    cat <<EOF | ${SQL} -column -header -batch ${addressbook}
 .width 32 40
 SELECT * FROM $list;
 EOF
@@ -197,9 +192,8 @@ EOF
 # import addresbook email from VCard
 import_vcard() {
     func "import VCard from file ${PARAM[1]}"
-    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
-    { test -r ${PARAM[1]} } || {
+    { test -r "${PARAM[1]}" } || {
 	error "File not found: import ${PARAM[1]}"
 	return 1
     }
@@ -265,12 +259,11 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 
 # export addressbook to vcard
 export_vcard() {
-    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
 
     act "Export addressbook into vCard $WORKDIR/addressbook.vcf"
     tmp=$TMPDIR/export.$datestamp.$RANDOM
 
-    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook \
+    cat <<EOF | ${SQL} -column -header -batch ${addressbook} \
 	| grep -v '^email' > $tmp
 .width 40 100
 .mode list
@@ -302,8 +295,6 @@ EOF
 }
 
 edit_abook() {
-    { test ! -r ${WORKDIR}/addressbook } && { create_addressbook }
-
     # take argument even without option -l
     { test -z ${PARAM[1]} } || { list=${PARAM[1]} }
 
@@ -313,7 +304,7 @@ edit_abook() {
 
     tmpread=$TMPDIR/abook.read.$datestamp.$RANDOM
     newlock $tmpread
-    cp $WORKDIR/addressbook $tmpread
+    cp ${addressbook} $tmpread
     cat <<EOF | ${SQL} -column -header -batch $tmpread \
 	| grep -v '^email' > $tmp
 .width 40 100
@@ -422,10 +413,10 @@ EOF
     func "Inserting the updated addressbook"
     tmpwrite=$TMPDIR/abook.write.$datestamp.$RANDOM
     newlock $tmpwrite
-    cp $WORKDIR/addressbook $tmpwrite
+    cp ${addressbook} $tmpwrite
     cat $tmp | ${SQL} -batch $tmpwrite 2> /dev/null
     unlink $tmp
-    cp $tmpwrite $WORKDIR/addressbook
+    cp $tmpwrite ${addressbook}
     unlink $tmpwrite
     notice "Addressbook updated"
 }

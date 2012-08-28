@@ -60,9 +60,12 @@ list=whitelist
 # global variables for accounts
 typeset -h name login host protocol port password auth folders accountopt
 
+# global variables for addressbook
+typeset -h hostname addressbook addressbook_tmp
+
 # global array for maildirs (filled by list_maildirs)
 typeset -al maildirs
-    
+
 # global variable for exit code
 typeset exitcode
 exitcode=0
@@ -175,6 +178,14 @@ ${=mkdir} "$TMPDIR"
     error "Cannot create temporary directory: $TMPDIR"
     return 1 }
 
+# make sure we have an addressbook
+# use the one in RAM if present, for acceleration
+hostname=$(hostname) # gather the current hostname
+addressbook=$WORKDIR/addressbook
+addressbook_tmp=$TMPDIR/${USER}.${hostname}.addressbook
+{ test -r "$addressbook" } || { create_addressbook }
+{ test -r "$addressbook_tmp" } && { addressbook="$addressbook_tmp" }
+
 ${=mkdir} "$WORKDIR/cache"
 ${=mkdir} "$WORKDIR/log"
 ${=mkdir} "$WORKDIR/certs"
@@ -216,7 +227,7 @@ TRAPINT() {
 	else exit 1; fi
 }
 
- 
+
 check_bin() {
     # check for required programs
     for req in pinentry fetchmail procmail mutt; do
@@ -457,8 +468,8 @@ main()
 	cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'
 	return 0 }
     { option_is_set -q } && { QUIET=1 }
-    { option_is_set -D } && { DEBUG=1
-	func "Debug messages ON" }
+    { option_is_set -D } && { DEBUG=1; QUIET=0
+	func "All debug messages ON" }
     { option_is_set -n } && { DRYRUN=1
 	act "Dry run, show operations without executing them." }
 

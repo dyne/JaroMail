@@ -127,7 +127,7 @@ require "fileinto";
 if header :contains "From" [
 EOF
     newlock $TMPDIR/blacklist.sieve.$id
-    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook \
+    cat <<EOF | ${SQL} -batch ${addressbook} \
 	>> $TMPDIR/blacklist.sieve.$id
 SELECT email FROM blacklist;
 EOF
@@ -187,7 +187,7 @@ PF_RECURSE = yes
 
 # blacklist filters
 :0 w:
-* ? \$JARO -l blacklist -q query from:
+* ? \$JARO -l blacklist -q isknown
 zz.blacklist/
 
 # if its a mailinglist bounce, save it to zz.bounces
@@ -291,7 +291,7 @@ cat <<EOF >> $sieve
 if header :contains "From" [
 EOF
 newlock $TMPDIR/whitelist.sieve.$id
-cat <<EOF | ${SQL} -batch $WORKDIR/addressbook \
+cat <<EOF | ${SQL} -batch ${addressbook} \
     >> $TMPDIR/whitelist.sieve.$id
 SELECT email FROM whitelist;
 EOF
@@ -332,7 +332,7 @@ EOF
 
 # whitelisting filters
 :0 w:
-* ? \$JARO -l whitelist -q query from:
+* ? \$JARO -l whitelist -q isknown
 known/
 
 # spam filters
