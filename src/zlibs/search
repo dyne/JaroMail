@@ -170,8 +170,8 @@ EOF
 
 
 backup() {
-    id=$RANDOM
-    rc=$TMPDIR/backup.conf.$id
+    mairixrc=$TMPDIR/backup.rc.$datestamp.$RANDOM
+    mairixdb=$TMPDIR/backup.db.$datestamp.$RANDOM
     typeset -al expr
     typeset -al fold
 
@@ -187,7 +187,7 @@ backup() {
 	    func "destination is ${p}"
 	    fold+=(${p})
 
-	elif [ -r ${p} ]; then
+	elif [ -r "${p}" ]; then
 
 	    { maildircheck ${p} } && {
 		func "param ${p} is a maildir"
@@ -199,7 +199,7 @@ backup() {
 		    popd }
 	    }
 
-	elif [ -r ${MAILDIRS}/${p} ]; then
+	elif [ -r "${MAILDIRS}/${p}" ]; then
 
 	    { maildircheck ${MAILDIRS}/${p} } && {
 		func "param ${p} is a jaro maildir"
@@ -219,22 +219,18 @@ backup() {
     }
 
     dst=${fold[${#fold}]}
-    if [ -r "$dst" ]; then
-	act "Backup destination already exists: $dst"
-    else
-	maildirmake "${dst}"
-    fi
+    { test -r "$dst" } || { maildirmake "${dst}" }
 
     { test ${#expr} = 0 } && {
 	error "No expression set for backup, please indicate what you want to backup"
-	act "For example: d:10y-2y (all mails older than 1 year up to 10 years ago"
+	act "For example: d:10y-2y (all mails older than 1 year up to 10 years ago)"
 	act "Or a simple search string, all expressions can be verified using search."
 	return 1
     }
 
     # forge the folder string for mairix conf
     folders=""
-    for f in ${fold}; do
+    for f in ${=fold}; do
 	{ test $f = $dst } || {
 	    folders="$folders`basename $f`:" }
     done
@@ -242,33 +238,44 @@ backup() {
     notice "Backup of all mails in '$folders' matching expression '$expr'"
 
     act "Indexing folders"
-    cat <<EOF > $rc
+    cat <<EOF > ${mairixrc}
 base=$basedir
-database=$TMPDIR/backup.db.$id
+database=$mairixdb
 maildir=${folders}
 mfolder=$dst
 mformat=maildir
 EOF
-    mairix -F -f $rc 2> /dev/null
+    mairix -F -f ${mairixrc} 2> /dev/null
     act "Moving matches to $dst"
     pushd `dirname $dst`; basedir=`pwd`; popd
-    rm -f $rc; cat <<EOF > $rc
+    rm -f ${mairixrc}; cat <<EOF > ${mairixrc}
 base=$basedir
-database=$TMPDIR/backup.db.$id
+database=$mairixdb
 maildir=${folders}
 mfolder=$dst
 mformat=maildir
 EOF
-    found=`mairix -F -f $rc -H ${expr} 2> /dev/null | awk '{print $2}'`
+    found=`mairix -F -f ${mairixrc} -H ${expr} 2>/dev/null | awk '{print $2}'`
     notice "$found matches found, destination folder size is `du -hs $basedir/$dst | awk '{print $1}'`"
+
+    ${=rm} ${mairixrc}
+    ${=rm} ${mairixdb}
+
     # invert the order of folders to start with destination in rmdupes
-    typeset -al PARAM
+    typeset -al revfold
     c=$(( ${#fold} ))
     while [ $c -gt 0 ]; do
 	func "${fold[$c]}"
-	PARAM+=(${fold[$c]})
+	revfold+=(${fold[$c]})
 	c=$(( $c - 1 ))
     done
-    QUIET=1
-    rmdupes
+
+    formail_cache=$TMPDIR/filter.rmdupes.$datestamp.$RANDOM
+    newlock $formail_cache
+
+    rmdupes ${=revfold}
+
+    unlink $formail_cache
+
+    notice "Backup completed to destination: $dst"
 }

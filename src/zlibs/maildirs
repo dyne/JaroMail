@@ -78,9 +78,40 @@ list_maildirs() {
     return ${#maildirs}
 }
 
-rmdupes() {
-    tmp=$TMPDIR/$datestamp.rmdupes.$RANDOM
-    newlock $tmp
+rmdupes() {    
+
+    ## special argument lastlog
+    { test "$1" = "lastlog" } && {
+    # gather a list of destinations for last filtering operation
+	typeset -alU dests prio lasts
+	for d in `cat ${WORKDIR}/log/procmail.log|awk '/Folder:/ {print $2}' | cut -d/ -f1`; do
+	    # skip procmail glitch
+	    { test "$d" = "procmail" } && { continue }
+	    # put filtered to last
+	    [[ ${PARAM} == *${d}* ]] && { lasts=($lasts $d); continue }
+	    # always give priority to known, then to priv, then the rest
+	    { test "$d" = "known" } && { prio=(known $prio); continue }
+	    { test "$d" = "priv" } && { prio=($prio priv); continue }
+	    # skip zz. trash
+	    [[ $d == zz.* ]] && { continue }
+	    # put them to filter
+	    dests+=($d)
+	done
+	act "Pruning duplicates across ${#dests} destination maildirs:"
+	act "${prio} ${dests} ${lasts}"
+	# recursion here
+	rmdupes ${=prio} ${=dests} ${=lasts}
+	notice "Done pruning"
+	# all the prioritization above is so that duplicates are spotted
+	# across different maildirs and deleted from the filtered source 
+	unset dests
+	unset prio
+	return 0
+    }
+    ###############
+
+    tot=0
+    typeset -al msgs
     for folder in ${=@}; do
 	{ test -r "$folder" } || { folder=$MAILDIRS/$folder }
 	{ test -r "$folder" } || {
@@ -91,20 +122,26 @@ rmdupes() {
 	    error "Not a maildir folder: $folder"
 	    continue }
 
-	notice "Checking for duplicates in $folder"
 	c=0
-	for i in `find ${folder} -type f`; do
-	    # 128MB should be enough ehre?
-	    formail -D 128000000  $tmp <$i \
-		&& rm $i && c=`expr $c + 1`
+	notice "Checking for duplicates in folder: `basename $folder`"
+	msgs=()
+	for m in `find ${folder} -type f`; do
+	    msgs+=($m)
 	done
-    done
-    unlink $tmp
-
-    if [ "$c" = "0" ]; then
-	act "No duplicates found"
-    else
+	act "${#msgs} messages to check"
+	for m in ${=msgs}; do
+	    # 128MB should be enough ehre?
+	    formail -D 128000000  $formail_cache <$m \
+		&& rm $m && c=$(( $c + 1 ))
+	done
 	act "$c duplicates found and deleted"
+	tot=$(( $tot + $c ))
+    done
+
+    if [ "$tot" = "0" ]; then
+	act "No duplicates found at all"
+    else
+	act "$tot total duplicates found and deleted"
     fi
 }
 
@@ -151,7 +188,10 @@ merge() {
     act "Removing source directory ${src}"
     ${=rm} -r ${src}
     act "Purging duplicates in destination"
+    formail_cache=$TMPDIR/filter.rmdupes.$datestamp.$RANDOM
+    newlock $formail_cache
     rmdupes ${dst}
+    unlock $formail_cache
     act "Done. All mails merged into ${dst}"
 }
 
@@ -162,20 +202,15 @@ filter() {
     update # update all filters
 
 	# archive old procmail log
-    if [ -r $WORKDIR/log/procmail.log ]; then
+    { test -r "$WORKDIR/log/procmail.log" } && {
 	newlock $WORKDIR/log/procmail-${datestamp}.log
 	cat $WORKDIR/log/procmail.log \
 	    >> $WORKDIR/log/procmail-${datestamp}.log
-	rm -f $WORKDIR/log/procmail.log
+	${=rm} $WORKDIR/log/procmail.log
 	unlock $WORKDIR/log/procmail-${datestamp}.log
-    fi
+    }
 
     prc=$PROCMAILDIR/rc
-    { test $TMPRAM = 1 } && { # accelerate using ramdisk if present
-	pdir=$TMPDIR/filter.procmail.$RAND
-	cp -r $PROCMAILDIR $TMPDIR/$pdir
-	prc=$TMPDIR/$pdir/rc
-    }
     
     typeset -al fall
     
@@ -194,15 +229,30 @@ filter() {
 	for m in `find $folder -type f`; do fall+=($m); done
     done
 
+    { test ${#fall} = 0 } && {
+	error "No messages to filter, operation aborted."
+	return 1
+    }
+
     # then process it, this way ignoring new mails send to same folder
-    act "Please wait while filtering ${#fall} maildirs..."
+    act "Filtering ${#fall} messages..."
     for n in ${=fall}; do
 	cat $n | procmail -m $prc
     done
     notice "Done filtering"
     unset fall
 
+
     total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
     briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
     echo "${briefing}"
+
+
+    formail_cache=$TMPDIR/filter.rmdupes.$datestamp.$RANDOM
+    newlock $formail_cache
+
+    # prunes out all duplicates from last filtered mails,
+    rmdupes lastlog
+
+    unlink $formail_cache
 }

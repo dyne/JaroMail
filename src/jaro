@@ -66,6 +66,9 @@ typeset -h hostname addressbook addressbook_tmp
 # global array for maildirs (filled by list_maildirs)
 typeset -al maildirs
 
+# global variable formail cache (used by rmdupes)
+typeset -h formail_cache
+
 # global variable for exit code
 typeset exitcode
 exitcode=0
