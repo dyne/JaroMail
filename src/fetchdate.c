@@ -27,6 +27,7 @@
 
 int verbose = 0;
 int do_hardlinks = 0;
+int do_movefiles = 0;
 char dateformat[256];
 
 void out_of_mem(char *file, int line, size_t size);
