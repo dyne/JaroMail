@@ -264,7 +264,7 @@ EOF
 	    else
 		act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
-		cat ${mail} | $WORKDIR/bin/jaro -l whitelist -q receiver to:
+		cat ${mail} | $WORKDIR/bin/jaro -q learn recipient
 		${=rm} ${mail} &
 		unlink ${smtp} &
 	    fi

@@ -146,7 +146,7 @@ learn() {
 	    insert_address "$email" "$name"
 	    return 0
 	    ;;
-	receiver) # complex: more addresses in To: and Cc:
+	recipient) # complex: more addresses in To: and Cc:
 	    head="`cat | ${WORKDIR}/bin/fetchaddr -x To: -a`"
 	    for h in ${head}; do
 		email="${h[(ws:,:)1]} )"
