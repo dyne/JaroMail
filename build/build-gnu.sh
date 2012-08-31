@@ -80,8 +80,9 @@ case $distro in
 	echo "Compiling mutt"
 	pushd src/mutt-1.5.21
 	CC="$cc" ./configure \
-	    --with-ssl --with-gnutls --enable-imap --disable-debug \
-	    --enable-hcache --with-regex --with-tokyocabinet
+	    --with-ssl --with-gnutls --enable-imap --disable-debug --with-slang \
+	    --enable-hcache --with-regex --with-tokyocabinet --with-mixmaster \
+	    --with-mailpath=Mail --with-homespool=Mail/known --with-exec-shell=/usr/bin/zsh
 	make > /dev/null
 	popd
 	cp src/mutt-1.5.21/mutt build/gnu/mutt-jaro

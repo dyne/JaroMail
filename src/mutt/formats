@@ -1,5 +1,4 @@
-# Postino's display format strings for Mutt
-# originally used by Jaromil
+# Jaro Mail display format strings for Mutt
 
 set alias_format="%2n %t %-20.20a: %r"
 
@@ -26,3 +25,15 @@ set status_format="-%r-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del
 set forward_format = "[Fwd] %s"
 
 set hdr_format="%Z %3C %{%b %d} %-19.19L (%5c) %s"
+
+
+ignore *
+unignore From:
+unignore To:
+unignore Cc:
+unignore Subject:
+unignore Date:
+unignore User-Agent:
+unignore X-BeenThere:
+unignore Organization:
+unignore List-Id:

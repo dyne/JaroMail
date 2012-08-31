@@ -9,7 +9,7 @@
 color normal white black
 color tilde white black
 color indicator brightgreen black
-color tree brightred black # the thread tree in the index menu
+color tree red black # the thread tree in the index menu
 color status cyan black
 color hdrdefault cyan black
 color body magenta black "(ftp|http)://[^ ]+"	# point out URLs
@@ -36,8 +36,8 @@ color quoted5 green black
 color index cyan black "."
 color index white black "~N" # New
 color index brightcyan black "~O" # Unread
-color index brightgreen black "~N (~x jaromil@* | ~h \"^In-[Rr]eply-[Tt]o: .*jaromil@*")"
-color index yellow black "~f jaromil@*"
+# color index brightgreen black "~N (~x jaromil@* | ~h \"^In-[Rr]eply-[Tt]o: .*jaromil@*")"
+# color index yellow black "~f jaromil@*"
 
 # color index brightblue black "~g" # gpg signed
 color index brightgreen black "~G" # gpg encrypted
@@ -46,7 +46,8 @@ color index brightgreen black "~F" # Flagged
 color index brightred black "~T" # Tagged
 color index red black "~f MAILER-DAEMON@*"
 color index red black "~f Mailer-Daemon@*"
-color index black brightblue "~v" # Collapsed thread with some unread
+color index brightwhite black "~v" # Collapsed thread
+# color index brightyellow black "~V" # Collapsed thread unread
 
 
 

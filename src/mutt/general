@@ -17,12 +17,12 @@ unset use_8bitmime
 unset suspend
 unset wait_key
 
-set send_charset=utf-8
+set send_charset = utf-8
 set assumed_charset = us-ascii
 
 #set charset = iso-8859-1
 #set send_charset = us-ascii
-#set charset = utf-8
+set charset = utf-8
 #set shell = retrieved from passwd file
 #set simple_search = "~f %s | ~s %s"
 
