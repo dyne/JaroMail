@@ -28,7 +28,7 @@
 #include <glib/gprintf.h>
 #include <gnome-keyring.h>
 
-static GnomeKeyringPasswordSchema git_schema = {
+static GnomeKeyringPasswordSchema jaro_schema = {
     GNOME_KEYRING_ITEM_GENERIC_SECRET,
     {
         { "protocol", GNOME_KEYRING_ATTRIBUTE_TYPE_STRING },
@@ -39,13 +39,13 @@ static GnomeKeyringPasswordSchema git_schema = {
     }
 };
 
-typedef struct git_credential {
+typedef struct jaro_credential {
     gchar *protocol;
     gchar *host;
     gchar *path;
     gchar *username;
     gchar *password;
-} git_credential_t;
+} jaro_credential_t;
 
 static void
 error(const char *err, ...)
@@ -60,12 +60,12 @@ error(const char *err, ...)
 }
 
 static int
-get_password(git_credential_t *cred)
+get_password(jaro_credential_t *cred)
 {
     GnomeKeyringResult keyres;
     gchar *pass = NULL;
     
-    keyres = gnome_keyring_find_password_sync(&git_schema,
+    keyres = gnome_keyring_find_password_sync(&jaro_schema,
 					      &pass,
 					      "protocol", cred->protocol,
 					      "host", cred->host,
@@ -81,12 +81,12 @@ get_password(git_credential_t *cred)
 }
 
 static int
-check_password(git_credential_t *cred)
+check_password(jaro_credential_t *cred)
 {
     GnomeKeyringResult keyres;
     gchar *pass = NULL;
     
-    keyres = gnome_keyring_find_password_sync(&git_schema,
+    keyres = gnome_keyring_find_password_sync(&jaro_schema,
 					      &pass,
 					      "protocol", cred->protocol,
 					      "host", cred->host,
@@ -101,7 +101,7 @@ check_password(git_credential_t *cred)
 }
 
 static int
-store_password(git_credential_t *cred)
+store_password(jaro_credential_t *cred)
 {
     gchar desc[1024];
     GnomeKeyringResult keyres;
@@ -111,8 +111,8 @@ store_password(git_credential_t *cred)
        	!cred->username || !cred->password)
       return 1;
 
-    g_snprintf(desc, sizeof(desc), "Git %s", cred->host);
-    keyres = gnome_keyring_store_password_sync(&git_schema,
+    g_snprintf(desc, sizeof(desc), "Jaro %s", cred->host);
+    keyres = gnome_keyring_store_password_sync(&jaro_schema,
 					       GNOME_KEYRING_DEFAULT,
 					       desc,
 					       cred->password,
@@ -129,11 +129,11 @@ store_password(git_credential_t *cred)
 }
 
 static int
-erase_password(git_credential_t *cred)
+erase_password(jaro_credential_t *cred)
 {
     GnomeKeyringResult keyres;
 
-    keyres = gnome_keyring_delete_password_sync(&git_schema,
+    keyres = gnome_keyring_delete_password_sync(&jaro_schema,
 						"protocol", cred->protocol,
 						"host", cred->host,
 						"path", cred->path,
@@ -147,7 +147,7 @@ erase_password(git_credential_t *cred)
 }
 
 static int
-read_credential(git_credential_t *cred)
+read_credential(jaro_credential_t *cred)
 {
     char buf[1024];
 
@@ -180,7 +180,7 @@ read_credential(git_credential_t *cred)
 }
 
 static void
-clear_credential(git_credential_t *cred)
+clear_credential(jaro_credential_t *cred)
 {
     if (cred->protocol) g_free(cred->protocol);
     if (cred->host) g_free(cred->host);
@@ -192,11 +192,13 @@ clear_credential(git_credential_t *cred)
 int
 main(int argc, const char **argv)
 {
-    git_credential_t cred = {0};
+    jaro_credential_t cred = {0};
     int res = 0;
 
     if (argc < 2) {
-	error("Usage: git credential-gnomekeyring <get|store|erase>");
+	error("Usage: jaro-gnome-keyring <get|check|store|erase>");
+	error("input from stdin: newline separated parameter=value tuples");
+	error("i.e: protocol, path, username, host, password (password on store)");
 	return 1;
     }
 
