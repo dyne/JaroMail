@@ -1,10 +1,11 @@
-#!/bin/sh
-
-cd ..
+#!/usr/bin/env zsh
 
 distro=unknown
 
-cflags="-O2"
+builddir=`pwd`
+cc="${builddir}/cc-static.zsh"
+
+pushd ..
 
 which apt-get && distro=debian
 which yum && distro=fedora
@@ -32,27 +33,28 @@ case $distro in
 	which sqlite3 || sudo apt-get install sqlite3
 	[ -r /usr/share/doc/libgnome-keyring-dev/copyright ] || \
 	    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
+	sudo apt-get install libtokyocabinet-dev
 	echo "All dependencies installed"
-	cd src
+	pushd src
 	echo -n "Compiling the address parser... "
 
 
 	echo "fetchaddr"
-	gcc $cflags -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-	    gcc $cflags -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o -lbz2
-	cd - > /dev/null
+	$cc -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
+	    $cc -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o -lbz2
+	popd
 
 	echo "Compiling the search engine..."
-	cd src/mairix
-	./configure
+	pushd src/mairix
+	CC="$cc" ./configure
 	make > /dev/null
-	cd - > /dev/null
+	popd
 
 
 	echo -n "Compiling the date parser... "
-	cd src
-	gcc $cflags -I mairix -c fetchdate.c
-	gcc $cflags -DHAS_STDINT_H -DHAS_INTTYPES_H -DUSE_GZIP_MBOX \
+	pushd src
+	$cc -I mairix -c fetchdate.c
+	$cc -DHAS_STDINT_H -DHAS_INTTYPES_H -DUSE_GZIP_MBOX \
 	    -o fetchdate fetchdate.o \
 	    mairix/datescan.o mairix/db.o mairix/dotlock.o \
 	    mairix/expandstr.o mairix/glob.o mairix/md5.o \
@@ -62,19 +64,27 @@ case $distro in
 	    mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o \
 	    -lz -lbz2
 	echo "fetchdate"
-	cd - > /dev/null
+	popd
 
 	cp src/mairix/mairix build/gnu/
 	cp src/fetchaddr build/gnu/
 	cp src/fetchdate build/gnu/
 
 	echo "Compiling gnome-keyring"
-	cd src/gnome-keyring
-	gcc jaro-gnome-keyring.c \
-	    `pkg-config --cflags --libs glib-2.0 gnome-keyring-1` \
-	    $cflags -o jaro-gnome-keyring
-	cd - > /dev/null
+	pushd src/gnome-keyring
+	$cc jaro-gnome-keyring.c -o jaro-gnome-keyring \
+	    `pkg-config --cflags --libs glib-2.0 gnome-keyring-1`
+	popd
 	cp src/gnome-keyring/jaro-gnome-keyring build/gnu/
+
+	echo "Compiling mutt"
+	pushd src/mutt-1.5.21
+	CC="$cc" ./configure \
+	    --with-ssl --with-gnutls --enable-imap --disable-debug \
+	    --enable-hcache --with-regex --with-tokyocabinet
+	make > /dev/null
+	popd
+	cp src/mutt-1.5.21/mutt build/gnu/mutt-jaro
 
 	echo "Done compiling."
 	echo "Now run ./install.sh and Jaro Mail will be ready in ~/Mail"
@@ -150,7 +160,7 @@ case $distro in
 	    $cflags -o jaro-gnome-keyring
 	cd - > /dev/null
 	cp src/gnome-keyring/jaro-gnome-keyring build/gnu/
-
+	strip build/gnu/*
 	echo "Done compiling."
 	echo "Now run ./install.sh and Jaro Mail will be ready in ~/Mail"
 	echo "or \"./install.sh path\" to install it somewhere else."
@@ -162,3 +172,5 @@ case $distro in
 	echo "Error: no distro recognized, build by hand."
 	;;
 esac
+
+popd
