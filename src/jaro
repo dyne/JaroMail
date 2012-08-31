@@ -52,7 +52,7 @@ typeset -A global_opts
 typeset -A opts
 
 # global variable for account selection
-typeset -h account
+typeset -h account account_type
 # account=default
 typeset -h list
 list=whitelist
@@ -233,7 +233,7 @@ TRAPINT() {
 
 check_bin() {
     # check for required programs
-    for req in pinentry fetchmail procmail mutt; do
+    for req in pinentry fetchmail procmail; do
 	which $req >/dev/null
 	{ test $? != 0 } && {
 	    error "Cannot find $req. Please install it."

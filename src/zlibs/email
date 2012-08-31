@@ -65,33 +65,26 @@ fetchall() {
     res=0
     for i in `find $WORKDIR/Accounts -type f | grep -v README`; do
 	account=`basename $i`
-	type=`print $account | cut -d. -f1`
+	account_type=`print $account | cut -d. -f1`
 	account=`print $account | cut -d. -f2`
-	fetch $type $account
+	fetch
 	if [ $? != 0 ]; then res=1; fi
 	# returns an error if just one of the accounts did
     done
     return $res
 }
 fetch() {
-
-    func "Fetch account ${@}"
-    # recursion here
-    { test ${#@} = 0 } && { fetchall; return $? }
-
-    adir=$WORKDIR/Accounts
-
-    typeset -al all
-
-    read_account ${=@}
-
+    { test "$account" = "" } && {
+	fetchall; return $? }
+	
+    read_account ${account_type} ${account}
     { test  $? != 0 } && {
-	error "Account configuration not found, or broken. Aborting operation."
+	error "Error on account entry: $account_type $account"
 	return 1
     }
 
     # fetch works with imap and pop, skip smtp
-    { test "$type" = "smtp" } && { return 0 }
+    { test "$account_type" = "smtp" } && { return 0 }
 
     if ! [ -r $PROCMAILDIR/rc ]; then
 	act "updating procmail configuration"
