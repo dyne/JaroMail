@@ -1,0 +1,46 @@
+# Mixmaster version 3.0  --  (C) 1999 - 2006 Anonymizer Inc. and others.
+
+# Mixmaster may be redistributed and modified under certain conditions.
+# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF
+# ANY KIND, either express or implied. See the file COPYRIGHT for
+# details.
+
+# $Id: $
+
+buffers.o: mix3.h config.h version.h mix.h
+chain.o: mix3.h config.h version.h mix.h
+chain1.o: mix3.h config.h version.h mix.h pgp.h
+chain2.o: mix3.h config.h version.h mix.h
+chain3.o: mix3.h config.h version.h mix.h
+compress.o: mix3.h config.h version.h mix.h
+crypto.o: mix3.h config.h version.h mix.h crypto.h
+dllmain.o: mix3.h config.h version.h mix.h
+dummy.o: mix3.h config.h version.h mix.h
+keymgt.o: mix3.h config.h version.h mix.h
+mail.o: mix3.h config.h version.h mix.h
+maildir.o: mix3.h config.h version.h mix.h
+main.o: mix3.h config.h version.h mix.h
+menu.o: menu.h mix3.h config.h version.h mix.h
+menunym.o: menu.h mix3.h config.h version.h mix.h
+menusend.o: menu.h mix3.h config.h version.h mix.h
+menuutil.o: menu.h mix3.h config.h version.h mix.h
+mime.o: mix3.h config.h version.h mix.h
+mix.o: mix3.h config.h version.h mix.h menu.h
+nym.o: mix3.h config.h version.h mix.h pgp.h
+pgp.o: mix3.h config.h version.h mix.h pgp.h
+pgpcreat.o: mix3.h config.h version.h mix.h pgp.h crypto.h
+pgpdata.o: mix3.h config.h version.h mix.h pgp.h crypto.h
+pgpdb.o: mix3.h config.h version.h mix.h pgp.h
+pgpget.o: mix3.h config.h version.h mix.h pgp.h crypto.h
+mpgp.o: mix3.h config.h version.h mix.h pgp.h
+pool.o: mix3.h config.h version.h mix.h
+random.o: mix3.h config.h version.h mix.h crypto.h
+rem.o: mix3.h config.h version.h mix.h
+rem1.o: mix3.h config.h version.h mix.h
+rem2.o: mix3.h config.h version.h mix.h
+rem3.o: mix3.h config.h version.h mix.h
+remailer.o: mix.h
+rfc822.o: mix3.h config.h version.h mix.h
+rndseed.o: mix3.h config.h version.h mix.h
+stats.o: mix3.h config.h version.h mix.h
+util.o: mix3.h config.h version.h mix.h

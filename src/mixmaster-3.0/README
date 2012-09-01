@@ -1,0 +1,191 @@
+Mixmaster 3.0 -- anonymous remailer software -- (C) 1999 - 2000 Anonymizer Inc.
+                                  (C) 2000-2008 The Mixmaster Development Team
+-------------------------------------------------------------------------------
+
+This program consists of
+
+* a remailer client:
+
+  The remailer client supports sending anonymous mail using Cypherpunk and
+  Mixmaster remailers. It supports OpenPGP encryption (compatible with PGP 2,
+  PGP 5 and up, and GnuPG).
+
+  The client can be used with a menu-based user interface and with command line
+  options.
+
+* a remailer:
+
+  The remailer supports the Cypherpunk and Mixmaster message formats.  It can
+  be integrated with the mail delivery system of Unix-based computers or use
+  the POP3 and SMTP protocols for mail transfer.  Mixmaster includes an
+  automated abuse-handling system.
+
+Please report any problems via the bug and patch trackers at
+http://sourceforge.net/projects/mixmaster/
+
+
+Installation:
+------------
+
+Libraries:
+
+  Mixmaster requires the libraries OpenSSL, zlib, and pcre. 
+  
+  If you want to use the menu-based user interface, you also need the ncurses
+  library. If these libraries are not installed on your system, you will need
+  to obtain the latest versions from the sources below and extract them in the
+  the Src/ directory first.
+
+  OpenSSL is available from http://www.openssl.org/source/
+
+  Ncurses can be obtained from http://ftp.gnu.org/pub/gnu/ncurses/
+
+  The Perl Compatable Regular Expressions library can be obtained from
+  ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/
+
+  The zlib compression libraries can be obtained from
+  http://www.gzip.org/zlib/
+
+To install or upgrade Mixmaster, type `./Install'.
+
+Mixmaster clients rely on pingers to compile statistics and keyrings for
+currently operating remailers.  A list of public pingers can be obtained from
+http://www.noreply.org/allpingers/.
+
+Alternatively clients can operate their own pingers to generate statistics.
+Pinger software can be obtained from http://www.palfrader.org/echolot/.  If you
+choose this option, please publish the pinger results for the benefit of other
+Mixmaster users and notify the metastats maintainer at admin@mixmin.net.
+
+The required files published by pingers are:-
+  pubring.asc    Type 1 remailer keys
+  pubring.mix    Type 2 remailer keys
+  rlist.txt      List of reliable type 1 remailers
+  mlist.txt      List of reliable type 2 remailers
+  type2.list     List of known type 2 remailers (optional)
+
+Using the remailer client:
+-------------------------
+
+To use the menu-based user interface, simply run `mixmaster'. To send an
+anonymous or pseudonymous reply to a message from within your mail or news
+reader, you can pipe it to `mixmaster'.
+
+The interactive mode supports sending mail and contains a simple mail reading
+function. OpenPGP messages are encrypted and decrypted automatically. 
+
+In the non-interactive mode, Mixmaster reads a message from a file or from its
+standard input. The command line options are described in the manual page
+(mixmaster.1).
+
+
+Mixmaster as a remailer:
+-----------------------
+
+The Mixmaster remailer can be installed on any account that can receive mail.
+Non-remailer messages will be delivered as usual. If you have root access, you
+may want to create a new user (e.g., `remailer') and install Mixmaster under
+that user id.
+
+The Install script provides a simple way to set up the remailer. More
+information about configuring Mixmaster can be found in the manual page.
+Typically, incoming mail is piped to "mixmaster -RM". In a UUCP setting, it may
+be useful to use just "mixmaster -R", and run "mixmaster -S" once all messages
+have arrived.
+
+Announcing a new remailer to the public is most commonly done by posting the
+remailer keys and capabilities to alt.privacy.anon-server as well as the
+"remops" mailing list. Information about the remops list can be found here:
+http://lists.mixmin.net/mailman/listinfo/remops
+
+
+Installation problems:
+---------------------
+
+In case one of the libraries Mixmaster uses is installed incorrectly on your
+system, place the library source code (available from the locations listed
+above) in the Src directory, remove the old Makefile, run the Install script
+again and answer `y' when asked whether to use the source code.
+
+The ncurses library can use termcap and terminfo databases. The Mixmaster
+Install script tries to find out whether terminfo is available. If you get a
+"Can't open display" error when starting the Mixmaster menu, run "./configure
+--enable-termcap; make lib/libncurses.a" in the ncurses directory.
+
+
+Security notes:
+--------------
+
+The ciphers and the anonymizing mix-net protocol used in Mixmaster correspond
+to the state of the art (see the Security Considerations section of the
+Mixmaster Protocol specification for details). However, no security proofs
+exist for any practical cryptosystem. It is unlikely that their security will
+be broken, but there is no "perfect security". Software can also contain
+implementation errors. The complete Mixmaster source code is available for
+public review, so that everyone can verify what the program does, and it is
+unlikely that security related errors or secret back doors in the software
+would go unnoticed.
+
+No software is secure if run in an insecure environment. For that reason you
+must make sure that there is no malicious software (such as viruses) running on
+your computer. Deleted files and even passphrases can in many cases be read
+from the hard disk if an adversary has access to the computer. The use of disk
+encryption programs is recommended to avoid this risk.
+
+Anonymous messages are secure as long as at least one of the remailers you use
+in a chain is honest. You can use up to 20 remailers in a chain, but
+reliability and speed decrease with longer chains. Four is a reasonable number
+of remailers to use. Many remailer operators sign their keys. You should verify
+those signatures with OpenPGP to make sure that you have the actual remailer
+keys.
+
+Anonymous keys usually cannot be introduced to the OpenPGP web of trust without
+giving up anonymity. For that reason, this client will use any OpenPGP key
+found on the key ring, whether it is certified or not. Your key ring must not
+contain any invalid keys when used with this program.
+
+If you want to use a pseudonym, the client will ask you for a passphrase to
+protect the nym database. Your passphrase should be long, and hard to guess.
+Anyone who gets hold of your nym database and private keys and can determine
+the passphrase will be able to compromise your pseudonymous identities. Note
+that some operating systems may store your passphrase on your hard disk in
+clear.
+
+While a good client passphrase can protect your keys if someone gets hold of
+your files, the remailer passphrase offers only casual protection for the
+remailer keys. If you install a remailer, the remailer passphrase must be
+different from your private passphrases.
+
+Note that nym.alias.net style nym-servers are trivially breakable by an
+adversary performing a long-term intersection attack. Discussion of 
+these attacks can be found in section 4.2 of The Pynchon Gate, by 
+Sassaman, Cohen, and Mathewson, 2005. Use of Type I remailers for any 
+purpose is discouraged.
+
+
+Copyright:
+---------
+
+Mixmaster may be redistributed and modified under certain conditions.  This
+software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY KIND,
+either express or implied. See the file COPYRIGHT for details.
+
+A license is required to use the IDEA(TM) algorithm for commercial purposes;
+see the file idea.txt for details.
+
+Mixmaster uses the compression library zlib by Jean-loup Gailly and Mark Adler,
+the free ncurses library and the regex library by Philip Hazel.  This product
+includes cryptographic software written by Eric Young (eay@cryptsoft.com). This
+product includes software developed by the OpenSSL Project for use in the
+OpenSSL Toolkit (http://www.OpenSSL.org/).  For some platforms: This product
+includes software developed by the University of California, Berkeley and its
+contributors.
+
+Additionally, this software uses code provided by the members of the 
+Mixmaster development team. The members respectively hold the copyright 
+to the code in question, having elected to make it available under the 
+Mixmaster license.
+
+All trademarks are the property of their respective owners.
+
+$Id: README 974 2008-03-03 17:40:11Z rabbi $

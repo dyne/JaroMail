@@ -1,0 +1,77 @@
+Items that need to be completed before the next MAIN release:
+
+- revert renaming of conf files for WIN32.
+
+Items to watch:
+
+- Hunt and kill bug in Mixmaster causing echolot pings to be turned
+  into permanent t* files.
+  [This is a pesky one. Changing the .forward pipe to go through 
+   truss first 'fixes' it. Grr. --rabbi]
+
+Items for 3.0.x:
+- doallow() should check more than one email address in a line
+- Automatically fetch pinger list and stats during installation process
+- destblk request confirmation (patch # 873498)
+    + perhaps we should phase this out in favor of a distributed RAB?
+- general bug fixes that do not break backward compatibility
+
+Items for 3.1.x
+- Full WIN32 support.
+  - Sane randomness handling
+  - Resolve crash when running with --post
+  - Resolve crash when config contains "SENDMAIL outfile"
+  - Confirm operation as a WIN32 service
+  - Test on Vista.
+- Include a formal win32 binary release, complete with docs.
+- Integrate RAB support -- automatic downloading similar to stats.
+- Introduce hashed RAB handling where mail recipients are hashed and
+  compared against a downloaded rab.hash file.  This solves the issue
+  of publishing a plain-text list of email addresses.
+    + We might want to salt these hashes but the salt would have to be
+      known to remops.
+- Hashcash support?
+
+Items for 3.5:
+
+- binomial mix implementation
+- RGB dummies
+- native echolot
+- Regroup-and-Go?
+
+Packaging:
+- Modify release tarball generation script to build the .tab.c file from
+  parsedate.y, so we don't end up requiring bison on every system that
+  wants to build mixmaster  (rabbi)
+- rpm -- dybbuk
+- Windows build instructions/files  (zax)
+- provide a packaged Windows build to be used with QuickSilver
+- Macintosh OS/X support  (rabbi)
+- Update Install script to put files in global system locations if
+  invoked by root. Also update to be smart about AES support.
+  (dybbuk said he would do this, but status is unclear.)
+
+Wishlist:
+- permit CRAM-MD5 SMTP AUTH in addition to LOGIN.  n/a (patch welcome)
+- do full regression tests on as many platforms possible
+  - list only these platforms as supported
+  - test on Solaris 9 on SPARC.
+- saner usage of /dev/[u]random is required -- throw warning when not in
+  daemon mode (patch 873497 -- needs work)
+- clean up documentation and tarball contents
+  + reorganize directory structure
+- AES support -- requires OpenSSL 0.9.7  dybbuk
+
+
+Abandoned/Deferred:
+D Remove OpenSSL version checks. Maybe print a message stating the 
+  supported versions, and leave it up to the user?
+D allow for verification of clearsigned OpenPGP messages  disastry
+D honor key preferences when encrypting to multiple keys  ulf/disastry (n/a)
+D further mpgp testing of AES/MDC packet support  ulf
+D make mpgp friendlier
+D COMMENT entire existing codebase!  (HAHA)
+D support for Borland compiler on Windows.
+  D I'ld even go so far as drop Visual C (or whatever we're supporting at
+    the moment) and require gcc with Cygwin to build it. But only if this
+    results in a Binary that runs without additional DLLs. (Weasel)

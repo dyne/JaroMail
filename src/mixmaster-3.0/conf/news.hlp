@@ -1,0 +1,59 @@
+You can use this remailer to post messages to Usenet newsgroups. To send
+a message to Usenet, insert the "Anon-post-to:" header as per the
+examples below.
+
+==================================================================
+To: %RMA
+
+::
+Anon-Post-To: alt.test,misc.test
+
+##
+Subject: An Anonymous Usenet Post
+
+This message is anonymous.
+===================================================================
+When posting test messages, please use the appropriate test newsgroups such
+as alt.test and misc.test.
+
+The newsgroup alt.privacy.anon-server is not a test newsgroup. Please do
+not use alt.privacy.anon-server for testing purposes.
+
+To post a follow-up to a Usenet article, you must insert a "References:"
+header.
+
+Here is an example as to how to reply to a message that originally
+contained the following headers:
+
+==================================================================
+Newsgroups: soc.rights.human
+Subject: Re: Are you a witness of torture in West Africa?
+Message-ID: <6643215551.110344173@news.newssender_domain.com>
+References: <19990101182004.17714.qmail@nym.some_nymserver.com>
+==================================================================
+
+Your anonymous follow-up message should begin as follows. Note the
+required blank line between the "To:" header and the double colon.
+
+================================================================== 
+To %RMA 
+
+::
+Anon-Post-To: soc.rights.human
+
+##
+Subject: RE: Are you a witness of torture in West Africa? 
+References: 19990101182004.17714.qmail@nym.some_nymserver.com
+
+Two weeks ago, soldiers came to our village. The soldiers all had
+machine guns. Nobody in our village has any guns, since the police had
+come by our village about a year ago and took away all of our guns to
+protect us from bandits. There was nothing we could do to resist the
+soldiers. The soldiers rounded up all the men, except young children and
+the very old. Then the soldiers lead the men away from the village.
+About half an hour later, we heard many shots in the distance. When we
+went looking for our people, all men were dead. The soldiers had left.
+The next day, they went to another village in the [. . .]
+==================================================================
+				*****
+

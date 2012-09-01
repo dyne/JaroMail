@@ -1,0 +1,1136 @@
+.TH MIXMASTER 1 "Mixmaster Version 3.0"
+.\" $Id: mixmaster.1 974 2008-03-03 17:40:11Z rabbi $
+.SH NAME
+mixmaster \- anonymous remailer software
+.SH SYNOPSIS
+.B mixmaster
+[\fB\-hpmdSvT\fR]
+[\fB\-t \fIuser@host\fR]
+[\fB\-g \fInewsgroup\fR]
+[\fB\-s \fIsubject\fR]
+[\fB\-a \fIfilename\fR]
+[\fB\-l \fImix1,mix2,mix3,...\fR]
+[\fB\-c \fInum\fR]
+[\fIuser@host\fR]
+[\fIfilename\fR]
+.PP
+.B mixmaster
+[\fB\-f\fR[\fBrfg\fR] \fIfilename\fR]
+.PP
+.B mixmaster \fR[\fB\-RGKSP\fR]
+.SH DESCRIPTION
+Mixmaster is an anonymous remailer. Remailers provide protection
+against traffic analysis and allow sending mail anonymously or
+pseudonymously.
+.PP
+In the non-interactive mode, Mixmaster reads a message from its
+standard input or from a file.  Destination address and input file can
+be specified in the command line.  If no address is given in the
+command line, the input file is expected to contain a message complete
+with mail headers.
+.SH OPTIONS
+.TP
+.B "\-h, \-\-help"
+Print a summary of command line options.
+.TP
+.B "\-V, \-\-version"
+Print version information.
+.TP
+.B "\-\-about"
+Print authorship and copyright information.
+.TP
+.B "\-\-config=\fIfilename"
+Read configuration from an alternate file.
+.TP
+.B "\-t, \-\-to=\fIuser@host"
+Add the destination address(es) to the message header. The input file
+contains the message body without headers.
+.TP
+.B "\-g, \-\-post-to=\fInewsgroup"
+Add the newsgroup(s) to the message header. The input file
+contains the message body without headers.
+.TP
+.B
+\-p, \-\-post
+Post the message to Usenet.
+.TP
+.B
+\-m, \-\-mail
+Send the message as electronic mail. (This is the default.)
+.TP
+.B "\-s, \-\-subject=\fIsubject"
+Add the
+.I subject
+to the message header.
+.TP
+.B "\-\-header=\fI'Header: text'
+Add the header line to the message header.
+.TP
+.B "\-a, \-\-attachment=\fIfilename"
+Attach
+.I file
+to the message.
+.TP
+.B \-\-encrypt
+Encrypt the message using the OpenPGP format.
+.TP
+.B \-\-sign
+Sign the message using the OpenPGP format.
+.TP
+.B "\-l, \-\-chain=\fImix1,mix2,mix3,..."
+Use this remailer chain to send the message. Alternatively, the input
+message may contain a pseudo-header
+.BR Chain: .
+If no chain is specified, Mixmaster will use a chain of four random
+remailers.
+.TP
+.B "\-T, \-\-type\-list"
+Display the contents of the
+.BR type2.list
+file.
+.TP
+.B "\-c, \-\-copies=\fInum"
+Send
+.I num
+copies of the message to increase reliability.
+.TP
+.B \-d, \-\-dummy
+Generate a dummy message as protection against traffic analysis.
+.TP
+.B \-S, \-\-send
+Send the message(s) from the pool.
+.TP
+.B \-v, \-\-verbose
+Output informational messages.
+.TP
+.B "\-f\fR [\fIfile\fR]"
+Read a mail folder or news article. This function requires ncurses support.
+.TP
+.B "\-fr\fR [\fIfile\fR]"
+Reply to a message.
+.TP
+.B "\-ff\fR [\fIfile\fR]"
+Post a follow-up to a message.
+.TP
+.B "\-fg\fR [\fIfile\fR]"
+Send a group reply to a message.
+.TP
+.B "\-\-update-pinger-list"
+Download an updated all pingers list file.
+.TP
+.B "\-\-update-stats\fI[=source\fR]"
+Download updated stats.
+.SS Remailer options:
+.TP
+.B "\-\-config=\fIfilename"
+Read configuration from an alternate file.
+.TP
+.B \-R, \-\-read\-mail
+Read a remailer message from standard input and store it in the pool.
+.TP
+.B \-I, \-\-store\-mail
+Read a remailer message from standard input and store it in the pool
+without decrypting it immediately. It will be processed the next time
+Mixmaster processes the queue (called with \fP-M\fP or in daemon mode).
+.TP
+.B \-P, \-\-pop-mail
+Read mail from the POP3 servers listed in
+.BR pop3.cfg .
+.TP
+.B \-M, \-\-remailer
+Check if it is time to perform the regular remailer actions:
+Send messages from the pool, get mail from POP3 servers and keep the
+internal files up\-to\-date.
+.TP
+.B \-D, \-\-daemon
+Detach from the console and process the pool, get mail and update the
+internal files at regular intervals.
+.TP
+.B \-\-no-detach
+Run as daemon but do not detach from the terminal (This option is
+only useful together with \fB--daemon\fP).
+.TP
+.B -G, \-\-generate\-key
+Generate a new remailer key.
+.TP
+.B \-K, \-\-update\-keys
+Generate remailer keys if necessary.
+.TP
+.B \-S, \-\-send
+Force sending the message(s) from the pool.
+.TP
+.B \-\-install\-svc
+Install the Mixmaster Service on Win32.
+.TP
+.B \-\-remove\-svc
+Remove the Mixmaster Service on Win32.
+.TP
+.B \-\-run\-svc
+Run the Mixmaster Service on Win32.
+.TP
+.B \-\-redirect
+Read a Mixmaster packet from stdin and route it through a chain given with
+.B \-\-no\-ask\-passphrase
+Do not ask for the remailer passphrase even if we don't have it compiled in,
+don't have it in the config file, don't have it in the environment and we are
+on a tty.
+\fB\-\-chain\fP.
+Note that this may corrupt the packet if there is not enough space in the
+headers (that is, if there are more than 20 hops total).  This function is
+not normally needed but may come in handy in certain cases.
+.SH CONFIGURATION
+Mixmaster reads its configuration from the file
+.B mix.cfg
+in its working directory.  The configuration file consists of lines of
+the type
+.PP
+.I VARIABLE       values
+.PP
+and of comments, which begin with a
+.B #
+character.  The variables have reasonable default values, but it is
+useful to create a configuration file using the
+.B Install
+script when setting up a remailer.
+.PP
+All configuration variables can be overridden from the command line,
+e.g.
+.B mixmaster -S --POOLSIZE=0 --RATE=100
+will send all messages currently in the message pool.
+.SS Client configuration:
+.TP
+.B ADDRESS
+Your address for sending non-anonymous messages.
+.TP
+.B NAME
+Your real name (used for sending non-anonymous messages).
+.TP
+.B MAILtoNEWS
+Address of a mail-to-news gateway. Default:
+.BR mail2news@nym.alias.net .
+.TP
+.B CHAIN
+Default chain for anonymous messages to be sent.
+.B CHAIN
+is a comma-separated list of remailer names or addresses.
+A
+.B *
+represents a random reliable remailer. Default:
+.BR *,*,*,* .
+.TP
+.B NUMCOPIES
+Number of redundant copies of an anonymous message to be
+sent, unless specified otherwise on the command line.
+Default:
+.BR 1 .
+.TP
+.B DISTANCE
+When selecting random remailers, the chain will contain
+.I DISTANCE
+other remailers between two occurrences of the
+same remailer in the chain. Default:
+.BR 2 .
+.TP
+.B MINREL
+Only select remailers with a reliability of at least
+.IR MINREL %.
+Default:
+.BR 98 .
+.TP
+.B RELFINAL
+Only select a remailer with a reliability of at least
+.IR RELFINAL %
+as the final remailer. Default:
+.BR 99 .
+.TP
+.B MAXLAT
+Only select remailers with a latency of at most
+.IR MAXLAT .
+Default:
+.BR 36h .
+.TP
+.B MINLAT
+Only select remailers with a latency of at least
+.IR MINLAT .
+Default:
+.BR 5m .
+.TP
+.B PGPPUBRING
+Path to your public PGP key ring. Default:
+.BR ~/.pgp/pubring.pkr .
+(Windows default: PGP registry value.)
+.TP
+.B PGPSECRING
+Path to your secret PGP key ring. Default:
+.BR ~/.pgp/secring.skr .
+(Windows default: PGP registry value.)
+.TP
+.B CLIENTAUTOFLUSH
+If 
+.B REMAIL
+is set to
+.BR n
+automatically flush the pool every time Mixmaster is run. Default:
+.BR n .
+.TP
+.B SENDMAIL
+Path to the
+.BR sendmail (1)
+program. If set to
+.BR outfile ,
+Mixmaster will create text files named
+.BI out * .txt
+in the
+.B pool
+directory instead of sending mail.
+Default:
+.BR "/usr/lib/sendmail -t" .
+.TP
+.B SMTPRELAY
+Name of SMTP relay. If set, mail will be delivered to the relay
+rather than by
+.BR sendmail (1).
+.TP
+.B HELONAME
+Host name used in the SMTP dialogue.
+Default: The
+.I ENVFROM
+host name or the current network name associated with the socket.
+.TP
+.B SMTPUSERNAME
+Some mail servers require authentication for sending mail. This is
+the authenticated SMTP user name.
+.B SMTPPASSWORD
+Password for authenticated SMTP.
+.TP
+.B ENVFROM
+Envelope from address used in the SMTP dialogue. (When the client is
+used to send non-anonymous messages,
+.I ADDRESSS
+is used instead.)
+Default:
+.IR ANONADDR .
+.TP
+.B ALLPINGERSURL
+URL from which to download the 
+.IR ALLPINGERSFILE .
+Default:
+.BR http://www.noreply.org/allpingers/allpingers.txt .
+.TP
+.B WGET
+Define the http protocol download tool. Default:
+.BR wget .
+.SS Remailer configuration:
+.TP
+.B NEWS
+Path to the news posting program, or address of a
+mail-to-news gateway. Default: no news posting.
+(When using a news posting program,
+.I ORGANIZATION
+contains
+an Organization line for anonymous messages. Default:
+.BR "Anonymous Posting Service" .)
+.TP
+.B SENDANONMAIL
+Path to a program for sending anonymous mail. Default:
+.IR SENDMAIL .
+.B SENDANONMAIL
+can be used to invoke an external mail filter for anonymized messages.
+.TP
+.B SHORTNAME
+A short name for the remailer to be used in lists. Defaults to the host name.
+.TP
+.B REMAILERADDR
+The remailer mail address.
+.TP
+.B ANONADDR
+An address to be inserted in the
+.B From:
+line of anonymous messages. Default:
+.IR REMAILERADDR .
+.TP
+.B REMAILERNAME
+A name to be inserted in the
+.B From:
+line of remailer status
+messages. Default:
+.BR "Anonymous Remailer" .
+.TP
+.B ANONNAME
+A name to be inserted in the
+.B From:
+line of anonymous messages.
+Default:
+.BR "Anonymous" .
+.TP
+.B COMPLAINTS
+An address for complaints to be sent to. Default:
+.IR REMAILERADDR .
+.TP
+.B ERRLOG
+Name of a file to log error messages, or
+.B stdout
+or
+.BR stderr .
+Default:
+.BR stderr .
+(When run from a tty, Mixmaster will always print a copy of error
+messages to
+.BR stderr .)
+.TP
+.B MAILBOX
+A generic mail folder for non-remailer messages that are not stored in
+any of the following folders.
+If
+.B MAILBOX
+begins with a
+.BR | ,
+it specifies the path to a program. If it contains an
+.B @
+sign, the message is forwarded to the given address (with an
+.B X-Loop:
+header to prevent mail loops). If it ends with a
+.B /
+it is treated as a Maildir, otherwise the message is appended
+to the given file name or written to standard output if
+.B MAILBOX
+is
+.BR stdout .
+Default:
+.BR mbox .
+.TP
+.B MAILABUSE
+Mail folder for messages sent to the
+.I COMPLAINTS
+address.
+Default:
+.IR MAILBOX .
+.TP
+.B MAILBLOCK
+Mail folder for messages sent to the remailer address with a
+.B DESTINATION-BLOCK
+line.
+Default:
+.IR MAILBOX .
+.TP
+.B MAILUSAGE
+Mail folder for messages sent to the remailer address that do not
+contain any valid remailer commands. Default:
+.BR /dev/null .
+.TP
+.B MAILANON
+Mail folder for replies sent to the
+.I ANONADDR
+address.
+Default:
+.BR /dev/null .
+.TP
+.B MAILERROR
+Mail folder for messages that cannot be decrypted or contain other
+errors. Default:
+.BR /dev/null .
+.TP
+.B MAILBOUNCE
+Mail folder for bounce messages. Default:
+.IR MAILBOX .
+.TP
+.B MAILIN
+If defined an additional mail folder where Mixmaster should read messages from
+when processing its pool. If it ends with a
+.B /
+it is treated as a Maildir, otherwise a standard mbox format file
+is expected. All messages are removed from the folder after reading.
+.B MAILIN
+is not set by default.
+It is an incredibly bad idea to set this the same as \fBMAILBOX\fP.
+.TP
+.B VERBOSE
+If
+.B VERBOSE
+is set to
+.BR 0 ,
+Mixmaster will log error
+messages only. If it is set to
+.BR 1 ,
+error messages and warnings are logged. If
+.B VERBOSE
+is set to
+.BR 2 ,
+successful operation is logged as well.
+If set to
+.BR 3 ,
+a log file entry is created whenever a message
+enters or leaves the pool.  Default:
+.BR 2 .
+.TP
+.B PASSPHRASE
+A passphrase used to protect the remailer secret keys from
+casual attackers. This setting overrides the compile-time
+defined
+.B COMPILEDPASS
+which is now deprecated.
+This should
+.I not
+be the same as the client passphrase.
+.TP
+.B EXTFLAGS
+Additional flags you want to set in the remailer's capabilities string.
+Defaults to the empty string, which means none.  Example:
+.BR testing .
+.TP
+.B PRECEDENCE
+Sets the header Precedence: to this value for all outgoing mail.
+Defaults to the empty string, which means no such header is added.
+Example: 
+.BR anon .
+If you use this you might want to block user supplied precedence
+headers in your header block file.
+.PP
+The following variables can be set to
+.B y
+or
+.BR n :
+.TP
+.B REMAIL
+Enable remailer functionality. Default:
+.BR n .
+.TP
+.B MIDDLEMAN
+Act as an intermediate hop only, forward anonymized
+messages to another remailer. This mode can be used
+where complaints about anonymous messages must be
+avoided. (The variable
+.B FORWARDTO
+specifies the remailer
+chain to be used; default:
+.BR * .)
+Default:
+.BR n .
+.TP
+.B AUTOREPLY
+Send help files in response to non-remailer messages. Explicit
+.B remailer-help
+requests are always served.
+Default:
+.BR n .
+.TP
+.B MIX
+Accept Mixmaster messages. Default:
+.BR y .
+.TP
+.B PGP
+Accept OpenPGP-encrypted Cypherpunk remailer messages.
+Default:
+.BR n .
+.TP
+.B UNENCRYPTED
+Accept unencrypted Cypherpunk remailer messages.
+Default:
+.BR n .
+.TP
+.B REMIX
+Re-encrypt Type I messages to other remailers in the Mixmaster format
+.RB ( x
+= only when requested by user explicitly).
+Default:
+.BR y .
+.TP
+.B BINFILTER
+Filter out binary attachments. Default:
+.BR n .
+.TP
+.B LISTSUPPORTED
+List known remailers and their keys in remailer-conf reply. Default:
+.BR y .
+.TP
+.B MID
+Use a hash of the message body as Message-ID, to avoid
+Usenet spam. Default:
+.BR y .
+If
+.B MID
+is set to a string
+beginning with
+.BR @ ,
+that string is used as the domain part of the message ID.
+.TP
+.B AUTOBLOCK
+Allow users to add their address to the
+.B dest.blk
+file by sending the remailer a message containing the line
+.BR destination-block .
+Default:
+.BR y .
+.TP
+.B STATSDETAILS
+List statistics on intermediate vs. final delivery in remailer-stats.
+Default:
+.BR y .
+.PP
+The following variables have numeric values:
+.TP
+.B POOLSIZE
+The size of the Mixmaster reordering pool. Larger sizes
+imply higher security and longer delays. Remailer default:
+.BR 45 .
+Client default:
+.BR 0 .
+.TP
+.B RATE
+Percentage of messages from the pool to be sent. Remailer default:
+.BR 65 .
+Client default:
+.BR 100 .
+Lower values cause the pool to increase in size when
+many messages are received at a time, reducing the effect
+of flooding attacks.
+.TP
+.B INDUMMYP
+Probability that Mixmaster will generate dummy messages upon
+receipt of incoming mail. Larger numbers mean more dummy
+messages on average. For instance,
+.B 10
+means that on average one in nine incoming messages will trigger
+a dummy generation, and
+.B 20
+means that one in four will.
+.B 0
+means no dummy messages. Remailer default:
+.BR 10 .
+Client default:
+.BR 3 .
+.TP
+.B OUTDUMMYP
+Probability that Mixmaster will generate dummy messages at
+.B SENDPOOL
+time. If the pool is processed frequently, this should be a lower value
+than if there are long intervals between pool processing. Examples:
+.B 50
+means on average, one dummy message will be generated per pool
+processing.
+.B 80
+means four will be generated.
+.B 0
+means no dummy messages. Remailer default:
+.BR 90 .
+Client default:
+.BR 3 .
+.TP
+.B SIZELIMIT
+Maximum size for anonymous messages in kB.
+.B 0
+means no limit.
+Default:
+.BR 0 .
+.TP
+.B POP3SIZELIMIT
+Maximum size for incoming messages in kB when using POP3.
+.B 0
+means no limit.
+Default:
+.BR 0 .
+Larger messages are deleted unread if
+.B POP3DEL
+is set to
+.BR y ,
+and left on the server otherwise.
+.TP
+.B INFLATEMAX
+Maximum size for
+.B Inflate:
+padding in kB.
+.B 0
+means padding is not allowed.
+Default:
+.B 50
+.BR kB .
+.TP
+.B MAXRANDHOPS
+Maximum chain length for message forwarding requested by
+.B Rand-Hop
+directives.
+Default:
+.BR 4 .
+.TP
+.B MAXRECIPIENTS
+limits the number of allowed recipients in outgoing mail.  Anything that exceeds this
+number is dropped silently.  Default:
+.BR 5 .
+.TP
+.B TEMP_FAIL
+exit with this exit code when a timeskew problem is suspected.  Also see
+.BR TIMESKEW_BACK
+and
+.BR TIMESKEW_FORWARD .
+The default of
+.B 75
+should cause your MTA to requeue the message if you are running
+mixmaster from a
+.BR .forward
+file.
+.TP
+.B STATSAUTOUPDATE
+Set non-zero to enable Daemon stats download mode. Default: 
+.BR 0 .
+.PP
+The following are time variables. They can be given as years (
+.BR y
+), months (
+.BR b
+), days (
+.BR d
+), hours (
+.BR h
+), minutes (
+.BR m
+), or seconds (
+.BR s
+).
+.TP
+.B SENDPOOLTIME
+How often Mixmaster should check the pool for messages
+to be sent. Remailer default:
+.BR 15m .
+Client default:
+.BR 0h .
+.TP
+.B POP3TIME
+How often Mixmaster should check the POP3 accounts
+listed in
+.B pop3.cfg
+for new mail.
+Default:
+.BR 1h .
+.TP
+.B MAILINTIME
+How often Mixmaster should read mail from
+.BR MAILIN
+and process mails fetched via POP3. Processing here means to
+answer remailer-xxx requests and decrypt messages to the Mixmaster
+and place them in the pool. No other processing of the pool is
+done. This action is always performed sending out messages from the pool (at
+.BR SENDPOOLTIME
+intervals) or receiving mail via POP3 (at
+.BR POP3TIME
+intervals). Default:
+.BR 5m .
+.TP
+.B PACKETEXP
+How long to store parts of incomplete multipart messages and other
+temporary pool files.
+Default:
+.BR 7d .
+.TP
+.B IDEXP
+Mixmaster keeps a log of packet IDs to prevent replay
+attacks.
+.B IDEXP
+specifies after which period of time old
+IDs are expired. Default:
+.BR 7d ,
+minimum:
+.BR 5d .
+If set to
+.BR 0 ,
+no log is kept.
+.TP
+.B KEYLIFETIME
+Mixmaster sets an expiration date on its remailer keys 
+.B KEYLIFETIME
+after the key creation date. Default:
+.BR 13b .
+.TP
+.B KEYGRACEPERIOD
+Mixmaster will continue to decrypt messages encrypted to an expired key 
+for
+.B KEYGRACEPERIOD 
+period of time after the expiration. This is done to ensure that messages
+already injected into the network are allowed to exit. Do not change this
+value unless you know what you are doing, or you will risk partitioning
+attacks. Default:
+.BR 7d . 
+.TP
+.B KEYOVERLAPPERIOD
+Mixmaster will generate and advertise a new key 
+.BR KEYOVERLAPPERIOD
+period of time before the expiration of the key. Clients should always use 
+the most recently created valid key. Clients that deviate from this 
+recommended behavior risk partitioning attacks. Default:
+.BR 7d .
+.TP
+.B TIMESKEW_BACK
+Allow going back up to
+.BR TIMESKEW_BACK
+in time.  If the time moved further back mixmaster will assume
+there is a problem with your clock and refuse to start as a remailer.
+This is done by comparing the latest timestamp in 
+.BR time.log
+with the current timestamp.  If set to
+.BR 0
+then this test is skipped.  If the system time is indeed correct, simply
+remove
+.BR time.log .
+Default: 
+.BR 12h .
+.TP
+.B TIMESKEW_FORWARD
+Similar to
+.BR TIMESKEW_BACK
+but allow jumping this far into the future.
+Default: 
+.BR 2w .
+.TP
+.B STATSINTERVAL
+Time interval between daemon downloads of stats files. Enabled by
+.BR STATSAUTOUPDATE .
+Default: 
+.BR 2h .
+.PP
+The following strings must be specified at compile-time in
+.BR config.h .
+It is not usually necessary to modify any of these:
+.TP
+.B
+DISCLAIMER
+A default string to be inserted in the header of all anonymous
+messages if no
+.B disclaim.txt
+file is available. If
+.B DISCLAIMER
+contains the substring
+.BR "%s" ,
+it will be substituted with the
+.I COMPLAINTS
+address.
+.TP
+.B FROMDISCLAIMER
+A default string to be inserted at the top of the message body
+if an anonymous message contains a user-supplied
+.B From:
+line and no
+.B fromdscl.txt
+file is available.
+.TP
+.B MSGFOOTER
+A default string to be inserted at the bottom of the message body
+of all anonymous messages if no
+.B footer.txt
+file is available.
+.TP
+.B BINDISCLAIMER
+A string to replace the body of a binary attachment when
+the remailer is configured to filter out binaries.
+.TP
+.B CHARSET
+The character set used for MIME-encoded header lines.
+.TP
+.B DESTBLOCK
+A quoted list of files that contain blocked addresses.
+Files must be separated by one space. Mixmaster will choose
+the first file for writing if
+.B AUTOBLOCK
+is enabled.
+.PP
+The following variables can be set in the
+.B Makefile
+or in
+.BR config.h :
+.TP
+.B COMPILEDPASS
+A passphrase used to protect the remailer secret keys from
+casual attackers. You can use
+.B `make PASS="\fIyour passphrase\fB"'
+to set a passphrase. This should
+.I not
+be the same as the client passphrase. This option is now deprecated in
+favor of the configuration file option
+.BR PASSPHRASE .
+.TP
+.B SPOOL
+Set
+.B SPOOL
+if you want to use a default directory other than
+.B ~/Mix
+or if Mixmaster is run in an environment where
+.B $HOME
+is not set, e.g. when invoked via
+.BR .forward .
+This value can be overridden by use of the environment variable
+.BR $MIXPATH .
+.TP
+.B USE_SSLEAY
+Use the SSLeay/OpenSSL cryptographic library. Currently this is the
+only cryptographic library supported by Mixmaster.
+.TP
+.B USE_IDEA
+Use the IDEA encryption algorithm. A license is required to use IDEA
+for commercial purposes. See file
+.B idea.txt
+for details.
+.TP
+.B USE_PGP
+Support the OpenPGP encryption format. Mixmaster does not call any
+external encryption program.
+.TP
+.B USE_PCRE
+Use the regular expression library.
+.TP
+.B USE_ZLIB
+Use the
+.B zlib
+compression library.
+.TP
+.B USE_NCURSES
+Use the
+.B ncurses
+library.
+.TP
+.B USE_SOCK
+Use sockets to transfer mail by POP3 and SMTP.
+.TP
+.B USE_WINGUI
+Use the
+.B Win32
+GUI.
+.TP
+.B HAVE_GETDOMAINNAME
+The
+.BR getdomainname (2)
+function is available.
+.SH FILES
+These filenames can be overridden by setting the corresponding configuration
+option (given in parentheses).
+.TP
+.B mix.cfg
+Mixmaster configuration file.
+.TP
+.B pubring.asc
+Type 1 remailer keys (\fBPGPREMPUBASC\fP).
+.TP
+.B pubring.mix
+Type 2 remailer keys (\fBPUBRING\fP).
+.TP
+.B rlist.txt
+List of reliable type 1 remailers (\fBTYPE1LIST\fP).
+.TP
+.B mlist.txt
+List of reliable type 2 remailers (\fBTYPE2REL\fP).
+.TP
+.B type2.list
+List of known type 2 remailers (optional) (\fBTYPE2LIST\fP).
+.TP
+.B starex.txt
+List of remailers which should not be used in randomly generated
+remailer chains (\fBSTAREX\fP).
+.SS Remailer files:
+.TP
+.B disclaim.txt
+A string to be inserted in the header of all anonymous
+messages (\fBDISCLAIMFILE\fP).
+.TP
+.B fromdscl.txt
+A string to be inserted at the top of the message body
+if an anonymous message contains a user-supplied
+.B From:
+line (\fBFROMDSCLFILE\fP).
+.TP
+.TP
+.B footer.txt
+A string to be inserted at the bottom of the message body
+of all anonymous messages (\fBMSGFOOTERFILE\fP).
+.TP
+.B help.txt
+Help file sent in response to
+.B remailer-help
+requests (\fBHELPFILE\fP).
+.TP
+.B adminkey.txt
+The PGP key of the remailer operator sent in response to
+.B remailer-adminkey
+requests (\fBADMKEYFILE\fP).
+.TP
+.B abuse.txt
+File sent in response to mail to the
+.I COMPLAINTS
+address if
+.B AUTOREPLY
+is set (\fBABUSEFILE\fP).
+.TP
+.B reply.txt
+Help file sent in response to replies to anonymous messages if
+.B AUTOREPLY
+is set (\fBREPLYFILE\fP).
+.TP
+.B usage.txt
+Help file sent in response to non-remailer message sent to
+.I REMAILERADDR
+if
+.B AUTOREPLY
+is set. If
+.B usage.log
+exists, recipients are logged and a reply is sent only once to avoid
+mail loops (\fBUSAGEFILE\fP).
+.TP
+.B blocked.txt
+Information sent in response to automatically processed blocking requests if
+.B AUTOREPLY
+is set (\fBBLOCKFILE\fP).
+.TP
+.B pop3.cfg
+List of POP3 accounts with lines of the form
+.I account@host.domain password
+to get remailer messages from. The lines may optionally contain the
+keyword "apop" or "pass" to select an authentication method (\fBPOP3CONF\fP).
+.TP
+.B dest.alw
+List of addresses to which Mixmaster will deliver, even in middleman mode (\fBDESTALLOW\fP).
+.TP
+.B dest.alw.nonpublished
+Similar to
+.BR dest.alw ,
+with the only difference that this list is not published in remailer-conf replies (\fBDESTALLOW2\fP).
+.TP
+.B dest.blk
+List of blocked destination addresses.
+Mixmaster does not send mail to the blocked addresses listed in this file (\fBDESTBLOCK\fP).
+.TP
+.B rab.blk
+Identical to
+.BR dest.blk ,
+except Mixmaster will not write to this file.
+For use with external remailer abuse blocklists.
+.TP
+.B source.blk
+List of blocked source addresses.  If an incoming message originates
+from an address or IP in this list, it will be ignored. This
+feature can be used to avoid spam and other abusive mail (\fBSOURCEBLOCK\fP).
+.TP
+.B header.blk
+List of unwanted header fields. The file is used to delete unwanted
+header lines (e.g. lines that indicate a false identity, or Usenet
+control messages), and do other header filtering (\fBHDRFILTER\fP).
+
+A destination address or header line is left out if it contains a
+search string or matches a regular expression specified in the block
+file. Lines in the block file that begin and end with a slash
+.RB ( /\fIregexp\fB/ )
+are interpreted as regular expressions. Lines without
+slashes are used for case-independent substring search.
+
+If a message contains a header line that matches a
+.B /\fIregexp\fB/q
+entry in
+.BR header.blk ,
+the entire message is deleted.
+
+In addition, regular expressions can be substituted. Back-references
+are supported. For example
+
+ /^From: *([^@]*) <.*>/From: $1/
+ /^From:.* \\(([^@]*)\)/From: $1/
+ /^From: *([^@]*).*$/From: $1 <\fInobody@remailer.domain\fR>/
+
+would allow user-defined names in the
+.B From:
+line, while replacing any given address with the remailer address.
+.TP
+.B allpingers.txt
+Information on all known pingers (\fBALLPINGERSFILE\fP).
+.SS
+Mixmaster uses the following files internally:
+.TP
+.B mixrand.bin
+Random seed file (\fBMIXRAND\fP).
+.TP
+.B secring.pgp
+Remailer type 1 secret keys (\fBPGPREMSECRING\fP).
+.TP
+.B secring.mix
+Remailer type 2 secret keys (\fBSECRING\fP).
+.TP
+.B pgpkey.txt
+The public type 1 remailer key (\fBPGPKEY\fP).
+.TP
+.B key.txt
+The public type 2 remailer key (\fBKEYFILE\fP).
+.TP
+.B id.log
+Log file of messages already processed (\fBIDLOG\fP).
+.TP
+.B stats.log
+Log file for remailer statistics (\fBSTATS\fP).
+.TP
+.B stats-src.txt
+File for name of most recent statistics source (\fBSTATSSRC\fP).
+.TP
+.B pgpmaxcount.log
+Log file for PGP Max-Count statistics (\fBPGPMAXCOUNT\fP).
+.TP
+.B time.log
+Time for periodic remailer actions (\fBREGULAR\fP).
+.TP
+.B dhparam.mix
+Public Diffie-Hellman parameters used for El-Gamal key generation (\fBDHPARAMS\fP).
+.TP
+.B dsaparam.mix
+Public DSA parameters used for DSA key generation (\fBDSAPARAMS\fP).
+.TP
+.B mixmaster.pid
+Pid file in daemon mode (\fBPIDFILE\fP).
+.TP
+.BI pool/
+Message pool directory (\fBPOOL\fP).
+.TP
+.BI pool/m *
+Message pool files.
+.TP
+.BI pool/p *
+Partial messages.
+.TP
+.BI pool/l *
+Latent messages.
+.TP
+.BI pool/s *
+Messages to be sent.
+.TP
+.BI pool/t *
+Temporary files.
+.SH ENVIRONMENT
+.TP
+.I MIXPATH
+The path to the Mixmaster directory. The default is
+.BR ~/Mix .
+.TP
+.I MIXPASS
+The passphrase used to protect your nyms and PGP keys.
+(The remailer uses a different passphrase.) If
+.I MIXPASS
+is not set, the client will ask for a passphrase.
+.SH SEE ALSO
+.BR mpgp (1),
+.BR pgp (1),
+.BR procmail (1),
+.BR sendmail (8).
+.SH HISTORY
+Mixmaster is an implementation of a Chaumian mix-net system.
+Versions 1.0 through 2.0.3 of the 
+.BR mixmaster
+remailer were originally written by Lance Cottrell. Mixmaster was first 
+released in 1995. Ulf Moeller collaborated on version 2.0.4, and began an 
+entire rewrite of
+.BR mixmaster
+in 1999. This rewrite was released in 2002 as version 2.9.0, with major 
+contributions from Janis Jagars, Peter Palfrader, and Len Sassaman.
+Mixmaster 3.0 is based on the 2.9 codebase. Peter Palfrader and Len 
+Sassaman were the principal maintainers until 2006. Since then, Steve 
+Crook, Len Sassaman, and Colin Tuckley have filled the role of 
+principal maintaners. For more information on contributing authors, 
+please see the file THANKS for details.
+.SH COPYRIGHT
+Copyright 1999 - 2008 Anonymizer Inc., The Mixmaster Development Team, 
+and others.
+
+Mixmaster may be redistributed and modified under certain conditions.
+This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF
+ANY KIND, either express or implied. See the file COPYRIGHT for
+details.

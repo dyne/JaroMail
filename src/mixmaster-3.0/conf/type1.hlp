@@ -1,0 +1,100 @@
+This remailer will permit you to remail messages without using the
+Mixmaster client software or PGP. This mode of operation is known to be
+insecure and should generally be used for testing purposes only. The
+operator of this remailer, all system administrators of the many
+machines through which your email will pass on the way to its
+destination, and any 15-year-old-hacker that may have broken into any of
+the many machines through which your email will pass may be able to
+determine that you are the original sender of the email.
+
+However, you may find this insecure mode useful for testing and
+debugging purposes or to just send a quick email without exposing your
+real email address to spam harvesters gathering email addresses from
+mailing lists. To use the insecure mode, send mail to <%RMA>. Place a
+blank line into the first line, two colons in the second line of your
+message, and the line "Anon-To: address" in the third line of your
+message. Follow that with another blank line and begin your message. For
+example:
+
+==================================================================
+From: remailer_user@sender_domain.com
+To: %RMA Subject: anonymous message
+
+::
+Anon-To:  final_recipient@destination_domain.com 
+
+Dear Domestic Violence List Members,
+My husband has physically abused me for most of the 18 years of our marriage.
+I can't tell you how many times I had to come up with excuses as to why I had
+those bruises or that black eye.  I stayed in the marriage for the sake of
+our daughter.
+But recently, my husband has started to touch our 14-year-old daughter.
+I don't know what to do. I am afraid my husband will kill me if I say
+something. I am even more afraid for my daughter. I have no money; my
+husband controls all the bank accounts. What can I do?
+
+Please help,
+-- Desperate.
+==================================================================
+
+The remailer will remove all header lines, and forward the message to
+the destination.  The following e-mail would be delivered to 
+<final_recipient@destination_domain.com >:
+
+==================================================================
+From: %RMN <%RAA>
+Comments: This message did not originate from the Sender
+address above.  It was remailed automatically by anonymizing remailer
+software.  Please report problems or inappropriate use to the remailer
+administrator at <%CA>.
+To:  final_recipient@destination_domain.com 
+
+Dear Domestic Violence List Members,
+My husband has physically abused me for most of the 18 years of our
+marriage.
+I can't tell you how many times I had to come up with excuses as to why
+I had those bruises or that black eye.  I stayed in the marriage for
+the sake of our daughter.
+But recently, my husband has started to touch our 14-year-old daughter.
+I don't know what to do. I am afraid my husband will kill me if I say
+something. I am even more afraid for my daughter. I have no money; my
+husband controls all the bank accounts. What can I do?
+
+Please help,
+-- Desperate.
+==================================================================
+
+You frequently will wish to include a Subject or other header lines in
+your remailed email. You can insert header lines in the remailed message
+by preceding them with a "##" line:
+
+==================================================================
+From: remailer_user@sender_domain.com
+To: %RMA
+
+::
+Anon-To:  final_recipient@destination_domain.com 
+
+##
+Subject: Re: Remailer Test Message 
+In-Reply-To: Your message of "Tue, 12 Jan 1999 22:47:04 EST." 
+<199901130247.WAA02761@destiation_domain.com>
+
+Dear Desperate,
+Just like you, I was stuck in an abusive marriage for
+many years. I don't need to tell you what you already know: if not for
+your sake, for the sake of your daughter, you need to get away from your
+husband immediately. At the moment, you may think your husband has all
+the power and that you are powerless. You are not powerless. Contact the
+National Center against Domestic Violence today and ask about the
+address and phone number of a women's shelter near where you live. The
+people there will show you how you can free yourself from the yoke of
+brutality and protect your daughter from the worst.
+
+Please post another anonymous email to this list if you are having any
+difficulties in locating a women's shelter.
+
+-- Broken Free
+==================================================================
+				****
+

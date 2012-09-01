@@ -1,0 +1,134 @@
+Copyright (c) 1999-2000 Anonymizer Inc.
+Copyright (c) 2000-2002 Ulf Moeller
+Copyright (c) 2001-2002 Janis Jagars
+Copyright (c) 2001-2007 Peter Palfrader
+Copyright (c) 2001-2008 Len Sassaman
+Copyright (c) 2004-2008 Colin Tuckley
+Copyright (c) 2007-2008 Steve Crook
+
+
+MIXMASTER LICENSE AGREEMENT
+
+1. Grant of License.
+
+ Anonymizer Inc. grants you the following non-exclusive license for
+ the Mixmaster program and its associated documentation (the "Program"),
+ subject to all of the following terms and conditions:
+
+ a) You may use the Program, and copy and distribute verbatim copies
+ of the Program as you receive it, in any medium.
+
+ Local regulations may exist which limit your rights to distribute or
+ use cryptographic software. In certain jurisdictions, parts of this
+ software may be protected by patents. It is your responsibility to
+ obtain the appropriate licenses.
+
+ b) You may modify the Program or incorporate the Program or any
+ portion of it into other computer programs. You may copy and
+ distribute such modifications or work, provided that you:
+
+       (i) cause the modified Program to carry a prominent notice
+       stating that it has been modified, and cause the modified files
+       to carry notices stating that you changed the files and the
+       date of any change;
+
+       (ii) reproduce and include this Agreement, the copyright
+       notices and disclaimer of warranty on any copy; and
+
+       (iii) provide Anonymizer Inc. with a copy of the Source Code of
+       such modifications or work via electronic mail to the address
+       mixmaster@anonymizer.com, and grant Anonymizer Inc. a perpetual,
+       royalty-free license to use and distribute the modifications or
+       work in its products.
+
+       "Source Code" means the preferred form of a work for making
+       modifications to it, including all modules it contains, plus
+       any associated interface definition files, scripts used to
+       control compilation and installation of an executable.
+
+ c) Should Anonymizer Inc. be acquired by another entity, you:
+
+       (i) will grant to the acquiring entity the items in section
+       1.b.(iii) in leiu of Anonymizer, Inc.;
+
+ d) Should Anonymizer Inc. cease to exist, and no aquiring entity be
+    available to accept Source Code modifications, you:
+
+       (i) will grant Lance Cottrell the items in section 1.b.(iii) in leiu
+       of Anonymizer, Inc.
+
+       (ii) should Mr. Cottrell be deceased, section 1.b.(iii) of this
+       license will be rendered null and void.
+
+ e) In the case that the electronic mail address mixmaster@anonymizer.com
+    ceases to accept electronic mail,
+
+       (i) submission of changes to the Mixmaster project at SourceForge
+       will be accceptable;
+
+       (ii) if Mixmaster development is no longer hosted by SourceForge,
+       submission of changes to any open source repository similar to
+       SourceForge, or
+
+       (iii) submission to the Internet news group alt.privacy.anon-server
+       will be acceptable.
+
+ f) Submission of changes is required as a "best effort". If it is not
+    possible for you to access any of the notification locations, a notation
+    in the modified code stating that the modifications should be submitted by
+    any capable parties who subsequently make use of the modified code will
+    be acceptable in lieu of code submission.
+
+2. Reservation of Rights.
+
+ No rights are granted to the Program except as expressly set forth
+ herein. You may not copy, modify, sublicense, or distribute the
+ Program except as expressly provided under this Agreement. Any
+ attempt otherwise to copy, modify, sublicense or distribute the
+ Program is void, and will automatically terminate your rights under
+ this Agreement.
+
+3. DISCLAIMER OF WARRANTY.
+
+ BECAUSE THE PROGRAM IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
+ FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE LAW. THE
+ PROGRAM IS PROVIDED ON AN ``AS IS'' BASIS, WITHOUT WARRANTY OF ANY
+ KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, WITHOUT LIMITATION,
+ WARRANTIES THAT THE PROGRAM IS FREE OF DEFECTS, MERCHANTABLE, FIT FOR
+ A PARTICULAR PURPOSE OR NON-INFRINGING. THE ENTIRE RISK AS TO THE
+ QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU. SHOULD THE
+ PROGRAM PROVE DEFECTIVE IN ANY RESPECT, YOU (NOT ANONYMIZER INC. OR
+ ANY DEVELOPER OR ANY OTHER CONTRIBUTOR) ASSUME THE COST OF ANY
+ NECESSARY SERVICING, REPAIR OR CORRECTION. THIS DISCLAIMER OF
+ WARRANTY CONSTITUTES AN ESSENTIAL PART OF THIS LICENSE. NO USE OF THE
+ PROGRAM IS AUTHORIZED HEREUNDER EXCEPT UNDER THIS DISCLAIMER.
+
+4. LIMITATION OF LIABILITY.
+
+ UNDER NO CIRCUMSTANCES AND UNDER NO LEGAL THEORY, WHETHER TORT
+ (INCLUDING NEGLIGENCE), CONTRACT, OR OTHERWISE, SHALL ANONYMIZER INC.
+ OR ANY DEVELOPER OR ANY OTHER CONTRIBUTOR OR ANY SUPPLIER OF ANY OF
+ SUCH PARTIES, BE LIABLE TO YOU OR ANY OTHER PERSON FOR ANY INDIRECT,
+ SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER
+ INCLUDING, WITHOUT LIMITATION, DAMAGES FOR LOSS OF GOODWILL, WORK
+ STOPPAGE, COMPUTER FAILURE OR MALFUNCTION, OR ANY AND ALL OTHER
+ COMMERCIAL DAMAGES OR LOSSES, EVEN IF SUCH PARTY SHALL HAVE BEEN
+ INFORMED OF THE POSSIBILITY OF SUCH DAMAGES. THIS LIMITATION OF
+ LIABILITY SHALL NOT APPLY TO LIABILITY FOR DEATH OR PERSONAL INJURY
+ RESULTING FROM SUCH PARTY'S NEGLIGENCE TO THE EXTENT APPLICABLE LAW
+ PROHIBITS SUCH LIMITATION. SOME JURISDICTIONS DO NOT ALLOW THE
+ EXCLUSION OR LIMITATION OF INCIDENTAL OR CONSEQUENTIAL DAMAGES, SO
+ THAT EXCLUSION AND LIMITATION MAY NOT APPLY TO YOU.
+
+5. General.
+
+ This license represents the complete agreement concerning subject
+ matter hereof. If any provision of this Agreement is held to be
+ unenforceable, such provision shall be reformed only to the extent
+ necessary to make it enforceable. This Agreement shall be governed by
+ California law provisions (except to the extent applicable law, if
+ any, provides otherwise), excluding its conflict-of-law provisions.
+ The application of the United Nations Convention on Contracts for the
+ International Sale of Goods is expressly excluded. Any law or
+ regulation which provides that the language of a contract shall be
+ construed against the drafter shall not apply to this License.

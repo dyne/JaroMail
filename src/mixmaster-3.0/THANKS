@@ -1,0 +1,102 @@
+Mixmaster Version 3.0
+
+As I write this, Mixmaster is over a decade old. This incarnation of the
+codebase was begun almost exactly 10 years ago, and the idea conceived
+nearly half that again. Despite many changes in the social, political,
+legal, and technological landscape, Mixmaster has continuously provided
+anonymity services to those who need it throughout this time. 
+
+Many people have helped with the development of Mixmaster during its
+long history. Lance Cottrell wrote the original 1.x and 2.0.x versions. 
+Ulf Möller contributed significantly to the 2.0.x versions, and wrote
+the core code for 2.9 from scratch. I'd like to give special thanks to
+Peter Palfrader, Colin Tuckley, and Steve Crook. As the core members of
+the Mixmaster development team, without their tireless efforts, this
+project would not be sustainable.
+
+Additionally, I would like to honor the memory of a former valued member 
+of the development team, Janis Jagars, whose work made this release 
+possible, though sadly, he passed away tragically before it was 
+completed. "Disastry", you are missed.
+
+Mixmaster uses Jean-loup Gailly and Mark Adler's compression library zlib,
+Philip Hazel's Perl Compatible Regular Expressions library, the ncurses
+library (originally written by Zeyd Ben-Halim and Eric Raymond), and
+OpenSSL (based on work by Eric Young and Tim Hudson.)
+
+I have compiled below a partial list of people who have contributed to
+Mixmaster's success, through suggestions, bug reports, patches, or other
+contributions. Please report any omissions to me.
+
+There have been numerous anonymous contributions to this project as well.
+While we obviously can't thank the contributor(s) by name, they are still
+very much appreciated.
+
+Thanks also to all the remailer operators, who give their time and service
+(and perform what is too often a thankless job) to ensure that our right
+to anonymous speech is preserved.
+
+Finally, thank you to my colleagues at COSIC, and my advisors, Prof. 
+Bart Preneel and Prof. David Chaum, for their support of my work on this 
+project.
+
+
+Len Sassaman
+03 March 2008
+Leuven, Belgium
+http://homes.esat.kuleuven.be/~lsassama/
+
+
+Credits:
+
+Antonomasia
+Erik Arneson
+Adam Back
+Kevin Bennett
+Gerd Beuster
+Jim Castleberry
+cmeclax
+Bram Cohen
+Steve Crook
+Lance Cottrell
+Richard Christman
+Todd Cutter
+Dingo Admin
+Andy Dustman
+Sami Farin
+John B. Fleming
+Bryan Fordham
+Laurent Fousse
+Ron Fritz
+goblin
+Mark Grant
+Lucky Green
+Mark Hahn
+Janis Jagars
+Richard Johnson
+Alex de Joode
+Katherine
+Johannes Kroeger
+Hauke Lampe
+Ben Laurie
+Patrick J. LoPresti
+L. McCarthy
+Medusa
+Christian Mock
+Bodo Möller
+Ulf Möller
+noise
+Bill O'Hanlon
+Peter Palfrader
+John A. Perry
+Scott Renfro
+RProcess
+Len Sassaman
+Senshi-Admin
+Markus Stöger
+Nikolay Sturm
+Trek
+Rodney Thayer
+Colin Tuckley
+André M. VanKlaveren
+Michael Young

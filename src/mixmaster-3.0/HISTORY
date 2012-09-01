@@ -1,0 +1,502 @@
+ 1998/1999           2.9   written from scratch.
+
+1999-04-14      2.9beta0   public preview release.
+
+1999-05-17      2.9beta1   Bug fixes (remix, OpenPGP encryption, FreeBSD
+                           name conflict); Win32 DLL.
+
+1999-05-18      2.9beta2   Install bug fixes. -N and -n options renamed.
+
+1999-05-19      2.9beta3   OpenSSL-related bug fix. Type 1 remailer fixes
+                           (pointed out by <kev@drule.org>).
+
+1999-05-20      2.9beta4   Read and generate OpenPGP encrypted secret keys.
+
+1999-05-20      2.9beta5   The client sent messages if PGP encryption failed.
+
+1999-05-28      2.9beta6   Message-ID generation bug fixes. Contributed by:
+                           Johannes Kroeger <hanne@squirrel.owl.de>.
+                           Remix-To bug fix.
+
+1999-06-09      2.9beta7   More (minor) remailer and Install script fixes.
+
+1999-06-10      2.9beta8   Regular expression bug fix. Thanks to Johannes
+                           and Kevin for help with debugging!
+
+1999-07-20      2.9beta9   Bug fixes (remailer, nym creation).
+
+1999-08-03      2.9beta10  Fix for buffer overrun error.
+                           "Chain:" pseudo-header may contain the number of
+                           copies like this: `Chain: *,*,*,*; copies=3'
+
+1999-09-09      2.9beta11  Support MIME attachments and OpenPGP/MIME in the
+                              client.
+                           Do not select cpunk remailers if PGP key is missing.
+                           Fix error in nym creation.
+                           Header lines can be edited when composing new
+                              messages in the mail reader.
+                           Accept empty pass phrase to allow storing the
+                              nym database on an encrypted file system.
+                           More verbose error messages.
+                           Various minor bug fixes.
+                           * Thanks to Gerd Beuster for many good suggestions!
+
+1999-09-22      2.9beta12  OpenSSL 0.9.3 or newer is now required.
+                           For the Mixmaster DLL, allow the application to
+                              seed the random number generator.
+
+1999-09-29      2.9beta13  Fix OpenPGP 3DES decryption.
+                           Store DSA secret keys in PGP5 compatible format.
+                           Support new "ekx" capability.
+                           Use the more secure new style OpenPGP conventional
+                              encryption to protect the nym database and nym
+                              keys.
+
+1999-10-01      2.9beta14  Bug fix.
+
+1999-10-01      2.9beta15  Bug fix: create mixrand.bin in Mix directory.
+                           Support "Encrypt-IDEA" directive.
+
+1999-10-11      2.9beta16  Fix memory leaks.
+
+1999-11-03      2.9beta17  Bug fix.
+                           Sending messages is logged as DEBUGINFO.
+
+1999-11-09      2.9beta18  Bug fix for rlist with trailing spaces.
+                           Print remailer reliability (by Gerd Beuster).
+
+1999-12-19      2.9beta19  (internal)
+
+1999-12-19      2.9beta20  Output remailer RSA keys separately from the
+                             DSA/ElGamal keys to avoid problems with old
+                             versions of PGP.
+                           Messages in mail folders can be deleted. Nym
+                             messages and other encrypted mail will be
+                             written back as plain text (by Gerd Beuster).
+                           SMTP bug fix.
+                           Support multiple OpenPGP decryption subkeys.
+                           Fix remailer bug with Newsgroups header in encrypted
+                             T1 messages.
+                           Fix MIME-decoding bug (pointed out by Gerd Beuster).
+                           Nym creation bug fix (by Gerd Beuster).
+
+2000-03-09      2.9beta21  Support for PGP partial length packets (by
+                             Christian Mock).
+
+2000-03-16      2.9beta22  Bug fixes (by Antonomasia) and minor changes.
+
+2000-06-29      2.9beta23  Bug fix for nym creation with several newsgroups
+                             reply blocks (by Gerd Beuster).
+                           --nym option bug fix (by Adam Back).
+
+2001-09-11      2.9beta24  Changed pool.c to allow Mixmaster keys to pass
+                             even when binary blocking is enabled. Note that
+                             the solution is not a nice one: It does not
+                             recognize Mix keys, it simply allows 10 lines of
+                             binary garbage instead of 3. This should be enough
+                             for Mix keys to come through (by Peter Palfrader).
+                           Fixed a bug in pgpdata.c affecting v3 OpenPGP keys.
+                           (by Michael Young).
+
+2001-09-14      2.9beta25  Now builds with pcre3 (by Peter Palfrader).
+                           Added support for destination.allow (by Peter
+                             Palfrader).
+                           If the sender email address or IP address matches
+                             anything in source.blk, ignore the message (by
+                             cmeclax).
+                           Added support for the Mutt -T option (by Bill
+                             O'Hanlon).
+                           Patches merged (by Len Sassaman).
+
+2001-09-17      2.9beta30  Version renamed to avoid conflicts with other
+                             unofficial releases.
+
+2001-09-19      2.9beta31  Fixed a bug in mime.c that sometimes resulted in
+                             malformed text attachments (by Michael Young).
+                           Better error handling (by Scott Renfro).
+                           Added support for multiple dest.blk files. This
+                             is needed for the Remailer Abuse Blocklist (by
+                             Markus Stöger).
+                           Added support for remailer-adminkey replies to
+                             provide a better way for remops to distribute
+                             their keys. (by Markus Stöger).
+                           Fixed errors with pcre2.08 (by Rodney Thayer).
+                           Added long command option --type-list for the -T
+                             option, and updated help (by Len Sassaman).
+                           Removed redundant "encoded" variable in mime.c.
+                           Fixed Installer bugs.
+
+2001-11-06      2.9beta32  Client functionality updates.
+                           POP sockets now properly close.
+                           Memory may be freed without allocating.
+                           Correct time is written to mbox.
+                           Key flags correctly set in key.txt. (all by
+                             Disastry).
+                           OpenSSL and OpenBSD Install script issues
+                             addressed.
+
+2001-12-16      2.9b33     Support for Mixmaster as a service on Windows
+                             platforms added (by Disastry).
+                           Problem transparently remixing to Type I remailers
+                             debugged and corrected (by Andy Dustman,
+                             Disastry, Senshi-Admin).
+                           Fixed an error in chain.c that was causing
+                             segfaults with chains greater than 20 remailers.
+                           Non-multipart MIME message errors fixed.
+                           Fixed an error in rfc822.c (by Scott Renfro).
+                           Fixed pgpget.c errors. (by Ulf Möller).
+                           No longer permits automatic blocking of entire
+                             domains or newsgroups.
+                           Help files re-written (by Lucky Green).
+                           Fixed inconsistencies between software name and
+                             package name.
+
+2002-07-01      2.9b34     Encrypt-to directive is now supported.
+                           Partial packets now properly expire if not
+                             reassembled (by cmeclax).
+                           Fixed an address blocking error introduced in
+                             the last version (Peter Palfrader).
+                           Various command line bug fixes.
+
+2002-07-10      2.9b35     Updated zlib due to security reasons.
+                           Does not generate keys in client mode.
+                           Uses binary format for id.log.
+                           Assorted mpgp fixes (by Disastry).
+                           Added support for storing the key passphrase
+                             in the mix.cfg file. (by Disastry).
+                           Now reports the contents of dest.alw for
+                             middleman remailers (by Kat).
+                           Reworked the OpenSSL version check in the
+                             Install script.
+
+2002-08-09      2.9b36     Removed duplicate define of NYMDB from menu.h.
+                           Fix a strncat() to undefined string variable in
+                             mix.c (Closes: #584381).
+                           Have the Makefile list all prerequisites for each
+                             build target (Closes: #584386).
+                           Change »majordomo@*« to »majordomo@« in default
+                             dest.blk. The dest block engine does not under-
+                             stand shell globs. Either substring matches or
+                             regexen.
+                           Fixed -T switch: if type2.list is not available fall
+                             back to pubring.mix.
+                           USE_IDEA is no longer default in config.h. It always
+                             gets defined by the Install script instead.
+                           Only create OpenPGP RSA keys if we compiled with
+                             IDEA.
+                           Make all filenames configurable in mix.cfg.
+                           Add global mix.cfg support (compile time option).
+                           The -G option now forces creation of new keys even in
+                             client mode (Closes: #585176).
+                           Random Documentation updates.
+                           Default to not installing a .forward file in Install
+                             script.
+                           Fix unused variable warning on OpenBSD.
+                           Fix public remailer keys getting re-signed
+                             every time keys are requested (Closes: #478383).
+                           Make smtp sending similar to local /usr/lib/sendmail
+                             sending (wrt header/body separation;
+                             Closes: #482052).
+                           Add X-Loop header on mailbox forwarded messages.
+                           Several small fixes by Sami Farin et al.
+                           Detach correctly in daemon mode.
+                           Minor Install script fixes.
+
+2002-08-20      2.9b37     OpenPGP enhancement release (fixes by Disastry).
+                           Fix a small bug in pgpdata.c that stopped Mixmaster
+                             from reading cipher preferences.
+                           Fixed Passphrase reading in mpgp (the test program)
+                             on Windows platform.
+                           Add Hash: header when clearsigning.
+                           Properly handle RSA keys whose key size is not a
+                             multiple of 64.
+                           Remove leading zeros from MPI.
+                           Use MDC packets whenever possible.
+                           List CAST5 and AES128 in cipher preferences.
+                           Now displays Mixmaster version in the PGP version
+                             header for non remailer/nym messages.
+
+2002-09-11      2.9b38     Install script deals with lack of patented IDEA
+                             algorithm in a sane way (closes: #479020).
+                           Compiled-in passphrase is now deprecated.
+                           When expiring packet ids from id.log also expire
+                             packets that are dated more than half a year in
+                             the future.  That way we get rid of invalid
+                             packets introduced by the switch to a binary file.
+                           The stats in remailer-stats replies always had a
+                             peak at 00:00 GMT which was wrong. Fixed.
+                             (closes: #597688).
+                           Fixed a bug with reading armored keyrings consisting
+                             of more than one armored block or having comments
+                              in front of the one armored block.
+                           In RSA PGP keys, we now set e=0x11.
+                           Mixmaster now deletes error and temporary files
+                             older than PACKETEXP time along with expired
+                             partial packets.
+                           Linux PPC fixes (and all other archs where char is
+                             unsigned).
+
+2002-10-07      2.9b39     Added a new feature, --store-mail (-I), which will
+                             deliver an encrypted mix packet to the message pool
+                             without attempting being decrypted.
+                           Made minor updates for WIN32 DLL.
+                           When sending type II messages interactively you may
+                             now choose a middleman remailer as the last hop
+                             in your chain (closes: #481244).
+                           If a footer.txt file exists its content will be
+                             appended to outgoing messages leaving the remailer
+                             network at this hop (closes: #490117).
+                           List known remailers in remailer-conf reply (closes:
+                             #480330).
+                           The files created with "SENDMAIL outfile" have
+                             different names now to scale beyond 10k files
+                             (closes: #587593).
+                           Fixed the "is a mailfolder" checking for -f.
+                           Various fixes for Mixmaster when not using ncurses.
+                           Added new option --config to allow loading of
+                             configuration information from an alternate file.
+                           POOL is now used correctly if set in mix.cfg.
+                           ASCII armor checksum is now verified on PGP keys.
+                           Corrected a bug where 1/4096 of pgp messages was
+                             destroyed due an improper armor checksum
+                             interpretation.
+                           Added password-based authenticated SMTP for mix.
+                             Currently, only AUTH LOGIN is supported.
+                           Mixmaster now handles <CR><LF> in pubring.mix.
+                           Removed incorrect NT service checks in mix.c.
+                           Mixmaster now keeps no stats in client mode.
+                           The pool is autmatically checked for waiting
+                             messages in the client configuration.
+                           Mixmaster now bears a DFSG-compliant license.
+                           Fixed permissions on tarball release.
+                           Documentation updates.
+
+2002-10-16      2.9b40     New option MAILIN that can be set to either a mbox
+                             or Maildir folder. New mail will be read from it
+                             and the folder cleared every time Mixmaster
+                             processes its pool, or at MAILINTIME intervals
+                             (closes: #597043).
+                           The Mixmaster daemon now writes a pid file.
+                           Mixmaster in daemon mode now catches SIGTERM and
+                             SIGINT and finishes its current queue run and then
+                             exits successfully.
+                           Minor code formating cleanup and Install script
+                             fixes.
+
+2002-12-15      2.9b41     The Mixmaster protocol version is now prepended
+                             to the software version in the Mixmaster cap-
+                             string.
+                           Minor configuration default changes and Install
+                             script fixes.
+                           Install script now always uses "make" and not
+                             "gmake".
+                           IDEA detection is fixed on systems that provide
+                             the header files but then turn out to not
+                             have the required functions upon linking.
+                           Install now properly identifies system-wide
+                             installations of pcre and/or zlib if they
+                             are installed in /usr/local/.
+                           Mixmaster will now ensure that an address
+                             submitted in a blocking request does not
+                             match that of a known remailer before
+                             adding it to the dest.blk file (patch
+                             submitted by Trek. Vulnerability originally
+                             discovered by noise and rabbi.)
+                           Minor documentation fixes.
+
+2002-12-16      2.9b42     Minor documentation fixes.
+                           Append another newline character to mbox folders
+                             when storing a mail so that the mandatory empty
+                             line is there.
+
+2002-12-16      2.9.0rc1   Release candidate. Packaging changes only.
+
+2002-12-25      2.9.0      Release version. Minor documentation changes
+                             and version number change only.
+
+2003-11-08      2.9.1      Several changes for the Windows build.
+                           Some Install script fixes.
+                           Fixed a problem in blockrequest() where a buffer
+                             could have been used after it was free()'d which
+                             resulted in segfaults.
+                           Check that feedback buffer is not null before
+                             operating on it in chain_select().
+                             Closes #631353, thanks Sami Farin.
+                           Make sure DH/DSA param file is actually opened
+                             before writing to it. Fixes a segfault in
+                             case it is not.
+                           Handle a pool we cannot read correctly: don't close
+                             the NULL dir handle (segfaults on *BSD). We also
+                             print a warning in that case now.
+                           Minor stats fix (gmtime vs localtime).
+                           Fix pool stats bug.
+
+2004-03-20      3.0b1      FEATURE ENHANCEMENTS:
+
+                           The secret pgp keyring is now stored ASCII armored
+                             with one key per ascii armor.
+                           NB: Due to the bug with reading armored keyrings and
+                             secring being stored armored now, it is not
+                             advisable to downgrade Mixmaster unless special
+                             action is taken to preserve the secret pgp
+                             keyring.
+                           Mixmaster now prompts for secret key passphrase when
+                             started in daemon mode.
+                           Mixmaster checks expiration and revocation status of
+                             pgp keys, userids, and subkeys.
+                           Mixmaster will not encrypt or sign with a revoked
+                             or expired key.
+                           When encrypting, Mixmaster uses preferences from
+                             the primary userid (or the latest userid, if zero
+                             or more than one primary userid is present.)
+                           Mixmaster keys now have creation and expiration date.
+                             It is not secured by any crypto voodoo, it's only
+                             informational for clients to decide which keys to
+                             use should they have more than one per remailer.
+                             - on the client side we do not show remailers (and
+                               therefore not use them) if their key is expired.
+                             - the remailer refuses to decrypt messages to keys
+                               that expired one month ago or earlier.
+                             - the remailer automatically creates new Mixmaster
+                               keys if the current ones are about to expire or
+                               already are expired.
+                             - the latest key from secring.mix is written to
+                               key.txt. It used to be the first one. Since
+                               creation of new mix key appends the key, this
+                               seemed sensible.
+                           Mixmaster now generates dummy messages automatically
+                             as mail enters and exits the pool.
+                           Applied Maildir feature patch by drt@un.bewaff.net,
+                             with some changes by PP:
+                             MAILBOX can now be a Maildir (closes: #586223).
+                           New Star-Exclude feature by Colin Tuckley: 
+                             User-selected remailers can be excluded from 
+                             being chosen as random hops.
+                           Have stats on intermediate vs. final hop count
+                             (closes: #649900).
+                           Add max capability for Type I.
+                           Config option EXTFLAGS allows appending additional
+                             flags to the capabilities string.  (Hauke Lampe)
+                           Config option PRECEDENCE allows setting the
+                             Precedence: header on all outgoing mail.
+                             (Hauke Lampe)
+                           In order to serve help files in different languages
+                             we need a way to reply to requests like
+                             remailer-help-it.  In order to not have to modify
+                             the code for each and every new ressource,
+                             Mixmaster now sends the file
+                             requests/remailer-<something> to
+                             remailer-<something> requests.
+                             remailer-{help,key, stats,conf,adminkey} still are
+                             special cases though.
+                           Drop messages without timestamps and messages with
+                             future timestamps.  This abandons backwards
+                             compatibility with Mixmaster 2.0.3 and earlier.
+                           Mixmaster attempts to detect system clock
+                             misconfigurations and refuses to run as a
+                             remailer if there is a problem suspected.
+                             Only applies to Mixmaster in remailer mode.
+
+                           BUG FIXES:
+
+                           Mixmaster in daemon mode reloads configuration on
+                             SIGHUP.
+                           In the curses interface chain selection it was not
+                             possible to select a random last hop with a usenet
+                             post message.  Fixed (closes: #719165).
+                           If remix was enabled and we had a Type-I Anon-Post-To
+                             request we accidently randhoped it via the
+                             configured default remailing chain (default:
+                             *,*,*,*).
+                             Fixed (closes: #729494).
+                           In client mode (REMAIL n) the pool is flushed every
+                             time mixmaster is run unless CLIENTAUTOFLUSH is
+                             set to n.  (closes: #676794: Rate implementation
+                             doubled)
+                           Found that weird bug that sometimes led to "Unknown
+                             remailer version!" errors: In chain_randfinal() we
+                             selected a random value between 0 and maxrem
+                             instead of 0 and maxrem - 1.  Mixmaster now uses
+                             broken-chain info from stats.
+                           Warn if remailer stats are older than a day or
+                             from the future.
+                           Don't send messages to ourselves via the mailsystem
+                             but instead place them in the pool as incoming
+                             messages so that they will get processed with the
+                             next pool run.
+                           No longer try to send a message if there are no
+                             recipients left.
+                           Set default max-randhops from 20 to 4.
+                           Remix-To chain is limited by max-randhops limit as
+                             well.
+                           Messages to more than one remailer are dropped.
+                           Nym support is not compiled in by default anymore.
+                           The OpenPGP module mpgp now includes a man
+                             page (large contributions by Trek).
+                           Ignore 'No reliable remailers' problems when
+                             randhopping messages in middleman mode.
+                             That is better than dropping them.
+                           Experimental feature:  --redirect -l <chain>.
+                             If you have a mixmaster message with a
+                             chain starting with hop1 (you cannot know any
+                             more because it already is encrypted) then
+                             mix --redirect -l foo,bar < file
+                             redirect the message so the chain is actually
+                             foo,bar,hop1,... and places it in your pool.
+                             If the total number of hops (which cannot be
+                             known) exceeds 20 the message is damanged
+                             and will fail at the 20th node.
+
+2004-05-06      3.0b2
+                           Use /dev/arandom instead of /dev/srandom on 
+                             OpenBSD (Nikolay Sturm).
+                           Fall back to 3DES as Encrypt-Key cipher if we don't
+                             have IDEA. - Laurent Fousse <laurent@komite.net>
+                           Also sort mail into the various mboxes if autoreply
+                             is not set.
+                           Properly ignore whitespace in chain selection.
+                           Removed unused functions in keymgt.c.
+                           Added new options -V, --version, and --about.
+                           Made manpage corrections.
+                           Minor ncurses display tweaks.
+                           General improvements for Win32 support (by 
+                             goblin and Peter Palfrader).
+                           Preliminary Windows Installer work.
+                           On Win32, default to Application Data/Mixmaster for
+                             mixmaster's basedirectory.  This can still be
+                             overridden by MIXPATH or the registry entry
+                             HKEY_CURRENT_USER\Software\Mixmaster\MixDir
+                           Introduced new option "(e)dit configuration 
+                             file" in the main menu.
+                           Changed 'q)uit' to 'q)uit w/o sending' in 
+                             menusend.c.
+                           Added stats downloading support. Currently 
+                             works under Win32 only (by goblin).
+                           Fixed bug in buffers.c.
+
+2006-06-24      3.0rc1
+                           Prefer pubring.asc over secring.pgp.
+                           Support an unpublished dest.alw file.
+                           Added MINLAT directive. Ensures randhopped 
+                             messages are sent through remailers of 
+                             latency of MINLAT time or greater
+                             (suggested by Steve Crook).
+                           Improved OpenSSL version checking in the
+                             Install script.
+                           Added full stats download support.
+                           Fixed buffer overflow bug in keymgt.c.
+
+2008-03-03     3.0
+                           Changed name of WIN32 default config file
+                             from mix.cfg.txt to mix.ini.
+                           Changed pop3.cfg to pop3.ini on WIN32.
+                           Updated Install script.
+                           Minor documentation changes.
+
+
+
+Mixmaster maintainer history:
+
+1998-2000: Ulf Möller -- versions 2.9beta0 through 2.9beta22.
+2000: Johannes Kroeger -- version 2.9beta23.
+2001-2008: Len Sassaman -- versions 2.9beta24 through present.

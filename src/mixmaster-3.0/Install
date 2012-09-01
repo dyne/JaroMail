@@ -1,0 +1,1403 @@
+#!/bin/sh
+# Mixmaster version 3.0  --  (C) 1999-2008 Anonymizer Inc. and others.
+
+# Mixmaster may be redistributed and modified under certain conditions.
+# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF
+# ANY KIND, either express or implied. See the file COPYRIGHT for
+# details.
+
+# $Id: Install 979 2008-03-03 18:17:07Z rabbi $
+
+#whereis program default-path
+whereis()
+{
+  #echo "Looking for $1..."
+  found=""
+  for i in $* `which $1 2>&1`
+  do
+    if [ -f "$i" -a -x "$i" ]
+    then
+      found=$i
+    fi
+  done
+  if [ "$found" = "" ]
+  then
+    found=$2
+#    echo "$1 not found. Using $found."
+#  else
+#    echo "$1 is at $found."
+  fi
+}
+
+if echo -n | grep n >/dev/null
+then
+ echo1=""
+ echo2="\c"
+else
+ echo1="-n"
+ echo2=""
+fi
+
+# readln text default
+readln()
+{
+  echo $echo1 "$1 [$2] $echo2"
+  read ans
+  if [ -z "$ans" ]
+  then
+    ans="$2"
+  fi
+}
+
+# findlib libxxx.a -- find and configure libraries
+#    Input:
+#       $1       library name
+#       $CONFIG  library configure options
+#       $INCDIR  possible include directories
+#       $SRCDIR  possible library source directories
+#       $LIBDIR  possible library binary directories
+#
+#    Output:
+#       $found   library directory
+#       $lib     library name
+#       $INCDIR  include directory if required, empty otherwise
+#       $LDFLAG  linker options
+#       $LIB     path to library file
+#       $MAKELIB Makefile entry to compile library
+findlib()
+{
+ lib=$1
+ libso=`echo $lib | sed 's/\.a$/.so/'`
+ echo "Looking for $lib..."
+
+ found=
+ source=
+ type=
+ LIB=
+ LDFLAG=
+ MAKELIB=
+
+ for i in /usr/local/lib /usr/lib /lib /usr/lib64
+ do
+  if [ -r $i/$lib -o -r $i/$libso ]
+  then
+   found=$i
+   type=system
+  fi
+ done
+
+ for i in $LIBDIR
+ do
+  if [ -r $i/$lib -o -r $i/$libso ]
+  then
+   found=$i
+   type=installed
+  fi
+ done
+
+ for i in $SRCDIR
+ do
+  if [ -r $i/$lib -o -r $i/lib/$lib ]
+  then
+   found=$i
+   type=binary
+  fi
+ done
+
+ if [ -r "$found/$libso" ]
+ then
+  echo "Found at $found/$libso."
+ elif [ -r "$found/$lib" ]
+ then
+  echo "Found at $found/$lib."
+ elif [ -r "$found/lib/$lib" ]
+ then
+  echo "Found at $found/lib/$lib."
+ fi
+
+ for i in $SRCDIR
+ do
+  if [ -d $i -a ! "$type" = binary ]
+  then
+   source=$i
+  fi
+ done
+
+ if [ "$source" != "" ]
+ then
+  echo "Found source directory $source."
+  if [ "$found" = "" ]
+  then
+   ans=y
+  else
+   echo "Use the source if the pre-installed library causes compilation problems."
+   readln "Use source?" n
+  fi
+  if [ "$ans" = "y" ]
+  then
+   found=$source
+   type=source
+  fi
+ fi
+
+ if [ "$found" = "" ]
+ then
+  echo "Not found."
+ fi
+
+ if [ -r $found/lib/$lib ]
+ then
+  LIB=$found/lib/$lib
+ else
+  LIB=$found/$lib
+ fi
+ if [ "$type" = system ]
+ then
+  LIB=
+  LDFLAG="-l`echo $lib | sed 's/^lib//;s/\.a$//'` -L$found"
+  if [ "$found" = "/usr/local/lib" ]
+  then
+    INCDIR="/usr/local/include $INCDIR"
+  fi
+ fi
+
+ incdir=$INCDIR
+ INCDIR=
+ for i in $incdir
+ do
+  if [ -d $i ]
+  then
+   INCDIR=$i
+  fi
+ done
+
+ if [ "$type" = source -o "$type" = binary ]
+ then
+  if [ ! -r $found/lib/$lib ]
+  then
+   MAKELIB="$found/$lib:
+	cd $found; make $lib"
+  fi
+  if [ -d $found/include ]
+  then
+   INCDIR=$found/include
+  else
+   INCDIR=$found
+  fi
+ fi
+
+ if [ "$type" = source ]
+ then
+  dir=`pwd`
+  if [ "$dir" = "" ]
+  then
+   dir=$PWD
+  fi
+
+  cd $found
+  if [ -x configure ]
+  then
+   echo "Configuring..."
+   ./configure $CONFIG
+  fi
+  if [ "$lib" = "libcrypto.a" ]
+  then
+   if [ -f config ]
+   then
+    sh config
+   elif [ -x Configure ]
+   then
+    ./Configure 2>tmp.$$
+    cat tmp.$$
+    readln "Your system?" `cat tmp.$$ | tr ' ' '\n' | grep -i \`uname\` | tail -1`
+    rm -f tmp.$$
+    echo "Configuring..."
+    ./Configure $ans
+   fi
+  fi
+  cd $dir
+ fi
+}
+
+# Global installation.
+
+
+##########################################################################
+umask 077
+
+#FIXME -- Mixmaster now should be installed as root, and Install should
+#create a remailer user. /var/spool/mixmaster is a good home.
+
+if [ `whoami` = root ]
+then
+ echo "Please create a new user, e.g, \`mix', and install Mixmaster under that
+user id.  Installing Mixmaster as root is not recommended."
+ readln "Continue anyway?" n
+ if [ "$ans" = n ]
+ then
+  exit 1
+ fi
+fi
+
+MIXDIR="$PWD"
+if [ "$MIXDIR" = "" ]
+then
+ MIXDIR=`pwd`
+fi
+MIXCFG="$MIXDIR/conf"
+MIXSRC="$MIXDIR/Src"
+MIXDEST0=${MIXPATH:-$HOME/Mix}
+
+system=`uname`
+if [ "$system" = "MS-DOS" ]
+then
+ system=msdos
+fi
+
+if [ "$HOSTNAME" = "" ]
+then
+ HOSTNAME=`hostname`
+fi
+if [ "$HOSTNAME" = "" ]
+then
+ HOSTNAME=msdos
+ system=msdos
+fi
+
+if [ "$system" = msdos ]
+then
+ MIXDEST0=${MIXPATH:-C:/Mix}
+fi
+
+if [ -f "$MIXSRC/Makefile" ]
+then
+ if grep "#Makefile generated.*$HOSTNAME" $MIXSRC/Makefile
+ then
+  echo "Found a Makefile for this system."
+  readln "Use this Makefile?" y
+  if [ "$ans" = n ]
+  then
+   rm -f "$MIXSRC/Makefile"
+  fi
+ else
+  readln "Remove old Makefile?" y
+  if [ "$ans" = y ]
+  then
+   rm -f "$MIXSRC/Makefile"
+  fi
+ fi
+fi
+
+if [ -f "$MIXSRC/Makefile" ]
+then
+ MIXDEST=`grep "DSPOOL=" $MIXSRC/Makefile | sed 's/.*DSPOOL=..//;s/\".*//'`
+ if [ "$MIXDEST" = "" ]
+ then
+  MIXDEST="$MIXDEST0"
+ fi
+fi
+
+if [ "$MIXDEST" = "" ]
+then
+ readln "Mixmaster directory?" "$MIXDEST0"
+ MIXDEST=$ans
+else
+ echo "Mixmaster directory: $MIXDEST"
+fi
+
+if [ ! -d "$MIXDEST" ]
+then
+  echo "Creating directory $MIXDEST"
+  mkdir "$MIXDEST"
+fi
+
+if [ ! -d "$MIXDEST" ]
+then
+  echo "Cannot not create $MIXDEST"
+  exit 1
+fi
+
+if [ -f "$MIXDEST/mix.cfg" ]
+then
+  if [ -f "$MIXDEST/secring.mix" ]
+  then
+    remailer=y
+    if grep PASSPHRASE "$MIXDEST/mix.cfg" >/dev/null
+    then
+      PASSINCONFIG=1
+    fi
+  else
+    readln "Do you want to set up a remailer?" n
+    remailer=$ans
+  fi
+elif [ -f "$MIXDEST/mixmaster.conf" ]
+then
+  echo "Upgrading from Mixmaster 2.0.*"
+  remailer=n
+else
+  readln "Do you want to set up a remailer?" y
+  remailer=$ans
+fi
+
+
+ans=""
+if [ "$remailer" = "y" ]
+then
+  ans="n"
+  if [ "$PASSINCONFIG" != 1 ]
+  then
+    echo ""
+    echo "You can either compile your secret passphrase into the binary
+or you can set it in your config file. Note that the former does not
+really increase security as the passphrase can still be discovered by
+running something like \`strings mixmaster'."
+    echo ""
+    echo "Most users should answer \`n' to this question:"
+    echo ""
+    readln "Do you want to compile the passphrase into the binary?" n
+  fi
+
+  rm -f "$MIXSRC/mix.o" # make sure our new passphrase takes effect
+  if [ "$ans" = "y" ]
+  then
+    ans=""
+    echo "Please enter a passphrase for your remailer (must be the same
+whenever you re-compile Mixmaster)."
+    read ans
+
+    if [ "$ans" != "" ]
+    then
+      PASS="PASS=$ans"
+    else
+      echo "WARNING: not setting a passphrase"
+    fi
+  else
+    if [ "$PASSINCONFIG" != 1 ]
+    then
+      ans=""
+      echo "Please enter a passphrase for your remailer (it will be 
+stored in mix.cfg in clear)."
+      read ans
+
+      if [ "$ans" = "" ]
+      then
+	echo "WARNING: setting empty passphrase"
+      fi
+      PASSPHRASE="PASSPHRASE	$ans"
+      if [ -f $MIXDEST/mix.cfg ]
+      then
+	echo "$PASSPHRASE" >> $MIXDEST/mix.cfg
+      fi
+    fi
+  fi
+fi
+
+
+cd "$MIXSRC"
+if [ ! -f Makefile ]
+then
+ LIBS=
+ INC=
+ DEF=
+ LDFLAGS=
+
+ if [ ! -z "$PASS" ]
+ then
+   DEF="$DEF -DCOMPILEDPASS='\"\$(PASS)\"'"
+ fi
+
+ if [ "$system" = msdos ]
+ then
+  readln "Use WIN32 GUI?" y
+  if [ "$ans" = y ]
+  then
+   system=win32
+   LDFLAGS=-lwsock32
+  fi
+ fi
+ if [ "$system" = SunOS ]
+ then
+  LDFLAGS="-lsocket -lnsl"
+ fi
+
+ LIBDIR=
+ INCDIR=
+ SRCDIR=zlib*
+ findlib libz.a
+ if [ "$found" = "" ]
+ then
+  readln "Continue anyway?" n
+  if [ "$ans" = "n" ]
+  then
+   echo "Please install zlib 1.1.4 or 1.2.3 or greater now."
+   exit 1
+  fi
+ else
+  ZLIB="$MAKELIB"
+  DEF="$DEF -DUSE_ZLIB"
+  LIBS="$LIBS $LIB"
+  LDFLAGS="$LDFLAGS $LDFLAG"
+  if [ "$INCDIR" != "" ]
+  then
+   INC="$INC -I$INCDIR"
+  fi
+ fi
+
+ LIBDIR=
+ INCDIR="/usr/include /usr/include/pcre /usr/local/pcre/include"
+ SRCDIR=pcre*
+ findlib libpcre.a
+ if [ "$found" != "" ]
+ then
+  PCRE="$MAKELIB"
+  DEF="$DEF -DUSE_PCRE"
+  LIBS="$LIBS $LIB"
+  LDFLAGS="$LDFLAGS $LDFLAG"
+  if [ "$INCDIR" != "" ]
+  then
+   INC="$INC -I$INCDIR"
+  fi
+ fi
+
+ opensslinfo="Please get OpenSSL 0.9.6l or greater from http://www.openssl.org/"
+ opensslwarning6="WARNING: This version of OpenSSL contains known vulnerabilities. Please upgrade to OpenSSL 0.9.6l or greater!"
+ opensslwarning7="WARNING: This version of OpenSSL contains known vulnerabilities. Please upgrade to OpenSSL 0.9.7c or greater!"
+ opensslwarning0=$opensslwarning7
+ LIBDIR=/usr/local/ssl/lib
+ INCDIR="/usr/include /usr/include/ssl /usr/lib/ssl/include /usr/local/ssl/include"
+ SRCDIR="openssl*"
+
+ opensslwarn()
+ {
+ if [ "$1" = "6" ]
+ then
+  echo $opensslwarning6
+ elif [ "$1" = "7" ]
+ then
+  echo $opensslwarning7
+ else 
+  echo $opensslwarning0
+ fi
+  readln "Continue anyway?" y
+  if [ "$ans" = "n" ]
+  then
+   echo $opensslinfo
+   exit 1
+  fi
+ }
+
+ if [ "$system" = win32 ]
+ then
+  findlib libeay32.a
+ else
+  findlib libcrypto.a
+ fi
+ if [ "$found" = "" ]
+ then
+  echo $opensslinfo
+  exit 1
+ fi
+
+ OPENSSLLIB="$LIB"
+ LIBS="$LIBS $LIB"
+ LDFLAGS="$LDFLAGS $LDFLAG"
+ if [ "$MAKELIB" != "" ]
+ then
+  OPENSSL="$found/$lib:
+	cd $found/crypto; make"
+ fi
+ if [ -d "$INCDIR/openssl" ]
+ then
+  INC="$INC -I$INCDIR"
+ else
+  # detect old SSLeay versions
+  if [ -f "$INCDIR/crypto.h" ]
+  then
+   version=800
+   if grep OPENSSL "$INCDIR/crypto.h" > /dev/null
+   then
+    version=920
+   fi
+  fi
+ fi
+
+ # Find the OpenSSL version header
+ if [ -f "$INCDIR/openssl/opensslv.h" ]
+ then
+  version=`grep 'SSL.*_VERSION_NUMBER.*0x' $INCDIR/openssl/opensslv.h | sed 's/.*0x0*//;s/[ 	].*//;s/L$//' | tr '[a-f]' '[A-F]'`
+ elif [ -f "$INCDIR/opensslv.h" ]
+ then
+  version=`grep 'SSL.*_VERSION_NUMBER.*0x' $INCDIR/opensslv.h | sed 's/.*0x0*//;s/[ 	].*//;s/L$//' | tr '[a-f]' '[A-F]'`
+ fi
+ if [ "$version" = "" ]
+ then
+  echo "Warning: Can't find OpenSSL version number!"
+  readln "Continue anyway?" y
+  if [ "$ans" = "n" ]
+  then
+   echo $opensslinfo
+   exit 1
+  fi
+#
+# Here we match against known OpenSSL versions
+#
+ elif [ "$version" = "90581F" ]
+ then
+  decimalversion=9459743
+  echo "Compiling with OpenSSL 0.9.5a."
+  opensslwarn 6
+ elif [ "$version" = "90601F" ]
+ then
+  decimalversion=9461791
+  echo "Compiling with OpenSSL 0.9.6a."
+  opensslwarn 6
+ elif [ "$version" = "90602F" ]
+ then
+  decimalversion=9461807
+  echo "Compiling with OpenSSL 0.9.6b."
+  opensslwarn 6
+ elif [ "$version" = "90603F" ]
+ then
+  decimalversion=9461823
+  echo "Compiling with OpenSSL 0.9.6c."
+  opensslwarn 6
+ elif [ "$version" = "90604F" ]
+ then
+  decimalversion=9461839
+  echo "Compiling with OpenSSL 0.9.6d."
+  opensslwarn 6
+ elif [ "$version" = "90605F" ]
+ then
+  decimalversion=9461855
+  echo "Compiling with OpenSSL 0.9.6e."
+  opensslwarn 6
+ elif [ "$version" = "90606F" ]
+ then
+  decimalversion=9461871
+  echo "Compiling with OpenSSL 0.9.6f."
+  opensslwarn 6
+ elif [ "$version" = "90607F" ]
+ then
+  decimalversion=9461887
+  echo "Compiling with OpenSSL 0.9.6g."
+  opensslwarn 6
+ elif [ "$version" = "90608F" ]
+ then
+  decimalversion=9461903
+  echo "Compiling with OpenSSL 0.9.6h."
+  opensslwarn 6
+elif [ "$version" = "90609F" ]
+ then
+  decimalversion=9461919
+  echo "Compiling with OpenSSL 0.9.6i."
+  opensslwarn 6
+ elif [ "$version" = "9060A0" ]
+ then
+  decimalversion=9461920
+  echo "Compiling with OpenSSL 0.9.6j."
+  opensslwarn 6
+ elif [ "$version" = "9060B0" ]
+ then
+  decimalversion=9461936
+  echo "Compiling with OpenSSL 0.9.6k."
+  opensslwarn 6
+ elif [ "$version" = "9060C0" ]
+ then
+  decimalversion=9461952
+  echo "Compiling with OpenSSL 0.9.6l."
+ elif [ "$version" = "9060D0" ]
+ then
+  decimalversion=9461968
+  echo "Compiling with OpenSSL 0.9.6m."
+ elif [ "$version" = "90700F" ]
+ then
+  decimalversion=9465871
+  echo "Compiling with OpenSSL 0.9.7."
+  opensslwarn 7
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90701F" ]
+ then
+  decimalversion=9465887
+  echo "Compiling with OpenSSL 0.9.7a."
+  opensslwarn 7
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90702F" ]
+ then
+  decimalversion=9465903
+  echo "Compiling with OpenSSL 0.9.7b."
+  opensslwarn 7
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90703F" ]
+ then
+  decimalversion=9465919
+  echo "Compiling with OpenSSL 0.9.7c."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90704F" ]
+ then
+  decimalversion=9465935
+  echo "Compiling with OpenSSL 0.9.7d."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90705F" ]
+ then
+  decimalversion=9465951
+  echo "Compiling with OpenSSL 0.9.7e."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90706F" ]
+ then
+  decimalversion=9465967
+  echo "Compiling with OpenSSL 0.9.7f."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90707F" ]
+ then
+  decimalversion=9465983
+  echo "Compiling with OpenSSL 0.9.7g."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90708F" ]
+ then
+  decimalversion=9465999
+  echo "Compiling with OpenSSL 0.9.7h."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90709F" ]
+ then
+  decimalversion=9466015
+  echo "Compiling with OpenSSL 0.9.7i."
+  DEF="$DEF -DUSE_AES"
+
+ elif [ "$version" = "9070AF" ]
+ then
+  decimalversion=9466031
+  echo "Compiling with OpenSSL 0.9.7j."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "9070BF" ]
+ then
+  decimalversion=9466047
+  echo "Compiling with OpenSSL 0.9.7k."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "9070CF" ]
+ then
+  decimalversion=9466063
+  echo "Compiling with OpenSSL 0.9.7l."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "9070DF" ]
+ then
+  decimalversion=9466079
+  echo "Compiling with OpenSSL 0.9.7m."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "9070EF" ]
+ then
+  decimalversion=9466095
+  echo "Compiling with OpenSSL 0.9.7n."
+  echo "This version was unreleased at the time of packaging."
+  echo "It is not guaranteed to work. Please report any problems."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90800F" ]
+ then
+  decimalversion=9469967
+  echo "Compiling with OpenSSL 0.9.8."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90801F" ]
+ then
+  decimalversion=9469983
+  echo "Compiling with OpenSSL 0.9.8a."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90802F" ]
+ then
+  decimalversion=9469999
+  echo "Compiling with OpenSSL 0.9.8b."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90803F" ]
+ then
+  decimalversion=9470015
+  echo "Compiling with OpenSSL 0.9.8c."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90804F" ]
+ then
+  decimalversion=9470031
+  echo "Compiling with OpenSSL 0.9.8d."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90805F" ]
+ then
+  decimalversion=9470047
+  echo "Compiling with OpenSSL 0.9.8e."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90806F" ]
+ then
+  decimalversion=9470063
+  echo "Compiling with OpenSSL 0.9.8f."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90807F" ]
+ then
+  decimalversion=9470079
+  echo "Compiling with OpenSSL 0.9.8g."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90808F" ]
+ then
+  decimalversion=9470095
+  echo "Compiling with OpenSSL 0.9.8h."
+  DEF="$DEF -DUSE_AES"
+ elif [ "$version" = "90809F" ]
+ then
+  decimalversion=9470111
+  echo "Compiling with OpenSSL 0.9.8h."
+  echo "This version was unreleased at the time of packaging."
+  echo "It is not guaranteed to work. Please report any problems."
+  DEF="$DEF -DUSE_AES"
+ fi
+#
+# Now we try to guess about unknown versions: 
+#
+ if [ "$decimalversion" = "" ]
+ then
+  decimalversion=`echo 16i $version p | dc`
+ fi
+ if [ "$decimalversion" = "" ]
+ then
+  echo "Warning: This version: ${version} of OpenSSL is not recognized."
+  readln "Continue anyway?" y
+  if [ "$ans" = "n" ]
+  then
+   echo $opensslinfo
+   exit 1
+  else
+   echo "Does this version of OpenSSL contain AES support?"
+   readln "If unsure of the answer, say \`n'" n
+    if [ "$ans" = "y" ]
+    then
+    DEF="$DEF -DUSE_AES"
+    fi
+  fi
+ elif [ "$decimalversion" -lt "2336" ]  # 920
+ then
+  echo "This version: ${version} of SSLeay is not supported."
+  echo $opensslinfo
+  exit 1
+ elif [ "$decimalversion" -lt "9449728" ]  # 903100
+ then
+  echo "This version: ${version} of OpenSSL is not supported."
+  echo $opensslinfo
+  exit 1
+ elif [ "$decimalversion" -gt "9470111" ]  # 0.9.8h
+ then
+  echo "Warning: This version: ${version} of OpenSSL is untested."
+  readln "Continue anyway?" y
+  if [ "$ans" = "n" ]
+  then
+   echo $opensslinfo
+   exit 1
+  else 
+   echo "Does this version of OpenSSL contain AES support?"
+   readln "If unsure of the answer, say \`n'" n
+    if [ "$ans" = "y" ]
+    then
+    DEF="$DEF -DUSE_AES"
+    fi
+  fi
+ fi
+
+ LIBDIR=
+ INCDIR=/usr/include/ncurses
+ SRCDIR=ncurses*
+ CONFIG=--enable-termcap
+ if [ "$TERMINFO" != "" ]
+ then
+  CONFIG="--datadir=$TERMINFO"
+ fi
+ if [ -d /usr/share/terminfo ]
+ then
+  CONFIG=
+ fi
+ if [ -d /usr/lib/terminfo ]
+ then
+  CONFIG=--datadir=/usr/lib/terminfo
+ fi
+
+  if [ `uname` = OpenBSD ]
+  then
+   findlib libcurses.a
+  else
+   findlib libncurses.a
+  fi
+ if [ "$found" = "" ]
+ then
+  if [ "$system" != win32 ]
+  then
+   readln "Do you want to use Mixmaster's menu-based user interface?" y
+   if [ "$ans" = "y" ]
+   then
+    echo "Please install ncurses now. It is available from http://www.clark.net/pub/dickey/ncurses/ncurses.tar.gz"
+    exit 1
+   fi
+  fi
+ else
+  DEF="$DEF -DUSE_NCURSES"
+  if [ "$type" = system -o "$type" = installed ]
+  then
+   LIBS="$LIBS $LIB"
+   LDFLAGS="$LDFLAGS $LDFLAG"
+  else
+   LIBS="$LIBS $found/lib/$lib"
+   NCURSES="$found/lib/$lib:
+	cd $found/ncurses; make ../lib/$lib"
+  fi
+  if [ "$INCDIR" != "" ]
+  then
+   INC="$INC -I$INCDIR"
+  elif [ -f "/usr/include/ncurses.h" ]
+  then
+   DEF="$DEF -DHAVE_NCURSES_H"
+  fi
+ fi
+
+ ideawarn()
+ {
+    echo "
+  WARNING: Your version of OpenSSL has been configured without IDEA support.
+  If you continue, Mixmaster will be installed with reduced functionality.
+  This means (among other things) that Mixmaster will not create an RSA
+  OpenPGP key (to avoid mail loss in the Type I system). You may want to
+  re-install OpenSSL before proceeding.
+
+  This will not concern you if you only plan to run a type II remailer or
+  simply want a type II client."
+    readln "Continue anyway?" y
+    if [ "$ans" = "n" ]
+    then
+     exit 1
+    fi
+ }
+
+ if [ "$system" = OpenBSD ]
+ then
+  LIBDIR=
+  INCDIR=
+  SRCDIR=idea*
+  findlib libidea.a
+  if [ "$found" = "" ]
+  then
+   ideawarn
+  else
+   DEF="$DEF -DUSE_IDEA"
+   IDEALIB="$MAKELIB"
+   LIBS="$LIBS $LIB"
+   LDFLAGS="$LDFLAGS $LDFLAG"
+   if [ "$INCDIR" != "" ]
+   then
+    INC="$INC -I$INCDIR"
+   fi
+  fi
+ elif [ "$system" = msdos -o "$system" = win32 ]
+ then
+  DEF="$DEF -DUSE_IDEA"
+ else
+   echo "Checking for IDEA support..."
+   cat <<END >tmptst.c
+#include <openssl/idea.h>
+int main() {
+  void *dummy;
+  dummy = idea_cfb64_encrypt;
+  exit(0);
+}
+END
+   if gcc $LDFLAGS $INC tmptst.c -o tmptst $OPENSSLLIB
+   then
+     DEF="$DEF -DUSE_IDEA"
+   else
+     ideawarn
+   fi
+   rm -f tmptst.c tmptst
+ fi
+
+ echo "testing for setenv()..."
+ cat <<END >tmptst.c
+int main() {
+#include <stdlib.h>
+ setenv("TZ", "GMT", 0);
+ exit(0);
+}
+END
+ if gcc tmptst.c -o tmptst
+ then
+   DEF="$DEF -DHAVE_SETENV"
+ fi
+ echo "done"
+ rm -f tmptst.c tmptst
+
+# if [ "$MIXDEST" = "$HOME/Mix" ]
+# then
+#  SPOOL=
+# else
+  SPOOL=-DSPOOL=\'\"$MIXDEST\"\'
+# fi
+
+ echo "Generating Makefile."
+ echo "#Makefile generated on $HOSTNAME `date`" >Makefile
+ sed -e "s#%MIXDIR#$SPOOL#" \
+     -e "s#%LIBS#$LIBS#" \
+     -e "s#%LDFLAGS#$LDFLAGS#" \
+     -e "s#%INC#$INC#" \
+     -e "s#%DEF#$DEF#" < Makefile.in >> Makefile
+# echo "$ZLIB" >>Makefile
+# echo "$PCRE" >>Makefile
+ echo "$IDEALIB" >>Makefile
+ echo "$NCURSES" >>Makefile
+ echo "$OPENSSL" >>Makefile
+fi
+
+
+
+
+
+echo "Compiling. Please wait."
+whereis make
+make=$found
+
+if [ "$system" = win32 ]
+then
+# (cd zlib*; make libz.a)
+# (cd pcre*; make libpcre.a)
+ if [ "$PASS" != "" ]
+ then
+  $make "$PASS" dllmix
+ else
+  $make dllmix
+ fi
+else
+ if [ "$PASS" != "" ]
+ then
+  $make "$PASS"
+ else
+  $make
+ fi
+fi
+
+if [ -x mixmaster ]
+then
+ echo
+else
+ echo "Error: The compilation failed. Please consult the documentation (section
+\`Installation problems')."
+ readln "Remove the old Makefile?" y
+ if [ "$ans" = y ]
+ then
+  rm -f Makefile
+ fi
+ exit 1
+fi
+
+if [ -f "$MIXDEST/mixmaster.conf" -a ! -f "$MIXDEST/mix.cfg" ]
+then
+ export MIXDEST
+ export MIXDIR
+ export MIXSRC
+ "${MIXDIR}/upgrade"
+ exit 0
+fi
+
+if [ -f mixmaster.exe ]
+then
+ cp mixmaster.exe "$MIXDEST"
+else
+ cp mixmaster "$MIXDEST"
+fi
+
+cd "$MIXCFG"
+for i in mlist.txt pubring.mix rlist.txt pubring.asc
+do
+ if [ ! -f "$MIXDEST/$i" ]
+ then
+  cp "$i" "$MIXDEST"
+ fi
+done
+
+if [ "$remailer" = "y" ]
+then
+ cd "$MIXCFG"
+ for i in adminkey.txt dest.alw
+ do
+  if [ ! -f "$MIXDEST/$i" ]
+  then
+   cp "$i" "$MIXDEST"
+  fi
+ done
+fi
+
+if [ "$remailer" = "n" ]
+then
+ if [ ! -f "$MIXDEST/mix.cfg" ]
+ then
+  whereis sendmail /usr/lib/sendmail /usr/sbin/sendmail
+  echo "SENDMAIL	$found -t" >"$MIXDEST/mix.cfg"
+  cat mix.cfg >>"$MIXDEST/mix.cfg"
+ fi
+ echo "Client installation complete."
+ exit
+fi
+
+for i in *.blk
+do
+ if [ ! -f "$MIXDEST/$i" ]
+ then
+  cp "$i" "$MIXDEST"
+ fi
+done
+
+cd "$MIXDEST"
+
+installed=n
+if [ -f mix.cfg ]
+then
+ if grep REMAILERADDR mix.cfg >/dev/null
+ then
+  installed=y
+ fi
+fi
+
+if [ "$installed" = "n" ]
+then
+ Date=`date`
+ whereis sendmail /usr/lib/sendmail /usr/sbin/sendmail
+ sendmail=$found
+
+ echo "Mixmaster can be installed in the low-maintenance \`middleman' mode.
+In that mode, it will send mail to other remailers only, to avoid
+complaints about anonymous messages."
+ readln "Install as middleman?" n
+ middle=$ans
+
+ readln "The e-mail address of your remailer:" `whoami`@$HOSTNAME
+ RMA=$ans
+
+ echo "Do you want Mixmaster to send auto-replies to messages it does not
+understand (If the address <$RMA> is also used"
+ readln "for mail to be read by a human, type \`n')?" y
+ autoreply=$ans
+
+ if [ "$middle" = n ]
+ then
+  readln "An address to appear in the \`From:' line of anonymous messages:" `echo $RMA | sed 's/.*@/nobody@/'`
+  RAA=$ans
+
+  readln "Address for complaints to be sent to:" `echo $RMA | sed 's/.*@/abuse@/'`
+  CA=$ans
+ else
+  RAA=$RMA
+  CA=$RMA
+ fi
+
+ echo "Choose a name for your remailer.  It will appear in remailer status messages."
+ readln "Long name:" "Anonymous Remailer"
+ RMN=$ans
+
+ if [ "$middle" = n ]
+ then
+  echo "Choose a name to be used in the \`From:' line of remailed messages."
+  readln "Anon long name:" "Anonymous"
+  RAN=$ans
+ fi
+
+ readln "A short name to appear in lists:" `echo $HOSTNAME|sed 's/\..*//'`
+ SN=$ans
+
+ readln "Accept Mixmaster (Type II) messages?" y
+ mix=$ans
+
+ readln "Accept PGP (Type I) remailer messages?" n
+ pgp=$ans
+
+ unencrypted=n
+ if [ "$pgp" = "y" ]
+ then
+  readln "Accept unencrypted remailer messages?" n
+  unencrypted=$ans
+ fi
+
+ echo "Mixmaster will log error messages and warnings. Do you want to log"
+ readln "informational messages about normal operation as well?" y
+ if [ "$ans" = y ]
+ then
+  verbose=2
+ else
+  verbose=1
+ fi
+
+ readln "Filter binary attachments?" n
+ binfilter=$ans
+
+ if [ "$middle" = n ]
+ then
+  if [ "$autoreply" = y ]
+  then
+   readln "Allow users to add themselves to the list of blocked addresses?" y
+   autoblock=$ans
+  fi
+
+  echo "Do you want to allow posting? Newsgroups can be restricted in dest.blk.
+y)es, post locally; use m)ail-to-news gateway; n)o."
+  readln "Allow posting to Usenet?" m
+  post="$ans"
+  if [ "$ans" = y ]
+  then
+   whereis inews /usr/lib/news/inews
+   readln "News posting software:" "$found -h"
+   news=$ans
+   readln "Organization line for anonymous Usenet posts:" "Anonymous Posting Service"
+   orga=$ans
+   readln "Use anti-spam message IDs?" y
+   mid=$ans
+  elif [ "$ans" = m ]
+  then
+   readln "Mail-to-news gateway:" mail2news@nym.alias.net
+   news=$ans
+  fi
+ fi
+
+# Commented the poolsize question out, since poolsize is the least
+# important of the three pool parameters.
+#
+# echo "How many messages do you want to keep in the reordering pool?
+#A larger pool is more secure, but also causes higher latency.
+#0 means to remail immediately."
+# readln "Pool size:" 45
+# poolsize=$ans
+
+ mbox=
+ if [ -f ~/.forward ]
+ then
+  mbox=`head -1 ~/.forward | sed 's/^"//;s/"$//'`
+  if echo "$mbox" | grep 'mix' >/dev/null 2>/dev/null
+  then
+   mbox=
+  elif echo "$mbox" | grep 'procmail' >/dev/null 2>/dev/null
+  then
+   if grep mix ~/.procmailrc >/dev/null 2>/dev/null
+   then
+    mbox=
+   fi
+  fi
+ fi
+
+ if [ "$mbox" = "" ]
+ then
+  mbox=${MAIL:-/usr/spool/mail/$NAME}
+  touch "$mbox"
+  if [ ! -w "$mbox" ]
+  then
+   echo "$mbox is not writeable."
+   readln "Mailbox for non-remailer messages:" "${MIXDEST}/mbox"
+   mbox=$ans
+  fi
+ fi
+
+ cat <<END >mix.cfg
+# mix.cfg -- installed $Date
+SENDMAIL	$sendmail -t
+
+# Where to store non-remailer messages:
+MAILBOX		$mbox
+#MAILABUSE	mbox.abuse
+#MAILBLOCK	mbox.block
+#MAILUSAGE	mbox.usage
+#MAILANON	mbox.anon
+#MAILERROR	mbox.error
+#MAILBOUNCE	mbox.bounce
+
+REMAIL		y
+MIDDLEMAN	$middle
+
+BINFILTER	$binfilter
+AUTOBLOCK	$autoblock
+
+ERRLOG          error.log
+VERBOSE		$verbose
+
+# Remailer name and addresses
+REMAILERADDR	$RMA
+ANONADDR	$RAA
+COMPLAINTS	$CA
+
+SHORTNAME	$SN
+REMAILERNAME	$RMN
+ANONNAME	$RAN
+
+# Supported formats:
+MIX             $mix
+PGP             $pgp
+UNENCRYPTED     $unencrypted
+
+# Maximum message size in kB (0 for no limit):
+SIZELIMIT       0
+
+# Usenet news:
+NEWS		$news
+ORGANIZATION	$orga
+MID		$mid
+
+# Remailing strategy:
+SENDPOOLTIME    15m
+POOLSIZE        45
+RATE            65
+INDUMMYP        10
+OUTDUMMYP       90
+CHAIN           *,*,*,*
+IDEXP           7d
+PACKETEXP       7d
+
+$PASSPHRASE
+
+END
+
+fi # not yet installed
+
+
+REPLACE="s/%RMN/$RMN/g;s/%RMA/$RMA/g;s/%CA/$CA/g;s/%RAA/$RAA/g"
+if [ "$installed" = "n" ]
+then
+ cd "$MIXCFG"
+ if [ ! -f "$MIXDEST/help.txt" ]
+ then
+  sed "$REPLACE" < intro.hlp >"$MIXDEST/help.txt"
+  if [ "$mix" = y ]
+  then
+   sed "$REPLACE" < mix.hlp >>"$MIXDEST/help.txt"
+  fi
+  if [ "$unencrypted" = y ]
+  then
+   sed "$REPLACE" < type1.hlp >>"$MIXDEST/help.txt"
+   if [ "$pgp" = y ]
+   then
+    sed "$REPLACE" < pgp.hlp >>"$MIXDEST/help.txt"
+   fi
+  elif [ "$pgp" = y ]
+  then
+   sed "$REPLACE" < pgponly.hlp >>"$MIXDEST/help.txt"
+  fi
+  if [ "$post" = y ]
+  then
+   if [ "$pgp" = y -o "$unencrypted" = y ]
+   then
+    sed "$REPLACE" < news.hlp >>"$MIXDEST/help.txt"
+   fi
+  fi
+  sed "$REPLACE" < end.hlp >>"$MIXDEST/help.txt"
+ fi
+
+ for i in *.txt.in
+ do
+  j=`echo $i | sed 's/\.in$//'`
+  if [ ! -f "$MIXDEST/$j" ]
+  then
+    sed "$REPLACE" < "$i" >"$MIXDEST/$j"
+  fi
+ done
+ cd "$MIXDEST"
+fi
+
+echo
+if [ ! -f secring.mix ]
+then
+ echo "Generating secret keys. This may take a while..."
+else
+ echo "Updating secret keys..."
+fi
+./mixmaster -K
+if [ -f key.txt ]
+then
+ echo "Done."
+ echo
+else
+ echo "Installation failed. Please consult the Mixmaster documentation."
+ exit 1
+fi
+
+if [ "$system" = msdos -o "$system" = win32 ]
+then
+ exit
+fi
+
+umask 033
+
+# Set .forward?
+# 
+set=y
+# FIXME -- Mixmastger should run in daemon mode, not from procmail
+# Make the Install script do that.
+
+if grep procmail ~/.forward >/dev/null 2>/dev/null
+then
+ if grep mix ~/.procmailrc >/dev/null 2>/dev/null
+ then
+  echo "Mixmaster is installed in your .procmailrc file."
+  set=n
+ fi
+fi
+
+if [ "$set" = y -a -f ~/.forward ]
+then
+ echo "Your current .forward is:"
+ cat ~/.forward
+ echo
+ if grep mix ~/.forward >/dev/null 2>/dev/null
+ then
+  echo "Mixmaster already is installed in your .forward file."
+  set=n
+ elif [ "$mbox" != "" ]
+ then
+  if echo "$mbox" | grep '|' >/dev/null 2>/dev/null
+  then
+   echo "Mixmaster will pipe messages to $mbox"
+  elif echo $mbox | grep '@' >/dev/null 2>/dev/null
+  then
+   echo "Mixmaster will forward messages to $mbox"
+  else
+   echo "Mixmaster will store messages to $mbox"
+  fi
+ fi
+fi
+
+if [ "$set" = y ]
+then
+ echo "Set .forward to the following line:"
+ echo "\"|${MIXDEST}/mixmaster -RM\""
+ if [ -f ~/.forward ]
+ then
+  readln "Overwrite now?" n
+ else
+  readln "Do that now?" n
+ fi
+ if [ "$ans" = "y" ]
+ then
+  echo "\"|${MIXDEST}/mixmaster -RM\"" >~/.forward
+ fi
+fi
+
+#FIXME -- we need a second script that can re-generate help files
+# when the conf changes.
+
+if [ "$RMA" != "" ]
+then
+ echo "
+Mixmaster will send the following files as auto-replies:
+Mail to <$RMA> with Subject: remailer-help => help.txt"
+ echo "Mail to <$RMA> with Subject: remailer-adminkey => adminkey.txt
+Remember to add your Remailer Admin public PGP key to the adminkey.txt file."
+ if [ "$autoblock" = y ]
+ then
+  echo "Mail to <$RMA> with line DESTINATION-BLOCK => blocked.txt"
+ fi
+ if [ "$autoreply" = y ]
+ then
+  echo "Other mail to <$RMA> => usage.txt"
+  echo
+  if [ "$CA" != "$RMA" ]
+  then
+   echo "If you arrange for mail to <$CA> and <$RAA>
+to be forwarded to <$RMA>:
+Mail to <$CA> => abuse.txt
+Mail to <$RAA> => reply.txt"
+  fi
+ fi
+fi
+
+echo
+echo "Mixmaster installation complete."
+

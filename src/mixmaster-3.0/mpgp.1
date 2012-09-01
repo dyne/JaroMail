@@ -1,0 +1,121 @@
+.TH MPGP 1 "Mixmaster Version 3.0"
+.\" $Id: $
+.SH NAME
+mpgp \- Mixmaster OpenPGP Module
+.SH SYNOPSIS
+.B mpgp \fB\-e\fR [\fB\-b\fR] \fIkeyname\fR [\fIfilename\fR]
+.PP
+.B mpgp \fB\-s\fR [\fB\-b\fR] [\fIkeyname\fR [\fIfilename\fR]]
+.PP
+.B mpgp \fB\-c\fR [\fB\-b\fR] [\fIfilename\fR]
+.PP
+.B mpgp \fB\-C\fR [\fB\-b\fR] [\fIfilename\fR]
+.PP
+.B mpgp \fB\-d\fR [\fB\-b\fR] [\fIpassphrase\fR [\fIfilename\fR]]
+.PP
+.B mpgp \fB\-g\fR[\fBr\fR] \fIkeyname\fR [\fIbits\fR]
+.PP
+.B mpgp \fB\-a\fR[\fB+\-\fR] [\fB\-b\fR] [\fIfilename\fR]
+.PP
+.B mpgp \fB\-V\fR
+.SH DESCRIPTION
+Mixmaster is an anonymous remailer. mpgp is a light-weight OpenPGP
+implementation, primarily used to diagnose issues with OpenPGP keys and
+messages handled by the Mixmaster remailer software.
+.PP
+mpgp can encrypt, decrypt and sign a message using the Mixmaster 
+OpenPGP library. The message is read from the standard input or the 
+specified \fIfilename\fR. The output will be written to the standard 
+output. When called without arguments mpgp decrypts from the standard 
+input. It asks for a passphrase when needed.
+.SH OPTIONS
+.TP
+.B "\-h"
+Print a summary of command line options.
+.TP
+.B "\-V"
+Print the current version, authorship and copyright information.
+.TP
+.B "\-e"
+Encrypt a message with the first OpenPGP key from the public key ring 
+whose contains \fIkeyname\fR as a substring.
+.TP
+.B "\-s"
+Make a signature of the message with the first OpenPGP key from the secret
+key ring, or the first key whose contains \fIkeyname\fR as a substring if
+specified.
+.TP
+.B "\-c"
+Encrypt with symmetric cipher only.
+.TP
+.B "\-C"
+Encrypt with symmetric cipher only using the new OpenPGP format.
+.TP
+.B "\-d"
+Decrypt a message using \fIpassphrase\fR if specified or asking for it if
+needed. It also verifies its signature.
+.TP
+.B "\-g\fR[\fBr\fR]"
+Generate new OpenPGP key pair with the given \fIkeyname\fR as user ID. If
+\fBr\fR is specified the OpenPGP key will be created using the RSA 
+algorithm, otherwise the ElGamal algorithm will be used. \fIbits\fR is the 
+key length and its default value is 1024.
+.TP
+.B "\-a\fR[\fB+\-\fR]"
+Create an ASCII OpenPGP armored message. If \fB\-\fR is specified mpgp 
+will remove ASCII armor.
+.TP
+.B "\-b"
+Specifies that the message is in binary format.
+.SH CONFIGURATION
+The Mixmaster OpenPGP module reads its configuration from the file
+.B mix.cfg
+in its working directory.  The configuration file consists of lines of
+the type
+.PP
+.I VARIABLE       values
+.PP
+and of comments, which begin with a
+.B #
+character.
+.PP
+.TP
+.B PGPPUBRING
+Path to your public OpenPGP key ring. Default:
+.BR ~/.pgp/pubring.pgp .
+(Windows default: PGP registry value.)
+.TP
+.B PGPSECRING
+Path to your secret OpenPGP key ring. Default:
+.BR ~/.pgp/secring.pgp .
+(Windows default: PGP registry value.)
+.SH FILES
+These filenames can be overridden by setting the corresponding configuration
+option (given in parentheses).
+.TP
+.B mix.cfg
+Mixmaster configuration file.
+.TP
+.B pubring.pgp
+OpenPGP public keys (\fBPGPPUBRING\fP).
+.TP
+.B secring.pgp
+OpenPGP secret keys (\fBPGPSECRING\fP).
+.SH SEE ALSO
+.BR mixmaster (1),
+.BR pgp (1),
+.BR gpg (1).
+.SH HISTORY
+The
+.BR mpgp 
+command was written by Ulf Moeller as a test suite for Mixmaster 
+2.9's internal OpenPGP support. It was enhanced and debugged primarily
+by Janis Jagars for use as a light-weight stand-alone OpenPGP application.
+.SH COPYRIGHT
+(C) 1999-2006 Ulf Moeller and others.
+Mixmaster and 
+.BR mpgp 
+may be redistributed and modified under certain
+conditions. This software is distributed on an "AS IS" basis, WITHOUT
+WARRANTY OF ANY KIND, either express or implied. See the file COPYRIGHT
+for details.

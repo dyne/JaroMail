@@ -1,0 +1,143 @@
+You can use PGP to encrypt messages sent to this remailer if you for
+some reason are unable to use the Mixmaster client software. However,
+while PGP will securely encrypt the content of a message that you are
+sending to the remailer, submitting messages to the remailer that are
+merely PGP encrypted without the use of the Mixmaster client software
+greatly increases the risk of third parties being able to determine the
+identity of the sender (you).
+
+This remailer primarily supports the ability to submit messages for
+remailing without requiring the Mixmaster client software for backwards
+compatibility with older remailer client software.
+
+If you are able to use the Mixmaster software with your operating system
+(chances are you can), it is highly recommended that you use the
+Mixmaster client software instead. See the earlier section in this help
+file on how to obtain a copy of the Mixmaster client software.
+
+If you cannot use the Mixmaster software, want to use an anonymous
+remailer, and are willing to accept reduced security, you can do the
+following:
+
+Send email with Subject: remailer-key to <%RMA> to obtain
+a copy of the remailer's PGP key.
+
+Then do the following:
+
+1)	create a file containing your message
+2)	insert a BLANK LINE as the first line of the file
+3)	Insert a "::" as the second line of the file
+4)	Insert "Anon-To: final_recipient@destination_domain.com" as the
+        third line of the file.
+
+At this time, the file should look as follows:
+
+==================================================================
+
+::
+Anon-To:  final_recipient@destination_domain.com 
+
+This is some anonymized email.
+==================================================================
+
+5)	Now encrypt the file with the PGP key of this remailer.
+
+Finally, email the encrypted file to <%RMA> as
+shown in the example below.
+
+The line "Encrypted: PGP" instructs the remailer to decrypt the message
+and process its contents.
+
+==================================================================
+From: remailer_user@sender_domain.com
+To: %RMA
+Subject: anonymous message
+
+::
+Encrypted: PGP
+
+-----BEGIN PGP MESSAGE-----
+Version: 2.6.3i
+
+owE1jMsNwjAUBH3gZMk9PClnUoBPUANpwElW2OBPZD8H0gd1UCP2gduuNDNfIcSH
+T4zCbQmtlbzGFM9T0jSD7QVvEzaPcUlBSSWHQclbnR9YWJNp5BFSLdR9CijF3NGx
+ybry/1Rsqn4la3a0JiIhLvnYGCu9HFtiC8oIxnlkeuIYe+EH =HgDq
+-----END PGP MESSAGE-----
+==================================================================
+
+Even though PGP encryption in itself is very secure, not using the
+Mixmaster client exposes some information to parties desiring to
+compromise your privacy. This information leakage permits what is known
+as "traffic analysis". For example, if someone receives anonymous
+messages soon after you sent encrypted messages to a remailer it is
+likely that you are the sender of those messages.
+
+To partially compensate for this information leak, you can instruct the
+remailer to delay your messages for some time or send the remailer empty
+messages to make such analysis harder:
+
+If you use the line "Null:" instead of "Anon-To:", the remailer will
+simply discard your message.
+
+You can add a "Latent-Time:" header to the remailer to retain your
+message for some time before forwarding it.  "Latent-Time: +2:00" would
+delay the message for two hours. You can use a random delay by adding
+"r", for example "Latent-Time: +5:00r" would delay the message for up to
+five hours. For example:
+
+==================================================================
+
+::
+Anon-To:  final_recipient@destination_domain.com
+Latent-Time: +2:00
+
+This is some anonymized email.
+==================================================================
+
+
+You can chain remailers by using another remailer to send the message to
+<%RMA> anonymously. For example, take the message
+
+================================================================== 
+
+::
+Anon-To: %RMA
+
+::
+Encrypted: PGP
+
+-----BEGIN PGP MESSAGE-----
+Version: 2.6.3i
+
+owE1jMsNwjAUBH3gZMk9PClnUoBPUANpwElW2OBPZD8H0gd1UCP2gduuNDNfIcSH
+T4zCbQmtlbzGFM9T0jSD7QVvEzaPcUlBSSWHQclbnR9YWJNp5BFSLdR9CijF3NGx
+ybry/1Rsqn4la3a0JiIhLvnYGCu9HFtiC8oIxnlkeuIYe+EH =HgDq
+-----END PGP MESSAGE-----
+==================================================================
+
+Next, encrypt the message with the PGP key of the %RMN
+and send the twice-encrypted message to <%RMA>.
+
+Similar to a nested Russian matryoshka doll, containing increasingly
+smaller dolls inside the each outer doll, you can layer multiple
+encryption layers and remailer hops around your message. If this sounds
+confusing, just use the Mixmaster client software instead.
+
+If you send your messages through a chain of several independent
+remailers, it will be become increasingly difficult, though not
+necessarily impossible, to trace the anonymous message back to you. A
+vastly more secure solution is to use the Mixmaster client software to
+send your anonymous mail.
+
+Some remailers supporting PGP encrypted messages offer pseudonymous
+"nym" service that allow you to not only send emails privately, but also
+receive emails without enabling the sender to determine your recipient
+destination email address. For more information about such nym services,
+see the following URLs.
+
+http://lexx.shinn.net/nym/ 
+
+http://riot.eu.org/anon/doc/nym.html
+
+				*****
+

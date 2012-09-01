@@ -1,0 +1,41 @@
+## List of addresses to which Mixmaster will deliver, even in middleman mode
+## Beware: substring matches
+##
+## $Id: dest.alw,v 1.3 2003/09/03 16:51:12 packbart Exp $
+
+
+##
+## allowed destinations
+##
+
+## Allows mail to *@example.com
+#/@example\.com$/
+
+## Matches *myaddress@example.net*
+#myaddress@example.net
+
+## Allows direct posts to alt.test and alt.anonymous.messages
+## (only mix posts unless mail2news@ is whitelisted, too)
+#/^Newsgroups: +(alt\.test|alt\.anonymous\.messages)$/
+
+
+##
+## nymservers
+##
+
+/@nym\.alias\.net$/
+/@hod\.aarg\.net$/
+/@blackhole\.riot\.eu\.org$/
+/@nym\.cryptofortress\.com$/
+/@nym\.xganon\.com$/
+/@rodent\.frell\.eu\.org$/
+
+##
+## presumably dead nymservers
+##
+
+#/@redneck\.gacracker\.org$/
+#/@anon\.nymserver\.com$/
+#/@mailanon\.com$/
+/@alias\.cyberpass\.net$/
+

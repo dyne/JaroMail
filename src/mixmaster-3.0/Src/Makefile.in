@@ -1,0 +1,83 @@
+# Mixmaster version 3.0  --  (C) 1999 - 2006 Anonymizer Inc. and others.
+
+# Mixmaster may be redistributed and modified under certain conditions.
+# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF
+# ANY KIND, either express or implied. See the file COPYRIGHT for
+# details.
+
+# $Id: Makefile.in 647 2003-10-25 23:34:13Z weasel $
+
+# Edit according to the libraries you want to use:
+INC = %INC
+DEF = %DEF -DUSE_SOCK %MIXDIR
+LIBS = %LIBS
+LDFLAGS = %LDFLAGS
+
+OPT = -g -Wall
+# OPT = -g -pg -Wall -DDEBUG
+# OPT = -O2 -Wall
+
+CFLAGS = $(INC) $(DEF) $(OPT)
+CC = gcc
+AR = ar rc
+RANLIB = ranlib
+#MAKE = make
+
+OBJ = mix.o rem.o rem1.o rem2.o chain.o chain1.o chain2.o nym.o pgp.o pgpdb.o pgpdata.o pgpget.o pgpcreat.o pool.o mail.o rfc822.o mime.o keymgt.o compress.o stats.o crypto.o random.o util.o buffers.o maildir.o parsedate.tab.o
+
+MIXOBJ = rndseed.o menu.o menusend.o menunym.o menuutil.o menustats.o
+NOMENUOBJ = rndseed.o dummy.o
+WINOBJ = winmain.o winutil.o
+
+all:	mixmaster
+
+mixmaster: $(OBJ) $(MIXOBJ) main.o $(LIBS)
+	$(CC) $(OBJ) $(MIXOBJ) main.o $(LIBS) $(LDFLAGS) -o mixmaster
+
+libmix.a: $(OBJ) $(MIXOBJ) dllmain.o
+	$(AR) libmix.a $(OBJ) $(MIXOBJ) dllmain.o
+
+libmix32.a: libmix.a mixlib.def
+	dllwrap --dllname mixlib.dll --def mixlib.def --output-lib libmix32.a libmix.a zlib-1.1.4/libz.a pcre-2.08/libpcre.a openssl/libeay32.a -lwsock32
+
+dllmix: main.o libmix32.a
+	$(CC) main.o libmix32.a -o dllmix
+
+winmix.exe:	$(WINOBJ) libmix32.a
+	$(CC) $(WINOBJ) libmix32.a -lgdi32 -luser32 $(LDFLAGS) -o mixmaster.exe
+
+winmix: winmenu.res #winmix.exe
+	rsrc winmenu.res mixmaster.exe
+
+winmenu.o:	winmenu.rc winmenu.h
+	windres winmenu.rc winmenu.o
+
+remailer:	$(OBJ) $(NOMENUOBJ) remailer.o $(LIBS)
+	$(CC) $(OBJ) $(NOMENUOBJ) remailer.o $(LIBS) $(LDFLAGS) -o remailer
+
+mpgp:	$(OBJ) $(NOMENUOBJ) mpgp.o $(LIBS)
+	$(CC) $(OBJ) $(NOMENUOBJ) mpgp.o $(LIBS) $(LDFLAGS) -o mpgp
+
+test:	$(OBJ) test.o $(NOMENUOBJ) $(LIBS)
+	$(CC) $(OBJ) test.o $(NOMENUOBJ) $(LIBS) $(LDFLAGS) -o test
+
+clean:
+	-rm -f *.o *.a *.res *~ mixmaster mix *.exe remailer test mpgp core gmon.out
+
+allclean: clean
+	-rm -f Makefile
+
+distclean:	allclean
+
+ci: clean
+	cd ~/src/mix3; ci -l * Mix/* Mix/Src/*; echo
+
+parsedate.tab.c: parsedate.y
+	@echo Expect 6 shift/reduce conflicts
+	bison parsedate.y
+
+parsedate: parsedate.tab.c
+	gcc -DTEST parsedate.tab.c -o parsedate
+
+
+include Makefile.deps

@@ -1,0 +1,36 @@
+Abuse Policy:
+
+Unfortunately, there will always be a very small percentage of
+individuals that choose to abuse the anonymity that this and similar
+systems worldwide afford to send otherwise unwelcome email. The
+%RMN does not condone such messages, or their content,
+in any way.
+
+Just as the Post Office is unable to prevent abuse of the mail system as
+long as there are public mailboxes into which a person can drop a letter
+without including a return address, the %RMN cannot preemptively
+prevent irresponsible individuals from using this system to send
+inappropriate messages. However, unlike the Post Office, this remailer
+enables you to assure that you will not be inconvenienced by users of
+this remailer in the future.
+
+To block the users of this remailer from sending email to your address,
+please send a message to <%RMA>
+containing the line
+
+DESTINATION-BLOCK
+
+anywhere in the body text of the email.  You can simply reply to this
+message using your email program and send back this entire message for
+your current email address to be permanently blocked from users of the
+%RMN.
+
+For additional information on this remailer's abuse policy, instructions
+on how to block more than one email address, and to reach the
+%RMN operator, please send
+email to <%CA>.
+  
+Thank you for your interest in secure and private communications,
+
+-- The %RMN Administrator
+

@@ -1,0 +1,48 @@
+
+Broken type-I remailer chains:
+(austria borked)
+(borked senshi)
+(cyberiad borked)
+(deuxpi senshi)
+(dizum borked)
+(frell senshi)
+(george borked)
+(senshi beton)
+
+Broken type-II remailer chains:
+(austria borked)
+(borked cyberiad)
+(cthulu antani)
+(deuxpi tonga)
+(metacolo tonga)
+(pobox tonga)
+(winters tonga)
+Last update: Sat 22 Dec 2007 14:50:04 GMT
+mixmaster           history  latency  uptime
+--------------------------------------------
+cthulu                  +-- 12:23:02 100.00%
+nymkey                  *-- 12:15:01 100.00%
+cyberiad                *-- 12:10:30 100.00%
+george                  *-- 11:53:04 100.00%
+dizum                   +-- 11:43:56 100.00%
+pboxmix                 *-- 11:27:59 100.00%
+banana                  +-- 11:16:59 100.00%
+borked                  *-- 11:13:06 100.00%
+metacolo                *-- 11:01:08 100.00%
+hermetix                *-- 10:35:00 100.00%
+deuxpi                  *-- 10:25:01 100.00%
+cside                   +-- 11:04:57  99.88%
+antani                  +-- 13:38:02  99.49%
+frell                   --- 16:59:02  99.03%
+citrus                  +-- 14:20:01  98.42%
+starwars                +-- 13:51:02  98.27%
+kroken                  +-- 10:25:33  96.30%
+pobox                   +-- 11:48:00  95.82%
+eurovibes               +-- 11:33:00  92.45%
+winters                 +--  9:52:06  89.99%
+beton              ___  +-- 64:40:28  64.21%
+austria              _  +-- 11:04:58  45.96%
+tonga                   +--  4:48:00  30.70%
+bunker                  +-- 14:50:01  24.07%
+hastio                      99:59:59   0.00%
+panta                       99:59:59   0.00%

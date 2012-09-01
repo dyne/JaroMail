@@ -1,0 +1,45 @@
+This independent remailer uses the Mixmaster remailer software. It is
+highly recommended that you obtain a copy of the Mixmaster software to
+utilize this remailer. This particular remailer may offer other means of
+accessing the remailer service. If this remailer offers other means of
+accessing the remailer service, the means will be described later in
+this help file. However, only by using the Mixmaster client software
+will you assure the highest level of security against third-parties
+compromising your privacy.  How to obtain the Mixmaster software:
+
+Mixmaster source code for FreeBSD, Linux, other variants of UNIX, and
+Win32:
+
+If your operating system is a UNIX derivative, simply download and
+compile the client from the source code available at
+http://prdownloads.sourceforge.net/mixmaster/
+
+Mixmaster clients binaries for Win32 (Windows 98, NT, 2000, XP)
+
+Win32 users may wish to try one of the GUI applications that interface with
+Mixmaster:
+Omnimix:		http://www.danner-net.de/om.htm
+Quicksilver:		http://www.quicksilvermail.net/
+Jack B. Nymble:		http://www.panta-rhei.eu.org/downloads/JBN/
+These are all developed independently of the main Mixmaster distribution. Please
+do not contact the Mixmaster development team or the Administrator of the
+%RMN with questions about this software.
+
+For more information about Mixmaster or to contribute to the development
+of Mixmaster, please see the following URL's:
+
+Official Mixmaster Project Site:
+http://sourceforge.net/projects/mixmaster/
+
+General Information about Remailers and Remailer "how-to" Guides:
+http://www.noreply.org/
+http://www.faqs.org/faqs/privacy/anon-server/
+http://www.andrebacard.com/remail.html
+http://www.freehaven.net/
+http://www.stack.nl/~galactus/remailers/
+
+Remailer Meta-Statistics:
+http://stats.mixmin.net
+
+					****
+

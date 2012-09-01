@@ -1,0 +1,34 @@
+This Software/Hardware product contains the algorithm IDEA(TM) as
+described and claimed in US Patent No. 5,214,703, EPO Patent
+No. 0482154 and filed Japanese Patent Application No. 508119/1991
+"Device for the conversion of a digital block and use of same"
+(hereinafter referred to as "Algorithm"). Any use of the Algorithm for
+Commercial Purposes is thus subject to a license from Ascom Systec
+Ltd. of CH-5506 Mägenwil (Switzerland), being the patentee and sole
+owner of all rights, including the term IDEA(TM). Commercial Purposes
+shall mean any revenue generating purpose including but not limited to
+
+i) using the Algorithm for company internal purposes (subject to a
+Site License).
+
+ii) incorporating an application software containing the Algorithm
+into any hardware and/or software and distributing such hardware
+and/or software and/or providing services related thereto to others
+(subject to a Product License).
+
+iii) using a product containing an application software that uses the
+Algorithm (subject to an End-User License), except in case where such
+End-User has acquired an implied license by purchasing the said
+product from an authorized licensee or where the End-User has already
+signed up for a Site License.
+All such commercial license agreements are available exclusively from
+Ascom Systec Ltd. and may be requested via the Internet World Wide Web
+at http://www.ascom.ch/systec/infosec.html or by sending an electronic
+mail to IDEA@ascom.ch. Any misuse will be prosecuted.
+
+Use other than for Commercial Purposes is strictly limited to data
+transfer between private individuals and not serving Commercial
+Purposes. The use by government agencies, non-profit organizations
+etc. is considered as use for Commercial Purposes but may be subject
+to special conditions. Requests for waivers for non-commercial use
+(e.g. by software developers) are welcome.

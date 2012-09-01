@@ -1,0 +1,22 @@
+# Header lines to be filtered out.
+
+/^From:/
+/^Sender:/
+/^X-Sender:/
+/^Resent-/
+/^Approved:/
+/^Errors-To:/
+/^Message-ID:/
+/^Comments: Authenticated sender is/
+/^Path:/
+/^Received:/
+
+/^Control: rmgroup/q
+/^Control: newgroup/q
+/^Control: sendsys/q
+/^Control: checkgroups/q
+/^Control: version/q
+
+# Don't allow excessive crossposting:
+/^Newsgroups:.*,.*,.*,.*,.*,/q
+

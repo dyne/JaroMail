@@ -1,0 +1,30 @@
+Mixmaster on Windows is known to build with Microsoft Visual Studio .NET
+2003 Professional.
+
+You will need openssl, zlib, pcre, and pdcurses.
+
+First, build openssl as described in the openssl documentation.  Place
+the entire build directory in Src/openssl.
+
+zlib, pcre, and pdcurses sources are assumed to be in Src/zlib-1.1.4,
+Src/pcre-2.08, and Src/pdcurses respectively.
+
+Open the mixmaster project win32/mix.sln, and build the mix solution.
+You should find the results in win32/release.
+
+
+References:
+ - http://www.openssl.org/
+ - http://pdcurses.sourceforge.net/
+
+-- 
+Peter Palfrader, Sat,  1 May 2004 20:31:48 +0200
+
+
+[Note to users of Mixmaster 3.0rc1 and earlier: mix.cfg.txt and pop3.cfg 
+are now named mix.ini and pop3.ini, respectively, on WIN32. You will 
+need to manually rename your custom config files, if appropriate.]
+
+--
+Len Sassaman,    Thu, 13 Sep 2007 14:56:37 +0200
+
