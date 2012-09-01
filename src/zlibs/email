@@ -315,7 +315,7 @@ EOF
 	    cp /dev/null $tmp
 	    unlink $tmp
 	) &
-	mutt -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
+	mutt-jaro -F $MUTTDIR/rc -f ${iproto}://${ilogin}@${host}${folder}
 
     } # DRYRUN
     return $?
