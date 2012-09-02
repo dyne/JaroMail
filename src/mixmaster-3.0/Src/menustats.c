@@ -17,6 +17,8 @@ char MIXDIR[512];
 int menu_getuserpass(BUFFER *p, int mode) { return 0; };
 #endif
 
+#define LINES 20
+
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>

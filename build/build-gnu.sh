@@ -128,12 +128,12 @@ case $distro in
 	{ test "$target" = "mixmaster" } && { 
 		echo "Compiling Mixmaster (anonymous remailer)"
 		pushd src/mixmaster-3.0/Src
-		mixmaster_sources=(main menustats mix rem rem1 rem2 chain chain1 chain2 nym)
+		mixmaster_sources=(main menu menuutil menusend menustats mix rem rem1 rem2 chain chain1 chain2 nym)
 		mixmaster_sources+=(pgp pgpdb pgpdata pgpget pgpcreat pool mail rfc822 mime keymgt)
 		mixmaster_sources+=(compress stats crypto random rndseed util buffers maildir parsedate.tab)
 		bison parsedate.y
 		for s in ${=mixmaster_sources}; do ${=cc} -c ${s}.c; done
-		${=cc} -o mixmaster *.o -lssl 
+		${=cc} -o mixmaster *.o -lssl -lcurses -lgpm
 		popd
 		cp src/mixmaster-3.0/Src/mixmaster build/gnu
 	}
