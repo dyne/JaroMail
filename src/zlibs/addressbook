@@ -148,15 +148,15 @@ learn() {
 	    ;;
 	recipient) # complex: more addresses in To: and Cc:
 	    head="`cat | ${WORKDIR}/bin/fetchaddr -x To: -a`"
-	    for h in ${head}; do
-		email="${h[(ws:,:)1]} )"
-		name="${h[(ws:,:)2]} )"
+	    for h in ${(f)head}; do
+		email="${h[(ws:,:)1]}"
+		name="${h[(ws:,:)2]}"
 		insert_address "$email" "$name"
 	    done
 	    head="`cat | ${WORKDIR}/bin/fetchaddr -x Cc: -a`"
-	    for h in ${head}; do
-		email="${h[(ws:,:)1]} )"
-		name="${h[(ws:,:)2]} )"
+	    for h in ${(f)head}; do
+		email="${h[(ws:,:)1]}"
+		name="${h[(ws:,:)2]}"
 		insert_address "$email" "$name"
 	    done
 	    return 0
