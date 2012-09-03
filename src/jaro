@@ -36,6 +36,9 @@ CLEANEXIT=1
 CALLMUTT=1
 TMPRAM=0
 
+# global variables for binaries called
+typeset -h rm mkdir mutt
+
 # which command to use when creating dirs
 mkdir="`which mkdir` -m 700 -p"
 # date stamp
@@ -96,9 +99,9 @@ act()    {
     fi
 }
 
-# honor quiet flag as early as possible
-echo "${@}" | grep '\-q' > /dev/null # silent
-if [ "$?" = 0 ]; then QUIET=1; fi
+# honor quiet and debug flags as early as possible
+if [[ ${@} == *-q* ]]; then QUIET=1; fi
+if [[ ${@} == *-D* ]]; then DEBUG=1; fi
 
 
 # what operating system are we in? use os_detect()
@@ -230,9 +233,10 @@ TRAPINT() {
 	else exit 1; fi
 }
 
-
+# binary programs recognition
 check_bin() {
-    # check for required programs
+
+    # required programs
     for req in pinentry fetchmail procmail; do
 	which $req >/dev/null
 	{ test $? != 0 } && {
@@ -242,13 +246,26 @@ check_bin() {
     done
 
     # which wipe command to use
-    which wipe > /dev/null
-    { test $? = 0 } && {
-	rm="wipe -f -s -q -R /dev/urandom"; return 0 }
-    which srm > /dev/null
-    { test $? = 0 } && {
-	rm="srm -m"; return 0 }
-    rm="rm -f"
+    if [ $(which wipe) ]; then
+	rm="wipe -f -s -q -R /dev/urandom"
+    elif [ $(which srm) ]; then
+	rm="srm -m"
+    else
+	rm="rm -f"
+    fi
+    func "Rm binary: $rm"
+
+    # which mutt binary to use
+    if [ $(which mutt-jaro) ]; then
+	mutt="mutt-jaro"
+    elif [ $(which mutt) ]; then
+	mutt="mutt"
+    else
+	error "Cannot find Mutt. Please install it."
+	return 1
+    fi
+    func "Mutt binary: $mutt"
+
     return 0
 }
 

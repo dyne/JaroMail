@@ -151,7 +151,7 @@ EOF
     if [ $CALLMUTT = 1 ]; then
 
 	if [ $found != 0 ]; then
-	    mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
+	    ${=mutt} -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
 	    notice "Found $found matches looking for '$expr' in all mail folders"
 	    exitcode=0
 	else error "Nothing found matching '$expr'"; fi

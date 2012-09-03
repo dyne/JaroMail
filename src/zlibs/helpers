@@ -31,7 +31,7 @@ autostart() {
 	{ test ! -r $MUTTDIR/rc } \
 	    && { error "Jaro Mail is not yet configured."; return 1 }
 
-	mutt-jaro -F $MUTTDIR/rc ${=muttflags}
+	${=mutt} -F $MUTTDIR/rc ${=muttflags}
 	return $?
     }
 
@@ -43,7 +43,7 @@ autostart() {
     { test $? = 0 } && {
 	notice "Composing message to: ${@}"
 	# its an email, TODO see if we have it in our addressbook
-	mutt-jaro -F $MUTTDIR/rc ${=muttflags} ${=@}
+	${=mutt} -F $MUTTDIR/rc ${=muttflags} ${=@}
 	return 0
     }
 
@@ -51,18 +51,18 @@ autostart() {
     { test -r "$1" } && {
 	# is it a maildir? then open
 	{ maildircheck ${1} } && {
-	    mutt-jaro -F $MUTTDIR/rc ${=muttflags} -f ${1}
+	    ${=mutt} -F $MUTTDIR/rc ${=muttflags} -f ${1}
 	    return 0 }
 	# is it a regular file? then attach it
 	{ test -f "$1" } && {
-	    mutt-jaro -F $MUTTDIR/rc ${=muttflags} -a ${=@}
+	    ${=mutt} -F $MUTTDIR/rc ${=muttflags} -a ${=@}
 	    return 0 }
     }
 
     # or the name of a folder in Jaro Mail
     { test -r "$MAILDIRS/$1" } && {
 	notice "Opening folder ${1}"
-	mutt-jaro -F $MUTTDIR/rc ${=muttflags} -f "$MAILDIRS/${1}"
+	${=mutt} -F $MUTTDIR/rc ${=muttflags} -f "$MAILDIRS/${1}"
 	return 0
     }
 
