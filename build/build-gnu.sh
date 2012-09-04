@@ -37,7 +37,9 @@ case $distro in
 		which sqlite3 || sudo apt-get install sqlite3
 		[ -r /usr/share/doc/libgnome-keyring-dev/copyright ] || \
 		    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
-		sudo apt-get install libtokyocabinet-dev
+		{ test -r /usr/lib/pkgconfig/tokyocabinet.pc } || {
+		    sudo apt-get install libtokyocabinet-dev }
+		which gpgme-config || sudo apt-get install libgpgme11-dev
 		echo "All dependencies installed"
 	}
 
@@ -103,9 +105,8 @@ case $distro in
 		echo "Compiling Mutt (MUA)"
 		pushd src/mutt-1.5.21
 		CC="$cc" ./configure \
-		    --with-ssl --with-gnutls --enable-imap --disable-debug --with-slang \
-		    --enable-hcache --with-regex --with-tokyocabinet --with-mixmaster \
-		    --with-mailpath=Mail --with-homespool=Mail/known --with-exec-shell=/usr/bin/zsh \
+		    --with-ssl --with-gnutls --enable-imap --disable-debug --with-slang --disable-gpgme \
+		    --enable-hcache --with-regex --with-tokyocabinet --with-mixmaster --enable-pgp \
 		    > /dev/null
 		make > make.log
 		popd

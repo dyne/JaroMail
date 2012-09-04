@@ -58,6 +58,7 @@ esac
 arguments=($@)
 
 linkdep() {
+    # # descend lib dependencies
     dep="`basename ${1}`"
     { test "$dep" = "" } && { echo "Error: linkdep called with void argument"; return 1 }
 
@@ -135,24 +136,6 @@ echo $arguments | grep -i ' -l' > /dev/null
 	    lib=${i/-l/}
 
 	    linkdep "lib${lib}"
-
-	    # # descend lib dependencies
-
-	    # 	Darwin)
-
-	    # 	    deps1=`otool -L ${libdir}/$lib.dylib | awk '
-	    # 	    /^\// {next} /\/opt\/local/ {print $1}'`
-	    # 	    for d1 in ${(f)deps1}; do
-	    # 		dep=`basename $d1`
-	    # 		sdep=${dep/.*/.a}
-	    # 		ddep=${dep/lib/-l}
-	    # 		ddep=${ddep/.*/}
-	    # 		if [ -r ${libdir}/${sdep} ]; then
-	    # 		    arguments+=(${libdir}/${sdep})
-	    # 		else arguments+=($ddep); fi
-	    # 	    done
-	    # 	    ;;
-	    # esac
 	}
     done
     
@@ -166,7 +149,6 @@ echo $arguments | grep -i ' -l' > /dev/null
 	ds="`print ${d/lib/} | cut -d. -f1`"
 
 	{ test "$libraries[$ds]" = "static" } && { continue }
-	print "link lib${ds}"
 	linkdep "lib${ds}"
     done
 
@@ -180,3 +162,22 @@ typeset -U arguments
 # execute
 echo "$cc ${=cflags} ${=arguments}"
 $cc ${=cflags} ${=arguments}
+
+
+
+# TODO
+
+	    # 	Darwin)
+	    # 	    deps1=`otool -L ${libdir}/$lib.dylib | awk '
+	    # 	    /^\// {next} /\/opt\/local/ {print $1}'`
+	    # 	    for d1 in ${(f)deps1}; do
+	    # 		dep=`basename $d1`
+	    # 		sdep=${dep/.*/.a}
+	    # 		ddep=${dep/lib/-l}
+	    # 		ddep=${ddep/.*/}
+	    # 		if [ -r ${libdir}/${sdep} ]; then
+	    # 		    arguments+=(${libdir}/${sdep})
+	    # 		else arguments+=($ddep); fi
+	    # 	    done
+
+

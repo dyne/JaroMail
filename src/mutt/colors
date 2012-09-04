@@ -52,4 +52,4 @@ color index brightwhite black "~v" # Collapsed thread
 
 
 color index red black "~=" # Duplicated messages
-color index brightblack black "~D" # Deleted
+color index red black "~D" # Deleted
