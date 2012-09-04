@@ -74,6 +74,7 @@ macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q forget send
 source $MUTTDIR/mboxes
 
 # specific configuration files
+source $MUTTDIR/gpg
 source $MUTTDIR/crypto
 source $MUTTDIR/general
 source $MUTTDIR/formats
