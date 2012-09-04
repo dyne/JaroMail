@@ -52,6 +52,10 @@
 #include <sys/wait.h>
 #include <sys/time.h>
 
+#if defined(CRYPT_BACKEND_GPGME)
+#include <gpgme.h>
+#endif
+
 #define CHECK_PAGER \
   if ((CurrentMenu == MENU_PAGER) && (idx >= 0) &&	\
 	    (MuttVars[idx].flags & R_RESORT)) \
@@ -1672,6 +1676,9 @@ static int check_charset (struct option_t *opt, const char *val)
   char *p, *q = NULL, *s = safe_strdup (val);
   int rc = 0, strict = strcmp (opt->option, "send_charset") == 0;
 
+  if (!s)
+    return rc;
+
   for (p = strtok_r (s, ":", &q); p; p = strtok_r (NULL, ":", &q))
   {
     if (!*p)
@@ -2559,7 +2566,7 @@ int mutt_command_complete (char *buffer, size_t len, int pos, int numtabs)
       Matches[Num_matched++] = User_typed;
 
       /* All matches are stored. Longest non-ambiguous string is ""
-       * i.e. dont change 'buffer'. Fake successful return this time */
+       * i.e. don't change 'buffer'. Fake successful return this time */
       if (User_typed[0] == 0)
 	return 1;
     }
@@ -3142,6 +3149,10 @@ void mutt_init (int skip_sys_rc, LIST *commands)
   }
 
   mutt_read_histfile ();
+
+#ifdef CRYPT_BACKEND_GPGME
+  gpgme_check_version (NULL);
+#endif
 
 #if 0
   set_option (OPTWEED); /* turn weeding on by default */

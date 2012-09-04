@@ -1053,7 +1053,7 @@ fill_buffer (FILE *f, LOFF_T *last_pos, LOFF_T offset, unsigned char **buf,
     q = *fmt;
     while (*p)
     {
-      if (*p == '\010' && (p > *buf))
+      if (*p == '\010' && (p > *buf) && (q > *fmt))
       {
 	if (*(p+1) == '_')	/* underline */
 	  p += 2;

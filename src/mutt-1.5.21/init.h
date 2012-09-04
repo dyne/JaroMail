@@ -1202,7 +1202,9 @@ struct option_t MuttVars[] = {
   ** ``\fCcopiousoutput\fP'' flag set for \fIevery\fP MIME attachment it doesn't have
   ** an internal viewer defined for.  If such an entry is found, mutt will
   ** use the viewer defined in that entry to convert the body part to text
-  ** form.
+  ** form. MIME attachments with 'text' types, with the only exception
+  ** of text/html, are excluded: they will be shown as they are unless auto_view
+  ** is specified.
   */
   { "include",		DT_QUAD, R_NONE, OPT_INCLUDE, M_ASKYES },
   /*

@@ -3846,7 +3846,7 @@ msgstr "Передати у конве╓р команд╕: "
 
 #: recvattach.c:710
 #, c-format
-msgid "I dont know how to print %s attachments!"
+msgid "I don't know how to print %s attachments!"
 msgstr "Я не знаю, як друкувати додатки типу %s!"
 
 #: recvattach.c:775

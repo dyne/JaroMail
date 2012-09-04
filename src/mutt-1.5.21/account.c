@@ -222,7 +222,7 @@ int mutt_account_getpass (ACCOUNT* account)
   else
   {
     snprintf (prompt, sizeof (prompt), _("Password for %s@%s: "),
-              account->flags & M_ACCT_LOGIN ? account->login : account->user,
+              ((account->flags & M_ACCT_LOGIN) && !(account->user)) ? account->login : account->user,
               account->host);
     account->pass[0] = '\0';
     if (mutt_get_password (prompt, account->pass, sizeof (account->pass)))

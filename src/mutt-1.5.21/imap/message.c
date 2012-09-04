@@ -65,7 +65,7 @@ int imap_read_headers (IMAP_DATA* idata, int msgbegin, int msgend)
   char *hdrreq = NULL;
   FILE *fp;
   char tempfile[_POSIX_PATH_MAX];
-  int msgno, idx;
+  int msgno, idx = msgbegin - 1;
   IMAP_HEADER h;
   IMAP_STATUS* status;
   int rc, mfhrc, oldmsgcount;
@@ -185,7 +185,7 @@ int imap_read_headers (IMAP_DATA* idata, int msgbegin, int msgend)
           continue;
         }
 
-        idx = h.sid - 1;
+        idx++;
         ctx->hdrs[idx] = imap_hcache_get (idata, h.data->uid);
         if (ctx->hdrs[idx])
         {
@@ -242,6 +242,15 @@ int imap_read_headers (IMAP_DATA* idata, int msgbegin, int msgend)
       char *cmd;
 
       fetchlast = msgend + 1;
+      /* Microsoft Exchange 2010 violates the IMAP protocol and
+       * starts omitting messages if one FETCHes more than 2047 (or
+       * or somewhere around that number. We therefore split the
+       * FETCH into chunks of 2000 messages each */
+      if (fetchlast - msgno - 1 > 2000)
+      {
+        fetchlast = msgno+1 + 2000;
+      }
+
       safe_asprintf (&cmd, "FETCH %d:%d (UID FLAGS INTERNALDATE RFC822.SIZE %s)",
                      msgno + 1, fetchlast, hdrreq);
       imap_cmd_start (idata, cmd);
@@ -273,13 +282,14 @@ int imap_read_headers (IMAP_DATA* idata, int msgbegin, int msgend)
       {
         dprint (2, (debugfile, "msg_fetch_header: ignoring fetch response with no body\n"));
         mfhrc = -1;
+        msgend--;
         continue;
       }
 
       /* make sure we don't get remnants from older larger message headers */
       fputs ("\n\n", fp);
 
-      idx = h.sid - 1;
+      idx++;
       if (idx > msgend)
       {
         dprint (1, (debugfile, "imap_read_headers: skipping FETCH response for "
@@ -288,7 +298,7 @@ int imap_read_headers (IMAP_DATA* idata, int msgbegin, int msgend)
         continue;
       }
       /* May receive FLAGS updates in a separate untagged response (#2935) */
-      if (idx < ctx->msgcount)
+      if (ctx->hdrs[idx] != NULL)
       {
 	dprint (2, (debugfile, "imap_read_headers: message %d is not new\n",
 		    h.sid));
@@ -398,7 +408,7 @@ int imap_fetch_message (MESSAGE *msg, CONTEXT *ctx, int msgno)
   char path[_POSIX_PATH_MAX];
   char *pc;
   long bytes;
-  progress_t progressbar;
+  progress_t progressbar, *pbar;
   int uid;
   int cacheno;
   IMAP_CACHE *cache;
@@ -495,9 +505,15 @@ int imap_fetch_message (MESSAGE *msg, CONTEXT *ctx, int msgno)
 	    imap_error ("imap_fetch_message()", buf);
 	    goto bail;
 	  }
-	  mutt_progress_init (&progressbar, _("Fetching message..."),
-			      M_PROGRESS_SIZE, NetInc, bytes);
-	  if (imap_read_literal (msg->fp, idata, bytes, &progressbar) < 0)
+	  if (!isendwin())
+	  {
+	    mutt_progress_init (&progressbar, _("Fetching message..."),
+	   		      M_PROGRESS_SIZE, NetInc, bytes);
+	    pbar = &progressbar;
+	  }
+	  else
+	    pbar = NULL;
+	  if (imap_read_literal (msg->fp, idata, bytes, pbar) < 0)
 	    goto bail;
 	  /* pick up trailing line */
 	  if ((rc = imap_cmd_step (idata)) != IMAP_CMD_CONTINUE)

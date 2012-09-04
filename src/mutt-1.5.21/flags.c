@@ -276,7 +276,10 @@ void mutt_tag_set_flag (int flag, int bf)
 int mutt_thread_set_flag (HEADER *hdr, int flag, int bf, int subthread)
 {
   THREAD *start, *cur = hdr->thread;
-  
+
+  if ( !hdr->thread )
+    return (-1);
+
   if ((Sort & SORT_MASK) != SORT_THREADS)
   {
     mutt_error _("Threading is not enabled.");

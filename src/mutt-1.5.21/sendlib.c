@@ -1799,7 +1799,7 @@ static int write_one_header (FILE *fp, int pfxw, int max, int wraplen,
   else
   {
     t = strchr (start, ':');
-    if (t > end)
+    if (!t || t > end)
     {
       dprint (1, (debugfile, "mwoh: warning: header not in "
 		  "'key: value' format!\n"));
@@ -2062,7 +2062,7 @@ int mutt_write_rfc822_header (FILE *fp, ENVELOPE *env, BODY *attach,
   if (mode == 0 && !privacy && option (OPTXMAILER) && !has_agent)
   {
     /* Add a vanity header */
-    fprintf (fp, "User-Agent: Jaro Mail - http://jaromail.dyne.org\n", MUTT_VERSION, ReleaseDate);
+    fprintf (fp, "User-Agent: Jaro Mail (http://jaromail.dyne.org)\n");
   }
 
   return (ferror (fp) == 0 ? 0 : -1);
