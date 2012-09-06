@@ -95,7 +95,7 @@ wwwtext=w3m
 { which elinks > /dev/null } && { wwwtext=elinks }
 cat <<EOF > $MUTTDIR/mailcap
 text/html; ${wwwtext} -dump %s; nametemplate=%s.html; copiousoutput
-application/*; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && jaro open \$a/\$f
+application/*; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && jaro preview \$a/\$f
 text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
   && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
 text/plain; cat %s
@@ -106,7 +106,7 @@ EOF
 
     # just the header, will be completed later in procmail loop
     rm -f $MUTTDIR/mboxes
-    print -n "mailboxes +priv" > $MUTTDIR/mboxes
+    print -n "mailboxes +known +priv" > $MUTTDIR/mboxes
 
     # update identity with default
     read_account imap
