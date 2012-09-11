@@ -20,7 +20,12 @@ cc="${builddir}/cc-static.zsh"
 
 #cflags="-arch x86_64 -arch i386 -O2"
 
-cflags="-I/opt/local/include -I/usr/include"
+cflags=(-I/opt/local/include -I/usr/include)
+cflags+=(-arch x86_64)
+cflags+=(-arch i386)
+cflags+=(-O2)
+
+
 ldflags="-L/opt/local/lib -L/usr/lib"
 
 
@@ -62,26 +67,25 @@ copydeps() {
 		done # 2nd
 	done # 1st
 
-	{ test -r build/osx/`basename $1`.bin } || {
-		cp $1 build/osx/`basename $1`.bin }
+	cp $1 build/osx/`basename $1`.bin
 	for d in `cat $tmp | sort | uniq`; do
-		if ! [ -r build/osx/dylib/`basename $d` ]; then
-			cp $d build/osx/dylib/
-			print "`basename $d`"
-		fi
+	    if ! [ -r build/osx/dylib/`basename $d` ]; then
+		cp $d build/osx/dylib/
+		print "`basename $d`"
+	    fi
 	done
-	{ test -r build/osx/`basename $1` } || {
+
 		# create a wrapper
-		cat <<EOF > build/osx/`basename $1`
+	cat <<EOF > build/osx/`basename $1`
 #!/usr/bin/env zsh
 test -r \$HOME/Mail/jaro/bin/jaro && PDIR=\$HOME/Mail/jaro
 test -r jaro/bin/jaro && PDIR="\`pwd\`/jaro"
 test \$JAROMAIL && PDIR=\$JAROMAIL
-DYLD_LIBRARY_PATH=\$PDIR/bin/dylib:\$DYLD_LIBRARY_PATH
+DYLD_LIBRARY_PATH=\$PDIR/bin/dylib:\$DYLD_LIBRARY_PATH \\
 \$PDIR/bin/`basename $1`.bin \${=@}
 EOF
-		chmod +x build/osx/`basename $1`
-	}
+	chmod +x build/osx/`basename $1`
+
 }
 
 print "Building Jaro Mail binary stash for Apple/OSX"
@@ -180,19 +184,23 @@ fi
 
  #  CFLAGS="${=cflags}" \
 
+{ test "$target" = "install" } || { 
+    test "$target" = "all" } && {
+
+    mkdir -p build/osx/dylib
 
 # copy all binaries built
-cp src/fetchdate build/osx/
-cp src/fetchaddr build/osx/
-cp src/mairix/mairix build/osx/
+    cp -v src/fetchdate build/osx/
+    cp -v src/fetchaddr build/osx/
+    cp -v src/mairix/mairix build/osx/
 # cp src/msmtp/src/msmtp build/osx/
-cp src/dotlock build/osx/
-copydeps ${root}/src/mutt-1.5.21/mutt-jaro
-copydeps /opt/local/bin/msmtp
-copydeps /opt/local/bin/pinentry
-copydeps /opt/local/bin/lynx
+    cp -v src/dotlock build/osx/
+    copydeps ${root}/src/mutt-1.5.21/mutt-jaro
+    copydeps /opt/local/bin/msmtp
+    copydeps /opt/local/bin/pinentry
+    copydeps /opt/local/bin/lynx
 
-
+}
 
 
 popd

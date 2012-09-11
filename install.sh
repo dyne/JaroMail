@@ -252,17 +252,7 @@ cp -a src/stats/* $WORKDIR/.stats
 
     case $OS in
 	MAC)
-	    test $(which msmtp) || cp build/osx/msmtp* $WORKDIR/bin
-	    test $(which lynx)  || cp build/osx/lynx* $WORKDIR/bin
-	    test $(which mutt)  || cp build/osx/mutt* $WORKDIR/bin
-	    test $(which pinentry)  || cp build/osx/pinentry* $WORKDIR/bin
-
-	    cp build/osx/dotlock $WORKDIR/bin
-	    cp build/osx/fetchdate $WORKDIR/bin
-	    cp build/osx/fetchaddr $WORKDIR/bin
-	    cp build/osx/mairix $WORKDIR/bin
-	    cp build/osx/ABQuery $WORKDIR/bin
-	    cp -r build/osx/dylib $WORKDIR/bin
+	    cp -r build/osx/* $WORKDIR/bin
 	    ;;
 
 	GNU) cp -a build/gnu/* $WORKDIR/bin
