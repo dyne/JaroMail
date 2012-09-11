@@ -47,7 +47,7 @@ list_accounts() {
 {next}' $a.txt
 	print " (`basename $a | cut -d. -f1`)"
     done
-}	
+}
 
 # arg 1 : account type, es: imap or smtp
 # -a defines which account name other than 'default'
@@ -225,21 +225,31 @@ new_password() {
     case $OS in
 	MAC)
 	    if [ "$password" != "" ]; then
+
+		act -n "Old "
+		security delete-internet-password \
+		    -c JARO -a $email -s $host \
+		    -p $transport -P $port > /dev/null
+
 		security add-internet-password \
 		    -c JARO -a $email -s $host \
 		    -p $transport -P $port -w "${password}"
+
 		if [ $? != 0 ]; then
 		    error "Error adding password to keyring."
 		else
 		    act "New password saved in keyring"
 		fi
 		return 0
+
 	    else
+		act -n "Old "
 		security delete-internet-password \
 		    -c JARO -a $email -s $host \
 		    -p $transport -P $port > /dev/null
 		res=$?; unset password
 		{ test $res != 0 } && {
+		    echo
 		    error "Error deleting password from keyring."
 		    return 1 }
 		act "No new password given, old password erased."
