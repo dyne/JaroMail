@@ -96,6 +96,7 @@ WHERE email IS "${1}";
 EOF
 	return $?
 }
+
 complete() {
     func "complete from $list: ${PARAM[1]}"
 

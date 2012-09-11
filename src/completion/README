@@ -1,0 +1,6 @@
+Shell completion quirks
+
+Zsh: _jaromail (working)
+Bash: jaromail.bash (not working yet)
+
+Manually configure by including in your completion plugin directory

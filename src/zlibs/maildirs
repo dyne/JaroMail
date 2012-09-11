@@ -60,7 +60,7 @@ maildirmake() {
 # fills up all maildirs array
 list_maildirs() {
     maildirs=()
-    for m in `find $MAILDIRS -type d | awk '
+    for m in `find -O3 $MAILDIRS/* -maxdepth 1 -type d | awk '
     /cur$/ {next}
     /tmp$/ {next}
     /new$/ {next}
@@ -69,7 +69,7 @@ list_maildirs() {
 	
 	{ maildircheck $m } && {
 	    # is a maildir
-	    { test "`find $m -type f`" != "" } && {
+	    { test "`find -O3 $m -type f`" != "" } && {
 		# and is not empty
 		maildirs+=(`basename $m`)
 	    }

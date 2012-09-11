@@ -20,6 +20,15 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+compose() {
+    # no args, open in compose mode
+    { test -z $PARAM } && {
+	${=mutt} -F $MUTTDIR/rc ""; return $? }
+    
+    ${=mutt} -F $MUTTDIR/rc "${PARAM[@]}"
+    return $?
+}
+
 queue() {
     local base;
     local tmp;

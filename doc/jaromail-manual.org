@@ -315,12 +315,12 @@ open inside the mail user agent:
 And here the addressbook commands that are available from the
 commandline:
 
-| Command | Function                 |
-|---------+--------------------------|
-| abook   | edit the addressbook     |
-| list    | list the addressbook     |
-| export  | export to a VCard file   |
-| import  | import from a VCard file |
+| Command  | Function                 |
+|----------+--------------------------|
+| *abook*  | edit the addressbook     |
+| *list*   | list the addressbook     |
+| *export* | export to a VCard file   |
+| *import* | import from a VCard file |
 
 * Workflow
 

@@ -355,10 +355,10 @@ EOF
 }
 
 # TODO: For more informations on Jaro Mail read the manual: man jaro
+typeset -A subcommands_opts
 
 main()
     {
-    local -A subcommands_opts
     ### Options configuration
     #Hi, dear developer! Are you trying to add a new subcommand, or to add some options?
     #Well, keep in mind that:
@@ -372,10 +372,12 @@ main()
     #               (it will say "option defined more than once, and he's right)
     main_opts=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
     subcommands_opts[__default]=""
+    subcommands_opts[compose]=""
     subcommands_opts[queue]=""
     subcommands_opts[fetch]=""
     subcommands_opts[send]=""
     subcommands_opts[peek]=""
+    subcommands_opts[open]=""
 
     subcommands_opts[update]=""
 
@@ -394,7 +396,7 @@ main()
     subcommands_opts[abook]=""
 
     subcommands_opts[edit]=""
-    subcommands_opts[open]=""
+    subcommands_opts[preview]=""
 
     subcommands_opts[later]=""
     subcommands_opts[backup]=""
@@ -494,6 +496,7 @@ main()
 	act "Dry run, show operations without executing them." }
 
     case "$subcommand" in
+	compose) compose ${PARAM} ;;
 	queue)   queue ${PARAM} ;;
 	fetch)   fetch ${PARAM} ;;
 	send)    send ${PARAM} ;;
@@ -516,8 +519,8 @@ main()
 	"export")  export_vcard ${PARAM} ;;
 	abook)   edit_abook ${PARAM} ;;
 
-	edit)    CLEANEXIT=0; editor ${PARAM} ;;
-	open)    CLEANEXIT=0; open_file ${PARAM} ;;
+	edit)    CLEANEXIT=0; edit_file ${PARAM} ;;
+	open)    CLEANEXIT=0; open_folder ${PARAM} ;;
 
 	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;
