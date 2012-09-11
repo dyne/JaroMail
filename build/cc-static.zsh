@@ -60,7 +60,7 @@ arguments=($@)
 linkdep() {
     # # descend lib dependencies
     dep="`basename ${1}`"
-    { test "$dep" = "" } && { echo "Error: linkdep called with void argument"; return 1 }
+    { test "$dep" = "" } && { print "Error: linkdep called with void argument"; return 1 }
 
     dep=${dep/lib/} # strip lib- prefix
 
@@ -109,7 +109,7 @@ linkdep() {
 
 	    return 1
 
-	else echo "$dep not found in ${l}";  return 10
+	else print "$dep not found in ${l}";  return 10
 
 	fi
     done
@@ -160,7 +160,7 @@ echo $arguments | grep -i ' -l' > /dev/null
 typeset -U arguments
 
 # execute
-echo "$cc ${=cflags} ${=arguments}"
+print "$cc ${=cflags} ${=arguments}"
 $cc ${=cflags} ${=arguments}
 
 
