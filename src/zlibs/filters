@@ -91,8 +91,8 @@ EOF
     # MUTT MAILCAP
 
 wwwtext=w3m
-{ which lynx > /dev/null } && { wwwtext=lynx }
-{ which elinks > /dev/null } && { wwwtext=elinks }
+{ command -v lynx > /dev/null } && { wwwtext=lynx }
+{ command -v elinks > /dev/null } && { wwwtext=elinks }
 cat <<EOF > $MUTTDIR/mailcap
 text/html; ${wwwtext} -dump %s; nametemplate=%s.html; copiousoutput
 application/*; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && jaro preview \$a/\$f

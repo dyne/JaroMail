@@ -24,7 +24,9 @@
 ## Search into maildirs
 # using mairix
 search() {
-    { which mairix > /dev/null } || { return 1 }
+    { command -v mairix > /dev/null } || {
+	error "Mairix not found, operation aborted."
+	return 1 }
     id=$RANDOM
     rc=$TMPDIR/search.conf.$id
     typeset -al expr

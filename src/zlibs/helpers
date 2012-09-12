@@ -100,9 +100,9 @@ edit_file() {
 	    ps ax|grep '[e]macs' > /dev/null
 	    if [ $? = 0 ]; then
 		emacsclient -a ${=PARAM}
-	    elif [ `which vim` ]; then
+	    elif command -v vim > /dev/null; then
 		jarovim ${=PARAM}
-	    elif [ `which nano` ]; then
+	    elif command -v nano > /dev/null; then
 		nano -m -S -Q ">" -I -E -D -T 4 -U -W -c -i -k -r 72 ${=PARAM}
 	    else
 		error "No editor found, please configure the JARO_EDITOR environment variable."

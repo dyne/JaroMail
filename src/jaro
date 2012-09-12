@@ -40,7 +40,7 @@ TMPRAM=0
 typeset -h rm mkdir mutt
 
 # which command to use when creating dirs
-mkdir="`which mkdir` -m 700 -p"
+mkdir="`command -v mkdir` -m 700 -p"
 # date stamp
 datestamp=`date '+%d%b%y'`
 ##########################
@@ -203,8 +203,7 @@ MUTTDIR=$WORKDIR/.mutt
 # use gnome-keyring for passwords on GNU systems
 GNOMEKEY=0
 { test $GNOME_KEYRING_CONTROL } && {
-    which jaro-gnome-keyring > /dev/null
-    { test $? = 0 } && { GNOMEKEY=1 }
+    { command -v jaro-gnome-keyring > /dev/null } && { GNOMEKEY=1 }
 }
 
 
@@ -238,7 +237,7 @@ check_bin() {
 
     # required programs
     for req in pinentry fetchmail procmail; do
-	which $req >/dev/null
+	command -v $req >/dev/null
 	{ test $? != 0 } && {
 	    error "Cannot find $req. Please install it."
 	    return 1
@@ -246,9 +245,9 @@ check_bin() {
     done
 
     # which wipe command to use
-    if [ $(which wipe) ]; then
+    if command -v wipe > /dev/null; then
 	rm="wipe -f -s -q -R /dev/urandom"
-    elif [ $(which srm) ]; then
+    elif command -v srm > /dev/null; then
 	rm="srm -m"
     else
 	rm="rm -f"
@@ -256,9 +255,9 @@ check_bin() {
     func "Rm binary: $rm"
 
     # which mutt binary to use
-    if [ $(which mutt-jaro) ]; then
+    if command -v mutt-jaro > /dev/null; then
 	mutt="mutt-jaro"
-    elif [ $(which mutt) ]; then
+    elif command -v mutt > /dev/null; then
 	mutt="mutt"
     else
 	error "Cannot find Mutt. Please install it."
