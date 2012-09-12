@@ -25,6 +25,8 @@ bind index   j	     next-entry
 bind index   <up>    previous-entry
 bind index   k 	     previous-entry
 
+# group reply by default
+bind index,pager	r	group-reply
 
 bind pager w search
 bind pager \n noop	# PINE prints "No default action for this menu."

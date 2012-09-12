@@ -70,6 +70,8 @@ set weed = yes
 ################
 ## Reply options
 set reply_to = ask-yes
+set askcc = yes
+
 
 ##################
 ## Sending options
