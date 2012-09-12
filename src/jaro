@@ -514,7 +514,7 @@ main()
 	learn)   CLEANEXIT=0; learn ${PARAM} ;;
 	forget)  CLEANEXIT=0; forget ${PARAM} ;;
 	list)    CLEANEXIT=0; list_addresses ${PARAM} ;;
-	import)  import_vcard ${PARAM} ;;
+	import)  import_addressbook ${PARAM} ;;
 	"export")  export_vcard ${PARAM} ;;
 	abook)   edit_abook ${PARAM} ;;
 

@@ -90,20 +90,17 @@ EOF
 }
 search_email() {
     func "search email from $list is $1"
-	cat <<EOF | ${SQL} -column -batch ${addressbook}
+    cat <<EOF | ${SQL} -column -batch ${addressbook}
 SELECT rowid FROM $list
 WHERE email IS "${1}";
 EOF
-	return $?
 }
 
 complete() {
     func "complete from $list: ${PARAM[1]}"
 
     act "Searching for \"${PARAM[1]}\" in $list"
-    { test "$OS" = "MAC" } && {
-	matches=`$WORKDIR/bin/ABQuery ${PARAM[1]}`
-    }
+
     matches="${matches}\n`search_name ${PARAM[1]}`"
 
     # mutt query requires something like this
@@ -189,13 +186,63 @@ SELECT * FROM $list;
 EOF
 }
 
+# import an addressbook, autodetect its type
+import_addressbook() {
+    notice "Importing addressbook"
+    if [ "${PARAM[1]}" != "" ]; then
+	func "file specified: ${PARAM[1]}"
+	# a file was given as argument
+	import_vcard ${PARAM[2]}
+    else
+	# no file as parameter
+	{ test "$OS" = "MAC" } && { import_macosx }
+    fi
+}
 
+    
+# import addressbook from Mac/OSX
+import_macosx() {
+    act "system addressbook from Mac/OSX"
+    { test "$OS" = "MAC" } || { error "Not running on Mac/OSX, operation aborted." }
+    { command -v ABQuery > /dev/null } || {
+	error "ABQuery not found, operation aborted." }
+
+    tmp=$TMPDIR/abook.import_osx.$datestamp.$RANDOM
+    newlock $tmp
+
+    # import all the Mac addressbook
+    ABQuery @ | awk '
+{ printf "%s|", $1; for(i=2;i<=NF;i++) { printf "%s ", $i } }
+' >> $tmp
+    addresses=`cat $tmp`
+    unlink $tmp
+
+    lock ${addressbook}
+
+    new=0; dupes=0;
+    for a in ${(f)addresses}; do
+	_email=`echo $a | cut -d'|' -f1`
+	# remove from name all what is an email between brackets
+	# crop (trim) all beginning and ending whitespaces from name
+	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
+	insert_address ${_email} ${_name}
+	if [ $? = 0 ]; then new=$(( $new + 1 ))
+	else dupes=$(( $dupes + 1 )); fi
+    done
+
+    unlock ${addressbook}
+
+    notice "Operation completed"
+    act "$new new addresses imported"
+    act "$dupes duplicate addresses skipped"
+    return 0
+}
 # import addresbook email from VCard
 import_vcard() {
-    func "import VCard from file ${PARAM[1]}"
+    act "import VCard from file: ${PARAM[1]}"
 
     { test -r "${PARAM[1]}" } || {
-	error "File not found: import ${PARAM[1]}"
+	error "File not found: ${PARAM[1]}"
 	return 1
     }
 
@@ -238,6 +285,8 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
     addresses=`cat $tmp`
     ${=rm} $tmp
 
+    lock ${addressbook}
+
     newa=1; _name=""; _email=""
     for a in ${(f)addresses}; do
 	{ test "${a[1]}" = "#" } && {
@@ -255,6 +304,9 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 	    _name=`echo ${(V)a} | cut -d^ -f1`; newa=0; continue }
 	{ test $newa -eq 0 } && { _email=`echo ${(V)a} | cut -d^ -f1` }
     done
+
+    unlock ${addressbook}
+
     notice "Done importing addresses"
 }
 
@@ -264,6 +316,8 @@ export_vcard() {
     act "Export addressbook into vCard $WORKDIR/addressbook.vcf"
     tmp=$TMPDIR/export.$datestamp.$RANDOM
 
+    lock ${addressbook}
+
     cat <<EOF | ${SQL} -column -header -batch ${addressbook} \
 	| grep -v '^email' > $tmp
 .width 40 100
@@ -271,6 +325,8 @@ export_vcard() {
 .separator '|'
 SELECT email, name FROM $list;
 EOF
+
+    unlock ${addressbook}
 
     addresses=`cat $tmp`
     ${=rm} $tmp
@@ -305,6 +361,8 @@ edit_abook() {
 	return 1
     }
 
+    lock ${addressbook}
+
     act "Editing addressbook $list"
     tmp=$TMPDIR/abook.$datestamp.$RANDOM
     newlock $tmp
@@ -320,6 +378,8 @@ edit_abook() {
 SELECT email, name FROM $list;
 EOF
 
+    { test "$OS" = "MAC" } && {
+    }
     addresses=`cat $tmp`
     rm -f $tmp
 
@@ -420,6 +480,7 @@ EOF
     cat $tmp | ${SQL} -batch $tmpwrite 2> /dev/null
     unlink $tmp
     cp $tmpwrite ${addressbook}
+    unlock ${addressbook}
     unlink $tmpwrite
     notice "Addressbook updated"
 }

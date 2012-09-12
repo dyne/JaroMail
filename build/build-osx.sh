@@ -16,7 +16,8 @@
 
 builddir=`pwd`
 
-cc="${builddir}/cc-static.zsh"
+#cc="${builddir}/cc-static.zsh"
+cc="${builddir}/clang-static-osx.sh"
 
 #cflags="-arch x86_64 -arch i386 -O2"
 
@@ -175,9 +176,10 @@ fi
 	--with-ssl --with-gnutls --enable-imap --disable-debug \
 	--with-slang --disable-gpgme \
 	--enable-hcache --with-regex --with-tokyocabinet \
-	--with-mixmaster=${root}/src/mixmaster --enable-pgp
-    make
-    { test $? = 0 } && { mv mutt mutt-jaro }
+	--with-mixmaster=${root}/src/mixmaster --enable-pgp \
+	> /dev/null
+    make mutt > /dev/null
+    { test $? = 0 } && { cp mutt mutt-jaro }
     popd
 }
 
@@ -198,6 +200,7 @@ fi
     copydeps ${root}/src/mutt-1.5.21/mutt-jaro
     copydeps /opt/local/bin/msmtp
     copydeps /opt/local/bin/pinentry
+    copydeps /opt/local/bin/abook
     copydeps /opt/local/bin/lynx
 
 }
