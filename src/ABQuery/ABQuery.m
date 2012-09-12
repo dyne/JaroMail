@@ -62,7 +62,7 @@ int main (int argc, const char *argv[]) {
         int i;
         for (i = 0; i < count; i++) {
             NSString *email = [emails valueAtIndex:i];
-            printf("%s\t%s\t(AddressBook)\n", [email cString], [fullName UTF8String]);
+            printf("%s\t%s\n", [email cString], [fullName UTF8String]);
       }
     }
 
