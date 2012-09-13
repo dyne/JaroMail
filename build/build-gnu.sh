@@ -49,6 +49,7 @@ case $distro in
 	    echo -n "Compiling the file lock utility... "
 	    $cc -o dotlock dotlock.c
 	    popd
+	    cp src/dotlock build/gnu/dotlock
 	}
 
 	{ test "$target" = "fetchaddr" } || { 
