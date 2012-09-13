@@ -293,9 +293,13 @@ other hand, the import command will include all entries found in a
 given VCard file that have at least one email address.
 : $ jaro import 00001.vcf
 Imports into the whitelist all contacts found in the 00001.vcf file.
-
-These functions are fully compatible with import and export of
+The VCard format is fully compatible with import and export of
 contacts in Android mobile phones.
+
+Apple Mac/OSX users can simply run the import command without any arguments
+: $ jaro import
+Imports all the contacts found in the system addressbook used by Mail.app,
+hence making them whitelisted.
 
 [fn:vcard] A file format standard for electronic business cards, see: http://en.wikipedia.org/wiki/VCard
 
@@ -340,8 +344,8 @@ If you have configured the *keep* option, which is the default, Jaro
 Mail will only download the email that you have not yet read and in
 any case it won't delete anything from the server.
 : $ jaro
-This will open the first folder *known* where all mails from people
-that you know or that you usually exchange mails with are shown.
+This will open the first folder containing unread emails, starting from
+the *known* folder, then *priv*, then all the rest.
 
 From there on, pressing *=* or *c* you can change the folder and
 explore your *priv* folder, the mailinglist ones as configured by your
@@ -351,9 +355,9 @@ Filters.txt, as well your *unsorted* mails.
 
 If you like to write a mail to someone, just write his/her own address
 as an argument to Jaro Mail
-: $ jaro friend@home.net
+: $ jaro compose friend@home.net
 But if you don't remember the email of your friend, then you can just
-start *jaro* without options, then press *m* and then start typing the
+start *jaro compose* without options, then start typing the
 name or whatever you remember of it: pressing the *Tab* key a
 completion will help to remind what you are looking for, offering a
 list of options to choose from.
@@ -379,9 +383,9 @@ the original message should be quoted and then open your favorite
 editor to compose your text.
 
 If the email you are replying has been sent to multiple recipients
-(for instance using multiple addresses in the Cc: or From: fields) one
-can easily include all of them in the reply using the [ *g* ] key
-instead.
+(for instance using multiple addresses in the Cc: or From: fields)
+they will all be included, but you will have the possibility to
+exclude them by hand editing those fields.
 
 It is also possible to forward a message to someone else than the
 sender, for instance to submit it to his or her attention, or that of
@@ -745,7 +749,7 @@ Michael Elkins for the Mutt MUA.
 The gateway to Apple/OSX addressbook (ABQuery) was written by Brendan
 Cully and just slightly updated for our distribution.
 
-Thanks also go to Alvise Gottieri and Anatole Shaw for early testing
+Special thanks go to Alvise Gottieri and Anatole Shaw for early testing
 and debugging.
 
 ** Mutt credits
@@ -753,7 +757,9 @@ and debugging.
 Please note that this is by no means an exhaustive list of all the
 persons who have been contributing to Mutt.  Please see the
 manual for a (probably still non complete) list of the persons who
-have been helpful with the development of Mutt.
+have been helpful with the development of Mutt. Our special thanks go to
+Antonio Radici, the Mutt maintainer in Debian, for his suggestions and
+encouragement.
 
 #+BEGIN_EXAMPLE
  Copyright (C) 1996-2007 Michael R. Elkins <me@cs.hmc.edu>

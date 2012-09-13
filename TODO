@@ -1,8 +1,7 @@
 
-
-* GTD
- + Integration with org-remember via org-protocol
-   or maybe just to taskwarrior
+* Outbox as maildir
+  also multiple outboxes for different send programs
+   for example anonymous/ for the mixmaster queue
 
 * TBT
    time based text, all included in html mails
@@ -28,6 +27,11 @@
  + Have some fancy statistics
    use timecloud for a jquery visualization
  + include anu arg's mailinglist statistics
+
+* DONE GTD
+ + Integration with org-remember via org-protocol
+   or maybe just to taskwarrior
+ : Solved implementing our own system: the simple remember folder
 
 * DONE Filtering
    filter out bounces in some zz.bounces - header:
