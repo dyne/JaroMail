@@ -198,6 +198,7 @@ fi
 # cp src/msmtp/src/msmtp build/osx/
     cp -v src/dotlock build/osx/
     copydeps ${root}/src/mutt-1.5.21/mutt-jaro
+    copydeps ${root}/src/mutt-1.5.21/pgpewrap
     copydeps /opt/local/bin/msmtp
     copydeps /opt/local/bin/pinentry
     copydeps /opt/local/bin/abook

@@ -112,6 +112,7 @@ case $distro in
 		make > make.log
 		popd
 		cp src/mutt-1.5.21/mutt build/gnu/mutt-jaro
+		cp src/mutt-1.5.21/pgpewrap build/gnu/pgpewrap
 	}
 
 	{ test "$target" = "mixmaster" } && { 
