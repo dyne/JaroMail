@@ -81,6 +81,8 @@ exitcode=0
 # last entry is grand_total_in_bytes ${imap_info[${#imap_info}]}
 typeset -alU imap_info
 
+# global variable for mutt options
+typeset -h muttflags
 
 autoload colors; colors
 
@@ -370,13 +372,13 @@ main()
     #       II. Option parsing WILL EXPLODE if you do this kind of bad things
     #               (it will say "option defined more than once, and he's right)
     main_opts=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
-    subcommands_opts[__default]=""
+    subcommands_opts[__default]="R -readonly=R"
     subcommands_opts[compose]=""
     subcommands_opts[queue]=""
     subcommands_opts[fetch]=""
     subcommands_opts[send]=""
-    subcommands_opts[peek]=""
-    subcommands_opts[open]=""
+    subcommands_opts[peek]="R -readonly=R"
+    subcommands_opts[open]="R -readonly=R"
 
     subcommands_opts[update]=""
 
@@ -493,6 +495,7 @@ main()
 	func "All debug messages ON" }
     { option_is_set -n } && { DRYRUN=1
 	act "Dry run, show operations without executing them." }
+    { option_is_set -R } && { muttflags+=" -R " }
 
     case "$subcommand" in
 	compose) compose ${PARAM} ;;
