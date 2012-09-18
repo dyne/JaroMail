@@ -136,6 +136,21 @@ open_file() {
 }
 
 
+#########################
+## check if we are online
+is_online() {
+    ping -c3 -n 8.8.8.8 2>/dev/null
+    { test $? = 0 } || {
+	error "Internet seems unreachable"
+	{ test "$FORCE" = "1" } || {
+	    act "Network connection is checked with a ping to 8.8.8.8"
+	    act "if your network doesn't allows it to pass, use -f to force."
+	    error "Operation aborted."
+	    exit 1 }
+    }
+}
+    
+
 # opens and closes a ramdisk for temporary files
 # users can do this explicitly between session to speed up operations
 ramdisk() {

@@ -400,7 +400,7 @@ main()
     #       I. usability; user expect that "-s" is "size
     #       II. Option parsing WILL EXPLODE if you do this kind of bad things
     #               (it will say "option defined more than once, and he's right)
-    main_opts=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n)
+    main_opts=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n f -force=f)
     subcommands_opts[__default]="R -readonly=R"
     subcommands_opts[compose]=""
     subcommands_opts[queue]=""
@@ -442,8 +442,6 @@ main()
     subcommands_opts[ramdisk]=""
     subcommands_opts[source]=""
 
-#    subcommands_opts[mount]=${subcommands_opts[open]}
-#    subcommands_opts[create]="s: -size=s -ignore-swap k: -key=k"
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
@@ -527,13 +525,14 @@ main()
     { option_is_set -n } && { DRYRUN=1
 	act "Dry run, show operations without executing them." }
     { option_is_set -R } && { muttflags+=" -R " }
+    { option_is_set -f } && { FORCE=1 }
 
     case "$subcommand" in
 	compose) compose ${PARAM} ;;
 	queue)   queue ${PARAM} ;;
-	fetch)   fetch ${PARAM} ;;
-	send)    send ${PARAM} ;;
-	peek)    peek ${PARAM} ;;
+	fetch)   is_online; fetch ${PARAM} ;;
+	send)    is_online; send ${PARAM} ;;
+	peek)    is_online; peek ${PARAM} ;;
 
 	later)   later ${PARAM} ;;
 
@@ -564,7 +563,7 @@ main()
 
 	passwd)  change_password ${PARAM} ;;
 
-	cert)    cert ${PARAM} ;;
+	cert)    is_online; cert ${PARAM} ;;
 
 	ramdisk) ramdisk ${PARAM} ;;
 
@@ -589,5 +588,5 @@ main()
 
 check_bin
 main $@
-if [ $CLEANEXIT = 1 ]; then cleanexit; fi
+{ test "$CLEANEXIT" = "1" } && { cleanexit }
 return $exitcode
