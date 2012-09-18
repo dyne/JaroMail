@@ -116,8 +116,9 @@ EOF
     #######
     # SIEVE
     act "generating sieve filters"
-    id=$RANDOM
+    id=$datestamp.$RANDOM
     sieve=$WORKDIR/sieve.filter
+    lock $sieve
     rm -f $sieve
     touch $sieve
     chmod 600 $sieve
@@ -319,6 +320,7 @@ if header :is "X-Spam-Flag" "YES" {
 
 EOF
 
+unlock $sieve
 
 #### PROCMAIL
 

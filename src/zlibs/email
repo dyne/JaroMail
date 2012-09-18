@@ -82,6 +82,7 @@ fetchall() {
     done
     return $res
 }
+
 fetch() {
     { test "$account" = "" } && {
 	fetchall; return $? }
@@ -267,8 +268,8 @@ EOF
 		act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
 		cat ${mail} | $WORKDIR/bin/jaro -q learn recipient
-		${=rm} ${mail} &
-		unlink ${smtp} &
+		${=rm} ${mail}
+		unlink ${smtp}
 	    fi
 	done
 	unlink $tmp

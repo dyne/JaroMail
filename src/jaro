@@ -211,25 +211,54 @@ GNOMEKEY=0
 
 cleanexit() {
     func "Clean exit procedures"
-    # while ( ps ax | grep '[s]rm' > /dev/null
-    # 	test $? = 0 ); do sleep 1; done
 
-    # for f in `ls $TMPDIR/ | grep -v '.lock$'`; do
-    # 	{ test ! -r $TMPDIR/$f.lock } && { unlink $TMPDIR/$f }
-    # done
+    unset name login host protocol port password auth folders accountopt
+
+    # security check
+    { test "$TMPDIR" = "" } && {
+	error "Temporary directory not defined"
+	act "skipping cleanup, this might leave private traces."
+	return 1
+    }
+
+    # first delete dirs
+    for d in `find -O3 $TMPDIR/ -maxdepth 1 -type d`; do
+	{ test "$d" = "$TMPDIR/" } || { ${=rm} -r ${d} }
+    done
+
+    # then locks, with a warning
+    for l in `find -O3 $TMPDIR/ -maxdepth 1 -type f -name '*.lock'`; do
+	lname=`basename ${(s:.lock:)l}`
+
+	# skip if in course of unlink - parallel operation, see unlink()
+	{ test -r ${TMPDIR}/${lname}.unlink } && { continue }
+
+	pid="$lname.pid"
+	if [ -r ${pid} ]; then
+	    error "forced removal of lock created by pid $pid: $lname"
+	    rm -f ${TMPDIR}/${pid}
+	else
+	    error "forced removal of lock created by unknown pid: $lname"
+	fi
+	rm -f ${TMPDIR}/${lock}
+
+	# remove the actual file
+	if [ -r ${TMPDIR}/$lname ]; then ${=rm} ${TMPDIR}/$lname
+	else error "stale lock: locked file not found"; fi
+
+    done
+
 
 #    { test $TMPRAM = 1 } && { rmdir $TMPDIR }
-    unset typeset -h name login host protocol port password auth folders accountopt
 }
 # make sure tmp is wiped from sensitive data in case of sigINT
 TRAPINT() {
 	error "Caught signal, aborting operations."
-	{ test $CLEANEXIT = 1 } && { cleanexit }
-	error "Forced removal of locks"
-	{ test $TMPDIR } && {
-	    for l in `find $TMPDIR/`; do
-		${=rm} $l; done
-	}
+
+	{ test $CLEANEXIT = 1 } && {
+	    error "Forced removal of locks"
+	    cleanexit }
+
 	if [ "$DEBUG" = "1" ]; then return 1
 	else exit 1; fi
 }
@@ -294,7 +323,7 @@ option_value() {
 
 
 usage() {
-    cat <<EOF
+    cat <<EOF | more
 Jaro Mail $VERSION - your humble and faithful electronic postman
 
  Copyright (C) 2010-2012 by Jaromil @ Dyne.org, License GNU GPL v3+
@@ -317,7 +346,7 @@ Options:
 
  -h     print this help
  -v     version information for this tool
- -q     run quietly without printing informations
+ -q     run quietly without printing information
  -n     dry run, show operations without executing them
  -D     print debugging information at runtime
 
@@ -355,7 +384,7 @@ Please report bugs on <http://bugs.dyne.org>.
 EOF
 }
 
-# TODO: For more informations on Jaro Mail read the manual: man jaro
+# TODO: For more information on Jaro Mail read the manual: man jaro
 typeset -A subcommands_opts
 
 main()
@@ -379,6 +408,8 @@ main()
     subcommands_opts[send]=""
     subcommands_opts[peek]="R -readonly=R"
     subcommands_opts[open]="R -readonly=R"
+
+    subcommands_opts[help]=""
 
     subcommands_opts[update]=""
 
@@ -507,6 +538,8 @@ main()
 	later)   later ${PARAM} ;;
 
 	update)  update ;;
+
+	help) CLEANEXIT=0; usage ;;
 
 	search)  CLEANEXIT=0; search ${PARAM} ;;
 

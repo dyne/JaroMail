@@ -123,7 +123,7 @@ EOF
     } # DRYRUN
     ${=rm} $TMPDIR/search.db.$id
     ${=rm} $TMPDIR/search.conf.$id
-    ${=rm} $TMPDIR/search.result.$id
+    ${=rm} -r $TMPDIR/search.result.$id
     return $exitcode
 }
 
