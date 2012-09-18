@@ -89,7 +89,17 @@ WHERE name LIKE "%${1}%";
 EOF
 }
 search_email() {
-    func "search email from $list is $1"
+    func "search addressbook $list for $1"
+    cat <<EOF | ${SQL} -column -batch ${addressbook}
+.width 64 128
+SELECT * FROM $list
+WHERE email LIKE "%${1}%";
+EOF
+}
+
+
+lookup_email() {
+    func "lookup email id from $list where $1"
     cat <<EOF | ${SQL} -column -batch ${addressbook}
 SELECT rowid FROM $list
 WHERE email IS "${1}";
@@ -124,7 +134,7 @@ isknown() {
 
     exitcode=1
 
-    lookup="`search_email ${email}`"
+    lookup="`lookup_email ${email}`"
 
     { test "$lookup" != "" } && { exitcode=0 }
 
@@ -292,7 +302,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 	{ test "${a[1]}" = "#" } && {
 	    newa=1; # its the end of the entry
 	    # check if we have this email already
-	    foundemail=`search_email "${_email}"`
+	    foundemail=`lookup_email "${_email}"`
 	    { test "$foundemail" = "" } && {
 		insert_address "${_email}" "${_name}"
 		act "${a} ${_name} <${_email}>"

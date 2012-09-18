@@ -24,156 +24,113 @@
 ## Search into maildirs
 # using mairix
 search() {
+    # check if the name of a maildir is among params
+    # we need at least 2 maildirs, the second is the destination
+    typeset -al fold
+    typeset -al term
+    # intelligent parse of args, position independent
+    # check if its a folder, if not is an expression
+    for p in ${PARAM}; do
+	if [ -r ${p} ]; then
+	    { maildircheck ${p} } && {
+		func "param ${p} is a maildir"
+		fold+=(${p}) }
+	elif  [ -r "${MAILDIRS}/${p}" ]; then
+	    { maildircheck ${MAILDIRS}/${p} } && {
+		func "param ${p} is a jaro maildir"
+		fold+=(${MAILDIRS}/${p}) }
+	else
+	    func "param ${p} is a search term"
+	    term+=(${p})
+	fi
+    done
+    # now fold is an array of specified folders
+    # term is an array of specified search expressions
+
+    { test "${#term}" = "0" } && {
+	error "No search terms specified."
+	act "Parameters: ${PARAM}"
+	return 1
+    }
+
+    # no folders specified, search into the addressbook
+    { test "${#fold}" = "0" } && {
+	typeset -alU results
+	notice "Searching addressbook for: ${PARAM}"
+	res=""
+
+	for t in ${term}; do
+	    res+=`search_name ${t}`
+	    res+=`search_email ${t}`
+	done
+
+	for rr in ${(f)res}; do
+	    _email=`print $rr | awk '{ print $1 }'`
+	    _name=`print $rr | awk '{ for(c=2;c<=NF;c++) printf "%s ", $c }'`
+	    results+=("$_name \t::\t <$_email>")
+	done
+
+	{ test "${#results}" = "0" } || {
+	    act "${#results} matches found:"
+	    for i in ${results}; do
+		print "$i"; done
+	    return 0
+	}
+	notice "No matches found."
+	return 1
+    }
+    
+    # base path is the dir of the first folder
+    pushd `dirname ${fold[1]}`
+    basedir=`pwd`
+    popd
+
+    notice "Searching ${#fold} folders in $basedir for: ${term}"
     { command -v mairix > /dev/null } || {
 	error "Mairix not found, operation aborted."
 	return 1 }
-    id=$RANDOM
+    act "Searching through: ${fold}"
+    act "Please wait..."
+    id=$datestamp.$RANDOM
     rc=$TMPDIR/search.conf.$id
-    typeset -al expr
-    typeset -al fold
-    # intelligent parse of args, position independent
-    # check if its a folder, if not is an expression
-    mlstr="all folders"; ml=""; c=0
-    basedir=$MAILDIRS
-    # check if the name of a maildir is among params
-    for p in ${PARAM}; do
-	c=$(( $c + 1 ))
-	func "checking param: ${p}"
-	if [ -r ${p} ]; then
-
-	    { maildircheck ${p} } && {
-		fold+=(${p})
-		{ test ${#fold} = 1 } && {
-		    # base path is the dir of the first folder
-		    pushd `dirname ${p}`
-		    basedir=`pwd`
-		    popd }
-	    }
-
-	elif [ -r ${MAILDIRS}/${p} ]; then
-
-	    { maildircheck ${MAILDIRS}/${p} } && { fold+=(${MAILDIRS}/${p}) }
-
-	else # not a folder, add it to expressions array
-	    expr+=(${p})
-	fi
-    done
-
-
-    # now fold is an array of specified folders
-    # expr is an array of specified search expressions
-
-
-    # to search only one maildir then we need to index it
-    # separate from the rest of the maildirs
-    if [ ${#fold} != 0 ]; then
-	{ test ${#expr} = 0 } && {
-	    error "no search expression given for folders ${fold[@]}"
-	    return 1 }
-	# forge the folder string for mairix conf
-	folders=""; for f in ${fold}; do folders="$folders`basename $f`:"; done
-	cat <<EOF > $rc
+    # forge the folder string for mairix conf
+    folders=""; for f in ${fold}; do folders="$folders`basename $f`:"; done
+    cat <<EOF > $rc
 base=$basedir
 database=$TMPDIR/search.db.$id
 maildir=${folders}
 mfolder=$TMPDIR/search.result.$id
 mformat=maildir
 EOF
+    { test $DEBUG = 1 } && {
+	func "Mairix conf (debug output)"
+	cat $rc }
 
+    exitcode=0
+    { test "$DRYRUN" = "1" } || {
 	exitcode=1
-	{ test $DRYRUN != 1 } && {
-	    act "Indexing ${folders}"
-	    mairix -F -f $rc 2> /dev/null
-	    { test $? = 0 } && {
-		act "Searching for: ${expr}"
-		found=`mairix -F -f $rc ${=expr} 2> /dev/null | awk '{ print $2}'`
-		if [ $found != 0 ]; then
-		    mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
-		    notice "Found $found matches looking for '$expr' in $folders"
-		    find $TMPDIR/search.result.$id
-		    cat $rc
-		    exitcode=0
-		else error "No matches found."; fi
-	    }
-
-	} # DRYRUN
-
-	rm -f $rc
-	rm -f $TMPDIR/search.db.$id
-#	rm -rf $TMPDIR/search.result.$id
-	return $exitcode
-
-
-	####################################################
-    else    # no folder specified on commandline, search all
-    # make index if no params given
-	list_maildirs
-	for i in ${maildirs}; do
-	    # exclude zz. trash from search
-	    { test ${i[1,2]} != 'zz' } && { ml="$ml:$i" }
-	done
-    fi
-
-    cat <<EOF > $rc
-base=$MAILDIRS
-database=$WORKDIR/search.db
-maildir=${ml}
-mfolder=$TMPDIR/search.result.$id
-mformat=maildir
-EOF
-    # just index
-    { test ${#PARAM} = 0 } && {
-	{ test $DRYRUN = 1 } && {
-	    act "Would index ${#maildirs} maildirs:"
-	    act "${maildirs}"
-	    act "Dry run exit."
-	    return 0
+	mairix -F -f $rc 2>/dev/null
+	{ test $? = 0 } && {
+	    found=`mairix -F -f $rc ${=term} 2> /dev/null | awk '{ print $2}'`
+	    if [ "$found" = "0" ]; then
+		error "No matches found."
+	    else
+		mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
+		notice "Found $found matches looking for '$term' in $folders"
+		exitcode=0
+	    fi
 	}
-	act "Indexing ${#maildirs} maildirs for search"
-	act "please be patient..."
-	mairix -F -f $rc
-	rm -f $rc
-	exitcode=$?
-	if [ $exitcode = 0 ]; then notice "Done."
-	else error "Error, indexing aborted."; fi
-	rm -f $rc
-	return $exitcode
-    }
-
-    { test $DRYRUN = 1 } && {
-	act "Would search $mlstr for: ${expr}"
-	act "Dry run exit."
-	return 0
-    }
-
-    act "Searching $mlstr for: ${expr}"
-    exitcode=1
-
-    found=`mairix -F -f $rc ${=expr} 2> /dev/null | awk '{print $2}'`
-    if [ $CALLMUTT = 1 ]; then
-
-	if [ $found != 0 ]; then
-	    ${=mutt} -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
-	    notice "Found $found matches looking for '$expr' in all mail folders"
-	    exitcode=0
-	else error "Nothing found matching '$expr'"; fi
-
-	rm -rf $TMPDIR/search.*.$id
-	rm -f $rc
-	return $exitcode
-
-    else ### if not calling mutt, internal use mode:
-	# print out the full path to the results maildir
-	# return number of found hits
-	echo $TMPDIR/search.result.$id
-	return $found
-    fi
+    } # DRYRUN
+    ${=rm} $TMPDIR/search.db.$id
+    ${=rm} $TMPDIR/search.conf.$id
+    ${=rm} $TMPDIR/search.result.$id
+    return $exitcode
 }
 
-
 backup() {
-    mairixrc=$TMPDIR/backup.rc.$datestamp.$RANDOM
-    mairixdb=$TMPDIR/backup.db.$datestamp.$RANDOM
+    id=$datestamp.$RANDOM
+    mairixrc=$TMPDIR/backup.rc.$id
+    mairixdb=$TMPDIR/backup.db.$id
     typeset -al expr
     typeset -al fold
 
