@@ -139,15 +139,39 @@ open_file() {
 #########################
 ## check if we are online
 is_online() {
-    ping -c3 -n 8.8.8.8 2>/dev/null
-    { test $? = 0 } || {
-	error "Internet seems unreachable"
-	{ test "$FORCE" = "1" } || {
-	    act "Network connection is checked with a ping to 8.8.8.8"
-	    act "if your network doesn't allows it to pass, use -f to force."
-	    error "Operation aborted."
-	    exit 1 }
+    { test "$FORCE" = "1" } && {
+	act "Internet check skipped (--force in use)"
+	return 0
     }
+    _res=1
+    _host=${1:-8.8.8.8}
+    _port=${2:-}
+
+    _mode=inet # or host
+    { test "$port" = "" } || { _mode=host }
+    
+    case $_mode in
+	inet)
+	    ping -c1 -n 8.8.8.8 2>&1 > /dev/null
+	    { test $? = 0 } || {
+		error "Internet seems unreachable"
+		act "Network connection is checked with a ping to 8.8.8.8"
+		act "if your network doesn't allows it to pass, use -f to force."
+		error "Operation aborted."
+		exit 1
+	    }
+	    ;;
+	host)
+	    nc -w 16 -z ${_host} ${_port} > /dev/null
+	    { test $? = 0 } || {
+		error "Host unreachable: $_host"
+		act "Network connection is checked with 16s timeout"
+		act "if you want to bypass this check, use -f to force."
+		error "Operation aborted."
+		return 1
+	    }
+	    ;;
+    esac
 }
     
 

@@ -27,7 +27,10 @@ lock() {
 	1) error "Cannot lock non existing file: $1"
 	    return 1 ;;
 	3) error "Locked file in use: $1"
+
+	    pidcheck ${1}
 	    return 3 ;;
+
 	5) error "Impossible to lock: $1"
 	    return 5 ;;
 	# success
@@ -44,14 +47,29 @@ newlock() { # create locked
 }
 
 pidcheck() { # check if lock belongs to us
-    lockpid="`cat ${1}.pid`"
-    { test -r "${1}.pid" } && {
+    if [ -r "${1}.pid" ]; then
+	lockpid="`cat ${1}.pid`"
 	{ test "$$" != "$lockpid" } && {
-	    error "Unlock attempt by different PID on `basename $1`"
-	    act "created by $lockpid now we ($$) try to unlock"
-	    act "skipped removal: $1"
-	    return 1 }
-    }
+	    error "Unlock attempt by multiple processes on `basename $1`"
+	    { test "$FORCE" = "1" } || {
+		_prun=1
+		while [ "$prun" = "1" ]; do
+		    ps ax | grep "^${lockpid}" > /dev/null
+		    if [ test $? = 0 ]; then
+			act "Owner (pid ${_pid}) still running, waiting release..."
+		    else
+			act "Owner (pid ${_pid}) not running, taking over the lock"
+			rm -f ${1}.pid; echo "$$" > ${1}.pid
+			_prun=0
+		    fi
+		done
+	    }
+	    act "left behind by $lockpid - we ($$) will unlock it"
+	}
+    else
+	act "left behind by unknown owner, we'll take it over"
+	rm -f ${1}.pid; echo "$$" > ${1}.pid
+    fi
     return 0
 }
 
@@ -85,4 +103,3 @@ unlink() { # delete a file that we are locking
     ) &!
     return 0
 }
-

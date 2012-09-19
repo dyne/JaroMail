@@ -229,22 +229,24 @@ cleanexit() {
     # then locks, with a warning
     for l in `find -O3 $TMPDIR/ -maxdepth 1 -type f -name '*.lock'`; do
 	lname=`basename ${(s:.lock:)l}`
+	func "cleaning lock for $lname"
 
 	# skip if in course of unlink - parallel operation, see unlink()
 	{ test -r ${TMPDIR}/${lname}.unlink } && { continue }
 
-	pid="$lname.pid"
-	if [ -r ${pid} ]; then
-	    error "forced removal of lock created by pid $pid: $lname"
-	    rm -f ${TMPDIR}/${pid}
+	pidfile="${TMPDIR}/$lname.pid"
+	if [ -r ${pidfile} ]; then
+	    pid=`cat $pidfile`
+	    error "forced removal of lock left by pid $pid: $lname"
+	    rm -f ${pidfile}
 	else
-	    error "forced removal of lock created by unknown pid: $lname"
+	    error "forced removal of lock left by unknown pid: $lname"
 	fi
-	rm -f ${TMPDIR}/${lock}
+	rm -f ${TMPDIR}/${lname}.lock
 
 	# remove the actual file
 	if [ -r ${TMPDIR}/$lname ]; then ${=rm} ${TMPDIR}/$lname
-	else error "stale lock: locked file not found"; fi
+	else act "empty lock: file was already removed"; fi
 
     done
 

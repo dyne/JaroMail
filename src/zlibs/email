@@ -24,7 +24,7 @@ compose() {
     # no args, open in compose mode
     { test -z $PARAM } && {
 	${=mutt} -F $MUTTDIR/rc ""; return $? }
-    
+
     ${=mutt} -F $MUTTDIR/rc "${PARAM[@]}"
     return $?
 }
@@ -86,7 +86,7 @@ fetchall() {
 fetch() {
     { test "$account" = "" } && {
 	fetchall; return $? }
-	
+
     read_account ${account_type} ${account}
     { test  $? != 0 } && {
 	error "Error on account entry: $account_type $account"
@@ -103,11 +103,8 @@ fetch() {
 
     notice "Examining mailbox for $name <$email> on $host"
 
-    # check if its online
-    nc -w 8 -z ${host} ${port} > /dev/null
-    { test $? = 0 } || {
-	error "server is off-line or unreachable, skipped"
-	return 1 }
+    is_online ${host} ${port}
+    { test $? = 0 } || { return 1 }
 
     ask_password $login $host
 
@@ -238,7 +235,7 @@ send() {
 	    unset password all; return 1
 	}
 
-	tmp=$TMPDIR/$host.send.$RANDOM
+	tmp=$TMPDIR/msmtp.$host.$datestamp.$RANDOM
 	newlock $tmp
 	cat <<EOF > $tmp
 account default
@@ -268,8 +265,8 @@ EOF
 		act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
 		cat ${mail} | $WORKDIR/bin/jaro -q learn recipient
-		${=rm} ${mail}
 		unlink ${smtp}
+		${=rm} ${mail}
 	    fi
 	done
 	unlink $tmp
