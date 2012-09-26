@@ -114,7 +114,7 @@ if ! [ -r $WORKDIR/Mutt.txt ]; then
 # set signature='~/.signature'    # signature file
 # set pgp_sign_as="0xC2B68E39"    # UserID/KeyID for signing
 
-# Customized headers
+# Customized headers example
 # unmy_hdr *                      # remove all extra headers first.
 
 # my_hdr From: Jaromil <jaromil@dyne.org>;
@@ -279,6 +279,10 @@ export PATH=$WORKDIR/bin:\$PATH
 EOF
 fi
 
+# update the manual
+{ test -r doc/jaromail-manual.pdf } && {
+    cp -f doc/jaromail-manual.pdf $WORKDIR/Manual.pdf }
+
 notice "Done! now configure your personal settings, accounts and filters in:"
 act "    $WORKDIR"
 act "To read the commandline help, with a list of commands: jaro -h"
@@ -288,13 +292,7 @@ act "    $WORKDIR/bin"
 
 # OS specific post install rules
 case $OS in
-	GNU)
-	{ test $bin = 1 } && {
-	    { test -r src/gnome-keyring/jaro-gnome-keyring } && {
-		cp src/gnome-keyring/jaro-gnome-keyring $WORKDIR/bin/
-	    }
-	}
-	;;
+	GNU) ;;
 	MAC) open $WORKDIR ;;
 	*)
 	;;
