@@ -222,11 +222,15 @@ send() {
 	return 1
     }
 
-    notice "Sending out ${mailnum} mails via ${type}.${account}"
-
     # defaults
     { test -z $auth } && { auth=plain }
     { test -z $port } && { port=25 }
+
+    is_online ${host} ${port}
+    { test $? = 0 } || { return 1 }
+
+    notice "Sending out ${mailnum} mails via ${type}.${account}"
+
 
     { test $DRYRUN != 1 } && {
 	ask_password $login $host
@@ -283,6 +287,9 @@ peek() {
 	error "Account configuration not found, or broken. Aborting operation."
 	return 1
     }
+
+    is_online ${host} ${port}
+    { test $? = 0 } || { return 1 }
 
     notice "Peek into remote imap account $name"
 

@@ -139,20 +139,22 @@ open_file() {
 #########################
 ## check if we are online
 is_online() {
+    func "Test if we are online"
     { test "$FORCE" = "1" } && {
 	act "Internet check skipped (--force in use)"
 	return 0
     }
     _res=1
     _host=${1:-8.8.8.8}
-    _port=${2:-}
+    _port=${2:-NONE}
 
     _mode=inet # or host
-    { test "$port" = "" } || { _mode=host }
+    { test "$_port" = "NONE" } || { _mode=host }
     
     case $_mode in
 	inet)
-	    ping -c1 -n 8.8.8.8 2>&1 > /dev/null
+	    func "trying to ping ${_host}"
+	    ping -c1 -n ${_host} 2>&1 > /dev/null
 	    { test $? = 0 } || {
 		error "Internet seems unreachable"
 		act "Network connection is checked with a ping to 8.8.8.8"
@@ -160,8 +162,10 @@ is_online() {
 		error "Operation aborted."
 		exit 1
 	    }
+	    act "Internet seems to be reachable"
 	    ;;
 	host)
+	    func "trying to connect ${_host} port ${_port}"
 	    nc -w 16 -z ${_host} ${_port} > /dev/null
 	    { test $? = 0 } || {
 		error "Host unreachable: $_host"
@@ -170,8 +174,10 @@ is_online() {
 		error "Operation aborted."
 		return 1
 	    }
+	    act "Host $_host responds on port $_port"
 	    ;;
     esac
+    return 0
 }
     
 

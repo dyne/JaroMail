@@ -451,6 +451,8 @@ main()
     subcommands_opts[ramdisk]=""
     subcommands_opts[source]=""
 
+    subcommands_opts[isonline]=""
+
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
@@ -575,6 +577,8 @@ main()
 	cert)    is_online; cert ${PARAM} ;;
 
 	ramdisk) ramdisk ${PARAM} ;;
+
+	isonline) is_online ${=PARAM}; exitcode=$? ;;
 
 	'source')   CLEANEXIT=0; return 0 ;;
 	__default)  func "no command provided"
