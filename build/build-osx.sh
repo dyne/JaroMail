@@ -69,6 +69,7 @@ copydeps() {
 	done # 1st
 
 	cp $1 build/osx/`basename $1`.bin
+	strip build/osx/`basename $1`.bin
 	for d in `cat $tmp | sort | uniq`; do
 	    if ! [ -r build/osx/dylib/`basename $d` ]; then
 		cp $d build/osx/dylib/
@@ -199,6 +200,7 @@ fi
     cp -v src/dotlock build/osx/
     copydeps ${root}/src/mutt-1.5.21/mutt-jaro
     copydeps ${root}/src/mutt-1.5.21/pgpewrap
+    copydeps /opt/local/bin/gfind
     copydeps /opt/local/bin/msmtp
     copydeps /opt/local/bin/pinentry
     copydeps /opt/local/bin/abook

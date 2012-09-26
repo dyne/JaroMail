@@ -357,7 +357,7 @@ EOF
 if header :contains "To" [
 EOF
     typeset -alU recv
-    for f in `find $WORKDIR/Accounts/ -type f | grep -v 'smtp'`; do
+    for f in `${=find} $WORKDIR/Accounts/ -type f | grep -v 'smtp'`; do
 	for addr in `cat $f | awk '
     /^email/ { print $2 }
     /^alias/ { print $2 }

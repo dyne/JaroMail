@@ -38,7 +38,7 @@ EOF
 }
 
 list_accounts() {
-    for a in `find $WORKDIR/Accounts -type f | grep -v README | sed 's/.txt//'`; do
+    for a in `${=find} $WORKDIR/Accounts -type f | grep -v README | sed 's/.txt//'`; do
 	act -n "`basename $a`\t :: "
 	awk '
 /^name/ { for(i=2;i<=NF;i++) printf "%s ", $i }
@@ -73,7 +73,7 @@ read_account() {
 
     # find the file
     func "read_account looking for ${type} ${account}"
-    for a in `find $WORKDIR/Accounts -name "$type.$account*"`; do
+    for a in `${=find} $WORKDIR/Accounts -name "$type.$account*"`; do
 	func "found account: $a"
 	all+=($a)
     done

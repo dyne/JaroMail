@@ -60,7 +60,7 @@ maildirmake() {
 # fills up all maildirs array
 list_maildirs() {
     maildirs=()
-    for m in `find -O3 $MAILDIRS/* -maxdepth 1 -type d | awk '
+    for m in `${=find} $MAILDIRS/* -maxdepth 1 -type d | awk '
     /cur$/ {next}
     /tmp$/ {next}
     /new$/ {next}
@@ -69,7 +69,7 @@ list_maildirs() {
 	
 	{ maildircheck $m } && {
 	    # is a maildir
-	    { test "`find -O3 $m -type f`" != "" } && {
+	    { test "`${=find} $m -type f`" != "" } && {
 		# and is not empty
 		maildirs+=(`basename $m`)
 	    }
@@ -125,7 +125,7 @@ rmdupes() {
 	c=0
 	notice "Checking for duplicates in folder: `basename $folder`"
 	msgs=()
-	for m in `find ${folder} -type f`; do
+	for m in `${=find} ${folder} -type f`; do
 	    msgs+=($m)
 	done
 	act "${#msgs} messages to check"
@@ -163,21 +163,21 @@ merge() {
 
     notice "Merging maildir ${src} into ${dst}"
     c=0
-    for i in `find ${src}/cur -type f`; do
+    for i in `${=find} ${src}/cur -type f`; do
 	mv $i ${dst}/cur/; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
 	    error "merge aborted."
 	    return 1 }
     done
-    for i in `find ${src}/new -type f`; do
+    for i in `${=find} ${src}/new -type f`; do
 	mv $i ${dst}/new/; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
 	    error "merge aborted."
 	    return 1 }
     done
-    for i in `find ${src}/tmp -type f`; do
+    for i in `${=find} ${src}/tmp -type f`; do
 	mv $i ${dst}/tmp/; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
@@ -226,7 +226,7 @@ filter() {
 
 	notice "Filtering folder $folder"
 	# first index current state
-	for m in `find $folder -type f`; do fall+=($m); done
+	for m in `${=find} $folder -type f`; do fall+=($m); done
     done
 
     { test ${#fall} = 0 } && {

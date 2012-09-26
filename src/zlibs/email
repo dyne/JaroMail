@@ -72,7 +72,7 @@ queue() {
 fetchall() {
     notice "Fetching all accounts in $MAILDIRS"
     res=0
-    for i in `find $WORKDIR/Accounts -type f | grep -v README`; do
+    for i in `${=find} $WORKDIR/Accounts -type f | grep -v README`; do
 	account=`basename $i`
 	account_type=`print $account | cut -d. -f1`
 	account=`print $account | cut -d. -f2`
@@ -252,7 +252,7 @@ password ${password}
 EOF
 	unset password
 
-	for mail in `find $MAILDIRS/outbox -name "*.mail"`; do
+	for mail in `${=find} $MAILDIRS/outbox -name "*.mail"`; do
 	    smtp=`print ${mail} | sed -e 's/mail/msmtp/'`
 	    lock ${smtp}
 	    recipients="`cat ${smtp}`"

@@ -222,12 +222,12 @@ cleanexit() {
     }
 
     # first delete dirs
-    for d in `find -O3 $TMPDIR/ -maxdepth 1 -type d`; do
+    for d in `${=find} $TMPDIR/ -maxdepth 1 -type d`; do
 	{ test "$d" = "$TMPDIR/" } || { ${=rm} -r ${d} }
     done
 
     # then locks, with a warning
-    for l in `find -O3 $TMPDIR/ -maxdepth 1 -type f -name '*.lock'`; do
+    for l in `${=find} $TMPDIR/ -maxdepth 1 -type f -name '*.lock'`; do
 	lname=`basename ${(s:.lock:)l}`
 	func "cleaning lock for $lname"
 
@@ -277,6 +277,13 @@ check_bin() {
 	}
     done
 
+    # which find command to use
+    case $OS in
+	GNU) find="find -O3" ;;
+	MAC) find="gfind -O3" ;;
+	*) find="find"
+    esac
+    
     # which wipe command to use
     if command -v wipe > /dev/null; then
 	rm="wipe -f -s -q -R /dev/urandom"

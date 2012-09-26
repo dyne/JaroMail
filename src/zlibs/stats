@@ -47,7 +47,7 @@ stats() {
 
 		fold+=($pfx)
 		# how big?
-		tot+=("`find $MAILDIRS/$pfx* -type f | wc -l`")
+		tot+=("`${=find} $MAILDIRS/$pfx* -type f | wc -l`")
 		grandtot="$(( $grandtot + ${tot[${#tot}]} ))"
 	    done
 	    # calculate screen size and bigger tot
@@ -100,7 +100,7 @@ EOF
 	func "  ${m}"
 	rm -rf $TMPDIR/weekstats.db.mdir
 	cp -r $MAILDIRS/${m} $TMPDIR/weekstats.db.mdir
-	for f in `find $TMPDIR/weekstats.db.mdir -type f`; do
+	for f in `${=find} $TMPDIR/weekstats.db.mdir -type f`; do
 	    timestamp=`fetchdate "%Y-%U" ${f}`
 	    mdir=`print $m|cut -d. -f1`
 	    cat <<EOF | ${SQL} -batch $db > $sql
@@ -199,7 +199,7 @@ EOF
 	return 1 }
     
     for m in ${maildirs}; do
-	for f in `find $MAILDIRS/${m} -type f`; do
+	for f in `${=find} $MAILDIRS/${m} -type f`; do
 	    timestamp=`fetchdate "%Y-%m-%d" ${f}`
 	    cat <<EOF | ${SQL} -batch $TMPDIR/timecloud.db.$id > $TMPDIR/timecloud.select.$id
 SELECT * FROM stats
