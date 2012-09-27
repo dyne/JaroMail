@@ -49,14 +49,19 @@ newlock() { # create locked
 pidcheck() { # check if lock belongs to us
     if [ -r "${1}.pid" ]; then
 	lockpid="`cat ${1}.pid`"
-	{ test "$$" != "$lockpid" } && {
+	func "lockpid: $lockpid"
+	if [ "$$" = "$lockpid" ]; then
+	    func "${1} lock belongs to us"
+	else
 	    error "Unlock attempt by multiple processes on `basename $1`"
-	    { test "$FORCE" = "1" } || {
-		_prun=1
-		while [ "$prun" = "1" ]; do
-		    ps ax | grep "^${lockpid}" > /dev/null
-		    if [ test $? = 0 ]; then
-			act "Owner (pid ${_pid}) still running, waiting release..."
+	    { test "$FORCE" = "1" } || { _prun=1
+		while [ "$_prun" = "1" ]; do
+		    for p in `ps ax | awk '{ print $1 }'`; do
+			{ test "$p" = "$lockpid" } && { break }
+		    done
+		    if [ "$p" = "$lockpid" ]; then
+			act "Owner (${lockpid}) still running, waiting release..."
+			sleep 1; continue
 		    else
 			act "Owner (pid ${_pid}) not running, taking over the lock"
 			rm -f ${1}.pid; echo "$$" > ${1}.pid
@@ -64,8 +69,8 @@ pidcheck() { # check if lock belongs to us
 		    fi
 		done
 	    }
-	    act "left behind by $lockpid - we ($$) will unlock it"
-	}
+	    act "left behind by $lockpid - we ($$) will take over"
+	fi
     else
 	act "left behind by unknown owner, we'll take it over"
 	rm -f ${1}.pid; echo "$$" > ${1}.pid
