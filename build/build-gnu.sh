@@ -113,6 +113,7 @@ case $distro in
 		popd
 		cp src/mutt-1.5.21/mutt build/gnu/mutt-jaro
 		cp src/mutt-1.5.21/pgpewrap build/gnu/pgpewrap
+		cp src/mutt-1.5.21/mutt_dotlock build/gnu/dotlock-mutt
 	}
 
 	{ test "$target" = "mixmaster" } && { 

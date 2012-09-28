@@ -615,7 +615,8 @@ struct option_t MuttVars[] = {
   ** filtered message is read from the standard output.
   */
 #if defined(DL_STANDALONE) && defined(USE_DOTLOCK)
-  { "dotlock_program",  DT_PATH, R_NONE, UL &MuttDotlock, UL BINDIR "/mutt_dotlock" },
+  //{ "dotlock_program",  DT_PATH, R_NONE, UL &MuttDotlock, UL BINDIR "/mutt_dotlock" },
+  { "dotlock_program",  DT_PATH, R_NONE, UL &MuttDotlock, "dotlock-mutt" },
   /*
   ** .pp
   ** Contains the path of the \fCmutt_dotlock(8)\fP binary to be used by

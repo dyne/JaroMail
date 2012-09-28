@@ -180,7 +180,10 @@ fi
 	--with-mixmaster=${root}/src/mixmaster --enable-pgp \
 	> /dev/null
     make mutt > /dev/null
-    { test $? = 0 } && { cp mutt mutt-jaro }
+    { test $? = 0 } && {
+	 mv mutt mutt-jaro
+	 mv mutt_dotlock dotlock-mutt
+    }
     popd
 }
 
@@ -199,6 +202,7 @@ fi
 # cp src/msmtp/src/msmtp build/osx/
     cp -v src/dotlock build/osx/
     copydeps ${root}/src/mutt-1.5.21/mutt-jaro
+    copydeps ${root}/src/mutt-1.5.21/dotlock-mutt
     copydeps ${root}/src/mutt-1.5.21/pgpewrap
     copydeps /opt/local/bin/gfind
     copydeps /opt/local/bin/msmtp
