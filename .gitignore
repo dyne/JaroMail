@@ -50,3 +50,4 @@ src/mutt-1.5.21/po/POTFILES
 src/mutt-1.5.21/reldate.h
 src/mutt-1.5.21/smime_keys
 src/mutt-1.5.21/stamp-h1
+doc/jaromail-manual.pdf
