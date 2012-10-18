@@ -3,7 +3,8 @@
 distro=unknown
 
 builddir=`pwd`
-cc="${builddir}/cc-static.zsh"
+# cc="${builddir}/cc-static.zsh"
+cc="gcc -O3 -fomit-frame-pointer -ffast-math"
 
 pushd ..
 
@@ -23,22 +24,27 @@ case $distro in
 	    test "$target" = "all" } && {
 		echo "Checking software to install..."
 		which zsh || sudo apt-get install zsh
-		which mutt || sudo apt-get install mutt
-		which procmail || sudo apt-get install procmail
-		which msmtp || sudo apt-get install msmtp
-		which pinentry || sudo apt-get install pinentry-curses
-		which fetchmail || sudo apt-get install fetchmail
-		which wipe || sudo apt-get install wipe
-		
+	
 		echo "Checking build dependencies"
 		which gcc || sudo apt-get install gcc
 		which bison || sudo apt-get install bison
 		which flex || sudo apt-get install flex
+		which make || sudo apt-get install make
+		which autoconf || sudo apt-get install autoconf
+		which automake || sudo apt-get install automake
 		which sqlite3 || sudo apt-get install sqlite3
+
 		[ -r /usr/share/doc/libgnome-keyring-dev/copyright ] || \
 		    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
 		{ test -r /usr/lib/pkgconfig/tokyocabinet.pc } || {
 		    sudo apt-get install libtokyocabinet-dev }
+		{ test -r /usr/share/doc/libslang2-dev/copyright } || {
+		    sudo apt-get install libslang2-dev }
+		{ test -r /usr/share/doc/libssl-dev/copyright } || {
+		    sudo apt-get install libssl-dev }
+		{ test -r /usr/share/doc/libgnutls-dev/copyright } || {
+		    sudo apt-get install libgnutls-dev }
+
 		which gpgme-config || sudo apt-get install libgpgme11-dev
 		echo "All dependencies installed"
 	}
@@ -47,7 +53,7 @@ case $distro in
 	    test "$target" = "all" } && {
 	    pushd src
 	    echo -n "Compiling the file lock utility... "
-	    $cc -o dotlock dotlock.c
+	    ${=cc} -o dotlock dotlock.c
 	    popd
 	    cp src/dotlock build/gnu/dotlock
 	}
@@ -56,8 +62,8 @@ case $distro in
 	    test "$target" = "all" } && {
 		pushd src
 		echo -n "Compiling the address parser... "
-		$cc -c fetchaddr.c helpers.c rfc2047.c rfc822.c;
-		$cc -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o -lbz2
+		${=cc} -c fetchaddr.c helpers.c rfc2047.c rfc822.c;
+		${=cc} -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o -lbz2
 		popd
 		cp src/fetchaddr build/gnu/
 	}
@@ -75,8 +81,8 @@ case $distro in
 	{ test "$target" = "fetchdate" } && { 
 		echo -n "Compiling the date parser... "
 		pushd src
-		$cc -I mairix -c fetchdate.c
-		$cc -DHAS_STDINT_H -DHAS_INTTYPES_H -DUSE_GZIP_MBOX \
+		${=cc} -I mairix -c fetchdate.c
+		${=cc} -DHAS_STDINT_H -DHAS_INTTYPES_H -DUSE_GZIP_MBOX \
 		    -o fetchdate fetchdate.o \
 		    mairix/datescan.o mairix/db.o mairix/dotlock.o \
 		    mairix/expandstr.o mairix/glob.o mairix/md5.o \
@@ -95,7 +101,7 @@ case $distro in
 	    test "$target" = "all" } && {
 		echo "Compiling gnome-keyring"
 		pushd src/gnome-keyring
-		$cc jaro-gnome-keyring.c -o jaro-gnome-keyring \
+		${=cc} jaro-gnome-keyring.c -o jaro-gnome-keyring \
 		    `pkg-config --cflags --libs glib-2.0 gnome-keyring-1`
 		popd
 		cp src/gnome-keyring/jaro-gnome-keyring build/gnu/
@@ -105,10 +111,9 @@ case $distro in
 	    test "$target" = "all" } && {
 		echo "Compiling Mutt (MUA)"
 		pushd src/mutt-1.5.21
-		CC="$cc" ./configure \
+		CC="$cc" LDFLAGS="-lm" ./configure \
 		    --with-ssl --with-gnutls --enable-imap --disable-debug --with-slang --disable-gpgme \
-		    --enable-hcache --with-regex --with-tokyocabinet --with-mixmaster --enable-pgp \
-		    > /dev/null
+		    --enable-hcache --with-regex --with-tokyocabinet --with-mixmaster --enable-pgp 
 		make > make.log
 		popd
 		cp src/mutt-1.5.21/mutt build/gnu/mutt-jaro

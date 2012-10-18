@@ -35,6 +35,7 @@ case `uname` in
 #	cc=clang
 	libdirs+=/lib
 	libdirs+=/usr/lib
+	libdirs+=/usr/lib/i386-linux-gnu
 	libdirs+=/usr/local/lib
 	cflags+=(-O2)
 	libraries+=(ld-linux-x86 skip)
