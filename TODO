@@ -1,14 +1,21 @@
 
+  Contribute code or donate to complete this TODO:
+  http://dyne.org/donate
+
 * Outbox as maildir
   also multiple outboxes for different send programs
    for example anonymous/ for the mixmaster queue
 
-* TBT
-   time based text, all included in html mails
+* Import of addresses fron GnuPG keyring
+
+* Local Bayesian learning spam filter (bogofilter)
 
 * Anonymizer
  + Built-in support for Mixmaster
  + Built-in support for Tor Mail
+
+* TBT
+   time based text, all included in html mails
 
 * Install
  + Full integration with the Tomb process creation

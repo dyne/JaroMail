@@ -1,12 +1,12 @@
 
- oo                                                oo dP
-						      88
- dP .d8888b. 88d888b. .d8888b. 88d8b.d8b. .d8888b. dP 88
- 88 88'  `88 88'  `88 88'  `88 88'`88'`88 88'  `88 88 88
- 88 88.  .88 88       88.  .88 88  88  88 88.  .88 88 88
- 88 `88888P8 dP       `88888P' dP  dP  dP `88888P8 dP dP
- 88~ooooooooooooooooooooooooooooooooooooooooooooooooooooo
-odP   your humble and faithful electronic postman   v 1.0
+  oo                                                oo dP
+                                                       88
+  dP .d8888b. 88d888b. .d8888b. 88d8b.d8b. .d8888b. dP 88
+  88 88'  `88 88'  `88 88'  `88 88'`88'`88 88'  `88 88 88
+  88 88.  .88 88       88.  .88 88  88  88 88.  .88 88 88
+  88 `88888P8 dP       `88888P' dP  dP  dP `88888P8 dP dP
+  88~ooooooooooooooooooooooooooooooooooooooooooooooooooooo
+ odP   your humble and faithful electronic postman   v 1.1
 
 A commandline tool to easily and privately handle your e-mail
 
@@ -25,9 +25,9 @@ It will check for all requirements on your system to be satisfied.
 Give it a path as argument if you want to install your Jaro Mail
 directory into something different than Mail inside your Home.
 
-./install.sh ./Testing
+./install.sh $HOME/Mail
 
-will install a new Jaro Mail instance into a new Testing folder
+will install Jaro Mail in a Mail folder in your $HOME
 
 Jaro Mail is completely reentrant: if you install it in multiple
 locations you can have completely separated setups, with multiple

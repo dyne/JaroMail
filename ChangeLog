@@ -1,3 +1,21 @@
+Jaro Mail 1.1 - 18 October 2012 - Slick bastard
+
+	Lots of bugfixes, code cleanups and usability improvements are
+	paving the way for some new powerful features.
+
+	The addressbook system has been enhanced to permit editing of the
+	entries in white and blacklist, plus import and export of VCards
+	is now possible.
+
+	The use of GnuPG in Mutt is fixed, along with performance
+	and usability improvements also to search.
+
+	Vim is now used as default editor, configured to properly format
+	emails with paragraph justification.
+
+	More improvements were done also to the management of multiple
+	accounts, mailbox filtering, maildir merge and backup.
+
 Jaro Mail 1.0 - 18 June 2012 - E-Data addict
 
 	Software development went forward in a rather passionate way,
