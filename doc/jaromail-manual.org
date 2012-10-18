@@ -171,8 +171,12 @@ and actions involved in managing one's email communication:
 
    There is also a file *jaro/Mutt.txt* that can be configured with
    some customized settings for the mail transport agent, such as
-   custom headers appearing in composed e-mails and the default GPG
+   custom headers appearing in composed e-mails and the default GPG[fn:gpg]
    key to be used when signing and encrypting them.
+
+[fn:gpg] GPG stands for GNU Privacy Guard, a system to securely
+encrypt and decrypt messages and files so that noone can read their
+content, even when intercepting the communication.
 
 ** Filter mail
 
@@ -462,28 +466,25 @@ Below a recapitulation of keys commonly used in our workflow
 * Searching
 
   Searching across all your emails it is as important as demanding of
-  a task. Jaro Mail implements it using an indexing mechanism that
-  speeds up greatly its operation, but require a first pass for
-  indexing.
-
-  To index all your local mails, or refresh the index, launch the
-  *search* command without arguments:
-: jaro search
-  Then wait for a while until the indexing is done. The time to wait
-  variates depending from the quantity of mails you have, it can take
-  about 10 seconds for 100MB on a fast computer, your mileage may
-  vary.
+  a task. Jaro Mail implements it using Mairix, a portable program
+  written by a bunch of talented programmers in portable C language.
 
   After the indexing is done, you can use the command *jaro search*
-  followed by any number of arguments to run the search. This is not a
-  glob match, but an absolute match on the single words.
+  followed by any number of arguments to run the search.
+
+  If one of the arguments given to the search command is the name of
+  an existing email directory folder in ~/Mail, then the search will
+  be on contents of the folder. 
 
   More than one word is aloud to refine the match (they are all AND'ed
   together), plus a number of tricks can be done: every single word
   following the command can be a particular expression that indicates
   in which header to search and for what.
 
-  Here below a short reference of possible expressions:
+  Here below a short reference of possible expressions:[fn:mairixdate]
+
+[fn:mairixdate] For a reference on how the date range works in search expressions, you can look into the *Backup* section in this manual.
+
 
   | word          | match word in message body and major headers                           |
   | t:word        | match word in To: header                                               |
@@ -506,13 +507,10 @@ Below a recapitulation of keys commonly used in our workflow
   | s:^substring= | match left-anchored substring in any word in Subject:                  |
   | s:substring=2 | match substring with <=2 errors in any word in Subject:                |
 
-  Besides expression, you can also use names of maildirs that you want
-  to search: they can be in any position following the *jaro search*
-  command. If no maildir was specified then the search is performed on
-  all stored maildirs.
+  If none of the arguments is an email folder existing in ~/Mail then
+  the search will be run over addressbook whitelist entries, returning
+  addresses of found contacts.
 
-  At last, for a reference on how the date range works in search
-  expressions, you can look into the *backup* section in this manual.
 
 * Security
 
@@ -749,8 +747,8 @@ Michael Elkins for the Mutt MUA.
 The gateway to Apple/OSX addressbook (ABQuery) was written by Brendan
 Cully and just slightly updated for our distribution.
 
-Special thanks go to Alvise Gottieri and Anatole Shaw for early testing
-and debugging.
+Special thanks go to Alvise Gottieri, Anatole Shaw, Francesco Politi
+and Fabio Pietrosanti for early testing and debugging.
 
 ** Mutt credits
 
