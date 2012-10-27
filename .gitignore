@@ -23,6 +23,7 @@ src/mairix/fromcheck.c
 src/mairix/fromcheck.h
 src/mairix/nvpscan.c
 src/mairix/nvpscan.h
+src/mairix/make.log
 src/mutt-1.5.21/Makefile
 src/mutt-1.5.21/config.h
 src/mutt-1.5.21/config.log
@@ -50,4 +51,5 @@ src/mutt-1.5.21/po/POTFILES
 src/mutt-1.5.21/reldate.h
 src/mutt-1.5.21/smime_keys
 src/mutt-1.5.21/stamp-h1
+src/mutt-1.5.21/mutt
 doc/jaromail-manual.pdf

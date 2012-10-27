@@ -248,7 +248,9 @@ cp -a src/stats/* $WORKDIR/.stats
 
 { test $bin = 1 } && {
     cp src/fetchaddr $WORKDIR/bin/
-    cp src/fetchdate $WORKDIR/bin/
+    { test -r src/fetchdate } && {
+	# fetchdate is only optionally used for stats
+	cp src/fetchdate $WORKDIR/bin/ }
 
     case $OS in
 	MAC)
