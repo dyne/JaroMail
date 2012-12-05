@@ -301,10 +301,14 @@ peek() {
 
     switch_identity
     case $transport in
-	ssl) act "using secure connection (SSL)"
+	ssl|tls) act "using secure connection (SSL)"
 	    iproto="imaps" ;;
 	plain) act "using clear text connection"
 	    iproto="imap"  ;;
+        *)
+	    error "Unknown transport: $transport"
+	    error "Configuration error in imap account ${account}"
+	    return 1 ;;
     esac
     # escape at sign in login
     ilogin=`print $login | sed 's/@/\\@/'`
