@@ -66,9 +66,9 @@ set mailcap_path = "$WORKDIR/.mutt/mailcap:$WORKDIR/mailcap:$HOME/.mailcap:/etc/
 # Little Brother Database
 set query_command = "$WORKDIR/bin/jaro -q complete '%s'"
 macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn sender<enter>" "add to whitelist everyone in the message"
-macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q forget sender<enter>" "remove sender from whitelist
+macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn all<enter>" "add all addresses in whitelist"
 macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q learn sender<enter>" "add sender to blacklist"
-macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q forget sender<enter>" "remove sender from blacklist
+macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q forget sender<enter>" "remove sender from blacklist"
 
 # mailboxes in order of priority
 source $MUTTDIR/mboxes

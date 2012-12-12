@@ -245,15 +245,14 @@ This we call implicit whitelisting.
 
 To explicitly whitelist an address from inside the mail reader index
 press [ *a* ] while selecting an email, this will add in the whitelist
-all addresses mentioned in To: and Cc:. To remove an address from the
-whitelist, press [ *A* ] (shift-a) while selecting a mail and its
-sender (only the From: field) will lose the privilege of ending up in
-your *known/* folder.
+the sender address (From: header). If you want to add all addresses
+reached by the mail (From: To: and Cc: fields) use the same letter
+capitalized pressing shift [ *A* ].
 
-There is one more privilege for people that have their address
-whitelisted: their name and e-mail will be completed automatically
-when composing a new email, pressing the *Tab* key while indicating
-them among the recipients.
+All addresses selected this way will have the privilege of ending up
+in your *known/* folder, plus their name and e-mail will be completed
+automatically when composing a new email, pressing the *Tab* key while
+indicating them among the recipients.
 
 ** Blacklist
 
@@ -261,11 +260,6 @@ To blacklist an address instead one can use the [ *z* ] key while an
 e-mail is selected on the index: the sender indicated in the From:
 field will be downgraded to the very bottom of your priorities, closes
 to spam than the rest, the most infamous *zz.blacklist/* folder.
-
-Similarly, to remove addresses from the blacklist the [ *Z* ] (shift-z)
-key can be pressed and all addresses mentioned in the currently
-selected e-mail (including those in Cc:) will be redeemed, but not
-whitelisted unless you do it explicitly with 'a'.
 
 ** Addressbook
 
@@ -279,7 +273,12 @@ Evolution etc.)[fn:appleaddr]
 
 [fn:appleaddr] On Apple/OSX systems Jaro Mail has access to the Mail.app addressbook, so all contacts known in your Mac will be automatically whitelisted
 
-To edit the addressbook in Jaro Mail the *abook* command is available
+Both the white and blacklist can be edited using a text interface,
+this way you can delete entries for instance (removing them from the
+whitelist or blacklist), or add entries by hand (for instance manually
+from visit cards), as well you can change details directly (name and
+email). To edit the addressbook in Jaro Mail the *abook* command is
+available
 : $ jaro abook
 This will open the current whitelist for edit, but one can append
 "blacklist" to this commandline to open that one instead.
@@ -287,9 +286,14 @@ This will open the current whitelist for edit, but one can append
 To quickly dump to the console all names and addresses in the Jaro
 Mail addressbook, one can use the *list* command
 : $ jaro list
-Even more useful to interface with other addressbook software and
-mobile phones, you can use the *export* and *import* functions to
-transport your addressbook formatted as a series of
+To search a string across the addressbook, simply use the command
+search followed by a string, for instance:
+: $ jaro search autistici
+will list all addresses @autistici in your addressbook.
+
+Even more useful to interface with other addressbook
+software and mobile phones, you can use the *export* and *import*
+functions to transport your addressbook formatted as a series of
 VCards[fn:vcard].
 : $ jaro export
 Will create or update the file in *Mail/jaro/addressbook.vcf*. On the
@@ -313,12 +317,11 @@ Below a recapitulation of keys related to the white and blacklisting
 functionality, to be used in the e-mail index or when an e-mail is
 open inside the mail user agent:
 
-| List  | Key         | Function                   | Fields    |
-|-------+-------------+----------------------------+-----------|
-| White | *a*         | Add all addresses found    | From: Cc: |
-| White | *A* (shift) | Remove sender address      | From:     |
-| Black | *z*         | Add sender address         | From:     |
-| Black | *Z* (shift) | Remove all addresses found | From: Cc: |
+| List  | Key         | Function                   | Fields        |
+|-------+-------------+----------------------------+---------------|
+| White | *a*         | Add the sender address     | From:         |
+| White | *A* (shift) | Add all addresses          | From: To: Cc: |
+| Black | *z*         | Blacklist the sender       | From:         |
 
 And here the addressbook commands that are available from the
 commandline:
@@ -327,6 +330,7 @@ commandline:
 |----------+--------------------------|
 | *abook*  | edit the addressbook     |
 | *list*   | list the addressbook     |
+| *search* | search a name or address |
 | *export* | export to a VCard file   |
 | *import* | import from a VCard file |
 

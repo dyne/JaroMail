@@ -50,10 +50,11 @@ EOF
     return 0
 }
 insert_address() {
-    func "insert address: $1, $2"
+    _email="$1"; _name="$2"; 
+    func "insert address: $_name <$_email>"
     cat <<EOF | ${SQL} -batch ${addressbook} 2> /dev/null
 INSERT INTO $list (email, name)
-VALUES ("${1}", "${2}");
+VALUES ("${_email}", "${_name}");
 EOF
     { test $? != 0 } && {
 	func "address already present in $list"
@@ -146,29 +147,49 @@ learn() {
 
     what=sender
     { test -z ${PARAM[1]} } || { what=${PARAM[1]} }
+    buffer=`cat`
     case ${PARAM[1]} in
+
 	sender) # simple: one address only on From:
-	    head="`cat | ${WORKDIR}/bin/fetchaddr -x From: -a`"
-	    email="${head[(ws:,:)1]}"
-	    name="${head[(ws:,:)2]}"
+	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x From: -a`"
+	    # (Q) eliminates quotes, then word split
+	    email="${(Q)head[(ws:,:)1]}"
+	    name="${(Q)head[(ws:,:)2]}"
 	    insert_address "$email" "$name"
 	    return 0
 	    ;;
-	recipient) # complex: more addresses in To: and Cc:
-	    head="`cat | ${WORKDIR}/bin/fetchaddr -x To: -a`"
+
+	all)
+	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -a`"
 	    for h in ${(f)head}; do
-		email="${h[(ws:,:)1]}"
-		name="${h[(ws:,:)2]}"
+		# (Q) eliminates quotes, then word split
+		email="${(Q)h[(ws:,:)1]}"
+		name="${(Q)h[(ws:,:)2]}"
+		insert_address "$email" "$name"
+		{ test $? = 0 } && { act "new: $_name <${_email}>" }
+	    done
+	    return 0
+	    ;;
+
+	recipient) # complex: more addresses in To: and Cc:
+	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x To: -a`"
+	    for h in ${(f)head}; do
+		# (Q) eliminates quotes, then word split
+		email="${(Q)h[(ws:,:)1]}"
+		name="${(Q)h[(ws:,:)2]}"
 		insert_address "$email" "$name"
 	    done
-	    head="`cat | ${WORKDIR}/bin/fetchaddr -x Cc: -a`"
+
+	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x Cc: -a`"
 	    for h in ${(f)head}; do
-		email="${h[(ws:,:)1]}"
-		name="${h[(ws:,:)2]}"
+		# (Q) eliminates quotes, then word split
+		email="${(Q)h[(ws:,:)1]}"
+		name="${(Q)h[(ws:,:)2]}"
 		insert_address "$email" "$name"
 	    done
 	    return 0
 	    ;;
+
 	*)
 	    error "Unknown learning function: $what" ;;
     esac
