@@ -51,7 +51,7 @@ EOF
 }
 
 insert_address() {
-    _email="$1"; _name="$2"; 
+    _email="${(Q)1}"; _name="${(Q)2}";
     func "insert address: $_name <$_email>"
     cat <<EOF | ${SQL} -batch ${addressbook} 2> /dev/null
 INSERT INTO $list (email, name)
@@ -222,7 +222,7 @@ import_addressbook() {
     fi
 }
 
-    
+
 # import addressbook from Mac/OSX
 import_macosx() {
     act "system addressbook from Mac/OSX"
@@ -294,7 +294,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
       c+=1
       print name
       print email
-      print "# " c 
+      print "# " c
     }
     email=""
     next
@@ -454,10 +454,10 @@ EOF
 	--outformat spruce | awk '
 BEGIN { c=0; name=""; email=""; }
 /^#/ { if(email != "") {
-          c+=1
-          print name
-          print email
-          print "# " c
+	  c+=1
+	  print name
+	  print email
+	  print "# " c
        }
        email=""
        next

@@ -104,7 +104,7 @@ if ! [ -r $WORKDIR/Applications.txt ]; then
 
 # Example:
 # application/rtf  oowriter
- 
+
 EOF
     act "Default helper applications settings created"
 else
@@ -309,8 +309,13 @@ act "    $WORKDIR/bin"
 
 # OS specific post install rules
 case $OS in
-	GNU) ;;
-	MAC) open $WORKDIR ;;
-	*)
+    GNU) ;;
+    MAC)
+	# import addressbook
+	notice "Importing addressbook"
+	import_macosx
+	notice "Installation done, opening filemanager on config file dir."
+	open $WORKDIR ;;
+    *)
 	;;
 esac
