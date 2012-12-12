@@ -68,7 +68,6 @@ set query_command = "$WORKDIR/bin/jaro -q complete '%s'"
 macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn sender<enter>" "add to whitelist everyone in the message"
 macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn all<enter>" "add all addresses in whitelist"
 macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q learn sender<enter>" "add sender to blacklist"
-macro index,pager Z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q forget sender<enter>" "remove sender from blacklist"
 
 # mailboxes in order of priority
 source $MUTTDIR/mboxes
@@ -90,15 +89,25 @@ EOF
 
     # MUTT MAILCAP
 
-wwwtext=w3m
-{ command -v lynx > /dev/null } && { wwwtext=lynx }
-{ command -v elinks > /dev/null } && { wwwtext=elinks }
-cat <<EOF > $MUTTDIR/mailcap
+    wwwtext=w3m
+    { command -v lynx > /dev/null } && { wwwtext=lynx }
+    { command -v elinks > /dev/null } && { wwwtext=elinks }
+    cat <<EOF > $MUTTDIR/mailcap
 text/html; ${wwwtext} -dump %s; nametemplate=%s.html; copiousoutput
-application/*; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && jaro preview \$a/\$f
 text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
   && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
 text/plain; cat %s
+EOF
+    apptypes=`cat ${WORKDIR}/Applications.txt`
+    for t in ${(f)apptypes}; do
+	eval `print $t | awk '
+    { print "_type=" $1 "; _app=" $2 ";" }'` 
+	cat <<EOF >> $MUTTDIR/mailcap
+${_type}; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && ${_app} \$a/\$f
+EOF
+    done
+    cat <<EOF >> $MUTTDIR/mailcap
+application/*; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && jaro preview \$a/\$f
 EOF
 
     # this one is empty and sources files in temp when necessary

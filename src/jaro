@@ -566,6 +566,7 @@ main()
 
 	edit)    CLEANEXIT=0; edit_file ${PARAM} ;;
 	open)    CLEANEXIT=0; open_folder ${PARAM} ;;
+	preview) CLEANEXIT=0; preview_file ${PARAM} ;;
 
 	backup)  backup ${PARAM} ;;
 	rmdupes) rmdupes ${PARAM} ;;

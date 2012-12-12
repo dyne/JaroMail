@@ -49,6 +49,7 @@ EOF
     chmod 600 $WORKDIR/addressbook
     return 0
 }
+
 insert_address() {
     _email="$1"; _name="$2"; 
     func "insert address: $_name <$_email>"
@@ -81,6 +82,7 @@ EOF
     { test $? != 0 } && {
 	func "address not found or error occurred" }
 }
+
 search_name() {
     func "search_name from $list like $1"
 	cat <<EOF | ${SQL} -column -batch ${addressbook}
@@ -89,6 +91,7 @@ SELECT * FROM $list
 WHERE name LIKE "%${1}%";
 EOF
 }
+
 search_email() {
     func "search addressbook $list for $1"
     cat <<EOF | ${SQL} -column -batch ${addressbook}
@@ -97,7 +100,6 @@ SELECT * FROM $list
 WHERE email LIKE "%${1}%";
 EOF
 }
-
 
 lookup_email() {
     func "lookup email id from $list where $1"
@@ -109,9 +111,7 @@ EOF
 
 complete() {
     func "complete from $list: ${PARAM[1]}"
-
     act "Searching for \"${PARAM[1]}\" in $list"
-
     matches="${matches}\n`search_name ${PARAM[1]}`"
 
     # mutt query requires something like this
@@ -125,20 +125,14 @@ complete() {
   }
   printf "\n" }'
 }
+
 isknown() {
     func "is known in $list: (string from stdin)"
-
     head="`${WORKDIR}/bin/fetchaddr -x From: -a`"
-
-
     email="${head[(ws:,:)1]}"
-
     exitcode=1
-
     lookup="`lookup_email ${email}`"
-
     { test "$lookup" != "" } && { exitcode=0 }
-
     act "Email <$email> found in $list with id $lookup"
 }
 
@@ -198,10 +192,8 @@ learn() {
 
 forget() {
     func "forget sender from mail in stdin"
-
     act "Expecting mail from stdin pipe"
     head="`${WORKDIR}/bin/fetchaddr -x From:`"
-
     # forget the email part of the parsed head
     remove_address "${head[(ws:,:)1]}"
 }
@@ -249,7 +241,6 @@ import_macosx() {
     unlink $tmp
 
     lock ${addressbook}
-
     new=0; dupes=0;
     for a in ${(f)addresses}; do
 	_email=`echo $a | cut -d'|' -f1`
@@ -262,12 +253,12 @@ import_macosx() {
     done
 
     unlock ${addressbook}
-
     notice "Operation completed"
     act "$new new addresses imported"
     act "$dupes duplicate addresses skipped"
     return 0
 }
+
 # import addresbook email from VCard
 import_vcard() {
     act "import VCard from file: ${PARAM[1]}"

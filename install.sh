@@ -97,6 +97,21 @@ else
     error "Existing configuration $WORKDIR/Filters.txt skipped"
 fi
 
+if ! [ -r $WORKDIR/Applications.txt ]; then
+    cat <<EOF > $WORKDIR/Applications.txt
+# Example configuration to match mime/type to applications
+# each line should start with a mime/type and then indicate an executable
+
+# Example:
+# application/rtf  oowriter
+ 
+EOF
+    act "Default helper applications settings created"
+else
+    error "Existing configuration $WORKDIR/Applications.txt skipped"
+fi
+
+
 if ! [ -r $WORKDIR/Mutt.txt ]; then
     cat <<EOF > $WORKDIR/Mutt.txt
 # Mutt specific customizations

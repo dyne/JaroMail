@@ -124,7 +124,7 @@ open_folder() {
 
 ##############
 ## Open a File
-open_file() {
+preview_file() {
     case $OS in
 	GNU)
 	    sensible-browser ${=PARAM} &
