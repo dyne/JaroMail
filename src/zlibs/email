@@ -22,11 +22,13 @@
 
 compose() {
     # no args, open in compose mode
-    { test -z $PARAM } && {
-	${=mutt} -F $MUTTDIR/rc ""; return $? }
-
-    ${=mutt} -F $MUTTDIR/rc "${PARAM[@]}"
-    return $?
+    tmp="${WORKDIR}/tmp/compose.$datestamp.$RANDOM"
+    _res=0;
+    echo "To: ${PARAM[@]}" > $tmp
+    ${=mutt} -F $MUTTDIR/rc -H $tmp
+    _res=$?
+    rm -f $tmp
+    return $_res
 }
 
 queue() {
