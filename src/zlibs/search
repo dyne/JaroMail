@@ -201,21 +201,23 @@ backup() {
 base=$basedir
 database=$mairixdb
 maildir=${folders}
-mfolder=$dst
 mformat=maildir
 EOF
     mairix -F -f ${mairixrc} 2> /dev/null
-    act "Moving matches to $dst"
-    pushd `dirname $dst`; basedir=`pwd`; popd
+    tempdst="bck.`basename $dst`"
+    notice "Backup of $dst"
     rm -f ${mairixrc}; cat <<EOF > ${mairixrc}
 base=$basedir
 database=$mairixdb
 maildir=${folders}
-mfolder=$dst
+mfolder=$tempdst
 mformat=maildir
 EOF
-    found=`mairix -F -f ${mairixrc} -t -M ${expr} 2>/dev/null | awk '{print $2}'`
-    notice "$found matches found, destination folder size is `du -hs $basedir/$dst | awk '{print $1}'`"
+    mairix -F -f ${mairixrc} -t -M ${expr}
+    { test -r $basedir/$tempdst } && { 
+      merge $basedir/$tempdst $dst
+      notice "Destination folder size is `du -hs $dst | awk '{print $1}'`"
+    }
 
     ${=rm} ${mairixrc}
     ${=rm} ${mairixdb}

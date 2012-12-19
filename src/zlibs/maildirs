@@ -146,8 +146,8 @@ rmdupes() {
 }
 
 merge() {
-    src=${PARAM[1]}
-    dst=${PARAM[2]}
+    src=${1}
+    dst=${2}
 
     { test "$src" = "$dst" } && {
 	error "Cannot merge same directory in itself: $src = $dst"
