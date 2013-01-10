@@ -191,6 +191,7 @@ fi
 { test "$target" = "install" } || { 
     test "$target" = "all" } && {
 
+    rm -rf build/osx/dylib
     mkdir -p build/osx/dylib
 
 # copy all binaries built
