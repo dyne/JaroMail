@@ -3,8 +3,6 @@
 # this script creates a binary build for Apple/OSX
 # it requires all needed macports to be installed:
 
-# mutt
-# sudo port -vc install mutt-devel +gnuregex +gpgme +headercache +imap +pop +sasl +smtp +ssl +tokyocabinet +universal
 
 # pinentry
 # sudo port install pinentry +universal
@@ -173,7 +171,7 @@ fi
     echo "Compiling Mutt (MUA)"
     pushd src/mutt-1.5.21
 
-    CC=clang CFLAGS="$cflags" LDFLAGS="$ldflags" ./configure \
+    CC=clang CFLAGS="$cflags" CPPFLAGS="-I/opt/local/include" LDFLAGS="$ldflags" ./configure \
 	--with-ssl --with-gnutls --enable-imap --disable-debug \
 	--with-slang --disable-gpgme \
 	--enable-hcache --with-regex --with-tokyocabinet \
@@ -206,10 +204,13 @@ fi
     copydeps ${root}/src/mutt-1.5.21/pgpewrap
     copydeps /opt/local/bin/gfind
     copydeps /opt/local/bin/msmtp
+    copydeps /opt/local/bin/gpg
+    mv build/osx/gpg build/osx/gpg-jaro
     copydeps /opt/local/bin/pinentry
     copydeps /opt/local/bin/abook
     copydeps /opt/local/bin/lynx
-
+    copydeps /opt/local/bin/fetchmail
+    copydeps /opt/local/bin/procmail
 }
 
 
