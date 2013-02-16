@@ -699,6 +699,41 @@ maildirs: it will first pass all messages found through your filters,
 refiling them to folders (even creating duplicates) and then prune all
 the affected folders to remove the duplicates.
 
+
+* Usability tips
+
+** Quickly send a file via email on Apple/OSX
+
+   To right-click on a file and send it via email attach using Jaro
+   Mail you must create a "Service" using the application
+   "Automator". It is fairly simple:
+
+   1) Start Automator
+   2) Choose the Service template
+   3) In the dropdown boxes that appear choose “files or folders” and “Finder”
+   4) Look for "Run Applescript" in the Library tree
+   5) Drag "Run Applectript" in  the workflow area and paste this script into it:
+
+#+BEGIN_EXAMPLE
+on run {input, parameters}
+	tell application "Terminal"
+		activate
+		tell window 1
+			do script "~/Mail/jaro/bin/jaro " & POSIX path of input
+		end tell
+	end tell
+end run
+#+END_EXAMPLE
+   
+   Now Save the new service (you can name it "Send file via Jaro
+   Mail") and when you will right click on a file, in the submenu
+   "Services" you will find the option you just scripted, which will
+   open a Terminal asking you the email address, while the file will
+   be already configured as attach.
+
+
+
+
 * Acknowledgements
 
 Jaro Mail would have never been possible without the incredible amount
