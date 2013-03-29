@@ -76,8 +76,8 @@ fetchall() {
     res=0
     for i in `${=find} $WORKDIR/Accounts -type f | grep -v README`; do
 	account=`basename $i`
-	account_type=`print $account | cut -d. -f1`
-	account=`print $account | cut -d. -f2`
+	account_type="${account[(ws:.:)1]}"
+	account="${account[(ws:.:)2]}"
 	fetch
 	if [ $? != 0 ]; then res=1; fi
 	# returns an error if just one of the accounts did

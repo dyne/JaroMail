@@ -67,7 +67,7 @@ search() {
 	for rr in ${(f)res}; do
 	    _email=`print $rr | awk '{ print $1 }'`
 	    _name=`print $rr | awk '{ for(c=2;c<=NF;c++) printf "%s ", $c }'`
-	    results+=("$_name \t::\t <$_email>")
+	    results+=("$_name <$_email>")
 	done
 
 	{ test "${#results}" = "0" } || {

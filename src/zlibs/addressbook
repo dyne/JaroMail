@@ -243,10 +243,10 @@ import_macosx() {
     lock ${addressbook}
     new=0; dupes=0;
     for a in ${(f)addresses}; do
-	_email=`echo $a | cut -d'|' -f1`
+	_email="${a[(ws:|:)1]}"
 	# remove from name all what is an email between brackets
 	# crop (trim) all beginning and ending whitespaces from name
-	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
+	_name=`print ${a[(ws:|:)2]} | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
 	insert_address ${_email} ${_name}
 	if [ $? = 0 ]; then new=$(( $new + 1 ))
 	else dupes=$(( $dupes + 1 )); fi
@@ -356,10 +356,10 @@ EOF
     rm -f $WORKDIR/addressbook.vcf
     touch $WORKDIR/addressbook.vcf
     for a in ${(f)addresses}; do
-	_email=`echo $a | cut -d'|' -f1`
+	_email="${a[(ws:|:)1]}"
 	# remove from name all what is an email between brackets
 	# crop (trim) all beginning and ending whitespaces from name
-	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
+	_name=`print ${a[(ws:|:)2]} | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
 	{ test "${_email}" != "" } && {
 	    cat <<EOF >> $WORKDIR/addressbook.vcf
 BEGIN:VCARD
@@ -392,6 +392,7 @@ edit_abook() {
     tmpread=$TMPDIR/abook.read.$datestamp.$RANDOM
     newlock $tmpread
     cp ${addressbook} $tmpread
+    func "launching SELECT email,name sqlite3 query"
     cat <<EOF | ${SQL} -column -header -batch $tmpread \
 	| grep -v '^email' > $tmp
 .width 40 100
@@ -399,14 +400,14 @@ edit_abook() {
 .separator '|'
 SELECT email, name FROM $list;
 EOF
+    func "query returned"
 
-    { test "$OS" = "MAC" } && {
-    }
     addresses=`cat $tmp`
     rm -f $tmp
 
     unlink $tmpread
 
+    func "converting database into abook format"
     cat <<EOF > $tmp
 # abook addressbook file
 
@@ -417,10 +418,10 @@ version=1.0
 EOF
     c=0
     for a in ${(f)addresses}; do
-	_email=`echo $a | cut -d'|' -f1`
+	_email="${a[(ws:|:)1]}"
 	# remove from name all what is an email between brackets
 	# crop (trim) all beginning and ending whitespaces from name
-	_name=`echo $a | cut -d'|' -f2 | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
+	_name=`print ${a[(ws:|:)2]} | sed 's/<.*>//'`
 	{ test "${_email}" != "" } && {
 	    cat <<EOF >> $tmp
 [${c}]
@@ -432,6 +433,8 @@ EOF
 	}
     done
 
+    func "abook format ready, generating configuration"
+
     # generate abook configuration
     abookrc=$TMPDIR/abookrc.$datestamp.$RANDOM
     cat <<EOF > $abookrc
@@ -442,10 +445,14 @@ set mutt_command=jaro
 set sort_field=name
 EOF
 
+    func "ready to launch abook."
+
     abook --config $abookrc --datafile $tmp
     # remove config and backup turd
     ${=rm} ${tmp}~
     ${=rm} ${abookrc}
+
+    func "exporting abook to spruce format"
 
     tmpspruce=$TMPDIR/abook.spruce.$datestamp.$RANDOM
     newlock $tmpspruce
@@ -468,6 +475,8 @@ BEGIN { c=0; name=""; email=""; }
     addresses=`cat $tmpspruce`
     unlink $tmpspruce
 
+    func "done, ready to reimport the database"
+
     rm -f $tmp
 
     # move addressbook to old
@@ -479,7 +488,7 @@ CREATE TABLE $list
   email   text collate nocase unique,
   name    text collate nocase
 );
-
+PRAGMA synchronous = OFF;
 EOF
 
     newa=1; _name=""; _email=""
@@ -491,8 +500,8 @@ EOF
 	    continue }
 
 	{ test $newa -eq 1 } && {
-	    _name=`echo ${a} | cut -d: -f2`; newa=0; continue }
-	{ test $newa -eq 0 } && { _email=`echo ${a// /} | cut -d: -f2` }
+	    _name="${a[(ws/:/)2]}"; newa=0; continue }
+	{ test $newa -eq 0 } && { a=${a// /}; _email="${a[(ws/:/)2]}" }
 
     done
     func "Inserting the updated addressbook"

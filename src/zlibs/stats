@@ -40,7 +40,7 @@ stats() {
 	    grandtot=0
 	    for i in ${maildirs}; do
 		# find maildir prefixes
-		pfx=`print $i | cut -d. -f1`
+		pfx="${i[(ws:.:)1]}"
 		# is it a new prefix?
 		{ test "$pfx" = "$oldpfx" } && { continue }
 		oldpfx=$pfx
@@ -102,7 +102,7 @@ EOF
 	cp -r $MAILDIRS/${m} $TMPDIR/weekstats.db.mdir
 	for f in `${=find} $TMPDIR/weekstats.db.mdir -type f`; do
 	    timestamp=`fetchdate "%Y-%U" ${f}`
-	    mdir=`print $m|cut -d. -f1`
+	    mdir="${m[(ws:.:)1]}"
 	    cat <<EOF | ${SQL} -batch $db > $sql
 SELECT * FROM stats
 WHERE ml IS "${mdir}" AND date IS "${timestamp}";
@@ -151,7 +151,7 @@ EOF
 EOF
     prevmdir=""
     for m in ${maildirs}; do
-	mdir=`print $m|cut -d. -f1`
+	mdir="${m[(ws:.:)1]}"
 	# skip duplicates
 	if [ "$prevmdir" = "$mdir" ]; then continue
 	else prevmdir=$mdir; fi
