@@ -610,8 +610,15 @@ Most existing e-mail systems have their own storage format which is
 often over-complicated and forces us to convert our archives to it.
 
 Jaro Mail stores emails using the well documented format *Maildir*
-format which is common to many other free and open source e-mail
-software and was developed and well documented by D.J. Bernstein.
+which is common to many other free and open source e-mail software and
+was developed and well documented by D.J. Bernstein. 
+
+
+We can safely say that the Maildir format to store e-mails will stay
+the same and well compatible in 10 years from now, if not more, mostly
+because of its simplicity: that's what we need the most from a storage
+format after all.
+
 
 Quoting him about the wonders of this format:
 
