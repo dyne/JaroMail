@@ -389,11 +389,8 @@ edit_abook() {
     tmp=$TMPDIR/abook.$datestamp.$RANDOM
     newlock $tmp
 
-    tmpread=$TMPDIR/abook.read.$datestamp.$RANDOM
-    newlock $tmpread
-    cp ${addressbook} $tmpread
     func "launching SELECT email,name sqlite3 query"
-    cat <<EOF | ${SQL} -column -header -batch $tmpread \
+    cat <<EOF | ${SQL} -column -header -batch $addressbook \
 	| grep -v '^email' > $tmp
 .width 40 100
 .mode list
@@ -402,10 +399,9 @@ SELECT email, name FROM $list;
 EOF
     func "query returned"
 
-    addresses=`cat $tmp`
+    addresses="$(<$tmp)"
+    # no need to wipe, will be rewritten
     rm -f $tmp
-
-    unlink $tmpread
 
     func "converting database into abook format"
     cat <<EOF > $tmp
@@ -505,14 +501,9 @@ EOF
 
     done
     func "Inserting the updated addressbook"
-    tmpwrite=$TMPDIR/abook.write.$datestamp.$RANDOM
-    newlock $tmpwrite
-    cp ${addressbook} $tmpwrite
-    cat $tmp | ${SQL} -batch $tmpwrite 2> /dev/null
+    cat $tmp | ${SQL} -batch $addressbook 2> /dev/null
     unlink $tmp
-    cp $tmpwrite ${addressbook}
     unlock ${addressbook}
-    unlink $tmpwrite
     notice "Addressbook updated"
 }
 ###################
