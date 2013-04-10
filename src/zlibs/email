@@ -89,7 +89,10 @@ fetch() {
     { test "$account" = "" } && {
 	fetchall; return $? }
 
+# setup global account variables
     read_account ${account_type} ${account}
+# name login host protocol port auth folders accountopt
+
     { test  $? != 0 } && {
 	error "Error on account entry: $account_type $account"
 	return 1
@@ -123,51 +126,48 @@ fetch() {
 
     { test $DRYRUN != 1 } && {
 
-	tmp=$TMPDIR/$host.fetch.$RANDOM
-	newlock $tmp
-	cat <<EOF > $tmp
-poll $host with proto IMAP user "$login" there with password "$password"
-EOF
+	fmconf=("poll $host with proto IMAP user \"$login\" there with password \"$password\"")
+
 	unset password
 
 	if ! [ -z $accountopt ]; then # add option configuration
-	    print "${accountopt}" >> $tmp; fi
+	    fmconf+=(" ${accountopt} "); fi
 
 	if ! [ -z $folders ]; then # add folder configuration
-	    print "folder ${folders}" >> $tmp; fi
+	    fmconf+=(" folder ${folders} "); fi
 
-	cat <<EOF >> $tmp
-ssl warnings 3600 and wants mda "procmail -m $PROCMAILDIR/rc"
-EOF
+	fmconf+=(" ssl warnings 3600 and wants mda \"procmail -m $PROCMAILDIR/rc\" ")
+
 	if [ "$cert" = "check" ]; then
-	    cat <<EOF >> $tmp
-sslcertck sslcertpath '$WORKDIR/certs'
-EOF
+	    fmconf+=(" sslcertck sslcertpath '$WORKDIR/certs' ")
 	fi
-	cat <<EOF >> $tmp
-antispam 571 550 501 554
-EOF
+
+	
+	fmconf+=(" antispam 571 550 501 554 ")
+
 
 	# try login without doing anything
-	fetchmail -c -f $tmp
+	print "$fmconf" | fetchmail -c -f -
+	res=$?
 	# examine result
-	case $? in
+	case $ret in
 	    1)
 		notice "No mails for $name"
-		unlink $tmp
+		unset $fmconf
 		return 1
 		;;
 	    2)
 		error "Invalid or unknown certificate for $host"
-		unlink $tmp
+		unset $fmconf
 		return 1
 		;;
 	    3)
 		error "Invalid password for user $login at $host"
-		unlink $tmp
+		unset $fmconf
 		return 1
 		;;
-	    *) ;;
+	    *) 
+		func "fetchmail returns $ret" ;;
 	esac
 
 	# archive old procmail log
@@ -185,11 +185,10 @@ EOF
 
 	act "please wait while downloading mails..."
 
-	cat $tmp | fetchmail -f $tmp
-	# TODO: substitute this with cat conf | fetchmail -f -
-	# to avoid writing the password in clear on filesystem
+	print " $fmconf " | fetchmail -f -
 
-	unlink $tmp
+	unset $fmconf
+
 	unlink $addressbook_tmp
 
 	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`

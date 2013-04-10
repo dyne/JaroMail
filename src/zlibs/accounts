@@ -51,6 +51,8 @@ list_accounts() {
 
 # arg 1 : account type, es: imap or smtp
 # -a defines which account name other than 'default'
+# results in the definition of global account variables:
+# name login host protocol port auth folders accountopt
 read_account() {
     typeset -al all
     unset name email host login transport \
@@ -190,7 +192,7 @@ ask_password() {
 	    func "Looking for password in keyring: $name"
 	    ###################
 	    # USE GNOME KEYRING
-	    { test $GNOMEKEY = 1 } && {
+	    if [ "$GNOMEKEY" = "1" ]; then
 		print "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" \
 		    | $WORKDIR/bin/jaro-gnome-keyring check
 		if [ $? != 0 ]; then # its a new password
@@ -203,7 +205,15 @@ ask_password() {
 		    password=`print "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" | $WORKDIR/bin/jaro-gnome-keyring get`
 		fi
 		return 0
-	    }
+	    elif [ -r $WORKDIR/keyring ]; then
+		_hash=`print "$transport:$email:$host" | shasum`
+		lookup="`lookup_secret ${_hash}`"
+		{ test "$lookup" = "" } || {
+		    act "Using saved password for $email ($transport on $host)"
+		    password="$lookup"
+		    return 0
+		}
+	    fi
 	    ####################
 	    # USE PINENTRY ALONE
 	    new_password
@@ -216,6 +226,16 @@ ask_password() {
 	    error "Unknown system, can't figure out how to handle passwords"
 	    return 1
     esac
+}
+
+lookup_secret() {
+    hash=$1
+    if [ "$2" = "" ]; then key=password
+    else key="$2"; fi
+    cat <<EOF | ${SQL} -column -batch $WORKDIR/keyring
+SELECT ${key} FROM secrets
+WHERE hash IS "${hash}";
+EOF
 }
 
 new_password() {
@@ -277,8 +297,8 @@ EOF
 
 	    else # password is blank or aborted
 
-		# USE GNOME KEYRING
-		{ test $GNOMEKEY = 1 } && {
+		# save it into gnome keyring
+		if [ $GNOMEKEY = 1 ]; then
 
 		    cat <<EOF | $WORKDIR/bin/jaro-gnome-keyring erase
 protocol=${type}
@@ -291,8 +311,40 @@ EOF
 			return 1 }
 		    act "No new password given, old password erased."
 		    return 0
-		}
 
+
+		else # save it into local keyring
+		    { test -r $WORKDIR/keyring } || {
+		    # make sure the local keyring exists 
+			touch $WORKDIR/keyring
+			chmod 600 $WORKDIR/keyring
+			chown $_uid:$_gid $WORKDIR/keyring
+			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
+CREATE TABLE secrets
+(
+  hash   text collate unique,
+  password    text collate
+);
+EOF
+		    }
+		    # calculate the hash for this entry
+		    hash=`print "$transport:$email:$host" | shasum`
+		    # check if the entry is already present
+		    lookup="`lookup_secret ${hash} rowid`"
+		    if [ "$lookup" = "" ]; then # new entry
+			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
+INSERT INTO secrets (hash, password)
+VALUES ("${hash}", "${password}");
+EOF
+			act "saved new password in local keyring"
+		    else # update entry
+			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
+UPDATE secrets SET password="${password}" WHERE hash LIKE "${hash}";
+EOF
+			act "updated local keyring with new password"
+		    fi
+		    return 0
+		fi
 		return 1
 
 	    fi
