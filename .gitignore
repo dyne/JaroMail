@@ -52,4 +52,11 @@ src/mutt-1.5.21/reldate.h
 src/mutt-1.5.21/smime_keys
 src/mutt-1.5.21/stamp-h1
 src/mutt-1.5.21/mutt
+src/mutt-1.5.21/Makefile.in
+src/mutt-1.5.21/aclocal.m4
+src/mutt-1.5.21/configure
+src/mutt-1.5.21/contrib/Makefile.in
+src/mutt-1.5.21/doc/Makefile.in
+src/mutt-1.5.21/m4/Makefile.in
+src/mutt-1.5.21/autom4te.cache
 doc/jaromail-manual.pdf

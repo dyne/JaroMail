@@ -119,13 +119,15 @@ case $(uname) in
 	error "Running on an unknown operating system, assuming GNU" ;;
 esac
 
-if [ -z $MAILDIRS ]; then
-    # check if we are inside the directory
-    if [ -r jaro/bin/jaro ]; then
+# check if we are inside the directory
+if [ -r jaro/bin/jaro ]; then
 	MAILDIRS=`pwd`
     else # else use default
 	MAILDIRS=$HOME/Mail
-    fi
+fi
+
+if [ "$JAROMAILDIR" != "" ]; then
+  MAILDIRS="$JAROMAILDIR"
 fi
 
 
@@ -147,7 +149,7 @@ if [ -d $WORKDIR/zlibs ]; then
 	. ${z}
     done
     act "full set of auxiliary functions loaded"
-elif [ $1 = source ]; then
+elif [[ $1 = source ]]; then
     act "limited set of auxiliary functions loaded"
 else
     error "No ZLibs found in $WORKDIR/zlibs"
@@ -600,7 +602,7 @@ main()
     return 0
 }
 
-check_bin
+if [ "$1" != "source" ]; then check_bin; fi
 main $@
 { test "$CLEANEXIT" = "1" } && { cleanexit }
 return $exitcode
