@@ -211,7 +211,8 @@ ask_password() {
 		lookup="`lookup_secret ${_hash}`"
 		{ test "$lookup" = "" } || {
 		    act "Saved password found for $email ($transport on $host)"
-		    password="$lookup"
+		    notice "Type the password to unlock this keyring entry:"
+		    password="`print $lookup | base64 -d | gpg -d --cipher-algo AES256 --openpgp --no-options`"
 		    return 0
 		}
 	    fi
@@ -311,15 +312,17 @@ EOF
 		    _hash=`print "$transport:$email:$host" | shasum | awk '{print $1}'`
 		    # check if the entry is already present
 		    lookup="`lookup_secret ${_hash} rowid`"
+		    notice "Select the password to lock this keyring entry:"
+		    _password="`print $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
 		    if [ "$lookup" = "" ]; then # new entry
 			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
 INSERT INTO secrets (hash, password)
-VALUES ("${_hash}", "${password}");
+VALUES ("${_hash}", "${_password}");
 EOF
 			act "saved new password in local keyring"
 		    else # update entry
 			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
-UPDATE secrets SET password="${password}" WHERE hash LIKE "${_hash}";
+UPDATE secrets SET password="${_password}" WHERE hash LIKE "${_hash}";
 EOF
 			act "updated local keyring with new password"
 		    fi
