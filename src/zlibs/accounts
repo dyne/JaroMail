@@ -322,7 +322,7 @@ EOF
 			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
 CREATE TABLE secrets
 (
-  hash   text collate unique,
+  hash   text unique,
   password    text collate
 );
 EOF
