@@ -207,7 +207,7 @@ ask_password() {
 		return 0
 	    elif [ -r $WORKDIR/keyring ]; then
                 func "Looking for password in local keyring for $email on $host over $transport"
-		_hash=`print "$transport:$email:$host" | shasum | awk '{print $1}'`
+		_hash=`print "$type:$email:$host" | shasum | awk '{print $1}'`
 		lookup="`lookup_secret ${_hash}`"
 		{ test "$lookup" = "" } || {
 		    act "Saved password found for $email ($transport on $host)"
@@ -309,7 +309,7 @@ CREATE TABLE secrets
 EOF
 		    }
 		    # calculate the hash for this entry
-		    _hash=`print "$transport:$email:$host" | shasum | awk '{print $1}'`
+		    _hash=`print "$type:$email:$host" | shasum | awk '{print $1}'`
 		    # check if the entry is already present
 		    lookup="`lookup_secret ${_hash} rowid`"
 		    notice "Select the password to lock this keyring entry:"
