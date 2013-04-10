@@ -173,7 +173,7 @@ EOF
 ask_password() {
     case $OS in
 	MAC)
-            func "Looking for password in Mac/OSX keyring for $email on $host over $transport"
+            func "Looking for password in Mac/OSX keyring for $email on $host over $type"
 	    security find-internet-password \
 		-c JARO -a $email -s $host \
 		-p $transport -P $port > /dev/null
@@ -192,7 +192,7 @@ ask_password() {
 	    ###################
 	    # USE GNOME KEYRING
 	    if [ "$GNOMEKEY" = "1" ]; then
-                func "Looking for password in Gnome keyring for $email on $host over $transport"
+                func "Looking for password in Gnome keyring for $email on $host over $type"
 		print "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" \
 		    | $WORKDIR/bin/jaro-gnome-keyring check
 		if [ $? != 0 ]; then # its a new password
@@ -206,13 +206,14 @@ ask_password() {
 		fi
 		return 0
 	    elif [ -r $WORKDIR/keyring ]; then
-                func "Looking for password in local keyring for $email on $host over $transport"
+                func "Looking for password in local keyring for $email on $host over $type"
 		_hash=`print "$type:$email:$host" | shasum | awk '{print $1}'`
 		lookup="`lookup_secret ${_hash}`"
 		{ test "$lookup" = "" } || {
 		    act "Saved password found for $email ($transport on $host)"
 		    notice "Type the password to unlock this keyring entry:"
 		    password="`print $lookup | base64 -d | gpg -d --cipher-algo AES256 --openpgp --no-options`"
+		    { test "$?" = 0 } || { error "Incorrect password to unlock local keyring entry, operation aborted."; return 1 }
 		    return 0
 		}
 	    fi
