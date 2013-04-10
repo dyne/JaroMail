@@ -15,17 +15,23 @@
 builddir=`pwd`
 
 #cc="${builddir}/cc-static.zsh"
-cc="${builddir}/clang-static-osx.sh"
+#cc="gcc-4.7"
+#cpp="cpp-4.7"
+cc="llvm-gcc"
+cpp="llvm-cpp-4.2"
+# ${builddir}/clang-static-osx.sh"
 
 #cflags="-arch x86_64 -arch i386 -O2"
-
-cflags=(-I/opt/local/include -I/usr/include)
-cflags+=(-arch x86_64)
-cflags+=(-arch i386)
+OSX_SDK=10.7
+cflags=(-I/usr/local/include -I/usr/include)
+cflags+=(-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${OSX_SDK}.sdk/usr/include)
+# cflags+=(-arch x86_64)
+# cflags+=(-arch i386)
 cflags+=(-O2)
 
 
-ldflags="-L/opt/local/lib -L/usr/lib"
+ldflags=(-L/usr/local/lib -L/usr/lib)
+ldflags+=(-L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${OSX_SDK}.sdk/usr/lib)
 
 
 target=all
@@ -67,11 +73,12 @@ copydeps() {
 	done # 1st
 
 	cp $1 build/osx/`basename $1`.bin
+	chmod +w build/osx/`basename $1`.bin
 	strip build/osx/`basename $1`.bin
 	for d in `cat $tmp | sort | uniq`; do
 	    if ! [ -r build/osx/dylib/`basename $d` ]; then
 		cp $d build/osx/dylib/
-		print "`basename $d`"
+		print "  `basename $d`"
 	    fi
 	done
 
@@ -87,6 +94,60 @@ EOF
 	chmod +x build/osx/`basename $1`
 
 }
+
+
+copydeps_brew() {
+	# copy a binary and all dependencies until 3rd level
+	print "`basename $1`"
+
+	tmp="/tmp/build_`basename $1`";
+	rm -f $tmp; touch $tmp
+
+	libs=`otool -L $1 | awk '
+		/^\// {next} /\/usr\/local/ {print $1}'`
+
+	for p1 in ${(f)libs}; do
+		echo "$p1" >> $tmp
+		# second pass
+		libs2=`otool -L $p1 | awk '
+			/^\// {next} /\/usr\/local/ {print $1}'`
+
+		for p2 in ${(f)libs2}; do
+			echo "$p2" >> $tmp
+			# third pass
+			libs3=`otool -L $p2 | awk '
+				/^\// {next} /\/usr\/local/ {print $1}'`
+
+			for p3 in ${(f)libs3}; do
+				echo "$p3" >> $tmp
+			done # 3rd
+		done # 2nd
+	done # 1st
+
+	cp $1 build/osx/`basename $1`.bin
+	chmod +w build/osx/`basename $1`.bin
+	strip build/osx/`basename $1`.bin
+	for d in `cat $tmp | sort | uniq`; do
+	    if ! [ -r build/osx/dylib/`basename $d` ]; then
+		cp $d build/osx/dylib/
+		print "  `basename $d`"
+	    fi
+	done
+
+		# create a wrapper
+	cat <<EOF > build/osx/`basename $1`
+#!/usr/bin/env zsh
+test -r \$HOME/Mail/jaro/bin/jaro && PDIR=\$HOME/Mail/jaro
+test -r jaro/bin/jaro && PDIR="\`pwd\`/jaro"
+test \$JAROMAIL && PDIR=\$JAROMAIL
+DYLD_LIBRARY_PATH=\$PDIR/bin/dylib:\$DYLD_LIBRARY_PATH \\
+\$PDIR/bin/`basename $1`.bin \${=@}
+EOF
+	chmod +x build/osx/`basename $1`
+
+}
+
+
 
 print "Building Jaro Mail binary stash for Apple/OSX"
 
@@ -111,8 +172,8 @@ fi
 # build our own address parser
     pushd src
     print "Address parser"
-    $cc -c fetchaddr.c helpers.c rfc2047.c rfc822.c; \
-	$cc -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o;
+    $cc ${=cflags} -c fetchaddr.c helpers.c rfc2047.c rfc822.c
+    $cc -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o ${=ldflags};
     popd
 }
 
@@ -121,9 +182,10 @@ fi
 # build mairix
     pushd src/mairix
     print "Search engine and date parser"
-    CC="$cc" LD=/usr/bin/ld CPP=/usr/bin/cpp \
-	./configure --disable-gzip-mbox --disable-bzip-mbox \
-	> /dev/null ; make 2>&1 > /dev/null
+    CFLAGS="${=cflags} ${=ldflags} -L/usr/local/opt/bison/lib" \
+    CFLAGS="$CFLAGS -L/usr/local/opt/flex/lib -I/usr/local/opt/flex/include" \
+    CC="$cc" LD=ld CPP="$cpp"  \
+	./configure --disable-gzip-mbox --disable-bzip-mbox ; make 
     popd
 }
 
@@ -131,8 +193,8 @@ fi
     test "$target" = "all" } && {
 # build our own fetchdate
     pushd src
-    $cc -I mairix -c fetchdate.c
-    $cc -DHAS_STDINT_H -DHAS_INTTYPES_H \
+    $cc ${=cflags} ${=ldflags} -I mairix -c fetchdate.c
+    $cc ${=cflags} ${=ldflags} -DHAS_STDINT_H -DHAS_INTTYPES_H \
 	-o fetchdate fetchdate.o \
 	mairix/datescan.o mairix/db.o mairix/dotlock.o \
 	mairix/expandstr.o mairix/glob.o mairix/md5.o \
@@ -148,8 +210,8 @@ fi
     test "$target" = "all" } && {
 # build our own dotlock
     pushd src
-    $cc -c dotlock.c
-    $cc -o dotlock dotlock.o
+    $cc ${=cflags} -c dotlock.c
+    $cc ${=ldflags} -o dotlock dotlock.o
     popd
 }
 
@@ -171,20 +233,35 @@ fi
     echo "Compiling Mutt (MUA)"
     pushd src/mutt-1.5.21
 
-    CC=clang CFLAGS="$cflags" CPPFLAGS="-I/opt/local/include" LDFLAGS="$ldflags" ./configure \
+    CC="$gcc" CPP="$cpp" CFLAGS="${=cflags} -I/usr/local/Cellar/gettext/0.18.2/include" \
+    CPPFLAGS="${=cflags}" LDFLAGS="${=ldflags} -L/usr/local/Cellar/gettext/0.18.2/lib" ./configure \
 	--with-ssl --with-gnutls --enable-imap --disable-debug \
 	--with-slang --disable-gpgme \
 	--enable-hcache --with-regex --with-tokyocabinet \
-	--with-mixmaster=${root}/src/mixmaster --enable-pgp \
-	> /dev/null
-    make mutt > /dev/null
-    { test $? = 0 } && {
-	 mv mutt mutt-jaro
-	 mv mutt_dotlock dotlock-mutt
-    }
+	--with-mixmaster=${root}/src/mixmaster --enable-pgp
+    make keymap_defs.h
+    make reldate.h
+    CFLAGS="-I/usr/local/Cellar/gettext/0.18.2/include" make hcversion.h
+    make mutt
+    make pgpewrap
+    { test $? = 0 } && { mv mutt mutt-jaro }
     popd
 }
 
+# build our own lynx (no ssl)
+{ test "$target" = "lynx" } || {
+  test "$target" = "all" } && {
+  echo "Compiling Lynx (html 2 txt)"
+  pushd src/lynx2-8-7
+    CC="$gcc" CPP="$cpp" CFLAGS="${=cflags} -I/usr/local/Cellar/gettext/0.18.2/include" \
+    CPPFLAGS="${=cflags}" LDFLAGS="${=ldflags} -L/usr/local/Cellar/gettext/0.18.2/lib" ./configure \
+    --disable-trace --enable-nls --with-screen=slang --enable-widec --enable-default-colors \
+    --disable-file-upload --disable-persistent-cookie --with-bzlib --with-zlib \
+    --disable-finger --disable-gopher --disable-news --disable-ftp --disable-dired \
+    --enable-cjk --enable-japanese-utf8 --enable-charset-selection
+  make
+  popd
+}
 
  #  CFLAGS="${=cflags}" \
 
@@ -201,17 +278,20 @@ fi
 # cp src/msmtp/src/msmtp build/osx/
     cp -v src/dotlock build/osx/
     copydeps ${root}/src/mutt-1.5.21/mutt-jaro
-    copydeps ${root}/src/mutt-1.5.21/dotlock-mutt
     copydeps ${root}/src/mutt-1.5.21/pgpewrap
-    copydeps /opt/local/bin/gfind
-    copydeps /opt/local/bin/msmtp
-    copydeps /opt/local/bin/gpg
+    copydeps_brew /usr/local/bin/gfind
+    copydeps_brew /usr/local/bin/msmtp
+    copydeps_brew /usr/local/bin/gpg
     mv build/osx/gpg build/osx/gpg-jaro
-    copydeps /opt/local/bin/pinentry
-    copydeps /opt/local/bin/abook
-    copydeps /opt/local/bin/lynx
+    copydeps_brew /usr/local/bin/pinentry
+    copydeps_brew /usr/local/bin/abook
+    copydeps ${root}/src/lynx2-8-7/lynx
+    cp ${root}/src/lynx2-8-7/lynx.cfg build/osx/lynx.cfg
+
     copydeps /opt/local/bin/fetchmail
-    copydeps /opt/local/bin/procmail
+
+    # system wide
+    rm build/osx/dylib/libiconv.2.dylib
 }
 
 

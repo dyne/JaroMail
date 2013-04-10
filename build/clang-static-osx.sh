@@ -24,14 +24,14 @@
 
 # configuration variables
 
-cc=clang
-libdir="/opt/local/lib"
+cc=gcc
+libdir="/usr/local/lib"
 
 typeset -a arguments
 typeset -a cflags
 
 cflags+=(-arch x86_64)
-cflags+=(-arch i386)
+# cflags+=(-arch i386)
 
 ##########################
 
