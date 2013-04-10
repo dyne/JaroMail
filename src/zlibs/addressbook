@@ -47,13 +47,15 @@ EOF
 	return 1 }
     # make sure is private
     chmod 600 $WORKDIR/addressbook
+    chown $_uid:$_gid $WORKDIR/addressbook
+
     return 0
 }
 
 insert_address() {
     _email="${(Q)1}"; _name="${(Q)2}";
     func "insert address: $_name <$_email>"
-    cat <<EOF | ${SQL} -batch ${addressbook} 2> /dev/null
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook 2> /dev/null
 INSERT INTO $list (email, name)
 VALUES ("${_email}", "${_name}");
 EOF
@@ -75,7 +77,7 @@ EOF
 
 remove_address() {
     func "remove address <$1> from $list"
-    cat <<EOF | ${SQL} -batch ${addressbook}
+    cat <<EOF | ${SQL} -batch $WORKDIR/addressbook
 DELETE FROM $list
 WHERE email IS "${1}";
 EOF
@@ -85,7 +87,7 @@ EOF
 
 search_name() {
     func "search_name from $list like $1"
-	cat <<EOF | ${SQL} -column -batch ${addressbook}
+	cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
 .width 64 128
 SELECT * FROM $list
 WHERE name LIKE "%${1}%";
@@ -94,7 +96,7 @@ EOF
 
 search_email() {
     func "search addressbook $list for $1"
-    cat <<EOF | ${SQL} -column -batch ${addressbook}
+    cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
 .width 64 128
 SELECT * FROM $list
 WHERE email LIKE "%${1}%";
@@ -103,7 +105,7 @@ EOF
 
 lookup_email() {
     func "lookup email id from $list where $1"
-    cat <<EOF | ${SQL} -column -batch ${addressbook}
+    cat <<EOF | ${SQL} -column -batch $WORKDIR/addressbook
 SELECT rowid FROM $list
 WHERE email IS "${1}";
 EOF
@@ -203,7 +205,7 @@ list_addresses() {
     { test ${PARAM[1]} } && { list=${PARAM[1]} }
 
     act "Listing all contents for $list"
-    cat <<EOF | ${SQL} -column -header -batch ${addressbook}
+    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook
 .width 32 40
 SELECT * FROM $list;
 EOF
@@ -240,7 +242,7 @@ import_macosx() {
     addresses=`cat $tmp`
     unlink $tmp
 
-    lock ${addressbook}
+    lock $WORKDIR/addressbook
     new=0; dupes=0;
     for a in ${(f)addresses}; do
 	_email="${a[(ws:|:)1]}"
@@ -252,7 +254,7 @@ import_macosx() {
 	else dupes=$(( $dupes + 1 )); fi
     done
 
-    unlock ${addressbook}
+    unlock $WORKDIR/addressbook
     notice "Operation completed"
     act "$new new addresses imported"
     act "$dupes duplicate addresses skipped"
@@ -307,7 +309,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
     addresses=`cat $tmp`
     ${=rm} $tmp
 
-    lock ${addressbook}
+    lock $WORKDIR/addressbook
 
     newa=1; _name=""; _email=""
     for a in ${(f)addresses}; do
@@ -327,7 +329,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 	{ test $newa -eq 0 } && { _email=`echo ${(V)a} | cut -d^ -f1` }
     done
 
-    unlock ${addressbook}
+    unlock $WORKDIR/addressbook
 
     notice "Done importing addresses"
 }
@@ -338,9 +340,9 @@ export_vcard() {
     act "Export addressbook into vCard $WORKDIR/addressbook.vcf"
     tmp=$TMPDIR/export.$datestamp.$RANDOM
 
-    lock ${addressbook}
+    lock $WORKDIR/addressbook
 
-    cat <<EOF | ${SQL} -column -header -batch ${addressbook} \
+    cat <<EOF | ${SQL} -column -header -batch $WORKDIR/addressbook \
 	| grep -v '^email' > $tmp
 .width 40 100
 .mode list
@@ -348,7 +350,7 @@ export_vcard() {
 SELECT email, name FROM $list;
 EOF
 
-    unlock ${addressbook}
+    unlock $WORKDIR/addressbook
 
     addresses=`cat $tmp`
     ${=rm} $tmp
@@ -383,7 +385,7 @@ edit_abook() {
 	return 1
     }
 
-    lock ${addressbook}
+    lock $WORKDIR/addressbook
 
     act "Editing addressbook $list"
     tmp=$TMPDIR/abook.$datestamp.$RANDOM
@@ -503,7 +505,7 @@ EOF
     func "Inserting the updated addressbook"
     cat $tmp | ${SQL} -batch $addressbook 2> /dev/null
     unlink $tmp
-    unlock ${addressbook}
+    unlock $WORKDIR/addressbook
     notice "Addressbook updated"
 }
 ###################
