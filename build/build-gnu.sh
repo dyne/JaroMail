@@ -34,8 +34,10 @@ case $distro in
 		which automake || sudo apt-get install automake
 		which sqlite3 || sudo apt-get install sqlite3
 
-		[ -r /usr/share/doc/libgnome-keyring-dev/copyright ] || \
-		    sudo apt-get install libglib2.0-dev libgnome-keyring-dev
+		{ test -r /usr/include/bzlib.h } || {
+		    sudo apt-get install libbz2-dev }
+		{ test -r /usr/share/doc/libgnome-keyring-dev/copyright } || {
+		    sudo apt-get install libglib2.0-dev libgnome-keyring-dev }
 		{ test -r /usr/lib/pkgconfig/tokyocabinet.pc } || {
 		    sudo apt-get install libtokyocabinet-dev }
 		{ test -r /usr/share/doc/libslang2-dev/copyright } || {
@@ -78,7 +80,8 @@ case $distro in
 		cp src/mairix/mairix build/gnu/
 	}
 
-	{ test "$target" = "fetchdate" } && { 
+	{ test "$target" = "fetchdate" } || {
+	    test "$target" = "all" } && { 
 		echo -n "Compiling the date parser... "
 		pushd src
 		${=cc} -I mairix -c fetchdate.c
