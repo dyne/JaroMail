@@ -88,16 +88,26 @@ source $WORKDIR/Mutt.txt
 EOF
 
     # MUTT MAILCAP
-
-    wwwtext=w3m
-    { command -v lynx > /dev/null } && { wwwtext=lynx }
-    { command -v elinks > /dev/null } && { wwwtext=elinks }
     cat <<EOF > $MUTTDIR/mailcap
-text/html; ${wwwtext} -dump %s; nametemplate=%s.html; copiousoutput
 text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
   && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
 text/plain; cat %s
 EOF
+
+    wwwtext=w3m
+    if command -v elinks; then
+	cat <<EOF >> $MUTTDIR/mailcap
+text/html; elinks -dump -dump-charset %{charset} -dump-color-mode 0 %s; nametemplate=%s.html; copiousoutput
+EOF
+    elif command -v w3m; then
+	cat <<EOF >> $MUTTDIR/mailcap
+text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput
+EOF
+    elif command -v lynx; then
+	cat <<EOF >> $MUTTDIR/mailcap
+text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
+EOF
+    fi
     apptypes=`cat ${WORKDIR}/Applications.txt`
     for t in ${(f)apptypes}; do
 	eval `print $t | awk '

@@ -75,7 +75,8 @@ set askcc = yes
 
 ##################
 ## Sending options
-set allow_8bit
+set allow_8bit = yes
+set allow_ansi = yes
 #set bounce_delivered
 set followup_to = yes
 set honor_followup_to = yes
