@@ -125,7 +125,8 @@ case $distro in
 		cp src/mutt-1.5.21/pgpewrap build/gnu/pgpewrap
 	}
 
-	{ test "$target" = "mixmaster" } && { 
+	{ test "$target" = "mixmaster" } || {
+	    test "$target" = "all" } && { 
 		echo "Compiling Mixmaster (anonymous remailer)"
 		pushd src/mixmaster-3.0/Src
 		mixmaster_sources=(main menu menuutil menusend menustats mix rem rem1 rem2 chain chain1 chain2 nym)
