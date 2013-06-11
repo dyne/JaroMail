@@ -363,6 +363,9 @@ Options:
 
 Addressbook commands:
 
+ import   import a VCard format addressbook in whitelist
+ export   export an addressbook.vcf file in Mail/jaro
+
  abook    manual edit the addressbook (white or blacklist)
  list     prints out the list of known addresses
 
