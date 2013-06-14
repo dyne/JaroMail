@@ -46,107 +46,49 @@ root=`pwd`
 
 copydeps() {
 	# copy a binary and all dependencies until 3rd level
-	print "`basename $1`"
 
-	tmp="/tmp/build_`basename $1`";
-	rm -f $tmp; touch $tmp
+	libs=(`otool -L $1 | awk '
+		/^\// {next} /\/local/ {print $1}'`)
 
-	libs=`otool -L $1 | awk '
-		/^\// {next} /\/opt\/local/ {print $1}'`
+	# for p1 in ${(f)libs}; do
+	# 	echo "$p1" >> $tmp
+	# 	# second pass
+	# 	libs2=`otool -L $p1 | awk '
+	# 		/^\// {next} /\/opt\/local/ {print $1}'`
 
-	for p1 in ${(f)libs}; do
-		echo "$p1" >> $tmp
-		# second pass
-		libs2=`otool -L $p1 | awk '
-			/^\// {next} /\/opt\/local/ {print $1}'`
+	# 	for p2 in ${(f)libs2}; do
+	# 		echo "$p2" >> $tmp
+	# 		# third pass
+	# 		libs3=`otool -L $p2 | awk '
+	# 			/^\// {next} /\/opt\/local/ {print $1}'`
 
-		for p2 in ${(f)libs2}; do
-			echo "$p2" >> $tmp
-			# third pass
-			libs3=`otool -L $p2 | awk '
-				/^\// {next} /\/opt\/local/ {print $1}'`
+	# 		for p3 in ${(f)libs3}; do
+	# 			echo "$p3" >> $tmp
+	# 		done # 3rd
+	# 	done # 2nd
+	# done # 1st
 
-			for p3 in ${(f)libs3}; do
-				echo "$p3" >> $tmp
-			done # 3rd
-		done # 2nd
-	done # 1st
-
-	cp $1 build/osx/`basename $1`.bin
-	chmod +w build/osx/`basename $1`.bin
-	strip build/osx/`basename $1`.bin
-	for d in `cat $tmp | sort | uniq`; do
-	    if ! [ -r build/osx/dylib/`basename $d` ]; then
-		cp $d build/osx/dylib/
-		print "  `basename $d`"
-	    fi
+	exe=`basename $1`
+	dst=$2
+	cp -v $1 $dst
+	{ test $? = 0 } || { print "Error copying $1" }
+	chmod +w $dst/$exe
+	strip $dst/$exe
+	for d in ${libs}; do
+	    dylib=`basename $d`
+	    print "  $dylib"
+	    # skip iconv and use the one provided system wide
+	    { test "$dylib" = "libiconv.2.dylib" } && {
+		install_name_tool -change $d /usr/lib/libiconv.2.dylib $dst/$exe
+		continue }
+	    # make sure destination is writable
+	    dylibdest=$dst/../Frameworks/`basename $d`
+	    { test -r $dylibdest } || { cp "$d" "$dylibdest" }
+	    install_name_tool -change $d \
+		"@executable_path/../Frameworks/`basename $d`" $dst/$exe
 	done
 
-		# create a wrapper
-	cat <<EOF > build/osx/`basename $1`
-#!/usr/bin/env zsh
-test -r \$HOME/Mail/jaro/bin/jaro && PDIR=\$HOME/Mail/jaro
-test -r jaro/bin/jaro && PDIR="\`pwd\`/jaro"
-test \$JAROMAIL && PDIR=\$JAROMAIL
-DYLD_LIBRARY_PATH=\$PDIR/bin/dylib:\$DYLD_LIBRARY_PATH \\
-\$PDIR/bin/`basename $1`.bin \${=@}
-EOF
-	chmod +x build/osx/`basename $1`
-
 }
-
-
-copydeps_brew() {
-	# copy a binary and all dependencies until 3rd level
-	print "`basename $1`"
-
-	tmp="/tmp/build_`basename $1`";
-	rm -f $tmp; touch $tmp
-
-	libs=`otool -L $1 | awk '
-		/^\// {next} /\/usr\/local/ {print $1}'`
-
-	for p1 in ${(f)libs}; do
-		echo "$p1" >> $tmp
-		# second pass
-		libs2=`otool -L $p1 | awk '
-			/^\// {next} /\/usr\/local/ {print $1}'`
-
-		for p2 in ${(f)libs2}; do
-			echo "$p2" >> $tmp
-			# third pass
-			libs3=`otool -L $p2 | awk '
-				/^\// {next} /\/usr\/local/ {print $1}'`
-
-			for p3 in ${(f)libs3}; do
-				echo "$p3" >> $tmp
-			done # 3rd
-		done # 2nd
-	done # 1st
-
-	cp $1 build/osx/`basename $1`.bin
-	chmod +w build/osx/`basename $1`.bin
-	strip build/osx/`basename $1`.bin
-	for d in `cat $tmp | sort | uniq`; do
-	    if ! [ -r build/osx/dylib/`basename $d` ]; then
-		cp $d build/osx/dylib/
-		print "  `basename $d`"
-	    fi
-	done
-
-		# create a wrapper
-	cat <<EOF > build/osx/`basename $1`
-#!/usr/bin/env zsh
-test -r \$HOME/Mail/jaro/bin/jaro && PDIR=\$HOME/Mail/jaro
-test -r jaro/bin/jaro && PDIR="\`pwd\`/jaro"
-test \$JAROMAIL && PDIR=\$JAROMAIL
-DYLD_LIBRARY_PATH=\$PDIR/bin/dylib:\$DYLD_LIBRARY_PATH \\
-\$PDIR/bin/`basename $1`.bin \${=@}
-EOF
-	chmod +x build/osx/`basename $1`
-
-}
-
 
 
 print "Building Jaro Mail binary stash for Apple/OSX"
@@ -244,7 +186,6 @@ fi
     CFLAGS="-I/usr/local/Cellar/gettext/0.18.2/include" make hcversion.h
     make mutt
     make pgpewrap
-    { test $? = 0 } && { mv mutt mutt-jaro }
     popd
 }
 
@@ -265,34 +206,108 @@ fi
 
  #  CFLAGS="${=cflags}" \
 
+pushd build
+dst=JaroMail.app/Contents/MacOS
+
+# copy all built binaries in place
 { test "$target" = "install" } || { 
     test "$target" = "all" } && {
 
-    rm -rf build/osx/dylib
-    mkdir -p build/osx/dylib
+    mkdir -p $dst
 
-# copy all binaries built
-    cp -v src/fetchdate build/osx/
-    cp -v src/fetchaddr build/osx/
-    cp -v src/mairix/mairix build/osx/
-# cp src/msmtp/src/msmtp build/osx/
-    cp -v src/dotlock build/osx/
-    copydeps ${root}/src/mutt-1.5.21/mutt-jaro
-    copydeps ${root}/src/mutt-1.5.21/pgpewrap
-    copydeps_brew /usr/local/bin/gfind
-    copydeps_brew /usr/local/bin/msmtp
-    copydeps_brew /usr/local/bin/gpg
-    mv build/osx/gpg build/osx/gpg-jaro
-    copydeps_brew /usr/local/bin/pinentry
-    copydeps_brew /usr/local/bin/abook
-    copydeps ${root}/src/lynx2-8-7/lynx
-    cp ${root}/src/lynx2-8-7/lynx.cfg build/osx/lynx.cfg
+# static ones do not require relocated links
+    cp -v ${root}/src/fetchdate $dst
+    cp -v ${root}/src/fetchaddr $dst
+    cp -v ${root}/src/mairix/mairix $dst
+    cp -v ${root}/src/dotlock $dst
 
-    copydeps /opt/local/bin/fetchmail
+
+    copydeps ${root}/src/mutt-1.5.21/mutt      $dst
+    copydeps ${root}/src/mutt-1.5.21/pgpewrap  $dst
+    copydeps /opt/local/bin/fetchmail          $dst
+    copydeps ${root}/src/lynx2-8-7/lynx        $dst
+    cp       ${root}/src/lynx2-8-7/lynx.cfg    $dst/lynx.cfg
+
+    copydeps /usr/local/bin/gfind     $dst
+    copydeps /usr/local/bin/msmtp     $dst
+    copydeps /usr/local/bin/gpg       $dst
+    copydeps /usr/local/bin/pinentry  $dst
+    copydeps /usr/local/bin/abook     $dst
+
+    # rename to avoid conflicts
+    mv $dst/gpg  $dst/gpg-jaro
+    mv $dst/mutt $dst/mutt-jaro
+
+
 
     # system wide
-    rm build/osx/dylib/libiconv.2.dylib
+    # rm build/osx/dylib/libiconv.2.dylib
 }
 
+cat <<EOF > $dst/jaroshell.sh
+export PATH="$PATH:/Applications/JaroMail.app/Contents/MacOS"
+export GNUPGHOME="$HOME/.gnupg"
+export MAILDIRS="$HOME/Library/Application\ Support/JaroMail"
+export WORKDIR="/Applications/JaroMail.app/Contents/Resources"
+mkdir -p $MAILDIRS $WORKDIR
+clear
+zsh
+EOF
+
+cat <<EOF > $dst/JaroMail.command
+#!/bin/zsh
+# JaroMail startup script for Mac .app
+# Copyright (C) 2012-2013 by Denis Roio <Jaromil@dyne.org>
+# GNU GPL V3 (see COPYING)
+osascript <<EOF
+tell application "System Events" to set terminalOn to (exists process "Terminal")
+tell application "Terminal"
+   if (terminalOn) then
+        activate
+        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh; exit"
+   else
+        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh; exit" in front window
+   end if
+end tell
+EOF
+echo "EOF" >> $dst/JaroMail.command
+
+chmod +x $dst/JaroMail.command
+
+cat <<EOF > JaroMail.app/Contents/PkgInfo
+APPLJAROMAIL
+EOF
+
+cat <<EOF > JaroMail.app/Contents/Info.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>JaroMail.command</string>
+	<key>CFBundleIconFile</key>
+	<string>jaromail.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.dyne.jaromail</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>JAROMAIL</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>CSResourcesFileMapped</key>
+	<true/>
+</dict>
+</plist>
+EOF
 
 popd
+
+mkdir -p build/JaroMail.app/Contents/Resources/
+./install.sh build/JaroMail.app/Contents/Resources/
