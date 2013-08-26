@@ -70,22 +70,24 @@ copydeps() {
 
 	exe=`basename $1`
 	dst=$2
-	cp -v $1 $dst
+	mkdir -p $dst/Contents/MacOS
+	mkdir -p $dst/Contents/Frameworks
+	cp -v $1 $dst/Contents/MacOS/$exe
 	{ test $? = 0 } || { print "Error copying $1" }
-	chmod +w $dst/$exe
-	strip $dst/$exe
+	chmod +w $dst/Contents/MacOS/$exe
+	strip $dst/Contents/MacOS/$exe
 	for d in ${libs}; do
 	    dylib=`basename $d`
 	    print "  $dylib"
 	    # skip iconv and use the one provided system wide
 	    { test "$dylib" = "libiconv.2.dylib" } && {
-		install_name_tool -change $d /usr/lib/libiconv.2.dylib $dst/$exe
+		install_name_tool -change $d /usr/lib/libiconv.2.dylib $dst/Contents/MacOS/$exe
 		continue }
 	    # make sure destination is writable
-	    dylibdest=$dst/../Frameworks/`basename $d`
-	    { test -r $dylibdest } || { cp "$d" "$dylibdest" }
+	    dylibdest=$dst/Contents/Frameworks/`basename $d`
+	    { test -r $dylibdest } || { cp -v "$d" "$dylibdest" }
 	    install_name_tool -change $d \
-		"@executable_path/../Frameworks/`basename $d`" $dst/$exe
+		"/Applications/JaroMail.app/Contents/Frameworks/`basename $d`" $dst/Contents/MacOS/$exe
 	done
 
 }
@@ -207,36 +209,36 @@ fi
  #  CFLAGS="${=cflags}" \
 
 pushd build
-dst=JaroMail.app/Contents/MacOS
+bindst=JaroMail.app/Contents/MacOS
 
 # copy all built binaries in place
 { test "$target" = "install" } || { 
     test "$target" = "all" } && {
 
-    mkdir -p $dst
+    mkdir -p $bindst
 
 # static ones do not require relocated links
-    cp -v ${root}/src/fetchdate $dst
-    cp -v ${root}/src/fetchaddr $dst
-    cp -v ${root}/src/mairix/mairix $dst
-    cp -v ${root}/src/dotlock $dst
+    cp -v ${root}/src/fetchdate $bindst
+    cp -v ${root}/src/fetchaddr $bindst
+    cp -v ${root}/src/mairix/mairix $bindst
+    cp -v ${root}/src/dotlock $bindst
 
 
-    copydeps ${root}/src/mutt-1.5.21/mutt      $dst
-    copydeps ${root}/src/mutt-1.5.21/pgpewrap  $dst
-    copydeps /opt/local/bin/fetchmail          $dst
-    copydeps ${root}/src/lynx2-8-7/lynx        $dst
-    cp       ${root}/src/lynx2-8-7/lynx.cfg    $dst/lynx.cfg
+    copydeps ${root}/src/mutt-1.5.21/mutt      $bindst
+    copydeps ${root}/src/mutt-1.5.21/pgpewrap  $bindst
+    copydeps /opt/local/bin/fetchmail          $bindst
+    copydeps ${root}/src/lynx2-8-7/lynx        $bindst
+    cp       ${root}/src/lynx2-8-7/lynx.cfg    $bindst
 
-    copydeps /usr/local/bin/gfind     $dst
-    copydeps /usr/local/bin/msmtp     $dst
-    copydeps /usr/local/bin/gpg       $dst
-    copydeps /usr/local/bin/pinentry  $dst
-    copydeps /usr/local/bin/abook     $dst
+    copydeps /usr/local/bin/gfind     $bindst
+    copydeps /usr/local/bin/msmtp     $bindst
+    copydeps /usr/local/bin/gpg       $bindst
+    copydeps /usr/local/bin/pinentry  $bindst
+    copydeps /usr/local/bin/abook     $bindst
 
     # rename to avoid conflicts
-    mv $dst/gpg  $dst/gpg-jaro
-    mv $dst/mutt $dst/mutt-jaro
+    mv $bindst/gpg  $bindst/gpg-jaro
+    mv $bindst/mutt $bindst/mutt-jaro
 
 
 
@@ -244,17 +246,17 @@ dst=JaroMail.app/Contents/MacOS
     # rm build/osx/dylib/libiconv.2.dylib
 }
 
-cat <<EOF > $dst/jaroshell.sh
+cat <<EOF > $bindst/jaroshell.sh
 export PATH="$PATH:/Applications/JaroMail.app/Contents/MacOS"
 export GNUPGHOME="$HOME/.gnupg"
 export MAILDIRS="$HOME/Library/Application\ Support/JaroMail"
 export WORKDIR="/Applications/JaroMail.app/Contents/Resources"
 mkdir -p $MAILDIRS $WORKDIR
 clear
-zsh
+zsh -i -c "echo \"Welcome to Jaro Mail\ntype 'jaro help' for a list of commands.\n\""
 EOF
 
-cat <<EOF > $dst/JaroMail.command
+cat <<EOF > $bindst/JaroMail.command
 #!/bin/zsh
 # JaroMail startup script for Mac .app
 # Copyright (C) 2012-2013 by Denis Roio <Jaromil@dyne.org>
@@ -262,17 +264,18 @@ cat <<EOF > $dst/JaroMail.command
 osascript <<EOF
 tell application "System Events" to set terminalOn to (exists process "Terminal")
 tell application "Terminal"
+   activate
    if (terminalOn) then
-        activate
-        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh; exit"
+        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh"
    else
-        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh; exit" in front window
+        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh" in front window
+        set custom title of front window to "Jaro Mail"
    end if
 end tell
 EOF
-echo "EOF" >> $dst/JaroMail.command
+echo "EOF" >> $bindst/JaroMail.command
 
-chmod +x $dst/JaroMail.command
+chmod +x $bindst/JaroMail.command
 
 cat <<EOF > JaroMail.app/Contents/PkgInfo
 APPLJAROMAIL

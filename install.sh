@@ -24,15 +24,7 @@
 
 
 
-if [ $1 ]; then
-    MAILDIRS=$1;
-else
-    MAILDIRS=$HOME/Mail
-fi
-
-WORKDIR=$MAILDIRS/jaro
-PROCMAILDIR=$WORKDIR/.procmail
-MUTTDIR=$WORKDIR/.mutt
+JAROMAILDIR=${1-:$HOME/Mail}
 
 source src/jaro source
 
