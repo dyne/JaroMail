@@ -6,50 +6,50 @@
 # white   - brightwhite   # yellow - brightyellow # green - brightgreen
 # magenta - brightmagenta # blue   - brightblue   # black - brightblack
 
-color normal white black
-color tilde white black
-color indicator brightgreen black
-color tree red black # the thread tree in the index menu
-color status cyan black
-color hdrdefault cyan black
-color body magenta black "(ftp|http)://[^ ]+"	# point out URLs
-color body magenta black [-a-z_0-9.]+@[-a-z_0-9.]+	# e-mail addresses
-color underline brightgreen black
-color markers brightblack black
-color signature green black
-color error red black
-color attachment brightmagenta black
+color normal white default
+color tilde white default
+color indicator brightgreen default 
+color tree red default # the thread tree in the index menu
+color status cyan default 
+color hdrdefault cyan default
+color body magenta default "(ftp|http)://[^ ]+"	# point out URLs
+color body magenta default [-a-z_0-9.]+@[-a-z_0-9.]+	# e-mail addresses
+color underline brightgreen default
+color markers brightblack default
+color signature green default
+color error red default
+color attachment brightmagenta default
 color search black green   # how to hilite search patterns in the pager
 
 # headers
-color header brightred black ^(From|Subject|Date|To):
+color header brightred default ^(From|Subject|Date|To):
 
 # quoted message
-color quoted brightgreen black
-color quoted1 green black
-color quoted2 brightgreen black
-color quoted3 green black
-color quoted4 brightgreen black
-color quoted5 green black
+color quoted brightgreen default
+color quoted1 green default
+color quoted2 brightgreen default
+color quoted3 green default
+color quoted4 brightgreen default
+color quoted5 green default
 
 # Colours for items in the index
-color index cyan black "."
-color index white black "~N" # New
-color index brightcyan black "~O" # Unread
-# color index brightgreen black "~N (~x jaromil@* | ~h \"^In-[Rr]eply-[Tt]o: .*jaromil@*")"
-# color index yellow black "~f jaromil@*"
+color index cyan default "."
+color index white default "~N" # New
+color index brightcyan default "~O" # Unread
+# color index brightgreen default "~N (~x jaromil@* | ~h \"^In-[Rr]eply-[Tt]o: .*jaromil@*")"
+# color index yellow default "~f jaromil@*"
 
-# color index brightblue black "~g" # gpg signed
-color index brightgreen black "~G" # gpg encrypted
+# color index brightblue default "~g" # gpg signed
+color index brightgreen default "~G" # gpg encrypted
 
-color index brightgreen black "~F" # Flagged
-color index brightred black "~T" # Tagged
-color index red black "~f MAILER-DAEMON@*"
-color index red black "~f Mailer-Daemon@*"
-color index brightwhite black "~v" # Collapsed thread
-# color index brightyellow black "~V" # Collapsed thread unread
+color index brightgreen default "~F" # Flagged
+color index brightred default "~T" # Tagged
+color index red default "~f MAILER-DAEMON@*"
+color index red default "~f Mailer-Daemon@*"
+color index brightwhite default "~v" # Collapsed thread
+# color index brightyellow default "~V" # Collapsed thread unread
 
 
 
-color index red black "~=" # Duplicated messages
-color index red black "~D" # Deleted
+color index red default "~=" # Duplicated messages
+color index red default "~D" # Deleted
