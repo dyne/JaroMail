@@ -47,6 +47,8 @@ case $distro in
 		    sudo apt-get install libssl-dev }
 		{ test -r /usr/share/doc/libgnutls-dev/copyright } || {
 		    sudo apt-get install libgnutls-dev }
+		{ test -r /usr/share/doc/libgpm-dev/copyright } || {
+		    sudo apt-get install libgpm-dev }
 
 		which gpgme-config || sudo apt-get install libgpgme11-dev
 		echo "All dependencies installed"
@@ -134,7 +136,7 @@ case $distro in
 		mixmaster_sources+=(compress stats crypto random rndseed util buffers maildir parsedate.tab)
 		bison parsedate.y
 		for s in ${=mixmaster_sources}; do ${=cc} -c ${s}.c; done
-		${=cc} -o mixmaster *.o -lssl -lcurses -lgpm
+		${=cc} -o mixmaster *.o -lssl -lcrypto -lcurses -lgpm
 		popd
 		cp src/mixmaster-3.0/Src/mixmaster build/gnu
 	}
