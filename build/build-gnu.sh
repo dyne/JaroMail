@@ -115,6 +115,7 @@ case $distro in
 	    test "$target" = "all" } && {
 		echo "Compiling Mutt (MUA)"
 		pushd src/mutt-1.5.21
+		{ test -r configure } || { autoreconf -i }
 		CC="$cc" LDFLAGS="-lm" ./configure \
 		    --with-ssl --with-gnutls --enable-imap --disable-debug --with-slang --disable-gpgme \
 		    --enable-hcache --with-regex --with-tokyocabinet --with-mixmaster --enable-pgp 

@@ -24,7 +24,7 @@
 
 
 
-JAROMAILDIR=${1-:$HOME/Mail}
+JAROMAILDIR=${1-$HOME/Mail}
 
 source src/jaro source
 
@@ -253,18 +253,18 @@ cp -a src/mutt/* $MUTTDIR
 ${=mkdir} $WORKDIR/.stats
 cp -a src/stats/* $WORKDIR/.stats
 
-{ test $bin = 1 } && {
-    cp src/fetchaddr $WORKDIR/bin/
+{ test "$bin" = "1" } && {
+    cp -v src/fetchaddr $WORKDIR/bin/
     { test -r src/fetchdate } && {
 	# fetchdate is only optionally used for stats
-	cp src/fetchdate $WORKDIR/bin/ }
+	cp -v src/fetchdate $WORKDIR/bin/ }
 
     case $OS in
 	MAC)
-	    cp -r build/osx/* $WORKDIR/bin
+	    cp -v -r build/osx/* $WORKDIR/bin
 	    ;;
 
-	GNU) cp -a build/gnu/* $WORKDIR/bin
+	GNU) cp -v -a build/gnu/* $WORKDIR/bin
 #rm -f $WORKDIR/bin/dotlock
 #cat <<EOF > $WORKDIR/bin/dotlock
 #!/usr/bin/env zsh
@@ -276,6 +276,7 @@ cp -a src/stats/* $WORKDIR/.stats
 }
 
 # generate initial configuration
+act "Refresh configuration"
 MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update -q
 
 touch $HOME/.profile
