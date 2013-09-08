@@ -115,7 +115,7 @@ EOF
 	    if [ "$found" = "0" ]; then
 		error "No matches found."
 	    else
-		mutt -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
+		${=mutt} -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
 		notice "Found $found matches looking for '$term' in $folders"
 		exitcode=0
 	    fi
