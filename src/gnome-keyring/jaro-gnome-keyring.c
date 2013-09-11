@@ -111,7 +111,7 @@ store_password(jaro_credential_t *cred)
        	!cred->username || !cred->password)
       return 1;
 
-    g_snprintf(desc, sizeof(desc), "Jaro %s", cred->host);
+    g_snprintf(desc, sizeof(desc), "%s %s", cred->protocol, cred->host);
     keyres = gnome_keyring_store_password_sync(&jaro_schema,
 					       GNOME_KEYRING_DEFAULT,
 					       desc,
