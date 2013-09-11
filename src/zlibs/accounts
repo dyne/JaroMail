@@ -193,7 +193,9 @@ ask_password() {
 	    # USE GNOME KEYRING
 	    if [ "$GNOMEKEY" = "1" ]; then
                 func "Looking for password in Gnome keyring for $email on $host over $type"
-		print "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" \
+		func "path: jaromail/${type}/${email}"
+
+		print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" \
 		    | $WORKDIR/bin/jaro-gnome-keyring check
 		if [ $? != 0 ]; then # its a new password
 		    new_password
@@ -202,7 +204,7 @@ ask_password() {
 			return 1 }
 		else # password found into gnome keyring
 		    act "Using saved password for $1 @ $2"
-		    password=`print "protocol=${type}\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" | $WORKDIR/bin/jaro-gnome-keyring get`
+		    password=`print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" | $WORKDIR/bin/jaro-gnome-keyring get`
 		fi
 		return 0
 	    elif [ -r $WORKDIR/keyring ]; then
@@ -284,10 +286,11 @@ new_password() {
 
 		# USE GNOME KEYRING
 		if [ "$GNOMEKEY" = "1" ]; then
-
+		    act "using gnome-keyring password storage"
+		    func "path: jaromail/${type}/${email}"
 		    cat <<EOF | $WORKDIR/bin/jaro-gnome-keyring store
 protocol=${type}
-path=jaromail/${email}
+path=jaromail/${type}/${email}
 username=${login}
 host=${host}
 password=${password}
