@@ -300,15 +300,3 @@ act "Make sure jaro is in your PATH! it was just added to your ~/.profile"
 act "    $WORKDIR/bin"
 
 
-# OS specific post install rules
-case $OS in
-    GNU) ;;
-    MAC)
-	# import addressbook
-	notice "Importing addressbook"
-	import_macosx
-	notice "Installation done, opening filemanager on config file dir."
-	open $WORKDIR ;;
-    *)
-	;;
-esac
