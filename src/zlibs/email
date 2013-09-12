@@ -145,6 +145,9 @@ fetch() {
 	
 	fmconf+=(" antispam 571 550 501 554 ")
 
+	print $accountopt | grep ' keep' > /dev/null
+	{ test $? = 0 } || {
+	   error "planning to delete mails from server, account option: $accountopt" }
 
 	# try login without doing anything
 	print "$fmconf" | fetchmail -c -f -
