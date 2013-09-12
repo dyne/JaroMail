@@ -17,21 +17,26 @@ builddir=`pwd`
 #cc="${builddir}/cc-static.zsh"
 #cc="gcc-4.7"
 #cpp="cpp-4.7"
+
+OSX_SDK=10.7
 cc="llvm-gcc"
 cpp="llvm-cpp-4.2"
+cflags+=(-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${OSX_SDK}.sdk/usr/include)
+ldflags+=(-L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${OSX_SDK}.sdk/usr/lib)
+
+#cc="gcc"
+#cpp="cpp"
+
 # ${builddir}/clang-static-osx.sh"
 
 #cflags="-arch x86_64 -arch i386 -O2"
-OSX_SDK=10.7
 cflags=(-I/usr/local/include -I/usr/include)
-cflags+=(-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${OSX_SDK}.sdk/usr/include)
-# cflags+=(-arch x86_64)
-# cflags+=(-arch i386)
+cflags+=(-arch x86_64)
+cflags+=(-arch i386)
 cflags+=(-O2)
 
 
 ldflags=(-L/usr/local/lib -L/usr/lib)
-ldflags+=(-L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${OSX_SDK}.sdk/usr/lib)
 
 
 target=all
@@ -46,6 +51,8 @@ root=`pwd`
 
 copydeps() {
 	# copy a binary and all dependencies until 3rd level
+	# 1st argument is the binary (full path)
+	# 2nd is the .app where to copy it (relative)
 
 	libs=(`otool -L $1 | awk '
 		/^\// {next} /\/local/ {print $1}'`)
@@ -70,24 +77,24 @@ copydeps() {
 
 	exe=`basename $1`
 	dst=$2
-	mkdir -p $dst/Contents/MacOS
-	mkdir -p $dst/Contents/Frameworks
-	cp -v $1 $dst/Contents/MacOS/$exe
+	bin=$dst/Contents/Resources/jaro/bin
+	lib=$dst/Contents/Frameworks
+	cp -v $1 $bin/$exe
 	{ test $? = 0 } || { print "Error copying $1" }
-	chmod +w $dst/Contents/MacOS/$exe
-	strip $dst/Contents/MacOS/$exe
+	chmod +w $bin/$exe
+	strip $dst/$exe
 	for d in ${libs}; do
 	    dylib=`basename $d`
 	    print "  $dylib"
 	    # skip iconv and use the one provided system wide
-	    { test "$dylib" = "libiconv.2.dylib" } && {
-		install_name_tool -change $d /usr/lib/libiconv.2.dylib $dst/Contents/MacOS/$exe
-		continue }
+#	    { test "$dylib" = "libiconv.2.dylib" } && {
+#		install_name_tool -change $d /usr/lib/libiconv.2.dylib $dst/Contents/MacOS/$exe
+#		continue }
 	    # make sure destination is writable
-	    dylibdest=$dst/Contents/Frameworks/`basename $d`
+	    dylibdest=$lib/`basename $d`
 	    { test -r $dylibdest } || { cp -v "$d" "$dylibdest" }
 	    install_name_tool -change $d \
-		"/Applications/JaroMail.app/Contents/Frameworks/`basename $d`" $dst/Contents/MacOS/$exe
+		"/Applications/$dst/Contents/Frameworks/`basename $d`" $bin/$exe
 	done
 
 }
@@ -176,40 +183,48 @@ fi
     test "$target" = "all" } && {
     echo "Compiling Mutt (MUA)"
     pushd src/mutt-1.5.21
+#    aclocal-17
+#    automake-17 -a -c
+#    autoconf
+#    autoheader
 
-    CC="$gcc" CPP="$cpp" CFLAGS="${=cflags} -I/usr/local/Cellar/gettext/0.18.2/include" \
-    CPPFLAGS="${=cflags}" LDFLAGS="${=ldflags} -L/usr/local/Cellar/gettext/0.18.2/lib" ./configure \
+ # -I/usr/local/Cellar/gettext/0.18.2/include" \
+ # -L/usr/local/Cellar/gettext/0.18.2/lib" ./configure \
+#    CC="gcc" CPP="cpp" CFLAGS="${=cflags}" \
+#    CPPFLAGS="${=cflags}" LDFLAGS="${=ldflags}" ./configure \
+    ./configure \
 	--with-ssl --with-gnutls --enable-imap --disable-debug \
 	--with-slang --disable-gpgme \
 	--enable-hcache --with-regex --with-tokyocabinet \
 	--with-mixmaster=${root}/src/mixmaster --enable-pgp
     make keymap_defs.h
     make reldate.h
-    CFLAGS="-I/usr/local/Cellar/gettext/0.18.2/include" make hcversion.h
+    make hcversion.h # with Cellar include?
     make mutt
     make pgpewrap
     popd
 }
 
-# build our own lynx (no ssl)
-{ test "$target" = "lynx" } || {
-  test "$target" = "all" } && {
-  echo "Compiling Lynx (html 2 txt)"
-  pushd src/lynx2-8-7
-    CC="$gcc" CPP="$cpp" CFLAGS="${=cflags} -I/usr/local/Cellar/gettext/0.18.2/include" \
-    CPPFLAGS="${=cflags}" LDFLAGS="${=ldflags} -L/usr/local/Cellar/gettext/0.18.2/lib" ./configure \
-    --disable-trace --enable-nls --with-screen=slang --enable-widec --enable-default-colors \
-    --disable-file-upload --disable-persistent-cookie --with-bzlib --with-zlib \
-    --disable-finger --disable-gopher --disable-news --disable-ftp --disable-dired \
-    --enable-cjk --enable-japanese-utf8 --enable-charset-selection
-  make
-  popd
-}
+# # build our own lynx (no ssl)
+# { test "$target" = "lynx" } || {
+#   test "$target" = "all" } && {
+#   echo "Compiling Lynx (html 2 txt)"
+#   pushd src/lynx2-8-7
+#     CC="$gcc" CPP="$cpp" CFLAGS="${=cflags} -I/usr/local/Cellar/gettext/0.18.2/include" \
+#     CPPFLAGS="${=cflags}" LDFLAGS="${=ldflags} -L/usr/local/Cellar/gettext/0.18.2/lib" ./configure \
+#     --disable-trace --enable-nls --with-screen=slang --enable-widec --enable-default-colors \
+#     --disable-file-upload --disable-persistent-cookie --with-bzlib --with-zlib \
+#     --disable-finger --disable-gopher --disable-news --disable-ftp --disable-dired \
+#     --enable-cjk --enable-japanese-utf8 --enable-charset-selection
+#   make
+#   popd
+# }
 
  #  CFLAGS="${=cflags}" \
 
 pushd build
-bindst=JaroMail.app/Contents/MacOS
+appdst=JaroMail.app
+bindst=$appdst/Contents/Resources/jaro/bin
 
 # copy all built binaries in place
 { test "$target" = "install" } || { 
@@ -222,19 +237,15 @@ bindst=JaroMail.app/Contents/MacOS
     cp -v ${root}/src/fetchaddr $bindst
     cp -v ${root}/src/mairix/mairix $bindst
     cp -v ${root}/src/dotlock $bindst
-
-
-    copydeps ${root}/src/mutt-1.5.21/mutt      $bindst
-    copydeps ${root}/src/mutt-1.5.21/pgpewrap  $bindst
-    copydeps /opt/local/bin/fetchmail          $bindst
-    copydeps ${root}/src/lynx2-8-7/lynx        $bindst
-    cp       ${root}/src/lynx2-8-7/lynx.cfg    $bindst
-
-    copydeps /usr/local/bin/gfind     $bindst
-    copydeps /usr/local/bin/msmtp     $bindst
-    copydeps /usr/local/bin/gpg       $bindst
-    copydeps /usr/local/bin/pinentry  $bindst
-    copydeps /usr/local/bin/abook     $bindst
+    copydeps ${root}/src/mutt-1.5.21/mutt      $appdst
+    copydeps ${root}/src/mutt-1.5.21/pgpewrap  $appdst
+    copydeps /opt/local/bin/fetchmail          $appdst
+    copydeps /opt/local/bin/elinks	       $appdst
+    copydeps /usr/local/bin/gfind     $appdst
+    copydeps /usr/local/bin/msmtp     $appdst
+    copydeps /usr/local/bin/gpg       $appdst
+    copydeps /usr/local/bin/pinentry  $appdst
+    copydeps /usr/local/bin/abook     $appdst
 
     # rename to avoid conflicts
     mv $bindst/gpg  $bindst/gpg-jaro
@@ -246,18 +257,20 @@ bindst=JaroMail.app/Contents/MacOS
     # rm build/osx/dylib/libiconv.2.dylib
 }
 
-cat <<EOF > $bindst/jaroshell.sh
-export PATH="$PATH:/Applications/JaroMail.app/Contents/MacOS"
-export GNUPGHOME="$HOME/.gnupg"
-export MAILDIRS="$HOME/Library/Application\ Support/JaroMail"
+mkdir -p $appdst/Contents/MacOS
+cat <<EOF > $appdst/Contents/MacOS/jaroshell.sh
+export PATH="/Applications/JaroMail.app/Contents/Resources/jaro/bin:\$PATH"
+export GNUPGHOME="\$HOME/.gnupg"
+export MAILDIRS="\$HOME/Library/Application\ Support/JaroMail"
 export WORKDIR="/Applications/JaroMail.app/Contents/Resources"
-mkdir -p $MAILDIRS $WORKDIR
+mkdir -p \$MAILDIRS \$WORKDIR
 clear
 zsh -i -c "echo \"Welcome to Jaro Mail\ntype 'jaro help' for a list of commands.\n\""
 EOF
+chmod +x $appdst/Contents/MacOS/jaroshell.sh
 
-cat <<EOF > $bindst/JaroMail.command
-#!/bin/zsh
+cat <<EOF > $appdst/Contents/MacOS/JaroMail.command
+#!/usr/bin/env zsh
 # JaroMail startup script for Mac .app
 # Copyright (C) 2012-2013 by Denis Roio <Jaromil@dyne.org>
 # GNU GPL V3 (see COPYING)
@@ -273,15 +286,15 @@ tell application "Terminal"
    end if
 end tell
 EOF
-echo "EOF" >> $bindst/JaroMail.command
+echo "EOF" >> $appdst/Contents/MacOS/JaroMail.command
 
-chmod +x $bindst/JaroMail.command
+chmod +x $appdst/Contents/MacOS/JaroMail.command
 
-cat <<EOF > JaroMail.app/Contents/PkgInfo
+cat <<EOF > $appdst/Contents/PkgInfo
 APPLJAROMAIL
 EOF
 
-cat <<EOF > JaroMail.app/Contents/Info.plist
+cat <<EOF > $appdst/Contents/Info.plist
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -313,4 +326,4 @@ EOF
 popd
 
 mkdir -p build/JaroMail.app/Contents/Resources/
-./install.sh build/JaroMail.app/Contents/Resources/
+./install.sh build/JaroMail.app/Contents/Resources
