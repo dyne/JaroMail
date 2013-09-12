@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+# Copyleft (C) 2010-2013 Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
@@ -336,10 +336,6 @@ option_value() {
 usage() {
     cat <<EOF | more
 Jaro Mail $VERSION - your humble and faithful electronic postman
-
- Copyright (C) 2010-2012 by Jaromil @ Dyne.org, License GNU GPL v3+
- This is free software: you are free to change and redistribute it
- The latest Jaro Mail sourcecode is on <http://jaromail.dyne.org>
 
 Synopsis: jaro [options] [command] [command-options]
 
