@@ -1,3 +1,15 @@
+Jaro Mail 1.2 - 14 September 2012
+	Several usability improvements and bugfixes both for usage on
+	GNU/Linux and Apple/OSX systems. The latter has now a different
+	distribution format for JaroMail as a self-contained app bundle.
+
+	Bugfixes for: backup mechanism, gnupg wrapper, file attachments,
+	whitelisting, HTML mail rendering.
+
+	New features include a native keyring mechanism to store account
+	informations in a single-pass symmetric encrypted file.
+	Minor updates to the documentation.
+
 Jaro Mail 1.1 - 18 October 2012 - Slick bastard
 
 	Lots of bugfixes, code cleanups and usability improvements are
