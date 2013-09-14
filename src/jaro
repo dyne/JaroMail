@@ -135,6 +135,8 @@ WORKDIR=$MAILDIRS/jaro
 # env override
 { test "$JAROWORKDIR" = "" } || { WORKDIR="${JAROWORKDIR}" }
 
+act "Maildirs in $MAILDIRS"
+act "System in $WORKDIR"
 ${=mkdir} $MAILDIRS
 ${=mkdir} $WORKDIR
 
