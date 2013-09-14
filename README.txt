@@ -14,16 +14,48 @@ Homepage with more information and links to the manual:
 
 	      	   	             http://jaromail.dyne.org
 
+* INTRODUCTION
 
+Jaro Mail is an integrated suite of interoperable tools for GNU/Linux
+and Apple/OSX to manage e-mail communication in a private and efficient
+way, without relying too much on on-line services, in fact encouraging
+users to store e-mail locally.
+
+Rather than reinventing the wheel, Jaro Mail reuses existing free and
+open source tools working since more than 10 years: 
+
+- Mutt :: Mail User Agent
+- Fetchmail :: Mail Transport Agent
+- Procmail :: Filtering Agent
+- MSmtp :: the mini SMTP
+- Mairix :: search engine
+- Z Shell :: scripting language
+
+A round-up on Jaro Mail features follows:
+
+- Minimalistic interface with automatic threading
+- Targets intensive usage of mailinglists
+- Does whitelisting and integrates addressbooks
+- Can do search and backup by expressions
+- Automatically generates filtering rules (procmail and sieve)
+- Computes and shows statistics on mail traffic (experimental)
+- Secure password storage (native, OSX and Gnome keyrings)
+- Stores e-mails locally in a reliable format (maildir)
+- Provides advanced maildir management tools
+- Defers connections for off-line operations
+- Checks SSL server certificates (imap, smtp)
+- Supports strong encryption messaging (GnuPG)
+- Is multi platform: GNU/Linux/BSD, Apple/OSX
+- Old school, used by its author for the past 10 years
 
 * INSTALL
 
 Apple/OSX users can simply drag JaroMail into /Applications
 
-Nevertheless, you need to read the Manual: this software is not
-graphical, yes has a high productive potential. JaroMail is operated via
-Terminal, configured in plain text and overall made by geeks for geeks.
-Beware.
+Bare in mind you need to read the Manual: this software is not
+graphical, yet has a high productive potential.
+JaroMail is operated via Terminal, configured in plain text and overall
+made by geeks for geeks.  Beware.
 
 GNU/Linux users can use the build/build-gnu.sh script to install
 dependencies and build all necessary binaries. This is still dirty, it

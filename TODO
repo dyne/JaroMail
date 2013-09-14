@@ -1,18 +1,16 @@
 
   Contribute code or donate to complete this TODO:
-  http://dyne.org/donate
+  https://dyne.org/donate
 
 * Outbox as maildir
   also multiple outboxes for different send programs
    for example anonymous/ for the mixmaster queue
 
-* Import of addresses fron GnuPG keyring
-
-* Local Bayesian learning spam filter (bogofilter)
-
 * Anonymizer
  + Built-in support for Mixmaster
  + Built-in support for Tor Mail
+
+* Import of addresses from, GnuPG keyring
 
 * TBT
    time based text, all included in html mails
@@ -30,10 +28,12 @@
   doesn't uses Mutt to generate the mail body
   but might read Mutt.txt configuration for headers and such
 
-* Stats
+* WIP Stats
  + Have some fancy statistics
    use timecloud for a jquery visualization
  + include anu arg's mailinglist statistics
+
+* REJECTED Local Bayesian learning spam filter (bogofilter)
 
 * DONE GTD
  + Integration with org-remember via org-protocol

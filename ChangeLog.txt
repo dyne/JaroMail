@@ -1,4 +1,4 @@
-Jaro Mail 1.2 - 14 September 2012
+Jaro Mail 1.2 - 14 September 2013
 	Several usability improvements and bugfixes both for usage on
 	GNU/Linux and Apple/OSX systems. The latter has now a different
 	distribution format for JaroMail as a self-contained app bundle.
