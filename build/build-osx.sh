@@ -30,13 +30,13 @@ ldflags+=(-L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform
 # ${builddir}/clang-static-osx.sh"
 
 #cflags="-arch x86_64 -arch i386 -O2"
-cflags=(-I/usr/local/include -I/usr/include)
+cflags=(-I/opt/local/include -I/usr/include)
 cflags+=(-arch x86_64)
 cflags+=(-arch i386)
 cflags+=(-O2)
 
 
-ldflags=(-L/usr/local/lib -L/usr/lib)
+ldflags=(-L/opt/local/lib -L/usr/lib)
 
 
 target=all
@@ -114,7 +114,6 @@ fi
     pushd src/ABQuery
     xcodebuild > /dev/null
     popd
-    cp src/ABQuery/build/Release/lbdb-ABQuery build/osx/ABQuery
 }
 
   
@@ -190,18 +189,53 @@ fi
 
  # -I/usr/local/Cellar/gettext/0.18.2/include" \
  # -L/usr/local/Cellar/gettext/0.18.2/lib" ./configure \
-#    CC="gcc" CPP="cpp" CFLAGS="${=cflags}" \
-#    CPPFLAGS="${=cflags}" LDFLAGS="${=ldflags}" ./configure \
+
+    make clean
+    make -C imap clean
+
+    # first 32 bit
+    CC="gcc" CPP="cpp" CFLAGS="-O2 -arch i386 -I/opt/local/include -I/usr/include"
+    CPPFLAGS="${CFLAGS}" LDFLAGS="-arch i386 -L/usr/local/lib -L/usr/lib" \
     ./configure \
 	--with-ssl --with-gnutls --enable-imap --disable-debug \
 	--with-slang --disable-gpgme \
 	--enable-hcache --with-regex --with-tokyocabinet \
 	--with-mixmaster=${root}/src/mixmaster --enable-pgp
+    make -C imap
     make keymap_defs.h
     make reldate.h
     make hcversion.h # with Cellar include?
     make mutt
     make pgpewrap
+
+    mv mutt mutt_32
+    mv pgpewrap pgpewrap_32
+
+    make clean
+    make -C imap clean
+
+
+    # then 64 bit
+    CC="gcc" CPP="cpp" CFLAGS="-O2 -arch x86_64 -I/opt/local/include -I/usr/include"
+    CPPFLAGS="${CFLAGS}" LDFLAGS="-arch x86_64 -L/usr/local/lib -L/usr/lib" \
+    ./configure \
+	--with-ssl --with-gnutls --enable-imap --disable-debug \
+	--with-slang --disable-gpgme \
+	--enable-hcache --with-regex --with-tokyocabinet \
+	--with-mixmaster=${root}/src/mixmaster --enable-pgp
+    make -C imap
+    make keymap_defs.h
+    make reldate.h
+    make hcversion.h # with Cellar include?
+    make mutt
+    make pgpewrap
+
+    mv mutt mutt_64
+    mv pgpewrap pgpewrap_64
+
+    lipo -create -arch i386 mutt_32 -arch x86_64 mutt_64 -output mutt
+    lipo -create -arch i386 pgpewrap_32 -arch x86_64 pgpewrap_64 -output pgpewrap
+
     popd
 }
 
@@ -231,12 +265,14 @@ bindst=$appdst/Contents/Resources/jaro/bin
     test "$target" = "all" } && {
 
     mkdir -p $bindst
+    mkdir -p $appdst/Contents/Frameworks
 
 # static ones do not require relocated links
     cp -v ${root}/src/fetchdate $bindst
     cp -v ${root}/src/fetchaddr $bindst
     cp -v ${root}/src/mairix/mairix $bindst
     cp -v ${root}/src/dotlock $bindst
+    cp -v ${root}/src/ABQuery/build/Release/lbdb-ABQuery $bindst
     copydeps ${root}/src/mutt-1.5.21/mutt      $appdst
     copydeps ${root}/src/mutt-1.5.21/pgpewrap  $appdst
     copydeps /opt/local/bin/fetchmail          $appdst
@@ -245,6 +281,7 @@ bindst=$appdst/Contents/Resources/jaro/bin
     copydeps /usr/local/bin/msmtp     $appdst
     copydeps /usr/local/bin/gpg       $appdst
     copydeps /usr/local/bin/pinentry  $appdst
+    copydeps /usr/local/bin/pinentry-curses  $appdst
     copydeps /usr/local/bin/abook     $appdst
 
     # rename to avoid conflicts
@@ -261,9 +298,8 @@ mkdir -p $appdst/Contents/MacOS
 cat <<EOF > $appdst/Contents/MacOS/jaroshell.sh
 export PATH="/Applications/JaroMail.app/Contents/Resources/jaro/bin:\$PATH"
 export GNUPGHOME="\$HOME/.gnupg"
-export MAILDIRS="\$HOME/Library/Application\ Support/JaroMail"
-export WORKDIR="/Applications/JaroMail.app/Contents/Resources"
-mkdir -p \$MAILDIRS \$WORKDIR
+export JAROMAILDIR="\$HOME/Library/Application\ Support/JaroMail"
+export JAROWORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
 clear
 zsh -i -c "echo \"Welcome to Jaro Mail\ntype 'jaro help' for a list of commands.\n\""
 EOF
@@ -304,7 +340,7 @@ cat <<EOF > $appdst/Contents/Info.plist
 	<key>CFBundleExecutable</key>
 	<string>JaroMail.command</string>
 	<key>CFBundleIconFile</key>
-	<string>jaromail.icns</string>
+	<string>JaroMail.icns</string>
 	<key>CFBundleIdentifier</key>
 	<string>org.dyne.jaromail</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -326,4 +362,5 @@ EOF
 popd
 
 mkdir -p build/JaroMail.app/Contents/Resources/
+cp -v doc/JaroMail.icns build/JaroMail.app/Contents/Resources/
 ./install.sh build/JaroMail.app/Contents/Resources
