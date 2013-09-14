@@ -126,19 +126,21 @@ if [ -r jaro/bin/jaro ]; then
 	MAILDIRS=$HOME/Mail
 fi
 
-if [ "$JAROMAILDIR" != "" ]; then
-  MAILDIRS="$JAROMAILDIR"
-fi
-
+# end override
+{ test "$JAROMAILDIR" = "" } || { MAILDIRS="$JAROMAILDIR" }
 
 # default working dir
 WORKDIR=$MAILDIRS/jaro
+
+# env override
+{ test "$JAROWORKDIR" = "" } || { WORKDIR="${JAROWORKDIR}" }
 
 ${=mkdir} $MAILDIRS
 ${=mkdir} $WORKDIR
 
 # make sure the permissions are private
 chmod 700 $WORKDIR
+chmod 700 $MAILDIRS
 
 PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
 
