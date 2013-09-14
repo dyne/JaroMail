@@ -1,6 +1,6 @@
 #+TITLE: Jaro Mail
 #+AUTHOR: by Jaromil @ dyne.org
-#+DATE: Sept 2012
+#+DATE: Sept 2013
 
 #+LaTeX_CLASS: article
 #+LaTeX_CLASS_OPTIONS: [a4,onecolumn,portrait]
