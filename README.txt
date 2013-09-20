@@ -71,12 +71,16 @@ identities and different filters.
 
 * USAGE instructions
 
-See the commandline help:
+Consult the commandline help by typing into the terminal:
 
  jaro -h
 
 When in doubt, make sure you read the User's Manual, it is important.
 
+Download the PDF https://files.dyne.org/jaromail/jaromail-manual.pdf
+
+Or browse online the latest version
+https://github.com/dyne/JaroMail/blob/master/doc/jaromail-manual.org
 
 
 * DEVELOPERS
