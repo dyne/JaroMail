@@ -139,7 +139,8 @@ fetch() {
 	fmconf+=(" ssl warnings 3600 and wants mda \"procmail -m $PROCMAILDIR/rc\" ")
 
 	if [ "$cert" = "check" ]; then
-	    fmconf+=(" sslcertck sslcertpath '$MAILDIRS/certs' ")
+	    # we now use system-wide certs
+	    fmconf+=(" sslcertck ") # sslcertpath '$WORKDIR/certs'
 	fi
 
 	
