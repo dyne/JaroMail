@@ -10,7 +10,7 @@
 
 A commandline tool to easily and privately handle your e-mail
 
-Homepage with more information and links to the manual:
+Shine up you Mutt setup! For the latest information see:
 
 	      	   	             http://jaromail.dyne.org
 
@@ -31,6 +31,7 @@ open source tools working since more than 10 years:
 - Mairix :: search engine
 - ABook :: addressbook
 - Z Shell :: scripting language
+- Elinks :: HTML rendering
 
 A round-up on Jaro Mail features follows:
 
@@ -65,10 +66,10 @@ export PATH=/Applications/JaroMail.app/Contents/Resources/jaro/bin:$PATH
 
 GNU/Linux users can use the build/build-gnu.sh script to install
 dependencies and build all necessary binaries. This is still dirty, it
-will likely never be really packaged by zealots into their distros, but
-works well for those who use it. It might get better in some future.
-After build, use the ./install.sh script to put JaroMail in $HOME/Mail
-or use an argument to install it in some other location.
+will likely never be really packaged by zealots into their distros,
+but works well for those who use it. It might get better in some
+future.  After build, use the ./install.sh script to put JaroMail in
+$HOME/Mail or use an argument to install it in some other location.
 
 
 Jaro Mail is completely reentrant: if you install it in multiple
@@ -77,7 +78,7 @@ identities and different filters.
 
 * USAGE instructions
 
-Consult the commandline help by typing into the terminal:
+See the commandline help:
 
  jaro -h
 
@@ -95,17 +96,17 @@ All revisioned in Git, see https://github.com/dyne/JaroMail
 
 Pull requests and patches welcome.
 
-Come on channel #dyne on https://irc.dyne.org to get in touch with devs
+Our chat channel is #dyne on https://irc.dyne.org
 
-Make sure to idle in that channel, answers take some time to come.
+Make sure to idle in that channel, answers take some time.
 
 We are all idling artists.
 
 
 * DONATE
 
-Money donations are very welcome and well needed, they will encourage
-further development even beyond my own needs for this software.
+Money donations are very welcome and well needed
+they will encourage further development.
 
  https://www.dyne.org/donate
 
@@ -114,12 +115,12 @@ further development even beyond my own needs for this software.
 * ACKNOWLEDGEMENTS
 
 JaroMail is conceived, designed and put together with a substantial
-amount of ZShell scripts and some C code by Jaromil @ Dyne.org
+amount of ZShell scripts and some C code by Denis Roio aka Jaromil
 
 The Mutt sourcecode included is maintained by Antonio Radici
 <antonio@dyne.org> who is also the original maintainer of the Debian
-package. Here below the list of main Mutt authors:
-Mutt is
+package. Here below the list of Mutt authors:
+
  Copyright (C) 1996-2007 Michael R. Elkins <me@cs.hmc.edu>
  Copyright (C) 1996-2002 Brandon Long <blong@fiction.net>
  Copyright (C) 1997-2008 Thomas Roessler <roessler@does-not-exist.org>
@@ -129,29 +130,30 @@ Mutt is
  Copyright (C) 2000-2004 Edmund Grimley Evans <edmundo@rano.org>
  Copyright (C) 2006-2008 Rocco Rutte <pdmef@gmx.net>
 
-Mairix, the search engine we use in Jaro Mail, is licensed GNU GPL v2
-Mairix is
+The Mairix search engine is licensed GNU GPL v2, made by:
+
  Copyright (C) Richard P. Curnow  2002,2003,2004,2005,2006,2007,2008
  Copyright (C) Sanjoy Mahajan 2005
  Copyright (C) James Cameron 2005
  Copyright (C) Paul Fox 2006
-And received contributions from: Anand Kumria André Costa, Andreas
-Amann, Andre Costa, Aredridel, Balázs Szabó, Bardur Arantsson,
-Benj. Mako Hill, Chris Mason, Christoph Dworzak, Christopher Rosado,
-Chung-chieh Shan, Claus Alboege, Corrin Lakeland, Dan Egnor, Daniel
-Jacobowitz, Dirk Huebner, Ed Blackman, Emil Sit, Felipe Gustavo de
-Almeida, Ico Doornekamp, Jaime Velasco Juan, James Leifer, Jerry
-Jorgenson, Joerg Desch, Johannes Schindelin, Johannes Weißl, John
-Arthur Kane, John Keener, Jonathan Kamens, Josh Purinton, Karsten
-Petersen, Kevin Rosenberg, Mark Hills, Martin Danielsson, Matthias
-Teege, Mikael Ylikoski, Mika Fischer, Oliver Braun, Paramjit Oberoi,
-Paul Fox, Peter Chines, Peter Jeremy, Robert Hofer, Roberto Boati,
-Samuel Tardieu, Sanjoy Mahajan, Satyaki Das, Steven Lumos, Tim Harder,
-Tom Doherty, Vincent Lefevre, Vladimir V. Kisil, Will Yardley,
-Wolfgang Weisselberg.
+
+With contributions by: Anand Kumria, André Costa, Andreas Amann, Andre
+Costa, Aredridel, Balázs Szabó, Bardur Arantsson, Benj. Mako Hill,
+Chris Mason, Christoph Dworzak, Christopher Rosado, Chung-chieh Shan,
+Claus Alboege, Corrin Lakeland, Dan Egnor, Daniel Jacobowitz, Dirk
+Huebner, Ed Blackman, Emil Sit, Felipe Gustavo de Almeida, Ico
+Doornekamp, Jaime Velasco Juan, James Leifer, Jerry Jorgenson, Joerg
+Desch, Johannes Schindelin, Johannes Weißl, John Arthur Kane, John
+Keener, Jonathan Kamens, Josh Purinton, Karsten Petersen, Kevin
+Rosenberg, Mark Hills, Martin Danielsson, Matthias Teege, Mikael
+Ylikoski, Mika Fischer, Oliver Braun, Paramjit Oberoi, Paul Fox, Peter
+Chines, Peter Jeremy, Robert Hofer, Roberto Boati, Samuel Tardieu,
+Sanjoy Mahajan, Satyaki Das, Steven Lumos, Tim Harder, Tom Doherty,
+Vincent Lefevre, Vladimir V. Kisil, Will Yardley, Wolfgang
+Weisselberg.
 
 Procmail was originally designed and developed by Stephen R. van den
-Berg. The Procmail library collection included in Jaro Mail is developed
+Berg. The Procmail library collection we are including is developed
 and maintained by Jari Aalto.
 
 MSmtp is developed and maintained by Martin Lambers.
@@ -173,7 +175,7 @@ jQuery project is distributed by the JQuery Foundation under the
 The Sizzle selector engine is held by the Dojo Foundation and is
  licensed under the MIT, GPL, and BSD licenses.
 JQuery.sparkline 2.0 is licensed under the New BSD License
-Visualize.JQuery is written by Scott Jehl Copyright (c) 2009 Filament Group 
+Visualize.JQuery by Scott Jehl Copyright (c) 2009 Filament Group 
 
 # JaroMail is Copyright (C) 2010-2013 Denis Roio <jaromil@dyne.org>
 #

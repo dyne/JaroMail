@@ -8,9 +8,12 @@
 
 * Anonymizer
  + Built-in support for Mixmaster
- + Built-in support for Tor Mail
 
-* Import of addresses from, GnuPG keyring
+* Substitute procmail with a simple C filter
+ we just filter From, To:, CC: and mailman headers
+ a small C program using sqlite3 should be enough
+
+* Import of addresses from GnuPG keyring
 
 * TBT
    time based text, all included in html mails
