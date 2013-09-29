@@ -32,14 +32,14 @@ INSTALL_DATA = ${INSTALL} -m 644
 MKINSTALLDIRS = ./mkinstalldirs
 mkinstalldirs = $(SHELL) `case "$(MKINSTALLDIRS)" in /*) echo "$(MKINSTALLDIRS)" ;; *) echo "$(top_builddir)/$(MKINSTALLDIRS)" ;; esac`
 
-CC = gcc
-GMSGFMT = /opt/local/bin/msgfmt
-MSGFMT = /opt/local/bin/msgfmt
-XGETTEXT = /opt/local/bin/xgettext
+CC = gcc -O3 -fomit-frame-pointer -ffast-math
+GMSGFMT = /usr/bin/msgfmt
+MSGFMT = /usr/bin/msgfmt
+XGETTEXT = /usr/bin/xgettext
 MSGMERGE = msgmerge
 
 DEFS = -DHAVE_CONFIG_H
-CFLAGS = -Wall -pedantic -Wno-long-long -arch i386 -O2
+CFLAGS = -Wall -pedantic -Wno-long-long -g -O2
 CPPFLAGS =  -I$(top_srcdir)/intl
 
 INCLUDES = -I.. -I$(top_srcdir)/intl
