@@ -162,9 +162,10 @@ case $distro in
 	which gcc || sudo yum install gcc
 	which bison || sudo yum install bison
 	which flex || sudo yum install flex
-	if [ -r /usr/share/doc/libgnome-keyring-3.2.0/COPYING ]; then
-	    sudo yum install glib2-devel libgnome-keyring-devel
-	fi
+	rpm -q glib2-devel || sudo yum install glib2-devel
+	rpm -q libgnome-keyring-devel || sudo yum install libgnome-keyring-devel
+	rpm -q bzip2-devel || sudo yum install bzip2-devel
+	rpm -q zlib-devel || sudo yum install zlib-devel
 
 	echo "All dependencies installed"
 	cd src
@@ -198,7 +199,8 @@ case $distro in
 	    mairix/nvpscan.o mairix/rfc822.o mairix/stats.o \
 	    mairix/writer.o mairix/dates.o mairix/dirscan.o \
 	    mairix/dumper.o mairix/fromcheck.o mairix/hash.o mairix/mbox.o \
-	    mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o
+	    mairix/nvp.o mairix/reader.o mairix/search.o mairix/tok.o \
+	    -lz -lbz2
 	echo "fetchdate"
 	cd - > /dev/null
 
