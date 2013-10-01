@@ -157,6 +157,7 @@ case $distro in
 	which pinentry || sudo yum install pinentry
 	which fetchmail || sudo yum install fetchmail
 	which wipe || sudo yum install wipe
+	which abook || sudo yum install abook
 
 	echo "Checking build dependencies"
 	which gcc || sudo yum install gcc
