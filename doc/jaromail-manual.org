@@ -140,17 +140,23 @@ and actions involved in managing one's email communication:
 
 * Configuration
 
+   The place where Jaro Mail is installed (*$HOME/Mail* by default)
+   contains all configuration files.
+
+   For Apple/OSX users, this directory is inside their *$HOME/Library*
+   and then *Application Support/JaroMail*.
+
+   From now own, we will call this place the *Mail directory*.
+
 ** Receive mail
 
-   The place where Jaro Mail is installed ($HOME/Mail by default)
-   contains a *jaro* folder where all configuration files are found.
 
-   There, inside the directory *Accounts*, are some brief instructions
-   and some default templates which can be filled in with Imap or Pop
-   account configuration to fetch mail. A default template will be
-   found in fresh installations: *Accounts/imap.default.txt*. The
-   configuration can be edited with one's favourite text editor, the
-   format of the file is pretty self-explanatory.
+   Inside the Mail directory is found the folder *Accounts* with brief
+   instructions and default templates to fill with Imap or Pop account
+   configurations to fetch mail. A default template will be found in
+   fresh installations: *Accounts/imap.default.txt*. The configuration
+   can be edited with one's favourite text editor, the format of the
+   file is pretty self-explanatory.
 
    It is possible to have more than one account and in fact when
    retreiving e-mails using the *jaro fetch* command all accounts will
@@ -161,18 +167,20 @@ and actions involved in managing one's email communication:
 
 ** Send mail
 
-   Also inside the *jaro/Accounts* directory is found the
-   *smtp.default.txt* file that configures how to send mail.
+   Also inside the *Accounts* directory is found
+   the *smtp.default.txt* file that configures how to send mail.
 
    When no special account is specified using the *-a* option, then
    the file named *smtp.default.txt* into the Accounts folder will be
    used. To fix a selection it is also possible to use a symbolic
    link.
 
-   There is also a file *jaro/Mutt.txt* that can be configured with
-   some customized settings for the mail transport agent, such as
-   custom headers appearing in composed e-mails and the default GPG[fn:gpg]
-   key to be used when signing and encrypting them.
+   Mutt users might want to customize settings by creating
+   a *Mutt.txt* file inside the Mail directory: it will be included
+   automatically if present and can contain any mutt configuration
+   directives for the mail transport agent, such as custom headers
+   appearing in composed e-mails and the default GPG[fn:gpg] key to be
+   used when signing and encrypting them.
 
 [fn:gpg] GPG stands for GNU Privacy Guard, a system to securely
 encrypt and decrypt messages and files so that noone can read their
@@ -180,13 +188,15 @@ content, even when intercepting the communication.
 
 ** Filter mail
 
-   The file *jaro/Filters.txt* can be edited to configure mailinglist
-   and other filters referencing the contents of the *From:* or *To:*
-   fields of each e-mail that is fetched.
+   In the mail directory a file named *Filters.txt* can be created and
+   filled in with rules referencing the contents of the *From:*
+   or *To:* fields of each e-mail that is fetched. The mails matching
+   will be then saved in the indicated maildirs (created if not
+   existing) to keep a bit of order, especially useful for mailinglist
+   users.
 
    The format of the filters configurarion is pretty easy and self
-   explanatory, those rules will be applied to mails saved on the
-   local filesystem in maildirs that will be created when needed.
+   explanatory, an example is found in the appendix of this manual.
 
 
 
@@ -265,9 +275,9 @@ to spam than the rest, the most infamous *zz.blacklist/* folder.
 
 What we call addressbook here basically consists of both the whitelist
 and the blacklist. We store both lists in a unique database file in
-*Mail/jaro/addressbook*[fn:sqlite].  In future we may add similar
-support for other addressbook formats that people use (GnuPG keyring,
-Evolution etc.)[fn:appleaddr]
+the Mail dir called *Addressbook*[fn:sqlite].  In future we may add
+similar support for other addressbook formats that people use (GnuPG
+keyring, Evolution etc.)[fn:appleaddr]
 
 [fn:sqlite] Jaro Mail uses sqlite3 as its own database storage
 
@@ -543,13 +553,19 @@ of a password input every time e-mails are being checked.
 
 On *Apple/OSX* the default internal keyring is being used.
 
-On *GNU/Linux* only the gnome-keyring is supported for now.
+On *GNU/Linux* gnome-keyring is supported if found, else JaroMail will
+revert to use its own encrypted[fn:keyringenc] database called *keyring*. Every time
+a password will be retrieved or saved, the keyring password will be
+asked.
+
+[fn:keyringenc] The keyring is encrypted using weak symmetric
+encryption via GnuPG, the only protection for the data inside then is
+the password memorized by the used.
 
 To explicitly change a password one can operate the default keyring
 manager or use the command *jaro passwd -a imap.default* (or other
 accounts) which will prompt to set for a new password even if an old
-one is known. If left blank, it will simply erase the password saved
-for the account.
+one is known.
 
 ** Temporary directory
 
@@ -717,9 +733,9 @@ the affected folders to remove the duplicates.
 
    1) Start Automator
    2) Choose the Service template
-   3) In the dropdown boxes that appear choose “files or folders” and “Finder”
+   3) In the dropdown boxes that appear choose "files or folders" and "Finder"
    4) Look for "Run Applescript" in the Library tree
-   5) Drag "Run Applectript" in  the workflow area and paste this script into it:
+   5) Drag "Run Applescript" in the workflow area and paste this script into it:
 
 #+BEGIN_EXAMPLE
 on run {input, parameters}

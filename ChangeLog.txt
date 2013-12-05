@@ -1,3 +1,11 @@
+Jaro Mail 1.3 - 5 December 2013
+        Major fixes for the new OSX Application packaging implying a
+	rather important refactoring: during its operation JaroMail will
+	not write into $WORKDIR anymore, but only into $MAILDIR, where
+	most user generated files are now moved.
+
+	Includes bugfixes for the build on Fedora.
+
 Jaro Mail 1.2 - 14 September 2013
 	Several usability improvements and bugfixes both for usage on
 	GNU/Linux and Apple/OSX systems. The latter has now a different
