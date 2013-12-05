@@ -49,10 +49,10 @@ ${=mkdir} ${WORKDIR}/bin
 cp -f src/jaro ${WORKDIR}/bin
 
 # make sure we have a temp and cache dir
-${=mkdir} $WORKDIR/tmp $WORKDIR/cache
+${=mkdir} $MAILDIRS/tmp $MAILDIRS/cache
 
-if ! [ -r $WORKDIR/Filters.txt ]; then
-    cat <<EOF > $WORKDIR/Filters.txt
+if ! [ -r $MAILDIRS/Filters.txt ]; then
+    cat <<EOF > $MAILDIRS/Filters.txt
 # Example filter configuration for Jaro Mail
 
 # mailinglist filters are in order of importance
@@ -86,11 +86,11 @@ if ! [ -r $WORKDIR/Filters.txt ]; then
 EOF
     act "Default filters created"
 else
-    error "Existing configuration $WORKDIR/Filters.txt skipped"
+    error "Existing configuration $MAILDIRS/Filters.txt skipped"
 fi
 
-if ! [ -r $WORKDIR/Applications.txt ]; then
-    cat <<EOF > $WORKDIR/Applications.txt
+if ! [ -r $MAILDIRS/Applications.txt ]; then
+    cat <<EOF > $MAILDIRS/Applications.txt
 # Example configuration to match mime/type to applications
 # each line should start with a mime/type and then indicate an executable
 
@@ -100,12 +100,12 @@ if ! [ -r $WORKDIR/Applications.txt ]; then
 EOF
     act "Default helper applications settings created"
 else
-    error "Existing configuration $WORKDIR/Applications.txt skipped"
+    error "Existing configuration $MAILDIRS/Applications.txt skipped"
 fi
 
 
-if ! [ -r $WORKDIR/Mutt.txt ]; then
-    cat <<EOF > $WORKDIR/Mutt.txt
+if ! [ -r $MAILDIRS/Mutt.txt ]; then
+    cat <<EOF > $MAILDIRS/Mutt.txt
 # Mutt specific customizations
 # uncomment and fill in with your settings
 
@@ -139,12 +139,12 @@ if ! [ -r $WORKDIR/Mutt.txt ]; then
 EOF
     act "Default Mutt configuration template created"
 else
-    error "Existing configuration $WORKDIR/Mutt.txt skipped"
+    error "Existing configuration $MAILDIRS/Mutt.txt skipped"
 fi
 
-if ! [ -r $WORKDIR/Accounts ]; then
-    ${=mkdir} $WORKDIR/Accounts
-    cat <<EOF > $WORKDIR/Accounts/README.txt
+if ! [ -r $MAILDIRS/Accounts ]; then
+    ${=mkdir} $MAILDIRS/Accounts
+    cat <<EOF > $MAILDIRS/Accounts/README.txt
 Directory containing account information
 
 Each file contains a different account: imap, pop or gmail
@@ -154,7 +154,7 @@ Examples are: imap.default.txt and smtp.default.txt
 
 One can have multiple accounts named otherwise than default
 EOF
-    cat <<EOF > $WORKDIR/Accounts/imap.default.txt
+    cat <<EOF > $MAILDIRS/Accounts/imap.default.txt
 # Name and values are separated by spaces or tabs
 # comments start the line with a hash
 
@@ -205,7 +205,7 @@ options keep
 # The password field will be filled in automatically
 #
 EOF
-    cat <<EOF > $WORKDIR/Accounts/smtp.default.txt
+    cat <<EOF > $MAILDIRS/Accounts/smtp.default.txt
 # Name and values are separated by spaces or tabs
 # comments start the line with a hash
 
@@ -227,7 +227,7 @@ port 25
 EOF
     act "Default accounts directory created"
 else
-    error "Existing configuration $WORKDIR/Accounts skipped"
+    error "Existing configuration $MAILDIRS/Accounts skipped"
 fi
 
 # our own libraries
@@ -242,12 +242,12 @@ done
 # procmail is entirely generated
 # so overwriting it won't hurt
 act "Installing procmail scripts"
-${=mkdir} $PROCMAILDIR
-cp -a src/procmail/* $PROCMAILDIR
+${=mkdir} $WORKDIR/.procmail
+cp -a src/procmail/* $WORKDIR/.procmail
 
 # also mutt is safe to override
-${=mkdir} $MUTTDIR
-cp -a src/mutt/* $MUTTDIR
+${=mkdir} $WORKDIR/.mutt
+cp -a src/mutt/* $WORKDIR/.mutt
 
 # all statistics
 ${=mkdir} $WORKDIR/.stats
@@ -277,7 +277,7 @@ cp -a src/stats/* $WORKDIR/.stats
 
 # generate initial configuration
 act "Refresh configuration"
-MAILDIRS=$MAILDIRS WORKDIR=$WORKDIR src/jaro update -q
+JAROMAILDIR=$MAILDIRS JAROWORKDIR=$WORKDIR src/jaro update -q
 
 touch $HOME/.profile
 cat $HOME/.profile | grep '^# Jaro Mail' > /dev/null
@@ -291,12 +291,13 @@ fi
 
 # update the manual
 { test -r doc/jaromail-manual.pdf } && {
-    cp -f doc/jaromail-manual.pdf $WORKDIR/Manual.pdf }
+    cp -f doc/jaromail-manual.pdf $MAILDIRS/Manual.pdf }
 
 notice "Done! now configure your personal settings, accounts and filters in:"
-act "    $WORKDIR"
-act "To read the commandline help, with a list of commands: jaro -h"
-act "Make sure jaro is in your PATH! it was just added to your ~/.profile"
+act "    $MAILDIRS"
+act "Make sure jaro is in your PATH! binaries are found in:"
 act "    $WORKDIR/bin"
+act "For a brief list of commands: jaro -h"
+act "For a complete introduction read the manual in $MAILDIRS/Manual.pdf"
 
 
