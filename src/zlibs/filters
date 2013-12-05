@@ -236,7 +236,7 @@ EOF
     typeset -alU filter_from
     typeset -alU filter_to
 
-    for f in `cat $WORKDIR/Filters.txt | awk '
+    for f in `cat $MAILDIRS/Filters.txt | awk '
     /^#/ {next}
     /^./ { print $1 ";" $2 ";" $3 ";" $4 }'`; do
 	header="${f[(ws:;:)1]}"

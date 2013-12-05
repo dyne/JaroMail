@@ -99,14 +99,14 @@ read_account() {
 	return 1
     fi
 
-    acct=${all[1]}
-    type=`basename $acct | cut -d. -f1`
+    acct="${all[1]}"
+    type=`basename "$acct" | cut -d. -f1`
 
     case $type in
 	imap|smtp)
 
 	    lock $acct
-	    ttmp=`cat $acct | awk '
+	    ttmp=`cat "$acct" | awk '
     /^#/ { next }
     /^name/ { printf "name=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^email/ { printf "email=\"%s\";", $2 }
