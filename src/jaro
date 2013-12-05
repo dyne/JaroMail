@@ -122,33 +122,45 @@ esac
 # check if we are inside the directory
 if [ -r jaro/bin/jaro ]; then
 	MAILDIRS=`pwd`
-    else # else use default
-	MAILDIRS=$HOME/Mail
+
+# check if we are on OSX
+elif [ -r /Applications/JaroMail.app ]; then
+    MAILDIRS=$HOME/Library/Application\ Support/JaroMail
+
+# else use GNU/Linux default
+else
+    MAILDIRS=$HOME/Mail
 fi
 
 # end override
 { test "$JAROMAILDIR" = "" } || { MAILDIRS="$JAROMAILDIR" }
 
 # default working dir
-WORKDIR=$MAILDIRS/jaro
+
+# check if we are on OSX
+if [ -r /Applications/JaroMail.app/Contents/Resources/jaro ]; then
+    WORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
+else # use GNU/Linux default
+    WORKDIR="$MAILDIRS/jaro"
+fi
 
 # env override
 { test "$JAROWORKDIR" = "" } || { WORKDIR="${JAROWORKDIR}" }
 
 act "Maildirs in $MAILDIRS"
 act "System in $WORKDIR"
-${=mkdir} $MAILDIRS
-${=mkdir} $WORKDIR
+${=mkdir} "$MAILDIRS"
+#${=mkdir} $WORKDIR
 
 # make sure the permissions are private
-chmod 700 $WORKDIR
-chmod 700 $MAILDIRS
+#chmod 700 $WORKDIR
+chmod 700 "$MAILDIRS"
 
 PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
 
 # load our ZLibs
 if [ -d $WORKDIR/zlibs ]; then
-    for z in `find $WORKDIR/zlibs/ -type f | grep -v '.zwc$'`; do
+    for z in `find $WORKDIR/zlibs -type f | grep -v '.zwc$'`; do
 	func "Loading zlib: ${z}"
 	. ${z}
     done
@@ -162,7 +174,7 @@ else
 fi
 
 # temporary directory
-TMPDIR=$WORKDIR/tmp
+TMPDIR="$MAILDIRS/tmp"
 case $OS in
     GNU)
 	touch /dev/shm/jaromail.test.tmp > /dev/null
@@ -186,7 +198,7 @@ esac
     act "Using temporary directory in volatile RAM" }
 
 
-# make sure we have a temp and cache dir
+# make sure we have a temp dir
 ${=mkdir} "$TMPDIR"
 { test $? != 0 } && {
     error "Cannot create temporary directory: $TMPDIR"
@@ -195,17 +207,34 @@ ${=mkdir} "$TMPDIR"
 # make sure we have an addressbook
 # use the one in RAM if present, for acceleration
 hostname=$(hostname) # gather the current hostname
-addressbook=$WORKDIR/addressbook
+
+
+ACCOUNTS="$MAILDIRS/Accounts"
+KEYRING="$MAILDIRS/Keyring"
+addressbook="$MAILDIRS/Addressbook"
+
+# backward compatibility tests for old paths in JaroMail <1.3
+{ test -r $WORKDIR/Accounts } && { test ! -r $ACCOUNTS } && {
+    act "Updating accounts location: $ACCOUNTS"
+    cp -r $WORKDIR/Accounts $ACCOUNTS }
+
+{ test -r $WORKDIR/keyring } && { test ! -r $KEYRING } && {
+    act "Updating keyring location: $KEYRING"
+    cp $WORKDIR/keyring $KEYRING }
+
+{ test -r $WORKDIR/addressbook } && { test ! -r $addressbook } && {
+    act "Updating addressbook location: $addressbook"
+    cp $WORKDIR/addressbook $addressbook }
+
 addressbook_tmp=$TMPDIR/${USER}.${hostname}.addressbook
 { test -r "$addressbook" } || { create_addressbook }
 { test -r "$addressbook_tmp" } && { addressbook="$addressbook_tmp" }
 
-${=mkdir} "$WORKDIR/cache"
-${=mkdir} "$WORKDIR/log"
-${=mkdir} "$WORKDIR/certs"
+${=mkdir} "$MAILDIRS/logs"
+# ${=mkdir} "$MAILDIRS/certs"
 
-PROCMAILDIR=$WORKDIR/.procmail
-MUTTDIR=$WORKDIR/.mutt
+PROCMAILDIR=$MAILDIRS/.procmail
+MUTTDIR=$MAILDIRS/.mutt
 
 
 # use gnome-keyring for passwords on GNU systems
@@ -228,12 +257,16 @@ cleanexit() {
     }
 
     # first delete dirs
-    for d in `${=find} $TMPDIR/ -maxdepth 1 -type d`; do
-	{ test "$d" = "$TMPDIR/" } || { ${=rm} -r ${d} }
+    tmpdirs=`${=find} $TMPDIR/ -maxdepth 1 -type d`
+    for d in ${(f)tmpdirs}; do
+	{ test "$d" = "$TMPDIR/" } || {
+	    func "deleting dir: $d"
+	    ${=rm} -r "${d}" }
     done
 
     # then locks, with a warning
-    for l in `${=find} $TMPDIR/ -maxdepth 1 -type f -name '*.lock'`; do
+    llist=`${=find} $TMPDIR/ -maxdepth 1 -type f -name '*.lock'`
+    for l in ${(f)llist}; do
 	lname=`basename ${(s:.lock:)l}`
 	func "cleaning lock for $lname"
 
@@ -251,7 +284,9 @@ cleanexit() {
 	rm -f ${TMPDIR}/${lname}.lock
 
 	# remove the actual file
-	if [ -r ${TMPDIR}/$lname ]; then ${=rm} ${TMPDIR}/$lname
+	if [ -r ${TMPDIR}/$lname ]; then
+	    func "deleting temp file: ${TMPDIR}/$lname"
+	    ${=rm} "${TMPDIR}/$lname"
 	else act "empty lock: file was already removed"; fi
 
     done
