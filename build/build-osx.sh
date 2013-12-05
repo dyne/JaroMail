@@ -364,3 +364,5 @@ popd
 mkdir -p build/JaroMail.app/Contents/Resources/
 cp -v doc/JaroMail.icns build/JaroMail.app/Contents/Resources/
 ./install.sh build/JaroMail.app/Contents/Resources
+chmod -R go+rX build/JaroMail.app/Contents/Resources/
+chmod -R go+rx build/JaroMail.app/Contents/Resources/jaro/bin

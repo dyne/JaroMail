@@ -21,24 +21,25 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-
 switch_identity() {
     if [ "$name" != "" ]; then
 	act "switch to identity: $name <$login>"
-	rm -f $MUTTDIR/identity
-	cat <<EOF > $MUTTDIR/identity
+	rm -f $MAILDIRS/Identity
+	cat <<EOF > $MAILDIRS/Identity
+# Automatically generated, do not modify
+# change or add configs into Accounts instead
 set hostname = $host
 set realname = "$name"
 set from = "$name <$login>"
 EOF
     else
 	error "No identity found, left blank."
-	touch $MUTTDIR/identity
+	touch $MAILDIRS/Identity
     fi
 }
 
 list_accounts() {
-    for a in `${=find} $WORKDIR/Accounts -type f | grep -v README | sed 's/.txt//'`; do
+    for a in `${=find} $ACCOUNTS -type f | grep -v README | sed 's/.txt//'`; do
 	act -n "`basename $a`\t :: "
 	awk '
 /^name/ { for(i=2;i<=NF;i++) printf "%s ", $i }
@@ -73,10 +74,14 @@ read_account() {
 	return 1 }
     { test "$account" = "" } && { account=default }
 
-    # find the file
+    # find the account
     func "read_account looking for ${type} ${account}"
-    for a in `${=find} $WORKDIR/Accounts -name "$type.$account*"`; do
+    accountlist=`${=find} $ACCOUNTS -name "$type.$account*" | grep -v 'lock$' | grep -v 'pid$'`
+    for a in ${(f)accountlist}; do
+	# check if it is locked
 	func "found account: $a"
+	{ test -r "${a}.lock" } && {
+	    pidcheck "${a}" }
 	all+=($a)
     done
     if [ ${#all} = 0 ]; then
@@ -237,21 +242,21 @@ lookup_secret() {
     _hash=$1
     if [ "$2" = "" ]; then key=password
     else key="$2"; fi
-    cat <<EOF | ${SQL} -column -batch $WORKDIR/keyring
+    cat <<EOF | ${SQL} -column -batch $KEYRING
 SELECT ${key} FROM secrets
 WHERE hash IS "${_hash}";
 EOF
 }
 
 new_password() {
-    notice "Setting a new password for $name"
+    notice "Setting a new password for $type account: $name"
+    act "please enter password for username '$login'"
     password=`pin_entry $login $host`
     res=0
     case $OS in
 	MAC)
 	    if [ "$password" != "" ]; then
 
-		act -n "Old "
 		security delete-internet-password \
 		    -c JARO -a $email -s $host \
 		    -p $transport -P $port > /dev/null
@@ -268,7 +273,10 @@ new_password() {
 		return 0
 
 	    else
-		act -n "Old "
+		error "No password given, operation aborted"
+		return 1
+
+		# we are not deleting passwords anymore
 		security delete-internet-password \
 		    -c JARO -a $email -s $host \
 		    -p $transport -P $port > /dev/null
@@ -279,6 +287,8 @@ new_password() {
 		    return 1 }
 		act "No new password given, old password erased."
 		return 0
+		#########
+
 	    fi
 	    ;;
 	GNU)
@@ -299,12 +309,12 @@ EOF
 
 		else # save it into local keyring
 
-		    { test -r $WORKDIR/keyring } || {
+		    { test -r $KEYRING } || {
 		    # make sure the local keyring exists 
-			touch $WORKDIR/keyring
-			chmod 600 $WORKDIR/keyring
-			chown $_uid:$_gid $WORKDIR/keyring
-			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
+			touch $KEYRING
+			chmod 600 $KEYRING
+			chown $_uid:$_gid $KEYRING
+			cat <<EOF | ${SQL} -batch $KEYRING
 CREATE TABLE secrets
 (
   hash		text unique,
@@ -319,13 +329,13 @@ EOF
 		    notice "Select the password to lock this keyring entry:"
 		    _password="`print $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
 		    if [ "$lookup" = "" ]; then # new entry
-			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
+			cat <<EOF | ${SQL} -batch $KEYRING
 INSERT INTO secrets (hash, password)
 VALUES ("${_hash}", "${_password}");
 EOF
 			act "saved new password in local keyring"
 		    else # update entry
-			cat <<EOF | ${SQL} -batch $WORKDIR/keyring
+			cat <<EOF | ${SQL} -batch $KEYRING
 UPDATE secrets SET password="${_password}" WHERE hash LIKE "${_hash}";
 EOF
 			act "updated local keyring with new password"
