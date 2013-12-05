@@ -144,7 +144,7 @@ EOF
     # SIEVE
     act "generating sieve filters"
     id=$datestamp.$RANDOM
-    sieve=$MAILDIRS/Sieve.txt
+    sieve=$MAILDIRS/Filters.sieve
     lock $sieve
     rm -f $sieve
     touch $sieve

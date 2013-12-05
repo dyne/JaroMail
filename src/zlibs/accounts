@@ -212,7 +212,7 @@ ask_password() {
 		    password=`print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" | $WORKDIR/bin/jaro-gnome-keyring get`
 		fi
 		return 0
-	    elif [ -r $WORKDIR/keyring ]; then
+	    elif [ -r $KEYRING ]; then
                 func "Looking for password in local keyring for $email on $host over $type"
 		_hash=`print "$type:$email:$host" | shasum | awk '{print $1}'`
 		lookup="`lookup_secret ${_hash}`"
