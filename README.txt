@@ -6,7 +6,7 @@
   88 88.  .88 88       88.  .88 88  88  88 88.  .88 88 88
   88 `88888P8 dP       `88888P' dP  dP  dP `88888P8 dP dP
   88~ooooooooooooooooooooooooooooooooooooooooooooooooooooo
- odP   your humble and faithful electronic postman   v 1.2
+ odP   your humble and faithful electronic postman   v 1.3
 
 A commandline tool to easily and privately handle your e-mail
 
@@ -29,6 +29,7 @@ open source tools working since more than 10 years:
 - Procmail :: Filtering Agent
 - MSmtp :: the mini SMTP
 - Mairix :: search engine
+- ABook :: addressbook
 - Z Shell :: scripting language
 
 A round-up on Jaro Mail features follows:
@@ -37,7 +38,7 @@ A round-up on Jaro Mail features follows:
 - Targets intensive usage of mailinglists
 - Does whitelisting and integrates addressbooks
 - Can do search and backup by expressions
-- Automatically generates filtering rules (procmail and sieve)
+- Automatically generates filter rules (procmail and sieve)
 - Computes and shows statistics on mail traffic (experimental)
 - Secure password storage (native, OSX and Gnome keyrings)
 - Stores e-mails locally in a reliable format (maildir)
@@ -56,6 +57,11 @@ Bare in mind you need to read the Manual: this software is not
 graphical, yet has a high productive potential.
 JaroMail is operated via Terminal, configured in plain text and overall
 made by geeks for geeks.  Beware.
+When started JaroMail opens a Terminal window preconfigured with its
+environment, to activate it for any terminal add this to ~/.profile:
+export PATH=/Applications/JaroMail.app/Contents/Resources/jaro/bin:$PATH
+
+
 
 GNU/Linux users can use the build/build-gnu.sh script to install
 dependencies and build all necessary binaries. This is still dirty, it
@@ -101,7 +107,7 @@ We are all idling artists.
 Money donations are very welcome and well needed, they will encourage
 further development even beyond my own needs for this software.
 
- https://dyne.org/donate
+ https://www.dyne.org/donate
 
 
 
