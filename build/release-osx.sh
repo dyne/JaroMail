@@ -8,7 +8,9 @@
 	return 1 }
 
 dir=JaroMail
-ver=$1
+ver="$1"
+
+
 out="`basename ${dir}`-${ver}.dmg"
 
 echo "Making ${dir} release v$ver"
@@ -19,12 +21,93 @@ echo "Making ${dir} release v$ver"
 	echo "error: version not specified"
 	return 0 }
 
+WORKDIR=JaroMail.app/Contents/Resources/jaro
+# copying inside the fresh scripts
+cp ../src/jaro $WORKDIR/bin/
+print "Compiling Jaro Mail ZLibs"
+{ test -d ${WORKDIR}/zlibs } && { rm -f $WORKDIR/zlibs/* }
+mkdir -p $WORKDIR/zlibs
+cp ../src/zlibs/* $WORKDIR/zlibs/
+for z in `find $WORKDIR/zlibs -type f`; do
+    zcompile -R ${z}
+done
+
+appdst=JaroMail.app
+# setting up the OSX app wrappers
+mkdir -p $appdst/Contents/MacOS
+cat <<EOF > $appdst/Contents/MacOS/jaroshell.sh
+export PATH="/Applications/JaroMail.app/Contents/Resources/jaro/bin:\$PATH"
+export GNUPGHOME="\$HOME/.gnupg"
+export JAROMAILDIR="\$HOME/Library/Application Support/JaroMail"
+export JAROWORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
+clear
+zsh -i -c "echo \"Welcome to Jaro Mail\ntype 'jaro help' for a list of commands.\n\""
+EOF
+chmod +x $appdst/Contents/MacOS/jaroshell.sh
+
+cat <<EOF > $appdst/Contents/MacOS/JaroMail.command
+#!/usr/bin/env zsh
+# JaroMail startup script for Mac .app
+# Copyright (C) 2012-2013 by Denis Roio <Jaromil@dyne.org>
+# GNU GPL V3 (see COPYING)
+osascript <<EOF
+tell application "System Events" to set terminalOn to (exists process "Terminal")
+tell application "Terminal"
+   activate
+   if (terminalOn) then
+        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh"
+   else
+        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh" in front window
+        set custom title of front window to "Jaro Mail"
+   end if
+end tell
+EOF
+echo "EOF" >> $appdst/Contents/MacOS/JaroMail.command
+
+chmod +x $appdst/Contents/MacOS/JaroMail.command
+
+cat <<EOF > $appdst/Contents/PkgInfo
+APPLJAROMAIL
+EOF
+
+cat <<EOF > $appdst/Contents/Info.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>JaroMail.command</string>
+	<key>CFBundleIconFile</key>
+	<string>JaroMail.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.dyne.jaromail</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>JAROMAIL</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>CSResourcesFileMapped</key>
+	<true/>
+</dict>
+</plist>
+EOF
+
+
+
+
 # creating the directory and populating it
 mkdir -p ${dir}
 { test -r JaroMail.app/Contents } && {
 	echo "updating to latest app build"
 	rm -rf ${dir}/JaroMail.app
-	mv JaroMail.app ${dir}/
+        cp -r JaroMail.app ${dir}/
 }
 echo "Source app: `du -hs ${dir}/JaroMail.app`"
 

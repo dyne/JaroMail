@@ -39,8 +39,7 @@ TMPRAM=0
 # global variables for binaries called
 typeset -h rm mkdir mutt
 
-# which command to use when creating dirs
-mkdir="`command -v mkdir` -m 700 -p"
+
 # date stamp
 datestamp=`date '+%d%b%y'`
 ##########################
@@ -125,7 +124,7 @@ if [ -r jaro/bin/jaro ]; then
 
 # check if we are on OSX
 elif [ -r /Applications/JaroMail.app ]; then
-    MAILDIRS=$HOME/Library/Application\ Support/JaroMail
+    MAILDIRS="$HOME/Library/Application Support/JaroMail"
 
 # else use GNU/Linux default
 else
@@ -146,6 +145,11 @@ fi
 
 # env override
 { test "$JAROWORKDIR" = "" } || { WORKDIR="${JAROWORKDIR}" }
+
+
+# which command to use when creating dirs
+mkdir="`command -v mkdir` -m 700 -p"
+
 
 act "Maildirs in $MAILDIRS"
 act "System in $WORKDIR"
