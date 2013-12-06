@@ -105,7 +105,7 @@ EOF
     wwwtext=w3m
     if command -v elinks; then
 	cat <<EOF >> $MUTTDIR/mailcap
-text/html; elinks -dump -dump-charset %{charset} -dump-color-mode 0 %s; nametemplate=%s.html; copiousoutput
+text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput
 EOF
     elif command -v w3m; then
 	cat <<EOF >> $MUTTDIR/mailcap
