@@ -80,7 +80,7 @@ autostart() {
 jarovim() {
     vim -c 'set fo=tcrq' -c 'set tw=72' \
 	-c 'map <C-j> {gq}' -c 'imap <C-j> <esc>{gq}i' \
-        ${=@}
+        "${@}"
     return $?
 }
 
@@ -90,9 +90,9 @@ edit_file() {
 
     case $_editor in
 	# refine settings for email
-	vi|vim) jarovim ${=PARAM}; return $? ;;
-	emacs) emacsclient -a emacs ${=PARAM}; return $? ;;
-	*) ${=_editor} ${=PARAM}; return $? ;;
+	vi|vim) jarovim "${PARAM}"; return $? ;;
+	emacs) emacsclient -a emacs "${PARAM}"; return $? ;;
+	*) ${=_editor} "${PARAM}"; return $? ;;
     esac
 
     # if we are here we need to guess
