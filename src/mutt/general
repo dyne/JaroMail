@@ -104,6 +104,8 @@ set noconfirmappend
 set save_empty
 #set folder_format = "%N %F %2l %-8.8u %-8.8g %8s %d %f"
 set move = no
+# deactivate imap idle, there is a broken implementation of it in mutt
+set imap_idle = no
 # set mbox_type = mbox
 
 #######################################
