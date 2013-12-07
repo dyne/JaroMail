@@ -121,11 +121,11 @@ EOF
 	eval `print $t | awk '
     { print "_type=" $1 "; _app=" $2 ";" }'` 
 	cat <<EOF >> $MUTTDIR/mailcap
-${_type}; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && ${_app} \$a/\$f
+${_type}; a="${TMPDIR}" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && ${_app} "\$a"/"\$f"
 EOF
     done
     cat <<EOF >> $MUTTDIR/mailcap
-application/*; a=${WORKDIR}/tmp && f=\`basename %s\` && rm -f \$a/\$f && cp %s \$a/\$f && jaro preview \$a/\$f
+application/*; a="${TMPDIR}" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
 EOF
 
     # this one is empty and sources files in temp when necessary
