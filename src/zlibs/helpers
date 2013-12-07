@@ -129,10 +129,10 @@ open_folder() {
 preview_file() {
     case $OS in
 	GNU)
-	    sensible-browser ${=PARAM} &
+	    sensible-browser "${PARAM}" &
 	    ;;
 	MAC)
-	    open -g ${=PARAM}
+	    open -g "${PARAM}"
 	    ;;
     esac
 }
