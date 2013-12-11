@@ -585,9 +585,9 @@ main()
     case "$subcommand" in
 	compose) compose ${PARAM} ;;
 	queue)   queue ${PARAM} ;;
-	fetch)   is_online; fetch ${PARAM} ;;
-	send)    is_online; send ${PARAM} ;;
-	peek)    is_online; peek ${PARAM} ;;
+	fetch)   fetch ${PARAM} ;; # was checking is_online
+	send)    send ${PARAM} ;; # was checking is_online
+	peek)    peek ${PARAM} ;; # was checking is_online
 
 	later)   later ${PARAM} ;;
 
@@ -619,7 +619,7 @@ main()
 
 	passwd)  change_password ${PARAM} ;;
 
-	cert)    is_online; cert ${PARAM} ;;
+	cert)    cert ${PARAM} ;; # was checking is_online
 
 	ramdisk) ramdisk ${PARAM} ;;
 
