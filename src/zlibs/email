@@ -106,12 +106,13 @@ fetch() {
 	{ test $DRYRUN != 1 } && { update }
     fi
 
-    notice "Examining mailbox for $name <$email> on $host"
+    notice "Connecting account ${account} via ${account_type}"
 
     is_online ${host} ${port}
     { test $? = 0 } || { return 1 }
 
     ask_password $login $host
+    { test $? = 0 } || { error "Impossible to fetch ${account_type} account ${account}"; return 1 }
 
     # this puts total size in $imap_info
     # experimental only, commented out for now
