@@ -368,6 +368,7 @@ EOF
 BEGIN:VCARD
 VERSION:3.0
 FN:${_name}
+N:;${_name};;;
 EMAIL;TYPE=HOME:${_email// /}
 END:VCARD
 EOF
