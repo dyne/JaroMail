@@ -6,7 +6,7 @@
   88 88.  .88 88       88.  .88 88  88  88 88.  .88 88 88
   88 `88888P8 dP       `88888P' dP  dP  dP `88888P8 dP dP
   88~ooooooooooooooooooooooooooooooooooooooooooooooooooooo
- odP   your humble and faithful electronic postman   v 1.3
+ odP   your humble and faithful electronic postman v 1.3.1
 
 A commandline tool to easily and privately handle your e-mail
 

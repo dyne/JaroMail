@@ -11,32 +11,6 @@ dir=JaroMail
 ver="$1"
 
 
-# first argument the binary
-# second argument the app name
-copydeps() {
-	libs=(`otool -L $1 | awk '
-		/^\// {next} /\/local/ {print $1}'`)
-
-	exe=`basename $1`
-	dst=$2
-	bin=$dst/Contents/Resources/jaro/bin
-	lib=$dst/Contents/Frameworks
-	cp -v $1 $bin/$exe
-	{ test $? = 0 } || { print "Error copying $1" }
-	chmod +w $bin/$exe
-	strip $dst/$exe
-	for d in ${libs}; do
-	    dylib=`basename $d`
-	    print "  $dylib"
-	    # make sure destination is writable
-	    dylibdest=$lib/`basename $d`
-	    { test -r $dylibdest } || { cp -v "$d" "$dylibdest" }
-	    install_name_tool -change $d \
-		"/Applications/$dst/Contents/Frameworks/`basename $d`" $bin/$exe
-	done
-}
-
-
 
 out="`basename ${dir}`-${ver}.dmg"
 
@@ -68,6 +42,7 @@ cp -r ../src/stats    $WORKDIR/.stats
 cp ../doc/Applications.txt $WORKDIR/
 cp ../doc/Filters.txt      $WORKDIR/
 cp ../doc/Mutt.txt         $WORKDIR/
+cp ../doc/JaroMail.icns	   $appdst/Contents/Resources
 cp -r ../doc/Accounts      $WORKDIR/
 
 
@@ -75,6 +50,7 @@ print "Copying binaries and adjusting relocations"
 mkdir -p $bindst
 cp ../src/jaro $bindst
 cp -v osx/* $bindst
+mkdir -p $appdst/Contents/Frameworks/
 cp -v osx/dylib/* $appdst/Contents/Frameworks/
 
 

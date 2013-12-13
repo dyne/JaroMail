@@ -2,6 +2,10 @@
   Contribute code or donate to complete this TODO:
   https://dyne.org/donate
 
+* Solve imap idle timeout on Mutt
+  peek command should use fetchmail --idle instead of mutt -f imaps
+  this way we can also implement desktop notifications
+
 * Outbox as maildir
   also multiple outboxes for different send programs
    for example anonymous/ for the mixmaster queue
