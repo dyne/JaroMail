@@ -52,52 +52,14 @@ cp -f src/jaro ${WORKDIR}/bin
 ${=mkdir} $MAILDIRS/tmp $MAILDIRS/cache
 
 if ! [ -r $MAILDIRS/Filters.txt ]; then
-    cat <<EOF > $MAILDIRS/Filters.txt
-# Example filter configuration for Jaro Mail
-
-# mailinglist filters are in order of importance
-# syntax: to <list email> save <folder>
-# below some commented out examples, note the use of a prefix,
-# which makes it handy when browsing with file completion.
-
-# to	  crypto@lists.dyne	save	dyne.crypto
-# to	  dynebolic		save	dyne.dynebolic
-# to	  freej			save	dyne.freej
-# to	  frei0r-devel		save	dyne.frei0r
-# to	  taccuino		save	ml.freaknet
-# to	  deadpoets		save	ml.freaknet
-# to	  linux-libre		save	gnu.linux-libre
-# to	  foundations@lists	save	gnu.foundations
-# to	  debian-mentors	save	debian.mentors
-# to	  debian-blends		save	debian.blends
-# to	  freedombox-discuss	save	debian.freedombox
-
-# Other filters for web 2.0 using folder names with a prefix:
-# they can facilitate folder maintainance.
-
-# from      identi.ca		save	web.identica
-# from      Twitter		save	web.twitter
-# from      linkedin		save	web.linkedin
-# from      googlealerts	save	web.google
-# from      facebook		save	web.facebook
-# from      FriendFeed		save	web.friendfeed
-# from      academia.edu	save	web.academia
-
-EOF
+    cp -v doc/Filters.txt $MAILDIRS/Filters.txt
     act "Default filters created"
 else
     error "Existing configuration $MAILDIRS/Filters.txt skipped"
 fi
 
 if ! [ -r $MAILDIRS/Applications.txt ]; then
-    cat <<EOF > $MAILDIRS/Applications.txt
-# Example configuration to match mime/type to applications
-# each line should start with a mime/type and then indicate an executable
-
-# Example:
-# application/rtf  oowriter
-
-EOF
+    cp -v doc/Applications.txt $MAILDIRS/Applications.txt
     act "Default helper applications settings created"
 else
     error "Existing configuration $MAILDIRS/Applications.txt skipped"
@@ -105,126 +67,14 @@ fi
 
 
 if ! [ -r $MAILDIRS/Mutt.txt ]; then
-    cat <<EOF > $MAILDIRS/Mutt.txt
-# Mutt specific customizations
-# uncomment and fill in with your settings
-
-## dark background (uncomment to switch)
-# source \$HOME/Mail/jaro/.mutt/colors-solarized-dark-256
-# source \$HOME/Mail/jaro/.mutt/colors-solarized-dark-16
-
-## light background (uncomment to switch)
-# source \$HOME/Mail/jaro/.mutt/colors-solarized-light-256
-# source \$HOME/Mail/jaro/.mutt/colors-solarized-light-16
-
-# set locale=""                   # system default locale ("C")
-# set signature='~/.signature'    # signature file
-# set pgp_sign_as="0xC2B68E39"    # UserID/KeyID for signing
-
-# Customized headers example
-# unmy_hdr *                      # remove all extra headers first.
-
-# my_hdr From: Jaromil <jaromil@dyne.org>;
-# my_hdr Organization: Dyne.org Foundation
-# my_hdr X-GPG-Keyserver: pgp.mit.edu
-# my_hdr X-GPG-Id: C2B68E39 [expires: 2013-09-25]
-# my_hdr X-GPG-Fingerprint: B2D9 9376 BFB2 60B7 601F  5B62 F6D3 FBD9 C2B6 8E39
-# my_hdr X-Face: %H:nE)m:Rl>Z?(C7EvRtuUJp4^f@d\#~4pB48~:1:EC)^&9EDcZaKL/*+10(P?g*N0>n8n3&\n kVzfAD\`+RofVAx~ew>FGQmmT7NqlSQx+M8LN5\`,h^aPF[Njx+A~%f!&VJu9!y:~ma/\'^@mvOr@}DyG\n @\"g\`kfy(vyRC
-
-#############
-
-# set attribution='On %{%a, %d %b %Y}, %n wrote:\n'
-# set status_format="-%r-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del:%d?%?F? Flag:%F?%?t? Tag:%t?%?p? Post:%p?%?b? Inc:%b? %?l? %l?]---(%s/%S)-default-%>-(%P)---"
-
-EOF
+    cp -v doc/Mutt.txt $MAILDIRS/Mutt.txt
     act "Default Mutt configuration template created"
 else
     error "Existing configuration $MAILDIRS/Mutt.txt skipped"
 fi
 
 if ! [ -r $MAILDIRS/Accounts ]; then
-    ${=mkdir} $MAILDIRS/Accounts
-    cat <<EOF > $MAILDIRS/Accounts/README.txt
-Directory containing account information
-
-Each file contains a different account: imap, pop or gmail
-each account contains all information needed to connect it
-
-Examples are: imap.default.txt and smtp.default.txt
-
-One can have multiple accounts named otherwise than default
-EOF
-    cat <<EOF > $MAILDIRS/Accounts/imap.default.txt
-# Name and values are separated by spaces or tabs
-# comments start the line with a hash
-
-# Name appearing in From: field
-name To Be Configured
-
-# Email address (default is same as login)
-email unknown@gmail.com
-
-# Aliases also received on this mail
-# alias mimesis@gmail.com
-# alias nemesis@gmail.com
-
-# Internet address
-host imap.gmail.com
-
-# Username
-login USERNAME@gmail.com
-
-# Authentication type
-auth plain # or kerberos, etc
-
-# Identity certificate: check or ignore
-cert ignore
-
-# Transport protocol
-transport ssl
-
-# Service port
-port 993
-
-# Options when fetching
-# to empty your mailbox you can use: fetchall flush
-# by default this is 'keep': don't delete mails from server
-options keep
-
-# Imap folders
-# uncomment to provide a list of folders to be fetched
-# folders INBOX, known, priv, lists, ml.unsorted, unsorted
-
-# Remote sieve
-# command to upload a sieve filter to the server
-# %% will be filled in automatically with our file
-# remote_sieve_cmd scp %% assata.dyne.org:/var/mail/sieve-scripts/email
-
-
-#
-# The password field will be filled in automatically
-#
-EOF
-    cat <<EOF > $MAILDIRS/Accounts/smtp.default.txt
-# Name and values are separated by spaces or tabs
-# comments start the line with a hash
-
-# Name for this account
-name To Be Configured
-
-# Internet address
-host smtp.gmail.com
-
-# Username
-login USERNAME@gmail.com
-
-# Transport protocol
-transport ssl # or "tls" or "plain"
-
-# Service port
-# port 465
-port 25
-EOF
+    cp -v -r doc/Accounts $MAILDIRS/Accounts
     act "Default accounts directory created"
 else
     error "Existing configuration $MAILDIRS/Accounts skipped"
