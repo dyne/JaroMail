@@ -1,3 +1,8 @@
+Jaro Mail 1.3.1 - 13 December 2013
+	More fixes to OSX usage for editor and attachments, changes to
+	local keyring hashing, slight refactoring of packaging and install
+	scripts.
+
 Jaro Mail 1.3 - 5 December 2013
         Major fixes for the new OSX Application packaging implying a
 	rather important refactoring: during its operation JaroMail will
