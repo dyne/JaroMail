@@ -1,0 +1,49 @@
+# Name and values are separated by spaces or tabs
+# comments start the line with a hash
+
+# Name appearing in From: field
+name To Be Configured
+
+# Email address (default is same as login)
+email unknown@gmail.com
+
+# Aliases also received on this mail
+# alias mimesis@gmail.com
+# alias nemesis@gmail.com
+
+# Internet address
+host imap.gmail.com
+
+# Username
+login USERNAME@gmail.com
+
+# Authentication type
+auth plain # or kerberos, etc
+
+# Identity certificate: check or ignore
+cert ignore
+
+# Transport protocol
+transport ssl
+
+# Service port
+port 993
+
+# Options when fetching
+# to empty your mailbox you can use: fetchall flush
+# by default this is 'keep': don't delete mails from server
+options keep
+
+# Imap folders
+# uncomment to provide a list of folders to be fetched
+# folders INBOX, known, priv, lists, ml.unsorted, unsorted
+
+# Remote sieve
+# command to upload a sieve filter to the server
+# %% will be filled in automatically with our file
+# remote_sieve_cmd scp %% assata.dyne.org:/var/mail/sieve-scripts/email
+
+
+#
+# The password field will be filled in automatically
+#

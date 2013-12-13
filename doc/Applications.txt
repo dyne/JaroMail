@@ -1,0 +1,7 @@
+# Example configuration to match mime/type to applications
+# each line should start with a mime/type and then indicate an executable
+# this file format is basically that of mailcap
+
+# Example:
+# application/rtf  oowriter
+
