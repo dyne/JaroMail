@@ -22,7 +22,7 @@
 
 compose() {
     # no args, open in compose mode
-    tmp="${WORKDIR}/tmp/compose.$datestamp.$RANDOM"
+    tmp="${TMPDIR}/compose.$datestamp.$RANDOM"
     _res=0;
     echo "To: ${PARAM[@]}" > $tmp
     ${=mutt} -F $MUTTDIR/rc -H $tmp
@@ -176,17 +176,19 @@ fetch() {
 	esac
 
 	# archive old procmail log
-	if [ -r $WORKDIR/log/procmail.log ]; then
-	    newlock $WORKDIR/log/procmail-${datestamp}.log
-	    cat $WORKDIR/log/procmail.log \
-		>> $WORKDIR/log/procmail-${datestamp}.log
-	    rm -f $WORKDIR/log/procmail.log
-	    unlock $WORKDIR/log/procmail-${datestamp}.log
+	if [ -r $MAILDIRS/logs/procmail.log ]; then
+	    newlock $MAILDIRS/logs/procmail-${datestamp}.log
+	    cat $MAILDIRS/logs/procmail.log \
+		>> $MAILDIRS/logs/procmail-${datestamp}.log
+	    rm -f $MAILDIRS/logs/procmail.log
+	    unlock $MAILDIRS/logs/procmail-${datestamp}.log
 	fi
 
 	# copy addressbook in RAM for speedup
-	newlock $addressbook_tmp
-	cp $WORKDIR/addressbook $addressbook_tmp
+	# TODO: check if we really have ramdisk
+	# newlock $addressbook_tmp
+	# cp $WORKDIR/addressbook $addressbook_tmp
+        # unlink $addressbook_tmp
 
 	act "please wait while downloading mails..."
 
@@ -194,10 +196,10 @@ fetch() {
 
 	unset $fmconf
 
-	unlink $addressbook_tmp
 
-	total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
-	briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+
+	total=`mailstat -k $MAILDIRS/logs/procmail.log | tail -n1 | awk '{print $2}'`
+	briefing=`mailstat -kt $MAILDIRS/logs/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
 	notice "$total emails fetched"
 	print "${briefing}"
 
@@ -256,27 +258,28 @@ port ${port}
 tls on
 tls_starttls on
 tls_certcheck off
-logfile ${WORKDIR}/log/msmtp.log
+logfile ${MAILDIRS}/logs/msmtp.log
 auth ${auth}
 password ${password}
 EOF
 	unset password
 
-	for mail in `${=find} $MAILDIRS/outbox -name "*.mail"`; do
-	    smtp=`print ${mail} | sed -e 's/mail/msmtp/'`
-	    lock ${smtp}
-	    recipients="`cat ${smtp}`"
+	_outq=`${=find} $MAILDIRS/outbox -name '*.mail'`
+	for mail in ${(f)_outq}; do
+	    smtp=`print "${mail}" | sed -e 's/mail/msmtp/'`
+	    lock "$smtp"
+	    recipients=`cat "${smtp}"`
 	    act "To: ${recipients}"
 	    msmtp -C $tmp -- ${=recipients} < "${mail}"
 	    if [ $? != 0 ]; then
 		error "Error sending mail, skipped"
-		unlock ${smtp}
+		unlock "$smtp"
 	    else
 		act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
-		cat ${mail} | $WORKDIR/bin/jaro -q learn recipient
-		unlink ${smtp}
-		${=rm} ${mail}
+		cat "$mail" | $WORKDIR/bin/jaro -q learn recipient
+		unlink "$smtp"
+		${=rm} "$mail"
 	    fi
 	done
 	unlink $tmp
