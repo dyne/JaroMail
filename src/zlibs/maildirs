@@ -84,7 +84,8 @@ rmdupes() {
     { test "$1" = "lastlog" } && {
     # gather a list of destinations for last filtering operation
 	typeset -alU dests prio lasts
-	for d in `cat ${WORKDIR}/log/procmail.log|awk '/Folder:/ {print $2}' | cut -d/ -f1`; do
+	_folders="`cat ${WORKDIR}/log/procmail.log|awk '/Folder:/ {print $2}' | cut -d/ -f1`"
+	for d in ${(f)_folders}; do
 	    # skip procmail glitch
 	    { test "$d" = "procmail" } && { continue }
 	    # put filtered to last
@@ -202,12 +203,12 @@ filter() {
     update # update all filters
 
 	# archive old procmail log
-    { test -r "$WORKDIR/log/procmail.log" } && {
-	newlock $WORKDIR/log/procmail-${datestamp}.log
-	cat $WORKDIR/log/procmail.log \
-	    >> $WORKDIR/log/procmail-${datestamp}.log
-	${=rm} $WORKDIR/log/procmail.log
-	unlock $WORKDIR/log/procmail-${datestamp}.log
+    { test -r "$MAILDIRS/logs/procmail.log" } && {
+	newlock $MAILDIRS/logs/procmail-${datestamp}.log
+	cat $MAILDIRS/logs/procmail.log \
+	    >> $MAILDIRS/logs/procmail-${datestamp}.log
+	${=rm} $MAILDIRS/logs/procmail.log
+	unlock $MAILDIRS/logs/procmail-${datestamp}.log
     }
 
     prc=$PROCMAILDIR/rc
@@ -243,8 +244,8 @@ filter() {
     unset fall
 
 
-    total=`mailstat -k $WORKDIR/log/procmail.log | tail -n1 | awk '{print $2}'`
-    briefing=`mailstat -kt $WORKDIR/log/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+    total=`mailstat -k $MAILDIRS/logs/procmail.log | tail -n1 | awk '{print $2}'`
+    briefing=`mailstat -kt $MAILDIRS/logs/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
     echo "${briefing}"
 
 
