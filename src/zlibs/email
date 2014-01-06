@@ -337,6 +337,8 @@ set imap_pass = "${password}"
 EOF
 	unset password
 	print "source '$tmp'" > $TMPDIR/muttpass
+        # when peeking don't mark unread messages as Old
+	print "unset mark_old" >> $TMPDIR/muttpass
 	(sleep 1;
 	    cp /dev/null $TMPDIR/muttpass
 	    unlink $tmp # secure delete in ram
