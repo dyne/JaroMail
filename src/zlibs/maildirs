@@ -44,16 +44,17 @@ maildirmake() {
 
     { test -z "$1" } && {
 	error "internal error: missing argument for maildirmake"
-	return }
+	return 255 }
 
     { test -r "$1" } && {
 	func "directory exists: $1"
-	return }
+	return 1 }
 
     ${=mkdir} ${1}/cur
     ${=mkdir} ${1}/new
     ${=mkdir} ${1}/tmp
 
+    return 0
 }
 
 

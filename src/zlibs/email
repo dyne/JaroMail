@@ -31,42 +31,88 @@ compose() {
     return $_res
 }
 
+
 queue() {
     local base;
-    local tmp;
-    local mailfile;
-    local msmtpfile;
 
-    # add mails to the sendout queue
-    ${=mkdir} $MAILDIRS/outbox
-    pushd $MAILDIRS/outbox
     notice "Adding mail to the outbox queue"
-    # Create new unique filenames of the form
-    # MAILFILE:  ccyy-mm-dd-hh.mm.ss[-x].mail
-    # MSMTPFILE: ccyy-mm-dd-hh.mm.ss[-x].msmtp
-    # where x is a consecutive number only appended if you send more than one
-    # mail per second.
-    base="`date +%Y-%m-%d-%H.%M.%S`"
-    func "[$base] queue called with params: ${PARAM[@]}"
+    base="`hostname`-queue-`date +%Y-%m-%d-%H.%M.%S`"
 
-    if [ -f "$base.mail" -o -f "$base.msmtp" ]; then
-	tmp="$base"
-	i=1
-	while [ -f "$tmp-$i.mail" -o -f "$tmp-$i.msmtp" ]; do
-		i=`expr $i + 1`
+    queue_to=($@)
+    # set it ready for saving in outbux
+    queue_body="$base"
+    cat > $TMPDIR/$queue_body.mail
+
+
+
+    maildirmake $MAILDIRS/outbox
+    { test $? = 1 } && {
+    # silently migrate the outbox from the old format to the new
+	tmpp=(`find $MAILDIRS/outbox -type f`)
+	if [ ${#tmpp} = 0 ]; then
+	    # the old format outbox is just empty
+	    rmdir $MAILDIRS/outbox
+	    maildirmake $MAILDIRS/outbox
+	else
+	    # there are some mails to be sent in the old format outbox
+	    # preserve them while migrating to the new format
+	    tmppp=$TMPDIR/jaro-outbox-migration-$RANDOM
+	    mkdir -p $tmppp
+	    mv $MAILDIRS/outbox/* $tmppp/
+	    rmdir $MAILDIRS/outbox
+	    maildirmake $MAILDIRS/outbox
+	    mkdir -p $MAILDIRS/outbox/send
+	    bodies=(`find $tmppp -type f -name '*.mail'`)
+	    rcpt=(`find $tmppp -type f -name '*.msmtp'`)
+	    for i in ${bodies}; do mv $i $MAILDIRS/outbox/new/; done
+	    for i in ${rcpt}; do mv $i $MAILDIRS/outbox/send/${i%%.msmtp}.rcpt; done
+	    rmdir $tmppp
+	fi
+    }
+    mkdir -p $MAILDIRS/outbox/send
+
+    lock $MAILDIRS/outbox
+
+    if [[ "${=queue_to}" =~ '@jaromail.group$' ]]; then
+        # recipients are in a group
+
+	groupfile="${=queue_to[(ws:@:)1]}"
+	act "email recipients are in group ${groupfile}"
+
+	{ test -r $MAILDIRS/Groups/$groupfile } || {
+	    maildirmake $MAILDIRS/postponed
+	    mv ${TMPDIR}/${queue_body}.mail $MAILDIRS/postponed/new
+	    unlock $MAILDIRS/outbox
+	    error "Group not found: $groupfile"
+	    return 1 }
+
+	groupnum="`cat wc -l < $MAILDIRS/Groups/$groupfile`"
+
+	recipients=`cat $MAILDIRS/Groups/$groupfile | grep -v '^#'`
+	groupnum="`print ${recipients} | wc -l`"
+	act "$groupnum recipients in total"
+
+	for i in ${(f)recipients}; do
+	    ig=${base}-${RANDOM}
+	    cat ${TMPDIR}/${queue_body}.mail | \
+		awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
+		> ${MAILDIRS}/outbox/new/${ig}.mail
+	    # TODO: check email validation and <stripping>
+	    print "$i" | sed 's/.*<//;s/>$//' \
+		> ${MAILDIRS}/outbox/send/${ig}.rcpt
 	done
-	base="$base-$i"
+
+    else
+	# recipients are in the email envelope
+	act "email recipients: $queue_to"
+	mv $TMPDIR/$queue_body.mail $MAILDIRS/outbox/new/$queue_body.mail
+	print "${=queue_to}" > $MAILDIRS/outbox/send/$queue_body.rcpt
     fi
-    mailfile="$base.mail"
-    msmtpfile="$base.msmtp"
-    # Write command line to $MSMTPFILE
-    print "$@" > "$msmtpfile"
-    lock $msmtpfile
-    # Write the mail to $MAILFILE
-    cat > "$mailfile"
-    unlock $msmtpfile
-    popd
-    return 0
+
+    unlock $MAILDIRS/outbox
+    { test -r ${TMPDIR}/${queue_body}.mail } && {
+	${=rm} ${TMPDIR}/${queue_body}.mail }
+	
 }
 
 ###########
@@ -216,13 +262,12 @@ send() {
     adir=$WORKDIR/Accounts
     typeset -al all
 
+
     # list mails to send
-    mailnum=`ls ${MAILDIRS}/outbox | grep 'mail$' | wc -l`
-    mailnum=${mailnum// /} # trim whitespace
-    if [ "$mailnum" = "0" ]; then
+    queue_rcpt=(`${=find} ${MAILDIRS}/outbox/send -type f -name '*.rcpt'`)
+    { test ${#queue_rcpt} = 0 } && {
 	act "Outbox is empty, no mails to send."
-	return 0
-    fi
+	return 0 }
 
     read_account smtp ${account}
     { test  $? != 0 } && {
@@ -237,19 +282,24 @@ send() {
     is_online ${host} ${port}
     { test $? = 0 } || { return 1 }
 
-    notice "Sending out ${mailnum} mails via ${type}.${account}"
+    notice "Sending out ${#queue_rcpt} mails via ${type}.${account}"
 
 
-    { test $DRYRUN != 1 } && {
-	ask_password $login $host
-	{ test $? != 0 } && {
-	    error "Error retrieving password for $login on $host"
-	    unset password all; return 1
-	}
+    { test $DRYRUN = 1 } && { return 0 }
 
-	tmp=$TMPDIR/msmtp.$host.$datestamp.$RANDOM
-	newlock $tmp
-	cat <<EOF > $tmp
+    # from here on we must unlock on error
+    lock ${MAILDIRS}/outbox
+    
+    ask_password $login $host
+    { test $? = 0 } || {
+	error "Error retrieving password for $login on $host"
+	unset password all
+	unlock ${MAILDIRS}/outbox
+	return 1 }
+    
+    tmp=$TMPDIR/msmtp.$host.$datestamp.$RANDOM
+    newlock $tmp
+    cat <<EOF > $tmp
 account default
 from ${email}
 user ${login}
@@ -262,28 +312,42 @@ logfile ${MAILDIRS}/logs/msmtp.log
 auth ${auth}
 password ${password}
 EOF
-	unset password
-
-	_outq=`${=find} $MAILDIRS/outbox -name '*.mail'`
-	for mail in ${(f)_outq}; do
-	    smtp=`print "${mail}" | sed -e 's/mail/msmtp/'`
-	    lock "$smtp"
-	    recipients=`cat "${smtp}"`
-	    act "To: ${recipients}"
-	    msmtp -C $tmp -- ${=recipients} < "${mail}"
-	    if [ $? != 0 ]; then
-		error "Error sending mail, skipped"
-		unlock "$smtp"
-	    else
-		act "Mail sent succesfully"
+    unset password
+    
+    for q in ${queue_rcpt}; do
+	qr=`basename ${q%%.rcpt}`
+	func "looking for a mail body to send labeled $qr"
+	qbody=(`${=find} $MAILDIRS/outbox -type f -name "${qr}.mail*"`)
+	func "found ${#qbody} hits: ${=qbody}"
+	recipients=(`cat $q`)
+	func "recipients: ${=recipients}"
+	
+	{ test ${#qbody} = 0 } && { 
+		# body for rcpt not found, mail must have been deleted from outbox
+	    act "canceled delivery for a deleted mail to: `cat $q`"
+	    ${=rm} $q
+	    continue }
+	
+	{ test ${#qbody} -gt 1 } && {
+	    error "too many mail bodies found for a message to: `cat $q`"
+	    error "this is quite confusing, check your outbox, we'll skip for now."
+	    continue }
+	
+	act "To: ${=recipients}"
+	msmtp -C $tmp -- ${=recipients} < "${qbody}"
+	if [ $? != 0 ]; then
+	    error "Error sending mail, skipped"
+	else
+	    act "Mail sent succesfully"
 	   # whitelist those to whom we send mails
-		cat "$mail" | $WORKDIR/bin/jaro -q learn recipient
-		unlink "$smtp"
-		${=rm} "$mail"
-	    fi
-	done
-	unlink $tmp
-    } # DRYRUN
+	    cat "$qbody" | $WORKDIR/bin/jaro -q learn recipient
+	    ${=rm} "$q" "$qbody"
+	fi
+    done
+
+    unlock $MAILDIRS/outbox
+    unlink $tmp
+    
     return 0
 }
 
