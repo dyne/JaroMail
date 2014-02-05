@@ -46,7 +46,8 @@ queue() {
 
 
     maildirmake $MAILDIRS/outbox
-    { test $? = 1 } && {
+    { test $? = 0 } || {
+	act "updating outbox format to Maildir"
     # silently migrate the outbox from the old format to the new
 	tmpp=(`find $MAILDIRS/outbox -type f`)
 	if [ ${#tmpp} = 0 ]; then
@@ -73,10 +74,10 @@ queue() {
 
     lock $MAILDIRS/outbox
 
-    if [[ "${=queue_to}" =~ '@jaromail.group$' ]]; then
-        # recipients are in a group
+    if [[ "${=queue_to}" =~ '@jaromail.group' ]]; then
+	# recipients are in a group
 
-	groupfile="${=queue_to[(ws:@:)1]}"
+	groupfile="`print ${=queue_to}|cut -d@ -f1`"
 	act "email recipients are in group ${groupfile}"
 
 	{ test -r $MAILDIRS/Groups/$groupfile } || {
@@ -85,8 +86,6 @@ queue() {
 	    unlock $MAILDIRS/outbox
 	    error "Group not found: $groupfile"
 	    return 1 }
-
-	groupnum="`cat wc -l < $MAILDIRS/Groups/$groupfile`"
 
 	recipients=`cat $MAILDIRS/Groups/$groupfile | grep -v '^#'`
 	groupnum="`print ${recipients} | wc -l`"
@@ -112,7 +111,7 @@ queue() {
     unlock $MAILDIRS/outbox
     { test -r ${TMPDIR}/${queue_body}.mail } && {
 	${=rm} ${TMPDIR}/${queue_body}.mail }
-	
+
 }
 
 ###########
@@ -190,7 +189,7 @@ fetch() {
 	    fmconf+=(" sslcertck ") # sslcertpath '$WORKDIR/certs'
 	fi
 
-	
+
 	fmconf+=(" antispam 571 550 501 554 ")
 
 	print $accountopt | grep ' keep' > /dev/null
@@ -217,7 +216,7 @@ fetch() {
 		unset $fmconf
 		return 1
 		;;
-	    *) 
+	    *)
 		func "fetchmail returns $ret" ;;
 	esac
 
@@ -234,7 +233,7 @@ fetch() {
 	# TODO: check if we really have ramdisk
 	# newlock $addressbook_tmp
 	# cp $WORKDIR/addressbook $addressbook_tmp
-        # unlink $addressbook_tmp
+	# unlink $addressbook_tmp
 
 	act "please wait while downloading mails..."
 
@@ -289,14 +288,14 @@ send() {
 
     # from here on we must unlock on error
     lock ${MAILDIRS}/outbox
-    
+
     ask_password $login $host
     { test $? = 0 } || {
 	error "Error retrieving password for $login on $host"
 	unset password all
 	unlock ${MAILDIRS}/outbox
 	return 1 }
-    
+
     tmp=$TMPDIR/msmtp.$host.$datestamp.$RANDOM
     newlock $tmp
     cat <<EOF > $tmp
@@ -313,7 +312,7 @@ auth ${auth}
 password ${password}
 EOF
     unset password
-    
+
     for q in ${queue_rcpt}; do
 	qr=`basename ${q%%.rcpt}`
 	func "looking for a mail body to send labeled $qr"
@@ -321,18 +320,18 @@ EOF
 	func "found ${#qbody} hits: ${=qbody}"
 	recipients=(`cat $q`)
 	func "recipients: ${=recipients}"
-	
-	{ test ${#qbody} = 0 } && { 
+
+	{ test ${#qbody} = 0 } && {
 		# body for rcpt not found, mail must have been deleted from outbox
 	    act "canceled delivery for a deleted mail to: `cat $q`"
 	    ${=rm} $q
 	    continue }
-	
+
 	{ test ${#qbody} -gt 1 } && {
 	    error "too many mail bodies found for a message to: `cat $q`"
 	    error "this is quite confusing, check your outbox, we'll skip for now."
 	    continue }
-	
+
 	act "To: ${=recipients}"
 	msmtp -C $tmp -- ${=recipients} < "${qbody}"
 	if [ $? != 0 ]; then
@@ -347,7 +346,7 @@ EOF
 
     unlock $MAILDIRS/outbox
     unlink $tmp
-    
+
     return 0
 }
 
@@ -378,7 +377,7 @@ peek() {
 	    iproto="imaps" ;;
 	plain) act "using clear text connection"
 	    iproto="imap"  ;;
-        *)
+	*)
 	    error "Unknown transport: $transport"
 	    error "Configuration error in imap account ${account}"
 	    return 1 ;;
@@ -401,7 +400,7 @@ set imap_pass = "${password}"
 EOF
 	unset password
 	print "source '$tmp'" > $TMPDIR/muttpass
-        # when peeking don't mark unread messages as Old
+	# when peeking don't mark unread messages as Old
 	print "unset mark_old" >> $TMPDIR/muttpass
 	(sleep 1;
 	    cp /dev/null $TMPDIR/muttpass

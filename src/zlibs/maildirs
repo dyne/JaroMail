@@ -46,9 +46,19 @@ maildirmake() {
 	error "internal error: missing argument for maildirmake"
 	return 255 }
 
+    { test -f "$1" } && {
+	func "not a maildir, but a file: $1"
+	return 254 }
+
+    { test -d "$1/new" } && {
+	func "maildir already exists: $1"
+	return 0 }
+
     { test -r "$1" } && {
-	func "directory exists: $1"
-	return 1 }
+	func "directory exists, but is not a maildir: $1"
+	return 254 }
+
+    func "creating maildir: $1"
 
     ${=mkdir} ${1}/cur
     ${=mkdir} ${1}/new
