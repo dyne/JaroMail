@@ -20,6 +20,13 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+# extract all emails found in stdin, one per line
+extract_emails() {
+awk '{ for (i=1;i<=NF;i++)
+         if ( $i ~ /[[:alnum:]]@[[:alnum:]]/ ) {
+           gsub(/<|>|,/ , "" , $i); print $i } }'
+}
+
 compose() {
     # no args, open in compose mode
     tmp="${TMPDIR}/compose.$datestamp.$RANDOM"
@@ -89,20 +96,49 @@ queue() {
 
 	recipients=`cat $MAILDIRS/Groups/$groupfile | grep -v '^#'`
 	groupnum="`print ${recipients} | wc -l`"
-	act "$groupnum recipients in total"
+	groupmode="`head -n1 $MAILDIRS/Groups/$groupfile | awk '/^#mode/ { print $2 } { next }'`"
+	{ test "$groupmode" = "" } && { groupmode="individual" }
+	act "$groupnum recipients in total, sending mode $groupmode"
+	
+	case $groupmode in
 
-	for i in ${(f)recipients}; do
-	    ig=${base}-${RANDOM}
-	    cat ${TMPDIR}/${queue_body}.mail | \
-		awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
-		> ${MAILDIRS}/outbox/new/${ig}.mail
+	    # individual group mode hides other recipients and send
+	    # multiple mail envelopes with each single recipient in To:
+	    individual)
+		for i in ${(f)recipients}; do
+		    ig=${base}-${RANDOM}
+		    cat ${TMPDIR}/${queue_body}.mail | \
+			awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
+			> ${MAILDIRS}/outbox/new/${ig}.mail
 	    # TODO: check email validation and <stripping>
-	    print "$i" | sed 's/.*<//;s/>$//' \
-		> ${MAILDIRS}/outbox/send/${ig}.rcpt
-	done
+		    print "$i" | sed 's/.*<//;s/>$//' \
+			> ${MAILDIRS}/outbox/send/${ig}.rcpt
+		done
+		;;
+
+	    # carboncopy group mode sends a single envelope where all
+	    # recipients can see and reply to each other
+	    carboncopy|cc)
+		cc=""
+		for i in ${(f)recipients}; do
+		    if [ "$cc" = "" ]; then cc="$i"
+		    else cc+=", $i"; fi
+		done
+		ig=${base}-${RANDOM}
+		cat ${TMPDIR}/${queue_body}.mail | \
+		    awk '/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
+                                { print $0 }' \
+		    > ${MAILDIRS}/outbox/new/${ig}.mail
+	        # extract emails one per line
+		rcpt=`print $cc | extract_emails`
+		func "cc: $cc"
+		func "rcpt: $rcpt"
+		print ${=rcpt} > ${MAILDIRS}/outbox/send/${ig}.rcpt
+		;;
+	esac
 
     else
-	# recipients are in the email envelope
+	# recipients are set in the email envelope
 	act "email recipients: $queue_to"
 	mv $TMPDIR/$queue_body.mail $MAILDIRS/outbox/new/$queue_body.mail
 	print "${=queue_to}" > $MAILDIRS/outbox/send/$queue_body.rcpt
