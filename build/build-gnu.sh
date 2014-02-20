@@ -111,8 +111,8 @@ case $distro in
 		cp src/gnome-keyring/jaro-gnome-keyring build/gnu/
 	}
 
-	{ test "$target" = "mutt" } || { 
-	    test "$target" = "all" } && {
+	# build mutt only if specified
+	{ test "$target" = "mutt" } && { 
 		echo "Compiling Mutt (MUA)"
 		pushd src/mutt-1.5.21
 		{ test -r configure } || { autoreconf -i }
@@ -125,6 +125,7 @@ case $distro in
 		cp src/mutt-1.5.21/pgpewrap build/gnu/pgpewrap
 	}
 
+	# build mixmaster only if specified
 	{ test "$target" = "mixmaster" } && { 
 		echo "Compiling Mixmaster (anonymous remailer)"
 		pushd src/mixmaster-3.0/Src
