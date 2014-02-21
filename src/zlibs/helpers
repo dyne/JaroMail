@@ -24,7 +24,16 @@
 # read or compose depending if there is an argument that is an email
 # or a folder to start with
 
+# which mutt binary to use
+if command -v mutt-jaro > /dev/null; then
+    mutt="mutt-jaro"
+elif command -v mutt > /dev/null; then
+    mutt="mutt"
+fi
+
+
 autostart() {
+
 # no argument passed. open first folder with new mail
     { test -z ${1} } && {
 

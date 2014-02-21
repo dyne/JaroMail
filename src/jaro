@@ -71,6 +71,9 @@ typeset -al maildirs
 # global variable formail cache (used by rmdupes)
 typeset -h formail_cache
 
+# global variable for mutt binary
+typeset -h mutt
+
 # global variable for exit code
 typeset exitcode
 exitcode=0
@@ -318,7 +321,7 @@ check_bin() {
 	command -v $req >/dev/null
 	{ test $? != 0 } && {
 	    error "Cannot find $req. Please install it."
-	    return 1
+	    exit 1
 	}
     done
 
@@ -346,7 +349,7 @@ check_bin() {
 	mutt="mutt"
     else
 	error "Cannot find Mutt. Please install it."
-	return 1
+	exit 1
     fi
     func "Mutt binary: $mutt"
 
@@ -387,12 +390,12 @@ Main commands:
  fetch  download unread emails from [account]
  send   send all mails queued in the outbox
  peek   look into the [account] mailbox without downloading
- search search local maildirs for a string or an expression
+ search search maildirs or addressbook for strings
 
 Options:
 
- -a     use a particular account instead of default (keyword)
- -l     whitelist or blacklist for learn/forget etc.
+ -a     use a particular account instead of default (filename)
+ -l     what list to use on Addressbook operations: white or black
 
  -h     print this help
  -v     version information for this tool
@@ -400,40 +403,69 @@ Options:
  -n     dry run, show operations without executing them
  -D     print debugging information at runtime
 
-Addressbook commands:
+== Addressbook commands (use -l to indicate which addressbook $list)
+a pipe | in front indicate they take an email body from stdin
 
- import   import a VCard format addressbook in whitelist
- export   export an addressbook.vcf file in Mail/jaro
+ import   import entries from a VCard file in the $list
 
- abook    manual edit the addressbook (white or blacklist)
- list     prints out the list of known addresses
+ export   export the $list to VCard file (addressbook.vcf)
 
- learn    learn addresses from mails piped in stdin
- forget   remove addresses found in mails piped in stdin
+ abook    edit the $list using abook terminal curses editor
 
- complete look for a glob matching string in addressbook
- isknown  read e-mail from stdin, return 0 if sender is known
+|learn    learn addresses from mails piped in stdin
 
-Maintenance commands:
+|forget   remove addresses found in mails piped in stdin
 
- passwd reset the stored password for a configured account
+ list     prints to console all the entries in a $list
 
- update   refresh configurations
- queue    add a mail into outbox
+ search   search into $list using a string parameter
 
- backup   move mails from a maildir to a new one with search expr
+|isknown  read e-mail from stdin, return 0 if sender is known
+
+
+== Operational commands (use -a to indicate which $account)
+account names correspond to the filenames, i.e. imap.default
+
+ fetch    downloads emails locally from an $account on-line
+          option "keep" (default) to avoid deleting from servers
+
+ send     send all emails queued in outbox/ to an smtp.$account
+
+ peek     connect to an imap.$account with ncurses terminal mutt
+          remote folders supported. use to delete without download
+
+ passwd   set account passwords in the OS native keyring
+          or into a simple, file based, gpg encrypted database.
+
+|queue    queue a mail in outbox/ for send
+
+
+== Storage commands (all take path to maildirs as arguments + mairix)
+(mairix) commandline parsed intuitive expressions for date and strings
+maildirs are directories of mails downloaded in Mail/
+
+ open     open a maildir folder (can use -R for read-only)
+
+ backup  (mairix)  move mails from a maildir to another one
+          match mails to move based on date ranges or strings
+
  rmdupes  remove all duplicated e-mails into a maildir
- merge    merge a maildir into another, removing all duplicates
- filter   passes a maildir through the filters
 
- ramdisk  open/close activates fast cache in RAM on Mac/OSX
+ merge    merge a maildir into another, removing all duplicates
+
+ filter   passes a maildir through the configured and updated Filters.txt
+
+ update   updates Filters.txt generating rules (procmail, sieve)
+
+ ramdisk [open|close]   activates fast cache in RAM on Mac/OSX (root)
 
 Experimental commands:
 
  stat     prints a statistical overview on stored maildirs
  cert     import most common SSL certificates from the Internet
 
-Please report bugs on <http://bugs.dyne.org>.
+For a complete introductory documentation, see the User Manual in LaTeX
+Website on <http://jaromail.dyne.org> Report bugs to <https://bugs.dyne.org>
 EOF
 }
 
@@ -568,7 +600,10 @@ main()
 	echo
     fi
     { option_is_set -a } && { account=`option_value -a` }
-    { option_is_set -l } && { list=`option_value -l` }
+    { option_is_set -l } && {
+	if [[ "`option_value -l`" =~ "black" ]]; then list=blacklist; fi
+	if [[ "`option_value -l`" =~ "white" ]]; then list=whitelist; fi
+    }
     { option_is_set -h } && { CLEANEXIT=0
 	usage; return 0 }
     { option_is_set -v } && { CLEANEXIT=0
