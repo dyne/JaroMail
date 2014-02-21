@@ -107,6 +107,9 @@ set move = no
 # deactivate imap idle, there is a broken implementation of it in mutt
 set imap_idle = no
 # set mbox_type = mbox
+# bug for when a folder has a period in the name
+# http://lists.df7cb.de/mutt/message/20090601.013609.d402c3aa.en.html
+set imap_delim_chars = '/'
 
 #######################################
 ## Attaching documents and MIME options
