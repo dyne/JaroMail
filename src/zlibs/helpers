@@ -96,7 +96,7 @@ jarovim() {
 edit_file() {
     { test ${EDITOR} } && { _editor="${EDITOR}" }
     { test ${JARO_EDITOR} } && { _editor="$JARO_EDITOR" }
-
+    { test "$_editor" = "" } && { _editor=vim }
     case $_editor in
 	# refine settings for email
 	vi|vim) jarovim "${PARAM}"; return $? ;;

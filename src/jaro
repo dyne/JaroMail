@@ -72,7 +72,7 @@ typeset -al maildirs
 typeset -h formail_cache
 
 # global variable for mutt binary
-typeset -h mutt
+typeset -h mutt pgpewrap dotlock
 
 # global variable for exit code
 typeset exitcode
@@ -181,7 +181,7 @@ else
 fi
 
 # temporary directory
-TMPDIR="$MAILDIRS/tmp"
+TMPDIR="$MAILDIRS/tmp/jaromil.$USER"
 case $OS in
     GNU)
 	touch /dev/shm/jaromail.test.tmp > /dev/null
@@ -253,7 +253,7 @@ GNOMEKEY=0
 
 cleanexit() {
     func "Clean exit procedures"
-
+    sleep 3
     unset name login host protocol port password auth folders accountopt
 
     # security check
@@ -307,7 +307,7 @@ TRAPINT() {
 
 	{ test $CLEANEXIT = 1 } && {
 	    error "Forced removal of locks"
-	    cleanexit }
+	    cleanexit & }
 
 	if [ "$DEBUG" = "1" ]; then return 1
 	else exit 1; fi
@@ -344,9 +344,16 @@ check_bin() {
 
     # which mutt binary to use
     if command -v mutt-jaro > /dev/null; then
-	mutt="mutt-jaro"
+	# in-house compiled
+	mutt=mutt-jaro
+	pgpewrap=pgpewrap
+	dotlock=dotlock
     elif command -v mutt > /dev/null; then
+	# system-wite
 	mutt="mutt"
+	# TODO: check if this is also the location on Fedora
+	pgpewrap="/usr/lib/mutt/pgpewrap"
+	dotlock="mutt_dotlock"
     else
 	error "Cannot find Mutt. Please install it."
 	exit 1
@@ -681,5 +688,5 @@ main()
 
 if [ "$1" != "source" ]; then check_bin; fi
 main $@
-{ test "$CLEANEXIT" = "1" } && { cleanexit }
+{ test "$CLEANEXIT" = "1" } && { cleanexit & }
 return $exitcode

@@ -48,6 +48,10 @@ update() {
 
     ######
     # MUTT
+    act "configuring Mutt's environment"
+    func "binary: $mutt"
+    func "pgpewrap: $pgpewrap"
+    func "lock: $dotlock"
     ${=mkdir} $MUTTDIR
     ${=mkdir} $MUTTDIR/cache
     rm -f $MUTTDIR/rc
@@ -89,6 +93,11 @@ EOF
     { test -r $MAILDIRS/Mutt.txt } && {
 	print "source '$MAILDIRS/Mutt.txt'" >> $MUTTDIR/rc }
 
+
+
+#####################
+# helper applications
+act "configuring helper applications"
 cat <<EOF >> $MUTTDIR/rc
 ## end of Jaro Mail generated muttrc
 ####################################
@@ -116,7 +125,8 @@ EOF
 text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
 EOF
     fi
-    apptypes=`cat ${WORKDIR}/Applications.txt`
+
+    apptypes=`cat ${MAILDIRS}/Applications.txt`
     for t in ${(f)apptypes}; do
 	eval `print $t | awk '
     { print "_type=" $1 "; _app=" $2 ";" }'` 
@@ -142,7 +152,7 @@ EOF
 
     #######
     # SIEVE
-    act "generating sieve filters"
+    act "generating procmail and sieve filter rules"
     id=$datestamp.$RANDOM
     sieve=$MAILDIRS/Filters.sieve
     lock $sieve
@@ -191,7 +201,6 @@ EOF
 
     ##########
     # PROCMAIL
-    act "generating procmail filters"
     ${=mkdir} $PROCMAILDIR
     rm -f $PROCMAILDIR/rc
     touch $PROCMAILDIR/rc
@@ -231,6 +240,7 @@ zz.bounces/
 EOF
 
     #######
+    act "compiling rules for mailinglists"
     print "# filters generated from Filters.txt" >> $PROCMAILDIR/rc
 
     typeset -alU filter_from
@@ -313,7 +323,7 @@ EOF
 
 
 #### SIEVE
-
+act "compiling whitelist rules from addressbook"
 func "generating whitelist for sieve filters"
 cat <<EOF >> $sieve
 # whitelist
@@ -384,7 +394,7 @@ EOF
 if header :contains "To" [
 EOF
     typeset -alU recv
-    for f in `${=find} $WORKDIR/Accounts/ -type f | grep -v 'smtp'`; do
+    for f in `${=find} $MAILDIRS/Accounts/ -type f | grep -v 'smtp'`; do
 	for addr in `cat $f | awk '
     /^email/ { print $2 }
     /^alias/ { print $2 }
