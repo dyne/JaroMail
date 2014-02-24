@@ -6,6 +6,7 @@
 dotlock
 fetchaddr
 fetchdate
+pgpewrap
 src/mairix/Makefile
 src/mairix/config.log
 src/mairix/mairix
@@ -54,3 +55,14 @@ src/mutt-1.5.21/mutt
 src/mutt-1.5.21/aclocal.m4
 src/mutt-1.5.21/autom4te.cache
 doc/jaromail-manual.pdf
+make.log
+jaromail-manual.tex
+src/dfasyn/dfasyn
+src/dfasyn/parse.c
+src/dfasyn/parse.h
+src/dfasyn/parse.output
+src/dfasyn/scan.c
+src/nvpscan.c
+src/nvpscan.h
+src/nvpscan.report
+src/pgpewrap
