@@ -26,7 +26,7 @@
 #include <limits.h>
 #endif
 
-#include "rfc822.h"
+#include "rfc822_mutt.h"
 #include "rfc2047.h"
 #include "helpers.h"
 

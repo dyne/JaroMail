@@ -18,7 +18,7 @@
  */ 
 
 /*
- * Completely stolen from the Mutt mailreader
+ * Borrowed from the Mutt mailreader
  */
 
 #include <stdio.h>

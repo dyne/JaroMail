@@ -22,7 +22,7 @@
 
 lock() {
     func "lock: $1"
-    $WORKDIR/bin/dotlock ${1}
+    ${=dotlock} ${1}
     case $? in
 	1) error "Cannot lock non existing file: $1"
 	    return 1 ;;
@@ -84,7 +84,7 @@ unlock() {
     pidcheck $1
     { test $? = 0 } || { return 1 }
 
-    $WORKDIR/bin/dotlock -u "$1"
+    ${=dotlock} -u "$1"
     { test $? = 0 } || {
 	rm -f "$1.lock"
 	{ test $? = 0 } || { error "Unable to unlock: $1"; return 1 }
@@ -104,7 +104,7 @@ unlink() { # delete a file that we are locking
     (
 	${=rm} ${1}
 	touch ${1}
-	$WORKDIR/bin/dotlock -d -f ${1}
+	${=dotlock} -d -f ${1}
 	{ test $? != 0 } && { error "Unable to unlink: $1"; return 1 }
 	{ test -r "${1}.pid" } && { rm -f ${1}.pid }
 	rm -f ${1}.unlink
