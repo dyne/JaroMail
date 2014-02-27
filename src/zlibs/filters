@@ -329,7 +329,9 @@ cat <<EOF >> $sieve
 # whitelist
 if header :contains "From" [
 EOF
+
 newlock $TMPDIR/whitelist.sieve.$id
+
 cat <<EOF | ${SQL} -batch ${addressbook} \
     >> $TMPDIR/whitelist.sieve.$id
 SELECT email FROM whitelist;
@@ -337,7 +339,9 @@ EOF
 typeset -alU whitelist
 for i in `cat $TMPDIR/whitelist.sieve.$id`; do
     whitelist+=($i); done
+
 unlink $TMPDIR/whitelist.sieve.$id
+
 c=${#whitelist}
 for w in $whitelist; do
     print -n "\"$w\"" >> $sieve
@@ -356,8 +360,6 @@ if header :is "X-Spam-Flag" "YES" {
 }
 
 EOF
-
-unlock $sieve
 
 #### PROCMAIL
 
@@ -464,6 +466,8 @@ cat <<EOF >> $sieve
 
 fileinto "unsorted";
 EOF
+
+unlock $sieve
 
     return 0
 } # end of update()
