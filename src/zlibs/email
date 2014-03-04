@@ -140,7 +140,12 @@ queue() {
     else
 	# recipients are set in the email envelope
 	act "email recipients: $queue_to"
-	mv $TMPDIR/$queue_body.mail $MAILDIRS/outbox/new/$queue_body.mail
+	# file into the outbox filtering headers
+	cat $TMPDIR/$queue_body.mail | awk '
+/User-Agent:/ { print "User-Agent: Jaro Mail <http://jaromail.dyne.org>"; next }
+{ print $0 }
+' > $MAILDIRS/outbox/new/$queue_body.mail
+	rm $TMPDIR/$queue_body.mail
 	print "${=queue_to}" > $MAILDIRS/outbox/send/$queue_body.rcpt
     fi
 
