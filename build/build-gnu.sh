@@ -198,10 +198,10 @@ mkdir -p build/gnu
 }
 
 
-
-print "Done compiling."
-print "Now run ./install.sh and Jaro Mail will be ready in ~/Mail"
-print "or \"./install.sh path\" to install it somewhere else."
-
+print
+print "Done building JaroMail!"
+print "Now run 'make install' as root to install jaromail in /usr/local"
+print "use PREFIX=/home/private/jaromail to avoid system-wide installation."
+print
 
 popd

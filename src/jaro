@@ -359,7 +359,8 @@ check_bin() {
 	exit 1
     fi
     func "Mutt binary: $mutt"
-
+    # make sure there is always a muttpass file even if empty
+    touch $TMPDIR/muttpass
     return 0
 }
 
@@ -476,7 +477,6 @@ Website on <http://jaromail.dyne.org> Report bugs to <https://bugs.dyne.org>
 EOF
 }
 
-# TODO: For more information on Jaro Mail read the manual: man jaro
 typeset -A subcommands_opts
 
 main()
@@ -535,6 +535,8 @@ main()
     subcommands_opts[source]=""
 
     subcommands_opts[isonline]=""
+
+    subcommands_opts[init]=""
 
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
@@ -666,6 +668,8 @@ main()
 	ramdisk) ramdisk ${PARAM} ;;
 
 	isonline) is_online ${=PARAM}; exitcode=$? ;;
+
+	'init') CLEANEXIT=0; maildir_init "`pwd`" ;;
 
 	'source')   CLEANEXIT=0; return 0 ;;
 	__default)  func "no command provided"

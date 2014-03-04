@@ -1,0 +1,78 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+maildir_init() {
+    
+    # source functions
+    source $WORKDIR/jaro source
+
+    notice "Initializing current directory for Jaro Mail"
+    MAILDIRS=${1}
+    ${=mkdir} $MAILDIRS/tmp $MAILDIRS/cache
+
+
+    # copy defaults if missing
+    if ! [ -r $MAILDIRS/Filters.txt ]; then
+	cp -v $WORKDIR/Filters.txt $MAILDIRS/Filters.txt
+	act "Default filters created"
+    else
+	error "Existing configuration $MAILDIRS/Filters.txt skipped"
+    fi
+    
+
+    if ! [ -r $MAILDIRS/Applications.txt ]; then
+	cp -v $WORKDIR/Applications.txt $MAILDIRS/Applications.txt
+	act "Default helper applications settings created"
+    else
+	error "Existing configuration $MAILDIRS/Applications.txt skipped"
+    fi
+
+    if ! [ -r $MAILDIRS/Mutt.txt ]; then
+	cp -v $WORKDIR/Mutt.txt $MAILDIRS/Mutt.txt
+	act "Default Mutt configuration template created"
+    else
+	error "Existing configuration $MAILDIRS/Mutt.txt skipped"
+    fi
+    
+    if ! [ -r $MAILDIRS/Accounts ]; then
+	cp -v -r $WORKDIR/Accounts $MAILDIRS/Accounts
+	act "Default accounts directory created"
+    else
+	error "Existing configuration $MAILDIRS/Accounts skipped"
+    fi
+
+    { test -r $MAILDIRS/Manual.pdf } || {
+	cp -f $WORKDIR/jaromail-manual.pdf $MAILDIRS/Manual.pdf }
+    
+    # update the settings
+    JAROMAILDIR=$MAILDIRS JAROWORKDIR=$WORKDIR $WORKDIR/jaro update -q
+
+    # create a startup wrapper
+    cat <<EOF > $MAILDIRS/jaro
+#!/usr/bin/env zsh
+export JAROWORKDIR=${WORKDIR}
+export JAROMAILDIR=${MAILDIRS}
+${WORKDIR}/jaro \${=@}
+EOF
+    chmod +x $MAILDIRS/jaro
+
+}
