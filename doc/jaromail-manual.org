@@ -271,6 +271,8 @@ e-mail is selected on the index: the sender indicated in the From:
 field will be downgraded to the very bottom of your priorities, closes
 to spam than the rest, the most infamous *zz.blacklist/* folder.
 
+To remove addresses from the blacklist, use *jaro abook blacklist* which will open the addressbook editor where you can delete, add and modify entries.
+
 ** Addressbook
 
 What we call addressbook here basically consists of both the whitelist

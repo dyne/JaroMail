@@ -64,12 +64,17 @@ queue() {
 	else
 	    # there are some mails to be sent in the old format outbox
 	    # preserve them while migrating to the new format
+	    # this code is less interesting, since it handles an old
+	    # format in JaroMail
 	    tmppp=$TMPDIR/jaro-outbox-migration-$RANDOM
 	    mkdir -p $tmppp
 	    mv $MAILDIRS/outbox/* $tmppp/
 	    rmdir $MAILDIRS/outbox
 	    maildirmake $MAILDIRS/outbox
 	    mkdir -p $MAILDIRS/outbox/send
+	    # here we devince two useful arrays:
+	    # bodies: the list of mail bodies to send
+	    # corresponding to files with same name and extension .msmtp
 	    bodies=(`find $tmppp -type f -name '*.mail'`)
 	    rcpt=(`find $tmppp -type f -name '*.msmtp'`)
 	    for i in ${bodies}; do mv $i $MAILDIRS/outbox/new/; done

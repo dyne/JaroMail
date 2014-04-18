@@ -462,11 +462,12 @@ EOF
     abookrc=$TMPDIR/abookrc.$datestamp.$RANDOM
     cat <<EOF > $abookrc
 set autosave=true
-set emailpos=35
-set extra_column=-1
 set mutt_command=jaro
 set sort_field=name
 EOF
+# new abook supports also:
+# set emailpos=35
+# set extra_column=-1
 
     func "ready to launch abook."
 
