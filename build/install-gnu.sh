@@ -24,9 +24,10 @@ cp -ra $srcdir/src/mutt $JARO_SHARE/.mutt
 cp -ra $srcdir/src/stats $JARO_SHARE/.stats
 
 # copy the executables
-cp -ra $srcdir/build/gnu/* $JARO_LIBEXEC/
+mkdir -p $JARO_LIBEXEC/bin
+cp $srcdir/src/jaro $JARO_LIBEXEC/bin
 cp -ra $srcdir/src/zlibs $JARO_LIBEXEC/
-cp $srcdir/src/jaro $JARO_LIBEXEC/
+cp -ra $srcdir/build/gnu/* $JARO_LIBEXEC/bin
 
 cat <<EOF > $PREFIX/bin/jaro
 #!/usr/bin/env zsh

@@ -28,7 +28,7 @@
 #include <time.h>
 
 #include "helpers.h"
-#include "rfc822.h"
+#include "rfc822_mutt.h"
 #include "rfc2047.h"
 
 #define MAXHDRS 21

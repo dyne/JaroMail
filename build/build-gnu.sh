@@ -127,6 +127,7 @@ mkdir -p build/gnu
     ${=cc} -c helpers.c
     ${=cc} -c rfc2047.c
     ${=cc} -c rfc822_mutt.c;
+    ${=cc} -c fetchaddr.c;
     ${=cc} -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822_mutt.o
     popd
     cp src/fetchaddr build/gnu/
