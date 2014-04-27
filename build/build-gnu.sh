@@ -29,7 +29,7 @@ mkdir -p build/gnu
 	    which msmtp     >/dev/null || deps+=(msmtp)
 	    which mutt      >/dev/null || deps+=(mutt)
 	    which mairix    >/dev/null || deps+=(mairix)
-	    which pinentry  >/dev/null || deps+=(pinentry)
+	    which pinentry  >/dev/null || deps+=(pinentry-curses)
 	    which abook     >/dev/null || deps+=(abook)
 	    which wipe      >/dev/null || deps+=(wipe)
 

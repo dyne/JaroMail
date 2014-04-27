@@ -15,13 +15,13 @@ mkdir -p $JARO_LIBEXEC
 { test -r doc } && { srcdir=. }
 { test -r install-gnu.sh } && { srcdir=.. }
 
+{ test -r $srcdir/src/fetchdate } || {
+    print "Error: first build, then install."; return 1 }
+
 cp -ra $srcdir/doc/* $JARO_SHARE/
 cp -ra $srcdir/src/procmail $JARO_SHARE/.procmail
 cp -ra $srcdir/src/mutt $JARO_SHARE/.mutt
 cp -ra $srcdir/src/stats $JARO_SHARE/.stats
-
-{ test -r $srcdir/build/gnu/fetchaddr } || {
-    print "Error: first build, then install."; return 1 }
 
 # copy the executables
 cp -ra $srcdir/build/gnu/* $JARO_LIBEXEC/

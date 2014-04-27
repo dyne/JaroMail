@@ -39,7 +39,7 @@ autostart() {
 
 	{ test ! -r $MUTTDIR/rc } \
 	    && { error "Jaro Mail is not yet configured."
-		 error "To configure, edit plain text config files in the system directory."
+		 error "To configure, edit the files in $MAILDIRS/Accounts"
 		 return 1 }
 
 	${=mutt} -F $MUTTDIR/rc ${=muttflags} -Z

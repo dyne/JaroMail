@@ -317,13 +317,20 @@ TRAPINT() {
 check_bin() {
 
     # required programs
-    for req in pinentry fetchmail procmail; do
+    for req in pinentry fetchmail procmail gpg; do
 	command -v $req >/dev/null
 	{ test $? != 0 } && {
 	    error "Cannot find $req. Please install it."
 	    exit 1
 	}
     done
+
+    # make sure a gnupg dir exists
+    { test -r $HOME/.gnupg/pubring.gpg } || {                                               
+        mkdir -p $HOME/.gnupg                                                           
+        touch $HOME/.gnupg/pubring.gpg
+        touch $HOME/.gnupg/secring.gpg
+    }
 
     # which find command to use
     case $OS in
