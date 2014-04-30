@@ -113,20 +113,21 @@ EOF
 }
 
 complete() {
-    func "complete from $list: $1"
+    func "complete: $1 (list $list)"
 
     # completion on configured groups
     { test -r $MAILDIRS/Groups } && {
 	if [[ "$1" =~ "group/" ]]; then
+	    func "completion will look into groups"
 	    needle="${1[(ws:/:)2]}"
-	    if [ "$needle" = "group" ]; then
+	    if [ "$needle" = "" ]; then
 		act "Listing all mailout groups"
 		matches="`${=find} $MAILDIRS/Groups -type f`"
 	    else
 		act "Searching for \"$needle\" in mailout groups"
-		matches="`#{=find} $MAILDIRS/Groups -type f -name \"*$needle*\"`"
+		matches="`${=find} $MAILDIRS/Groups -type f -name \"*$needle*\"`"
 	    fi
-	    print "jaro: ${#matches} matches"
+	    print "Groups: `print $matches | wc -l` matches"
 	    print
 	    for i in ${(f)matches}; do
 		gr=`basename $i`
