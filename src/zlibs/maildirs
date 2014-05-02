@@ -89,35 +89,43 @@ list_maildirs() {
     return ${#maildirs}
 }
 
+maildirs_lastlog() {
+    # returns an array of destinations maildirs touched by the last filtering operation
+    # based on the procmail log format
+    typeset -alU dests prio lasts
+    _folders="`cat ${MAILDIRS}/logs/procmail.log|awk '/Folder:/ {print $2}' | cut -d/ -f1`"
+    for d in ${(f)_folders}; do
+	func "maildir touched by last operation: $d"
+	# skip procmail glitch
+	{ test "$d" = "procmail" } && { continue }
+	# put filtered to last
+	[[ ${PARAM} == *${d}* ]] && { lasts=($lasts $d); continue }
+	# always give priority to known, then to priv, then the rest
+	{ test "$d" = "known" } && { prio=(known $prio); continue }
+	{ test "$d" = "priv" } && { prio=($prio priv); continue }
+	# skip zz. trash
+	[[ $d == zz.* ]] && { continue }
+	# put them to filter
+	    dests+=($d)
+    done
+    print "${=prio} ${=dests} ${=lasts}"
+    unset dests
+    unset prio
+    unset lasts
+}
+
 rmdupes() {    
 
     ## special argument lastlog
     { test "$1" = "lastlog" } && {
-    # gather a list of destinations for last filtering operation
-	typeset -alU dests prio lasts
-	_folders="`cat ${WORKDIR}/log/procmail.log|awk '/Folder:/ {print $2}' | cut -d/ -f1`"
-	for d in ${(f)_folders}; do
-	    # skip procmail glitch
-	    { test "$d" = "procmail" } && { continue }
-	    # put filtered to last
-	    [[ ${PARAM} == *${d}* ]] && { lasts=($lasts $d); continue }
-	    # always give priority to known, then to priv, then the rest
-	    { test "$d" = "known" } && { prio=(known $prio); continue }
-	    { test "$d" = "priv" } && { prio=($prio priv); continue }
-	    # skip zz. trash
-	    [[ $d == zz.* ]] && { continue }
-	    # put them to filter
-	    dests+=($d)
-	done
-	act "Pruning duplicates across ${#dests} destination maildirs:"
-	act "${prio} ${dests} ${lasts}"
+	lastdirs=(`maildirs_lastlog`)
+	act "Pruning duplicates across ${#lastdirs} destination maildirs:"
+	act "${lastdirs}"
 	# recursion here
-	rmdupes ${=prio} ${=dests} ${=lasts}
+	rmdupes ${=lastdirs}
 	notice "Done pruning"
 	# all the prioritization above is so that duplicates are spotted
 	# across different maildirs and deleted from the filtered source 
-	unset dests
-	unset prio
 	return 0
     }
     ###############
@@ -125,7 +133,7 @@ rmdupes() {
     tot=0
     typeset -al msgs
     for folder in ${=@}; do
-	{ test -r "$folder" } || { folder=$MAILDIRS/$folder }
+	{ test -r "$folder" } || { folder="$MAILDIRS/$folder" }
 	{ test -r "$folder" } || {
 	    error "Directory not found: $folder"
 	    continue }
@@ -215,11 +223,11 @@ filter() {
 
 	# archive old procmail log
     { test -r "$MAILDIRS/logs/procmail.log" } && {
-	newlock $MAILDIRS/logs/procmail-${datestamp}.log
-	cat $MAILDIRS/logs/procmail.log \
-	    >> $MAILDIRS/logs/procmail-${datestamp}.log
-	${=rm} $MAILDIRS/logs/procmail.log
-	unlock $MAILDIRS/logs/procmail-${datestamp}.log
+	newlock "$MAILDIRS/logs/procmail-${datestamp}.log"
+	cat "$MAILDIRS/logs/procmail.log" \
+	    >> "$MAILDIRS/logs/procmail-${datestamp}.log"
+	${=rm} "$MAILDIRS/logs/procmail.log"
+	unlock "$MAILDIRS/logs/procmail-${datestamp}.log"
     }
 
     prc=$PROCMAILDIR/rc
@@ -227,7 +235,7 @@ filter() {
     typeset -al fall
     
     for folder in ${=PARAM}; do
-	{ test -r "$folder" } || { folder=$MAILDIRS/$folder }
+	{ test -r "$folder" } || { folder="$MAILDIRS/$folder" }
 	{ test -r "$folder" } || {
 	    error "Directory not found: $folder"
 	    continue }

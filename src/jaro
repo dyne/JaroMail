@@ -660,7 +660,7 @@ main()
 
 	later)   later ${PARAM} ;;
 
-	update)  update ;;
+	update|init)  update ;;
 
 	help) CLEANEXIT=0; usage ;;
 
@@ -693,8 +693,6 @@ main()
 	ramdisk) ramdisk ${PARAM} ;;
 
 	isonline) is_online ${=PARAM}; exitcode=$? ;;
-
-	'init') CLEANEXIT=0; maildir_init "`pwd`" ;;
 
 	'source')   CLEANEXIT=0; return 0 ;;
 	__default)  func "no command provided"
