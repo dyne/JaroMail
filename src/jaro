@@ -180,6 +180,10 @@ else
     exit 1
 fi
 
+ACCOUNTS="$MAILDIRS/Accounts"
+KEYRING="$MAILDIRS/Keyring"
+addressbook="$MAILDIRS/Addressbook"
+
 # temporary directory
 TMPDIR="$MAILDIRS/tmp/jaromil.$USER"
 case $OS in
@@ -190,6 +194,20 @@ case $OS in
 	    TMPDIR=/dev/shm/tmp.jaromail.$USER
 	    TMPRAM=1
 	}
+
+	# backward compatibility tests for old paths in JaroMail <1.3
+	{ test -d $WORKDIR/Accounts } && { test ! -d $ACCOUNTS } && {
+	    act "Updating accounts location: $ACCOUNTS"
+	    cp -ra $WORKDIR/Accounts $ACCOUNTS }
+
+	{ test -r "$WORKDIR/keyring" } && { test ! -r "$KEYRING" } && {
+	    act "Updating keyring location: $KEYRING"
+	    cp $WORKDIR/keyring "$KEYRING" }
+
+	{ test -r $WORKDIR/addressbook } && { test ! -r $addressbook } && {
+	    act "Updating addressbook location: $addressbook"
+	    cp $WORKDIR/addressbook $addressbook }
+
 	;;
     MAC)
 	mount | grep 'JaroTmp' > /dev/null
@@ -201,9 +219,9 @@ case $OS in
 	;;
 esac
 
+# use the TMP in RAM if possible, for acceleration
 { test $TMPRAM = 1 } && {
     act "Using temporary directory in volatile RAM" }
-
 
 # make sure we have a temp dir
 ${=mkdir} "$TMPDIR"
@@ -211,28 +229,15 @@ ${=mkdir} "$TMPDIR"
     error "Cannot create temporary directory: $TMPDIR"
     return 1 }
 
-# make sure we have an addressbook
-# use the one in RAM if present, for acceleration
 hostname=$(hostname) # gather the current hostname
 
+# make sure we have a directory for account configurations
+{ test -d $ACCOUNTS } || { mkdir -p $ACCOUNTS }
 
-ACCOUNTS="$MAILDIRS/Accounts"
-KEYRING="$MAILDIRS/Keyring"
-addressbook="$MAILDIRS/Addressbook"
+# make sure we have a local keyring in case system-wide not found
+{ test -r "$KEYRING" } || { create_keyring "$KEYRING" }
 
-# backward compatibility tests for old paths in JaroMail <1.3
-{ test -r $WORKDIR/Accounts } && { test ! -r $ACCOUNTS } && {
-    act "Updating accounts location: $ACCOUNTS"
-    cp -r $WORKDIR/Accounts $ACCOUNTS }
-
-{ test -r $WORKDIR/keyring } && { test ! -r $KEYRING } && {
-    act "Updating keyring location: $KEYRING"
-    cp $WORKDIR/keyring $KEYRING }
-
-{ test -r $WORKDIR/addressbook } && { test ! -r $addressbook } && {
-    act "Updating addressbook location: $addressbook"
-    cp $WORKDIR/addressbook $addressbook }
-
+# make sure we have an addressbook
 addressbook_tmp=$TMPDIR/${USER}.${hostname}.addressbook
 { test -r "$addressbook" } || { create_addressbook }
 { test -r "$addressbook_tmp" } && { addressbook="$addressbook_tmp" }
@@ -242,6 +247,30 @@ ${=mkdir} "$MAILDIRS/logs"
 
 PROCMAILDIR=$MAILDIRS/.procmail
 MUTTDIR=$MAILDIRS/.mutt
+
+
+# make sure we have Filters.txt Applications.txt Mutt.txt
+if ! [ -r $MAILDIRS/Filters.txt ]; then
+    cp -v doc/Filters.txt $MAILDIRS/Filters.txt
+    act "Default filters created"
+else
+    error "Existing configuration $MAILDIRS/Filters.txt skipped"
+fi
+
+if ! [ -r $MAILDIRS/Applications.txt ]; then
+    cp -v doc/Applications.txt $MAILDIRS/Applications.txt
+    act "Default helper applications settings created"
+else
+    error "Existing configuration $MAILDIRS/Applications.txt skipped"
+fi
+
+
+if ! [ -r $MAILDIRS/Mutt.txt ]; then
+    cp -v doc/Mutt.txt $MAILDIRS/Mutt.txt
+    act "Default Mutt configuration template created"
+else
+    error "Existing configuration $MAILDIRS/Mutt.txt skipped"
+fi
 
 
 # use gnome-keyring for passwords on GNU systems
@@ -326,10 +355,10 @@ check_bin() {
     done
 
     # make sure a gnupg dir exists
-    { test -r $HOME/.gnupg/pubring.gpg } || {                                               
-        mkdir -p $HOME/.gnupg                                                           
-        touch $HOME/.gnupg/pubring.gpg
-        touch $HOME/.gnupg/secring.gpg
+    { test -r $HOME/.gnupg/pubring.gpg } || {
+	mkdir -p $HOME/.gnupg
+	touch $HOME/.gnupg/pubring.gpg
+	touch $HOME/.gnupg/secring.gpg
     }
 
     # which find command to use
@@ -338,7 +367,7 @@ check_bin() {
 	MAC) find="gfind -O3" ;;
 	*) find="find"
     esac
-    
+
     # which wipe command to use
     if command -v wipe > /dev/null; then
 	rm="wipe -f -s -q -R /dev/urandom"
@@ -442,15 +471,15 @@ a pipe | in front indicate they take an email body from stdin
 account names correspond to the filenames, i.e. imap.default
 
  fetch    downloads emails locally from an $account on-line
-          option "keep" (default) to avoid deleting from servers
+	  option "keep" (default) to avoid deleting from servers
 
  send     send all emails queued in outbox/ to an smtp.$account
 
  peek     connect to an imap.$account with ncurses terminal mutt
-          remote folders supported. use to delete without download
+	  remote folders supported. use to delete without download
 
  passwd   set account passwords in the OS native keyring
-          or into a simple, file based, gpg encrypted database.
+	  or into a simple, file based, gpg encrypted database.
 
 |queue    queue a mail in outbox/ for send
 
@@ -462,7 +491,7 @@ maildirs are directories of mails downloaded in Mail/
  open     open a maildir folder (can use -R for read-only)
 
  backup  (mairix)  move mails from a maildir to another one
-          match mails to move based on date ranges or strings
+	  match mails to move based on date ranges or strings
 
  rmdupes  remove all duplicated e-mails into a maildir
 
@@ -572,7 +601,7 @@ main()
 		act "try -h for help"
 		CLEANEXIT=0
 	}
-    	return $exitcode
+	return $exitcode
     fi
 
     argv=(${oldstar})

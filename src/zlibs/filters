@@ -126,6 +126,8 @@ text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copio
 EOF
     fi
 
+    { test -r ${MAILDIRS}/Applications.txt } && {
+
     apptypes=`cat ${MAILDIRS}/Applications.txt`
     for t in ${(f)apptypes}; do
 	eval `print $t | awk '
@@ -137,6 +139,8 @@ EOF
     cat <<EOF >> $MUTTDIR/mailcap
 application/*; a="${TMPDIR}" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
 EOF
+    } # Applications.txt
+
 
     # this one is empty and sources files in temp when necessary
     # touch $TMPDIR/muttpass
@@ -197,7 +201,7 @@ EOF
 
 # continue later on while we parse filters
 
-
+touch $MAILDIRS/Filters.txt
 
     ##########
     # PROCMAIL

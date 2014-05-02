@@ -27,11 +27,11 @@ ADDRESSBOOK=$MAILDIRS/Addressbook
 # Jaro Brother DB
 create_addressbook() {
     func "create addressbook"
-    { test -r "$ADDRESSBOOK" } && {
-	error "Addressbook already exists: $ADDRESSBOOK"
+    { test -r "$1" } && {
+	error "Addressbook already exists: $1"
 	return 1
     }
-    cat <<EOF | ${SQL} -batch $ADDRESSBOOK
+    cat <<EOF | ${SQL} -batch "$1"
 CREATE TABLE whitelist
 (
   email   text collate nocase unique,
@@ -47,8 +47,8 @@ EOF
 	error "Error creating addressbook database."
 	return 1 }
     # make sure is private
-    chmod 600 $ADDRESSBOOK
-    chown $_uid:$_gid $ADDRESSBOOK
+    chmod 600 "$1"
+    chown $_uid:$_gid "$1"
 
     return 0
 }
