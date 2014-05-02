@@ -39,7 +39,7 @@ lock() {
     esac
 }
 
-newlock() { # create locked
+newlock() { # lock file, create if not existing
     func "creating locked file: $1"
     touch $1
     chmod 600 $1

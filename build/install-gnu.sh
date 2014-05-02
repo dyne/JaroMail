@@ -32,6 +32,6 @@ cp -ra $srcdir/build/gnu/* $JARO_LIBEXEC/bin
 cat <<EOF > $PREFIX/bin/jaro
 #!/usr/bin/env zsh
 export JAROWORKDIR=${JARO_SHARE}
-${JARO_SHARE}/jaro \${=@}
+${JARO_SHARE}/bin/jaro \${=@}
 EOF
 chmod +x $PREFIX/bin/jaro

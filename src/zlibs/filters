@@ -112,15 +112,15 @@ text/plain; cat %s
 EOF
 
     wwwtext=w3m
-    if command -v elinks; then
+    if command -v elinks > /dev/null; then
 	cat <<EOF >> $MUTTDIR/mailcap
 text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput
 EOF
-    elif command -v w3m; then
+    elif command -v w3m > /dev/null; then
 	cat <<EOF >> $MUTTDIR/mailcap
 text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput
 EOF
-    elif command -v lynx; then
+    elif command -v lynx > /dev/null; then
 	cat <<EOF >> $MUTTDIR/mailcap
 text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
 EOF
@@ -159,7 +159,7 @@ EOF
     act "generating procmail and sieve filter rules"
     id=$datestamp.$RANDOM
     sieve=$MAILDIRS/Filters.sieve
-    lock $sieve
+    newlock $sieve
     rm -f $sieve
     touch $sieve
     chmod 600 $sieve

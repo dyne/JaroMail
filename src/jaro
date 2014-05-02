@@ -232,7 +232,7 @@ ${=mkdir} "$TMPDIR"
 hostname=$(hostname) # gather the current hostname
 
 # make sure we have a directory for account configurations
-{ test -d $ACCOUNTS } || { mkdir -p $ACCOUNTS }
+{ test -d "$ACCOUNTS" } || { ${=mkdir} "$ACCOUNTS" }
 
 # make sure we have a local keyring in case system-wide not found
 { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
@@ -243,33 +243,24 @@ hostname=$(hostname) # gather the current hostname
 ${=mkdir} "$MAILDIRS/logs"
 # ${=mkdir} "$MAILDIRS/certs"
 
-PROCMAILDIR=$MAILDIRS/.procmail
-MUTTDIR=$MAILDIRS/.mutt
+PROCMAILDIR="$MAILDIRS/.procmail"
+{ test -d "$PROCMAILDIR" } || { ${=mkdir} "$PROCMAILDIR" }
 
+MUTTDIR="$MAILDIRS/.mutt"
+{ test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
 
 # make sure we have Filters.txt Applications.txt Mutt.txt
-if ! [ -r $MAILDIRS/Filters.txt ]; then
-    cp -v doc/Filters.txt $MAILDIRS/Filters.txt
-    act "Default filters created"
-else
-    error "Existing configuration $MAILDIRS/Filters.txt skipped"
-fi
+{ test -r "$MAILDIRS/Filters.txt" } || {
+    cp "$WORKDIR/Filters.txt" "$MAILDIRS/Filters.txt"
+    notice "Default filters created" }
 
-if ! [ -r $MAILDIRS/Applications.txt ]; then
-    cp -v doc/Applications.txt $MAILDIRS/Applications.txt
-    act "Default helper applications settings created"
-else
-    error "Existing configuration $MAILDIRS/Applications.txt skipped"
-fi
+{ test -r "$MAILDIRS/Applications.txt" } || {
+    cp "$WORKDIR/Applications.txt" "$MAILDIRS/Applications.txt"
+    notice "Default helper applications settings created" }
 
-
-if ! [ -r $MAILDIRS/Mutt.txt ]; then
-    cp -v doc/Mutt.txt $MAILDIRS/Mutt.txt
-    act "Default Mutt configuration template created"
-else
-    error "Existing configuration $MAILDIRS/Mutt.txt skipped"
-fi
-
+{ test -r "$MAILDIRS/Mutt.txt" } || {
+    cp "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
+    notice "Default Mutt configuration template created" }
 
 # use gnome-keyring for passwords on GNU systems
 GNOMEKEY=0
@@ -354,7 +345,7 @@ check_bin() {
 
     # make sure a gnupg dir exists
     { test -r $HOME/.gnupg/pubring.gpg } || {
-	mkdir -p $HOME/.gnupg
+	${=mkdir} $HOME/.gnupg
 	touch $HOME/.gnupg/pubring.gpg
 	touch $HOME/.gnupg/secring.gpg
     }
