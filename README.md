@@ -24,16 +24,20 @@ users to store e-mail locally.
 Rather than reinventing the wheel, JaroMail reuses existing free and
 open source tools working since more than 10 years: 
 
-* ZShell :: scripting language
-* Mutt :: Mail User Agent
-* Fetchmail :: Mail Transport Agent
-* Procmail :: Filtering Agent
-* MSmtp :: the mini SMTP
-* Mairix :: search engine
-* ABook :: addressbook
-* Elinks :: HTML rendering
+ executable | function
+ ---------- | --------------------
+  ZShell    | scripting language
+  Mutt      | Mail User Agent
+  Fetchmail | Mail Transport Agent
+  Procmail  | Filtering Agent
+  MSmtp     | the mini SMTP
+  Mairix    | search engine
+  ABook     | addressbook
+  Elinks    | HTML rendering
 
 A round-up on JaroMail features follows:
+
+![JaroMail functions diagram](http://files.dyne.org/jaromail/diagram.png)
 
 * Minimalistic interface with automatic threading
 * Targets intensive usage of mailinglists
@@ -67,9 +71,9 @@ The dependencies to be installed on the system for JaroMail are
 Bare in mind **you need to read the Manual**: this software is not
 graphical, it is not meant to be intuitive, does not contains eyecandies (except for stats on mail traffic). JaroMail is operated via Terminal, configured in plain text and overall made by geeks for geeks.
 
-# USAGE instructions
+# Manual and usage instructions
 
-See the commandline help:
+For a brief overview see the commandline help:
 ```
  jaro -h
 ```
@@ -94,7 +98,7 @@ We are all idling artists.
 
 # DONATE
 
-Money donations are very welcome and well needed.
+Donations are very welcome and well needed.
 
 By donating you will encourage further development.
 
