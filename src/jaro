@@ -368,17 +368,17 @@ check_bin() {
     func "Rm binary: $rm"
 
     # which mutt binary to use
-    if command -v mutt-jaro > /dev/null; then
-	# in-house compiled
-	mutt=mutt-jaro
-	pgpewrap=pgpewrap
-	dotlock=dotlock
-    elif command -v mutt > /dev/null; then
+    if command -v mutt > /dev/null; then
 	# system-wite
 	mutt="mutt"
 	# TODO: check if this is also the location on Fedora
 	pgpewrap="/usr/lib/mutt/pgpewrap"
 	dotlock="mutt_dotlock"
+    elif command -v mutt-jaro > /dev/null; then
+	# in-house compiled
+	mutt=mutt-jaro
+	pgpewrap=pgpewrap
+	dotlock=dotlock
     else
 	error "Cannot find Mutt. Please install it."
 	exit 1
