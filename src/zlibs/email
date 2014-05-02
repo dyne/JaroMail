@@ -441,7 +441,11 @@ EOF
 	unset password
 	print "source '$tmp'" > $TMPDIR/muttpass
 	# when peeking don't mark unread messages as Old
-	print "unset mark_old" >> $TMPDIR/muttpass
+        # and sort date received with no threading (latest up)
+        cat <<EOF >> $TMPDIR/muttpass
+unset mark_old
+set sort=reverse-date-received
+EOF
 	(sleep 1;
 	    cp /dev/null $TMPDIR/muttpass
 	    unlink $tmp # secure delete in ram

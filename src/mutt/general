@@ -45,11 +45,15 @@ set wrap_search = yes
 set timeout = 300
 set delete = yes
 #set reply_regexp = "^(re|aw):[ \t]*"
-set sort = threads
 #set status_chars = "-*%A"
-
 #set to_chars = " +TCF"
-set sort_aux = reverse-date
+
+##########
+## Sorting
+set sort=threads
+set sort_browser=reverse-date
+set sort_aux=reverse-last-date-received
+# set sort_aux = reverse-date
 
 ################
 ## Pager options
