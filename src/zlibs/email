@@ -275,12 +275,6 @@ fetch() {
 	    unlock $MAILDIRS/logs/procmail-${datestamp}.log
 	fi
 
-	# copy addressbook in RAM for speedup
-	# TODO: check if we really have ramdisk
-	# newlock $addressbook_tmp
-	# cp $WORKDIR/addressbook $addressbook_tmp
-	# unlink $addressbook_tmp
-
 	act "please wait while downloading mails..."
 
 	print " $fmconf " | fetchmail -f -

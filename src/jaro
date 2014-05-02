@@ -238,9 +238,7 @@ hostname=$(hostname) # gather the current hostname
 { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
 
 # make sure we have an addressbook
-addressbook_tmp=$TMPDIR/${USER}.${hostname}.addressbook
-{ test -r "$addressbook" } || { create_addressbook }
-{ test -r "$addressbook_tmp" } && { addressbook="$addressbook_tmp" }
+{ test -r "$addressbook" } || { create_addressbook "$addressbook" }
 
 ${=mkdir} "$MAILDIRS/logs"
 # ${=mkdir} "$MAILDIRS/certs"
