@@ -139,11 +139,15 @@ fi
 
 # default working dir
 
+
+# check if we are testing from source
+if [ -r ../src/jaro ]; then
+    WORKDIR="../src"
 # check if we are on OSX
-if [ -r /Applications/JaroMail.app/Contents/Resources/jaro ]; then
+elif [ -r /Applications/JaroMail.app/Contents/Resources/jaro ]; then
     WORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
 else # use GNU/Linux default
-    WORKDIR="$MAILDIRS/jaro"
+    WORKDIR="/usr/local/share/jaromail"
 fi
 
 # env override
@@ -167,10 +171,18 @@ PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
 
 # load our ZLibs
 if [ -d $WORKDIR/zlibs ]; then
-    for z in `find $WORKDIR/zlibs -type f | grep -v '.zwc$'`; do
-	func "Loading zlib: ${z}"
-	. ${z}
-    done
+    # if testing from source load uncompiled libs
+    if [ "$WORKDIR" = "../src" ]; then
+	for z in `find $WORKDIR/zlibs -type f`; do
+	    func "Loading zlib: ${z}"
+	    . ${z}
+	done
+    else
+	for z in `find $WORKDIR/zlibs -type f | grep -v '.zwc$'`; do
+	    func "Loading zlib: ${z}"
+	    . ${z}
+	done
+    fi
     act "full set of auxiliary functions loaded"
 elif [[ $1 = source ]]; then
     act "limited set of auxiliary functions loaded"
@@ -713,7 +725,7 @@ main()
     return 0
 }
 
-if [ "$1" != "source" ]; then check_bin; fi
+check_bin
 main $@
 { test "$CLEANEXIT" = "1" } && { cleanexit & }
 return $exitcode
