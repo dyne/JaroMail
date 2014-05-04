@@ -90,8 +90,9 @@ set honor_followup_to = yes
 set abort_nosubject = no
 set abort_unmodified = no
 set copy = yes
-# folder to copy sent messages
-fcc-hook . "=sent"
+# mutt is not going to copy sent messages
+# fcc-hook . "=sent"
+set record = ""
 
 ##################
 ## Forward options
