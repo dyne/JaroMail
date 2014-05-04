@@ -5,6 +5,29 @@
   https://dyne.org/donate
 
 
+## Vacation trigger
+sieve script example
+
+```
+
+require ["fileinto", "vacation", "variables"];
+    
+if header :is "X-Spam-Flag" "YES" {
+    fileinto "Spam";
+}
+
+if header :matches "Subject" "*" {
+        set "subjwas" ": ${1}";
+}
+
+vacation
+  :days 1
+  :subject "Out of office reply${subjwas}"
+"I'm out of office, please contact Joan Doe instead.
+Best regards
+John Doe";
+```
+
 ## Peek to open imap folders with reverse Date ordering
    when open, imap folders should list emails without threading
    this is really intended for a peek
@@ -37,14 +60,6 @@
   
   PLAN: use isync and open local maildirs
 
-## Mixmaster
-   basically is an almost finished implementation, only thing
-   missing is to clear out the header handling between jaromail and mutt
-
-## Multiple outboxes
-  handle different send programs
-     for example anonymous/ for the mixmaster queue
-
 ## Substitute procmail with a simple C filter
  we just filter From, To:, CC: and mailman headers
 
@@ -57,13 +72,6 @@
 ## TBT
    time based text, all included in html mails
 
-## Install
- * Full integration with the Tomb process creation
- * integrate install/setup command in jaro
-
-## Mouse enable MUA
-  mutt or mu in debian?
- * Find out how to make mouse selection work
 
 ## Speedmail or Quickmail
   write down a mail from commandline and send it right away (if online)

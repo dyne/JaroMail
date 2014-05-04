@@ -23,8 +23,8 @@
 # extract all emails found in stdin, one per line
 extract_emails() {
 awk '{ for (i=1;i<=NF;i++)
-         if ( $i ~ /[[:alnum:]]@[[:alnum:]]/ ) {
-           gsub(/<|>|,/ , "" , $i); print $i } }'
+	 if ( $i ~ /[[:alnum:]]@[[:alnum:]]/ ) {
+	   gsub(/<|>|,/ , "" , $i); print $i } }'
 }
 
 compose() {
@@ -48,9 +48,12 @@ queue() {
     queue_to=($@)
     # set it ready for saving in outbux
     queue_body="$base"
-    cat > $TMPDIR/$queue_body.mail
 
-
+    # pre-processing of the email headers
+    cat | awk '
+/User-Agent:/ { print "User-Agent: Jaro Mail <http://jaromail.dyne.org>"; next }
+{ print $0 }
+' > "$TMPDIR/${queue_body}.mail"
 
     maildirmake $MAILDIRS/outbox
     { test $? = 0 } || {
@@ -76,18 +79,17 @@ queue() {
 	    # bodies: the list of mail bodies to send
 	    # corresponding to files with same name and extension .msmtp
 	    bodies=(`find $tmppp -type f -name '*.mail'`)
-	    rcpt=(`find $tmppp -type f -name '*.msmtp'`)
 	    for i in ${bodies}; do mv $i $MAILDIRS/outbox/new/; done
-	    for i in ${rcpt}; do mv $i $MAILDIRS/outbox/send/${i%%.msmtp}.rcpt; done
 	    rmdir $tmppp
 	fi
     }
-    mkdir -p $MAILDIRS/outbox/send
+    ${=mkdir} $MAILDIRS/outbox/send
 
     lock $MAILDIRS/outbox
 
+    # check if recipients are a Group
     if [[ "${=queue_to}" =~ '@jaromail.group' ]]; then
-	# recipients are in a group
+
 
 	groupfile="`print ${=queue_to}|cut -d@ -f1`"
 	act "email recipients are in group ${groupfile}"
@@ -104,7 +106,8 @@ queue() {
 	groupmode="`head -n1 $MAILDIRS/Groups/$groupfile | awk '/^#mode/ { print $2 } { next }'`"
 	{ test "$groupmode" = "" } && { groupmode="individual" }
 	act "$groupnum recipients in total, sending mode $groupmode"
-	
+
+
 	case $groupmode in
 
 	    # individual group mode hides other recipients and send
@@ -112,12 +115,9 @@ queue() {
 	    individual)
 		for i in ${(f)recipients}; do
 		    ig=${base}-${RANDOM}
-		    cat ${TMPDIR}/${queue_body}.mail | \
+		    cat "${TMPDIR}/${queue_body}.mail" | \
 			awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
 			> ${MAILDIRS}/outbox/new/${ig}.mail
-	    # TODO: check email validation and <stripping>
-		    print "$i" | sed 's/.*<//;s/>$//' \
-			> ${MAILDIRS}/outbox/send/${ig}.rcpt
 		done
 		;;
 
@@ -130,28 +130,16 @@ queue() {
 		    else cc+=", $i"; fi
 		done
 		ig=${base}-${RANDOM}
-		cat ${TMPDIR}/${queue_body}.mail | \
+		cat "${TMPDIR}/${queue_body}.mail" | \
 		    awk '/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
-                                { print $0 }' \
-		    > ${MAILDIRS}/outbox/new/${ig}.mail
-	        # extract emails one per line
-		rcpt=`print $cc | extract_emails`
-		func "cc: $cc"
-		func "rcpt: $rcpt"
-		print ${=rcpt} > ${MAILDIRS}/outbox/send/${ig}.rcpt
+				{ print $0 }' \
+				    > ${MAILDIRS}/outbox/new/${ig}.mail
 		;;
 	esac
 
     else
 	# recipients are set in the email envelope
-	act "email recipients: $queue_to"
-	# file into the outbox filtering headers
-	cat $TMPDIR/$queue_body.mail | awk '
-/User-Agent:/ { print "User-Agent: Jaro Mail <http://jaromail.dyne.org>"; next }
-{ print $0 }
-' > $MAILDIRS/outbox/new/$queue_body.mail
-	rm $TMPDIR/$queue_body.mail
-	print "${=queue_to}" > $MAILDIRS/outbox/send/$queue_body.rcpt
+	mv $TMPDIR/$queue_body.mail $MAILDIRS/outbox/new/$queue_body.mail
     fi
 
     unlock $MAILDIRS/outbox
@@ -211,8 +199,8 @@ fetch() {
 
     # return here if the imap folders are all empty
     # { test ${imap_info[${#imap_info}]} = 0 } && {
-    # 	act "Mailbox is empty, nothing to fetch."
-    # 	return 0 }
+    #	act "Mailbox is empty, nothing to fetch."
+    #	return 0 }
 
     # notice "Total occupation is `human_size ${imap_info[${#imap_info}]}`"
 
@@ -303,8 +291,8 @@ send() {
 
 
     # list mails to send
-    queue_rcpt=(`${=find} ${MAILDIRS}/outbox/send -type f -name '*.rcpt'`)
-    { test ${#queue_rcpt} = 0 } && {
+    queue_outbox=(`${=find} ${MAILDIRS}/outbox -type f -name '*.mail'`)
+    { test ${#queue_outbox} = 0 } && {
 	act "Outbox is empty, no mails to send."
 	return 0 }
 
@@ -321,7 +309,7 @@ send() {
     is_online ${host} ${port}
     { test $? = 0 } || { return 1 }
 
-    notice "Sending out ${#queue_rcpt} mails via ${type}.${account}"
+    notice "Sending out ${#queue_outbox} mails via ${type}.${account}"
 
 
     { test $DRYRUN = 1 } && { return 0 }
@@ -351,41 +339,88 @@ logfile ${MAILDIRS}/logs/msmtp.log
 auth ${auth}
 password ${password}
 EOF
-    unset password
 
-    for q in ${queue_rcpt}; do
-	qr=`basename ${q%%.rcpt}`
-	func "looking for a mail body to send labeled $qr"
-	qbody=(`${=find} $MAILDIRS/outbox -type f -name "${qr}.mail*"`)
-	func "found ${#qbody} hits: ${=qbody}"
-	recipients=(`cat $q`)
-	func "recipients: ${=recipients}"
+    for qbody in ${queue_outbox}; do
 
-	{ test ${#qbody} = 0 } && {
-		# body for rcpt not found, mail must have been deleted from outbox
-	    act "canceled delivery for a deleted mail to: `cat $q`"
-	    ${=rm} $q
-	    continue }
+	# check if this is an anonymous mail
+	head -n 20 "$qbody" | grep -i '^from: anon' > /dev/null
+	if [ $? = 0 ]; then
+	    anoncfg="${TMPDIR}/${host}.anon.$RANDOM"
+	    cat <<EOF > "$anoncfg"
+REMAIL		n
+POOLSIZE	0
+SENDPOOLTIME	0m
+RATE		100
 
-	{ test ${#qbody} -gt 1 } && {
-	    error "too many mail bodies found for a message to: `cat $q`"
-	    error "this is quite confusing, check your outbox, we'll skip for now."
-	    continue }
+PGPREMPUBASC	/var/lib/mixmaster/used-stats/pubring.asc
+PUBRING		/var/lib/mixmaster/used-stats/pubring.mix
+TYPE1LIST	/var/lib/mixmaster/used-stats/rlist.txt
+TYPE2REL	/var/lib/mixmaster/used-stats/mlist.txt
+TYPE2LIST	/var/lib/mixmaster/used-stats/type2.list
 
-	act "To: ${=recipients}"
-	msmtp -C $tmp -- ${=recipients} < "${qbody}"
-	if [ $? != 0 ]; then
+SENDMAIL=msmtp -C $tmp -t
+ERRLOG=${MAILDIRS}/logs/mixmaster.log
+VERBOSE=2
+
+EOF
+
+	    act "Sending out anonymous email via mixmaster"
+	    act "`head -n 20 $qbody | grep '^Subject:'`"
+	    recipients=(`cat $qbody | fetchaddr -a -x to | cut -d, -f1`)
+	    recipients+=(`cat $qbody | fetchaddr -a -x cc | cut -d, -f1`)
+	    for r in ${recipients}; do
+		act "Sending to: ${r}"
+		# strip headers and send via mixmaster
+		cat  "$qbody" | awk '
+BEGIN { head=1 }
+/^To: /           { print $0; next }
+/^Cc: /           { print $0; next }
+/^Bcc: /          { print $0; next }
+/^Subject: /      { print $0; next }
+/^In-Reply-To: /  { print $0; next }
+/^References: /   { print $0; next }
+/^Mime-Version: / { print $0; next }
+/^Content-Type: / { print $0; next }
+/^Content-Disposition: / { print $0; next }
+/^$/ { head=0 }
+{ if(head==0) print $0 }
+' | mixmaster --config=$anoncfg -m --to="$r"
+		res=$?
+		func "mixmaster returns $res"
+	    done
+
+	    ${=rm} $anoncfg
+
+	else # normal send with msmtp
+
+	    act "Sending out email"
+	    head -n 10 "$qbody" | awk '
+/^From:/ { print " .  " $0 }
+/^To:/   { print " .  " $0 }
+/^Cc:/   { print " .  " $0 }
+/^Subject:/ { print " .  " $0 }
+'
+	    msmtp -C $tmp -t < "${qbody}"
+	    res=$?
+
+	fi
+
+	# evaluate results
+	if [ "$res" != "0" ]; then
 	    error "Error sending mail, skipped"
 	else
-	    act "Mail sent succesfully"
-	   # whitelist those to whom we send mails
+	    notice "Mail sent succesfully"
+	    # whitelist those to whom we send mails
 	    cat "$qbody" | $WORKDIR/bin/jaro -q learn recipient
-	    ${=rm} "$q" "$qbody"
+	    mv "$qbody" $MAILDIRS/sent/new/
 	fi
+
     done
 
+    unset password
     unlock $MAILDIRS/outbox
-    unlink $tmp
+    unlock $tmp
+    ${=rm} $tmp
 
     return 0
 }
@@ -441,8 +476,8 @@ EOF
 	unset password
 	print "source '$tmp'" > $TMPDIR/muttpass
 	# when peeking don't mark unread messages as Old
-        # and sort date received with no threading (latest up)
-        cat <<EOF >> $TMPDIR/muttpass
+	# and sort date received with no threading (latest up)
+	cat <<EOF >> $TMPDIR/muttpass
 unset mark_old
 set sort=reverse-date-received
 EOF
