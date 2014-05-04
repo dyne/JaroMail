@@ -155,7 +155,7 @@ complete() {
 
 isknown() {
     func "is known in $list: (string from stdin)"
-    head="`${WORKDIR}/bin/fetchaddr -x From: -a`"
+    head="`${WORKDIR}/bin/fetchaddr -x From -a`"
     email="${head[(ws:,:)1]}"
     exitcode=1
     lookup="`lookup_email ${email}`"
@@ -172,7 +172,7 @@ learn() {
     case ${PARAM[1]} in
 
 	sender) # simple: one address only on From:
-	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x From: -a`"
+	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x From -a`"
 	    # (Q) eliminates quotes, then word split
 	    email="${(Q)head[(ws:,:)1]}"
 	    name="${(Q)head[(ws:,:)2]}"
@@ -193,7 +193,7 @@ learn() {
 	    ;;
 
 	recipient) # complex: more addresses in To: and Cc:
-	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x To: -a`"
+	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x To -a`"
 	    for h in ${(f)head}; do
 		# (Q) eliminates quotes, then word split
 		email="${(Q)h[(ws:,:)1]}"
@@ -201,7 +201,7 @@ learn() {
 		insert_address "$email" "$name"
 	    done
 
-	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x Cc: -a`"
+	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x Cc -a`"
 	    for h in ${(f)head}; do
 		# (Q) eliminates quotes, then word split
 		email="${(Q)h[(ws:,:)1]}"
@@ -220,7 +220,7 @@ learn() {
 forget() {
     func "forget sender from mail in stdin"
     act "Expecting mail from stdin pipe"
-    head="`${WORKDIR}/bin/fetchaddr -x From:`"
+    head="`${WORKDIR}/bin/fetchaddr -x From -a`"
     # forget the email part of the parsed head
     remove_address "${head[(ws:,:)1]}"
 }
