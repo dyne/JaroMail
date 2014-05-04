@@ -86,7 +86,7 @@ pidcheck() { # check if lock belongs to us
 unlock() {
     func "unlock: $1"
 
-    pidcheck $1
+    pidcheck "$1"
     { test $? = 0 } || { return 1 }
 
     ${=dotlock} -u "$1"
@@ -94,28 +94,11 @@ unlock() {
 	rm -f "$1.lock"
 	{ test $? = 0 } || { error "Unable to unlock: $1"; return 1 }
     }
-    { test -r "${1}.pid" } && { rm -f ${1}.pid }
+    { test -r "${1}.pid" } && { rm -f "${1}.pid" }
     return 0
 }
 unlink() { # delete a file that we are locking
-    func "unlink: $1"
-    # use with care! this can permanently erase currently locked files
-
-    pidcheck $1
-    { test $? = 0 } || { return 1 }
-
-    { test -r ${1}.unlink } && {
-	error "Ongoing unlink detected on $1"; return 0 }
-
-    # signal that is unlinking (for parallel operation)
-    touch ${1}.unlink
-    (
-	${=rm} ${1}
-	touch ${1}
-	${=dotlock} -d -f ${1}
-	{ test $? != 0 } && { error "Unable to unlink: $1"; return 1 }
-	{ test -r "${1}.pid" } && { rm -f ${1}.pid }
-	rm -f ${1}.unlink
-    ) &!
-    return 0
+    unlock "$1"
+    ${=rm} "$1"
+    func "$1 removed"
 }
