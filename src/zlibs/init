@@ -23,56 +23,56 @@
 maildir_init() {
     
     # source functions
-    source $WORKDIR/jaro source
+    source "$WORKDIR/jaro" source
 
     notice "Initializing current directory for Jaro Mail"
-    MAILDIRS=${1}
-    ${=mkdir} $MAILDIRS/tmp $MAILDIRS/cache
+    MAILDIRS="${1}"
+    ${=mkdir} "$MAILDIRS/tmp" "$MAILDIRS/cache"
 
 
     # copy defaults if missing
-    if ! [ -r $MAILDIRS/Filters.txt ]; then
-	cp -v $WORKDIR/Filters.txt $MAILDIRS/Filters.txt
+    if ! [ -r "$MAILDIRS/Filters.txt" ]; then
+	cp -v "$WORKDIR/Filters.txt" "$MAILDIRS/Filters.txt"
 	act "Default filters created"
     else
 	error "Existing configuration $MAILDIRS/Filters.txt skipped"
     fi
     
 
-    if ! [ -r $MAILDIRS/Applications.txt ]; then
-	cp -v $WORKDIR/Applications.txt $MAILDIRS/Applications.txt
+    if ! [ -r "$MAILDIRS/Applications.txt" ]; then
+	cp -v "$WORKDIR/Applications.txt" "$MAILDIRS/Applications.txt"
 	act "Default helper applications settings created"
     else
 	error "Existing configuration $MAILDIRS/Applications.txt skipped"
     fi
 
-    if ! [ -r $MAILDIRS/Mutt.txt ]; then
-	cp -v $WORKDIR/Mutt.txt $MAILDIRS/Mutt.txt
+    if ! [ -r "$MAILDIRS/Mutt.txt" ]; then
+	cp -v "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
 	act "Default Mutt configuration template created"
     else
 	error "Existing configuration $MAILDIRS/Mutt.txt skipped"
     fi
     
-    if ! [ -r $MAILDIRS/Accounts ]; then
-	cp -v -r $WORKDIR/Accounts $MAILDIRS/Accounts
+    if ! [ -r "$MAILDIRS/Accounts" ]; then
+	cp -v -r "$WORKDIR/Accounts" "$MAILDIRS/Accounts"
 	act "Default accounts directory created"
     else
 	error "Existing configuration $MAILDIRS/Accounts skipped"
     fi
 
-    { test -r $MAILDIRS/Manual.pdf } || {
-	cp -f $WORKDIR/jaromail-manual.pdf $MAILDIRS/Manual.pdf }
+    { test -r "$MAILDIRS/Manual.pdf" } || {
+	cp -f "$WORKDIR/jaromail-manual.pdf" "$MAILDIRS/Manual.pdf" }
     
     # update the settings
-    JAROMAILDIR=$MAILDIRS JAROWORKDIR=$WORKDIR $WORKDIR/jaro update -q
+    JAROMAILDIR="$MAILDIRS" JAROWORKDIR="$WORKDIR" "$WORKDIR/jaro" update -q
 
     # create a startup wrapper
-    cat <<EOF > $MAILDIRS/jaro
+    cat <<EOF > "$MAILDIRS/jaro"
 #!/usr/bin/env zsh
-export JAROWORKDIR=${WORKDIR}
-export JAROMAILDIR=${MAILDIRS}
-${WORKDIR}/jaro \${=@}
+export JAROWORKDIR="${WORKDIR}"
+export JAROMAILDIR="${MAILDIRS}"
+"${WORKDIR}/jaro" \${=@}
 EOF
-    chmod +x $MAILDIRS/jaro
+    chmod +x "$MAILDIRS/jaro"
 
 }

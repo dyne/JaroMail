@@ -70,19 +70,14 @@ maildirmake() {
 
 # fills up all maildirs array
 list_maildirs() {
-    maildirs=()
-    for m in `${=find} $MAILDIRS/* -maxdepth 1 -type d | awk '
-    /cur$/ {next}
-    /tmp$/ {next}
-    /new$/ {next}
-    /\/jaro\// {next}
-    {print $0}'`; do
-	
-	{ maildircheck $m } && {
+    maildirs=`${=find} "$MAILDIRS" -maxdepth 1 -type d`
+    for m in ${(f)maildirs}; do
+	func "$m"
+	{ maildircheck "$m" } && {
 	    # is a maildir
-	    { test "`${=find} $m -type f`" != "" } && {
+	    { test "`${=find} "$m" -type f`" != "" } && {
 		# and is not empty
-		maildirs+=(`basename $m`)
+		maildirs+=(`basename "$m"`)
 	    }
 	}
     done
@@ -93,7 +88,7 @@ maildirs_lastlog() {
     # returns an array of destinations maildirs touched by the last filtering operation
     # based on the procmail log format
     typeset -alU dests prio lasts
-    _folders="`cat ${MAILDIRS}/logs/procmail.log|awk '/Folder:/ {print $2}' | cut -d/ -f1`"
+    _folders=`cat "${MAILDIRS}/logs/procmail.log"|awk '/Folder:/ {print $2}' | cut -d/ -f1`
     for d in ${(f)_folders}; do
 	func "maildir touched by last operation: $d"
 	# skip procmail glitch
@@ -138,21 +133,21 @@ rmdupes() {
 	    error "Directory not found: $folder"
 	    continue }
 
-	{ maildircheck ${folder} } || {
+	{ maildircheck "${folder}" } || {
 	    error "Not a maildir folder: $folder"
 	    continue }
 
 	c=0
 	notice "Checking for duplicates in folder: `basename $folder`"
 	msgs=()
-	for m in `${=find} ${folder} -type f`; do
-	    msgs+=($m)
+	for m in `${=find} "${folder}" -type f`; do
+	    msgs+=("$m")
 	done
 	act "${#msgs} messages to check"
 	for m in ${=msgs}; do
 	    # 128MB should be enough ehre?
-	    formail -D 128000000  $formail_cache <$m \
-		&& rm $m && c=$(( $c + 1 ))
+	    formail -D 128000000  $formail_cache <"$m" \
+		&& rm "$m" && c=$(( $c + 1 ))
 	done
 	act "$c duplicates found and deleted"
 	tot=$(( $tot + $c ))
@@ -173,32 +168,32 @@ merge() {
 	error "Cannot merge same directory in itself: $src = $dst"
 	return 1 }
 
-    { maildircheck $src } || {
+    { maildircheck "$src" } || {
 	error "Source is not a maildir: $src"
 	return 1 }
 
-    { maildircheck $dst } || {
+    { maildircheck "$dst" } || {
 	error "Destination is not a maildir: $dst"
 	return 1 }
 
     notice "Merging maildir ${src} into ${dst}"
     c=0
-    for i in `${=find} ${src}/cur -type f`; do
-	mv $i ${dst}/cur/; c=$(($c + 1))
+    for i in `${=find} "${src}/cur" -type f`; do
+	mv $i "${dst}/cur/"; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
 	    error "merge aborted."
 	    return 1 }
     done
-    for i in `${=find} ${src}/new -type f`; do
-	mv $i ${dst}/new/; c=$(($c + 1))
+    for i in `${=find} "${src}/new" -type f`; do
+	mv $i "${dst}/new/"; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
 	    error "merge aborted."
 	    return 1 }
     done
-    for i in `${=find} ${src}/tmp -type f`; do
-	mv $i ${dst}/tmp/; c=$(($c + 1))
+    for i in `${=find} "${src}/tmp" -type f`; do
+	mv $i "${dst}/tmp/"; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
 	    error "merge aborted."
@@ -206,12 +201,12 @@ merge() {
     done
     notice "$c mails succesfully moved"
     act "Removing source directory ${src}"
-    ${=rm} -r ${src}
+    ${=rm} -r "${src}"
     act "Purging duplicates in destination"
-    formail_cache=$TMPDIR/filter.rmdupes.$datestamp.$RANDOM
-    newlock $formail_cache
-    rmdupes ${dst}
-    unlock $formail_cache
+    formail_cache="$TMPDIR/filter.rmdupes.$datestamp.$RANDOM"
+    newlock "$formail_cache"
+    rmdupes "${dst}"
+    unlock "$formail_cache"
     act "Done. All mails merged into ${dst}"
 }
 
@@ -230,7 +225,7 @@ filter() {
 	unlock "$MAILDIRS/logs/procmail-${datestamp}.log"
     }
 
-    prc=$PROCMAILDIR/rc
+    prc="$PROCMAILDIR/rc"
     
     typeset -al fall
     
@@ -240,13 +235,13 @@ filter() {
 	    error "Directory not found: $folder"
 	    continue }
 	
-	{ maildircheck ${folder} } || {
+	{ maildircheck "$folder" } || {
 	    error "Not a maildir folder: $folder"
 	    continue }
 
 	notice "Filtering folder $folder"
 	# first index current state
-	for m in `${=find} $folder -type f`; do fall+=($m); done
+	for m in `${=find} "$folder" -type f`; do fall+=("$m"); done
     done
 
     { test ${#fall} = 0 } && {
@@ -257,22 +252,22 @@ filter() {
     # then process it, this way ignoring new mails send to same folder
     act "Filtering ${#fall} messages..."
     for n in ${=fall}; do
-	cat $n | procmail -m $prc
+	cat "$n" | procmail -m "$prc"
     done
     notice "Done filtering"
     unset fall
 
 
-    total=`mailstat -k $MAILDIRS/logs/procmail.log | tail -n1 | awk '{print $2}'`
-    briefing=`mailstat -kt $MAILDIRS/logs/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+    total=`mailstat -k "$MAILDIRS/logs/procmail.log" | tail -n1 | awk '{print $2}'`
+    briefing=`mailstat -kt "$MAILDIRS/logs/procmail.log" |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
     echo "${briefing}"
 
 
-    formail_cache=$TMPDIR/filter.rmdupes.$datestamp.$RANDOM
-    newlock $formail_cache
+    formail_cache="$TMPDIR/filter.rmdupes.$datestamp.$RANDOM"
+    newlock "$formail_cache"
 
     # prunes out all duplicates from last filtered mails,
     rmdupes lastlog
 
-    unlink $formail_cache
+    unlink "$formail_cache"
 }

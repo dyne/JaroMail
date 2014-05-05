@@ -168,15 +168,15 @@ require "fileinto";
 # blacklist
 if header :contains "From" [
 EOF
-    newlock $TMPDIR/blacklist.sieve.$id
+    newlock "$TMPDIR/blacklist.sieve.$id"
     cat <<EOF | ${SQL} -batch ${addressbook} \
-	>> $TMPDIR/blacklist.sieve.$id
+	>> "$TMPDIR/blacklist.sieve.$id"
 SELECT email FROM blacklist;
 EOF
     typeset -alU blacklist
-    for i in `cat $TMPDIR/blacklist.sieve.$id`; do
-	blacklist+=($i); done
-    unlink $TMPDIR/blacklist.sieve.$id
+    for i in `cat "$TMPDIR/blacklist.sieve.$id"`; do
+	blacklist+=("$i"); done
+    unlink "$TMPDIR/blacklist.sieve.$id"
     c=${#blacklist}
     for b in $blacklist; do
 	print -n "\"$b\"" >> "$MAILDIRS/Filters.sieve"
@@ -244,7 +244,7 @@ EOF
 
     #######
     act "compiling rules for mailinglists"
-    print "# filters generated from Filters.txt" >> $PROCMAILDIR/rc
+    print "# filters generated from Filters.txt" >> "$PROCMAILDIR/rc"
 
     typeset -alU filter_from
     typeset -alU filter_to
@@ -333,17 +333,17 @@ cat <<EOF >> "$MAILDIRS/Filters.sieve"
 if header :contains "From" [
 EOF
 
-newlock $TMPDIR/whitelist.sieve.$id
+newlock "$TMPDIR/whitelist.sieve.$id"
 
 cat <<EOF | ${SQL} -batch ${addressbook} \
-    >> $TMPDIR/whitelist.sieve.$id
+    >> "$TMPDIR/whitelist.sieve.$id"
 SELECT email FROM whitelist;
 EOF
 typeset -alU whitelist
-for i in `cat $TMPDIR/whitelist.sieve.$id`; do
-    whitelist+=($i); done
+for i in `cat "$TMPDIR/whitelist.sieve.$id"`; do
+    whitelist+=("$i"); done
 
-unlink $TMPDIR/whitelist.sieve.$id
+unlink "$TMPDIR/whitelist.sieve.$id"
 
 c=${#whitelist}
 for w in $whitelist; do
@@ -366,7 +366,7 @@ EOF
 
 #### PROCMAIL
 
-    cat <<EOF >> $PROCMAILDIR/rc
+    cat <<EOF >> "$PROCMAILDIR/rc"
 }
 
 :0
@@ -388,7 +388,7 @@ zz.spam/
 EOF
 
     #######
-    cat <<EOF >> $PROCMAILDIR/rc
+    cat <<EOF >> "$PROCMAILDIR/rc"
 # filters generated from Accounts
 :0
 * ? test \$PMSRC/pf-chkto.rc
@@ -399,18 +399,19 @@ EOF
 if header :contains "To" [
 EOF
     typeset -alU recv
-    for f in `${=find} $MAILDIRS/Accounts/ -type f | grep -v 'smtp'`; do
-	for addr in `cat $f | awk '
+    accts=`${=find} "$MAILDIRS/Accounts/" -type f | grep -v 'smtp'`
+    for f in ${(f)accts}; do
+	for addr in `cat "$f" | awk '
     /^email/ { print $2 }
     /^alias/ { print $2 }
-    '`; do func "email $addr in `basename $f`"; recv+=($addr); done
+    '`; do func "email $addr in `basename $f`"; recv+=("$addr"); done
     done
     c=${#recv}
     for rr in ${recv}; do \
 
 	# procmail
 	print "ADDR=${rr}\tDEST=priv/\tINCLUDERC=\$PMSRC/pf-chkto.rc" \
-	>> $PROCMAILDIR/rc
+	>> "$PROCMAILDIR/rc"
 
 	# sieve
 	print -n "\"${rr}\"" >> "$MAILDIRS/Filters.sieve"
@@ -427,7 +428,7 @@ EOF
 
 EOF
 
-    cat <<EOF >> $PROCMAILDIR/rc
+    cat <<EOF >> "$PROCMAILDIR/rc"
 }
 
 :0
@@ -444,15 +445,15 @@ unsorted.ml/
 EOF
 
     # MUTT (generate mailboxes priority this parser)
-    print " \\" >> $MUTTDIR/mboxes
-    print " +unsorted.ml +unsorted" >> $MUTTDIR/mboxes
+    print " \\" >> "$MUTTDIR/mboxes"
+    print " +unsorted.ml +unsorted" >> "$MUTTDIR/mboxes"
 
-    uniq $MUTTDIR/mboxes > $TMPDIR/mboxes
-    mv $TMPDIR/mboxes $MUTTDIR/mboxes
-    rm -f $TMPDIR/mboxes
+    uniq "$MUTTDIR/mboxes" > "$TMPDIR/mboxes"
+    mv "$TMPDIR/mboxes" "$MUTTDIR/mboxes"
+    rm -f "$TMPDIR/mboxes"
 
     # conclude procmail
-    cat <<EOF >> $PROCMAILDIR/rc
+    cat <<EOF >> "$PROCMAILDIR/rc"
 
 # if got here, go to unsorted
 :0:
