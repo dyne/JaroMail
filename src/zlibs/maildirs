@@ -178,22 +178,25 @@ merge() {
 
     notice "Merging maildir ${src} into ${dst}"
     c=0
-    for i in `${=find} "${src}/cur" -type f`; do
-	mv $i "${dst}/cur/"; c=$(($c + 1))
+    fr=`${=find} ${src}/cur -type f`
+    for i in ${(f)fr}; do
+	mv "$i" "${dst}/cur/"; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
 	    error "merge aborted."
 	    return 1 }
     done
-    for i in `${=find} "${src}/new" -type f`; do
-	mv $i "${dst}/new/"; c=$(($c + 1))
+    fr=`${=find} ${src}/new -type f`
+    for i in ${(f)fr}; do
+	mv "$i" "${dst}/new/"; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
 	    error "merge aborted."
 	    return 1 }
     done
-    for i in `${=find} "${src}/tmp" -type f`; do
-	mv $i "${dst}/tmp/"; c=$(($c + 1))
+    fr=`${=find} ${src}/tmp -type f`
+    for i in ${(f)fr}; do
+	mv "$i" "${dst}/tmp/"; c=$(($c + 1))
 	{ test $? = 0 } || {
 	    error "error moving file: $i"
 	    error "merge aborted."
