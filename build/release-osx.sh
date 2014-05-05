@@ -26,19 +26,20 @@ appdst=JaroMail.app
 WORKDIR=${appdst}/Contents/Resources/jaro
 bindst=${WORKDIR}/bin
 
+mkdir -p $WORKDIR/{bin,zlibs,.mutt,.procmail,.stats}
+
 # copying inside the fresh scripts
 print "Compiling Jaro Mail ZLibs"
 { test -d ${WORKDIR}/zlibs } && { rm -f $WORKDIR/zlibs/* }
-mkdir -p $WORKDIR/zlibs
 cp ../src/zlibs/* $WORKDIR/zlibs/
 for z in `find $WORKDIR/zlibs -type f`; do
     zcompile -R ${z}
 done
 
 
-cp -r ../src/mutt     $WORKDIR/.mutt
-cp -r ../src/procmail $WORKDIR/.procmail
-cp -r ../src/stats    $WORKDIR/.stats
+cp -r ../src/mutt/*     $WORKDIR/.mutt/
+cp -r ../src/procmail/* $WORKDIR/.procmail/
+cp -r ../src/stats/*    $WORKDIR/.stats/
 cp ../doc/Applications.txt $WORKDIR/
 cp ../doc/Filters.txt      $WORKDIR/
 cp ../doc/Mutt.txt         $WORKDIR/
@@ -62,14 +63,14 @@ export GNUPGHOME="\$HOME/.gnupg"
 export JAROMAILDIR="\$HOME/Library/Application Support/JaroMail"
 export JAROWORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
 clear
-zsh -i -c "echo \"Welcome to Jaro Mail\ntype 'jaro help' for a list of commands.\n\""
+zsh -i -c "echo \"Welcome to Jaro Mail\ntype 'jaro help' for a list of commands\nedit config files in: \$HOME/Library/Application Support/JaroMail\""
 EOF
 chmod +x $appdst/Contents/MacOS/jaroshell.sh
 
 cat <<EOF > $appdst/Contents/MacOS/JaroMail.command
 #!/usr/bin/env zsh
 # JaroMail startup script for Mac .app
-# Copyright (C) 2012-2013 by Denis Roio <Jaromil@dyne.org>
+# Copyright (C) 2012-2014 by Denis Roio <Jaromil@dyne.org>
 # GNU GPL V3 (see COPYING)
 osascript <<EOF
 tell application "System Events" to set terminalOn to (exists process "Terminal")
@@ -132,9 +133,10 @@ mkdir -p ${dir}
 }
 echo "Source app: `du -hs ${dir}/JaroMail.app`"
 
-v=README.txt; cp -v -f ../${v} ${dir}/${v}
-v=COPYING.txt; cp -v -f ../${v} ${dir}/${v}
-v=ChangeLog.txt; cp -v -f ../${v} ${dir}/${v}
+v=README; cp -v -f ../${v}.md ${dir}/${v}.txt
+
+v=COPYING; cp -v -f ../${v}.txt ${dir}/${v}.txt
+v=ChangeLog; cp -v -f ../${v}.md ${dir}/${v}.txt
 v=jaromail-manual.pdf; cp -v -f ../doc/${v} ${dir}/${v}
 ln -sf /Applications ${dir}/Applications
 
