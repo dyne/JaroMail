@@ -79,7 +79,7 @@ ask_password() {
 		func "path: jaromail/${type}/${email}"
 
 		print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" \
-		    | $WORKDIR/bin/jaro-gnome-keyring check
+		    | "$WORKDIR/bin/jaro-gnome-keyring" check
 		if [ $? != 0 ]; then # its a new password
 		    new_password
 		    { test $? != 0 } && {
@@ -87,10 +87,10 @@ ask_password() {
 			return 1 }
 		else # password found into gnome keyring
 		    act "Using saved password for $1 @ $2"
-		    password=`print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" | $WORKDIR/bin/jaro-gnome-keyring get`
+		    password=`print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" | "$WORKDIR/bin/jaro-gnome-keyring" get`
 		fi
 		return 0
-	    elif [ -r $KEYRING ]; then
+	    elif [ -r "$KEYRING" ]; then
                 func "Looking for password in local keyring for $type account $account on $host"
 		func "new pass hash for: $type:$login:$host"
 		_hash=`print "$type:$login:$host" | shasum | awk '{print $1}'`
@@ -177,7 +177,7 @@ new_password() {
 		if [ "$GNOMEKEY" = "1" ]; then
 		    act "using gnome-keyring password storage"
 		    func "path: jaromail/${type}/${email}"
-		    cat <<EOF | $WORKDIR/bin/jaro-gnome-keyring store
+		    cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" store
 protocol=${type}
 path=jaromail/${type}/${email}
 username=${login}
@@ -198,13 +198,13 @@ EOF
 		    notice "Select the password to lock this keyring entry:"
 		    _password="`print $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
 		    if [ "$lookup" = "" ]; then # new entry
-			cat <<EOF | ${SQL} -batch $KEYRING
+			cat <<EOF | ${SQL} -batch "$KEYRING"
 INSERT INTO secrets (hash, password)
 VALUES ("${_hash}", "${_password}");
 EOF
 			act "saved new password in local keyring"
 		    else # update entry
-			cat <<EOF | ${SQL} -batch $KEYRING
+			cat <<EOF | ${SQL} -batch "$KEYRING"
 UPDATE secrets SET password="${_password}" WHERE hash LIKE "${_hash}";
 EOF
 			act "updated local keyring with new password"
@@ -218,7 +218,7 @@ EOF
 		# save it into gnome keyring
 		if [ $GNOMEKEY = 1 ]; then
 
-		    cat <<EOF | $WORKDIR/bin/jaro-gnome-keyring erase
+		    cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" erase
 protocol=${type}
 path=jaromail/${email}
 username=${login}

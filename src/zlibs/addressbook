@@ -21,7 +21,7 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-ADDRESSBOOK=$MAILDIRS/Addressbook
+ADDRESSBOOK="$MAILDIRS/Addressbook"
 
 ###################
 # Jaro Brother DB
@@ -116,16 +116,16 @@ complete() {
     func "complete: $1 (list $list)"
 
     # completion on configured groups
-    { test -r $MAILDIRS/Groups } && {
+    { test -r "$MAILDIRS/Groups" } && {
 	if [[ "$1" =~ "group/" ]]; then
 	    func "completion will look into groups"
 	    needle="${1[(ws:/:)2]}"
 	    if [ "$needle" = "" ]; then
 		act "Listing all mailout groups"
-		matches="`${=find} $MAILDIRS/Groups -type f`"
+		matches=`${=find} "$MAILDIRS/Groups" -type f`
 	    else
 		act "Searching for \"$needle\" in mailout groups"
-		matches="`${=find} $MAILDIRS/Groups -type f -name \"*$needle*\"`"
+		matches=`${=find} "$MAILDIRS/Groups" -type f -name \"*$needle*\"`
 	    fi
 	    print "Groups: `print $matches | wc -l` matches"
 	    print

@@ -55,37 +55,37 @@ queue() {
 { print $0 }
 ' > "$TMPDIR/${queue_body}.mail"
 
-    maildirmake $MAILDIRS/outbox
+    maildirmake "$MAILDIRS/outbox"
     { test $? = 0 } || {
 	act "updating outbox format to Maildir"
     # silently migrate the outbox from the old format to the new
-	tmpp=(`find $MAILDIRS/outbox -type f`)
+	tmpp=(`find "$MAILDIRS/outbox" -type f`)
 	if [ ${#tmpp} = 0 ]; then
 	    # the old format outbox is just empty
-	    rmdir $MAILDIRS/outbox
-	    maildirmake $MAILDIRS/outbox
+	    rmdir "$MAILDIRS/outbox"
+	    maildirmake "$MAILDIRS/outbox"
 	else
 	    # there are some mails to be sent in the old format outbox
 	    # preserve them while migrating to the new format
 	    # this code is less interesting, since it handles an old
 	    # format in JaroMail
-	    tmppp=$TMPDIR/jaro-outbox-migration-$RANDOM
+	    tmppp="$TMPDIR/jaro-outbox-migration-$RANDOM"
 	    mkdir -p $tmppp
-	    mv $MAILDIRS/outbox/* $tmppp/
-	    rmdir $MAILDIRS/outbox
-	    maildirmake $MAILDIRS/outbox
-	    mkdir -p $MAILDIRS/outbox/send
+	    mv "$MAILDIRS/outbox/*" $tmppp/
+	    rmdir "$MAILDIRS/outbox"
+	    maildirmake "$MAILDIRS/outbox"
+	    mkdir -p "$MAILDIRS/outbox/send"
 	    # here we devince two useful arrays:
 	    # bodies: the list of mail bodies to send
 	    # corresponding to files with same name and extension .msmtp
 	    bodies=(`find $tmppp -type f -name '*.mail'`)
-	    for i in ${bodies}; do mv $i $MAILDIRS/outbox/new/; done
+	    for i in ${bodies}; do mv $i "$MAILDIRS/outbox/new/"; done
 	    rmdir $tmppp
 	fi
     }
-    ${=mkdir} $MAILDIRS/outbox/send
+    ${=mkdir} "$MAILDIRS/outbox/send"
 
-    lock $MAILDIRS/outbox
+    lock "$MAILDIRS/outbox"
 
     # check if recipients are a Group
     if [[ "${=queue_to}" =~ '@jaromail.group' ]]; then
@@ -94,16 +94,16 @@ queue() {
 	groupfile="`print ${=queue_to}|cut -d@ -f1`"
 	act "email recipients are in group ${groupfile}"
 
-	{ test -r $MAILDIRS/Groups/$groupfile } || {
-	    maildirmake $MAILDIRS/postponed
-	    mv ${TMPDIR}/${queue_body}.mail $MAILDIRS/postponed/new
-	    unlock $MAILDIRS/outbox
+	{ test -r "$MAILDIRS/Groups/$groupfile" } || {
+	    maildirmake "$MAILDIRS/postponed"
+	    mv "${TMPDIR}/${queue_body}.mail" "$MAILDIRS/postponed/new"
+	    unlock "$MAILDIRS/outbox"
 	    error "Group not found: $groupfile"
 	    return 1 }
 
-	recipients=`cat $MAILDIRS/Groups/$groupfile | grep -v '^#'`
-	groupnum="`print ${recipients} | wc -l`"
-	groupmode="`head -n1 $MAILDIRS/Groups/$groupfile | awk '/^#mode/ { print $2 } { next }'`"
+	recipients=`cat "$MAILDIRS/Groups/$groupfile" | grep -v '^#'`
+	groupnum=`print ${recipients} | wc -l`
+	groupmode=`head -n1 "$MAILDIRS/Groups/$groupfile" | awk '/^#mode/ { print $2 } { next }'`
 	{ test "$groupmode" = "" } && { groupmode="individual" }
 	act "$groupnum recipients in total, sending mode $groupmode"
 
@@ -117,7 +117,7 @@ queue() {
 		    ig=${base}-${RANDOM}
 		    cat "${TMPDIR}/${queue_body}.mail" | \
 			awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
-			> ${MAILDIRS}/outbox/new/${ig}.mail
+			> "${MAILDIRS}/outbox/new/${ig}.mail"
 		done
 		;;
 
@@ -133,18 +133,18 @@ queue() {
 		cat "${TMPDIR}/${queue_body}.mail" | \
 		    awk '/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
 				{ print $0 }' \
-				    > ${MAILDIRS}/outbox/new/${ig}.mail
+				    > "${MAILDIRS}/outbox/new/${ig}.mail"
 		;;
 	esac
 
     else
 	# recipients are set in the email envelope
-	mv $TMPDIR/$queue_body.mail $MAILDIRS/outbox/new/$queue_body.mail
+	mv "$TMPDIR/$queue_body.mail" "$MAILDIRS/outbox/new/$queue_body.mail"
     fi
 
-    unlock $MAILDIRS/outbox
-    { test -r ${TMPDIR}/${queue_body}.mail } && {
-	${=rm} ${TMPDIR}/${queue_body}.mail }
+    unlock "$MAILDIRS/outbox"
+    { test -r "${TMPDIR}/${queue_body}.mail" } && {
+	${=rm} "${TMPDIR}/${queue_body}.mail" }
 
 }
 
@@ -180,7 +180,7 @@ fetch() {
     # fetch works with imap and pop, skip smtp
     { test "$account_type" = "smtp" } && { return 0 }
 
-    if ! [ -r $PROCMAILDIR/rc ]; then
+    if ! [ -r "$PROCMAILDIR/rc" ]; then
 	act "updating procmail configuration"
 	{ test $DRYRUN != 1 } && { update }
     fi
@@ -255,12 +255,12 @@ fetch() {
 	esac
 
 	# archive old procmail log
-	if [ -r $MAILDIRS/logs/procmail.log ]; then
-	    newlock $MAILDIRS/logs/procmail-${datestamp}.log
-	    cat $MAILDIRS/logs/procmail.log \
-		>> $MAILDIRS/logs/procmail-${datestamp}.log
-	    rm -f $MAILDIRS/logs/procmail.log
-	    unlock $MAILDIRS/logs/procmail-${datestamp}.log
+	if [ -r "$MAILDIRS/logs/procmail.log" ]; then
+	    newlock "$MAILDIRS/logs/procmail-${datestamp}.log"
+	    cat "$MAILDIRS/logs/procmail.log" \
+		>> "$MAILDIRS/logs/procmail-${datestamp}.log"
+	    rm -f "$MAILDIRS/logs/procmail.log"
+	    unlock "$MAILDIRS/logs/procmail-${datestamp}.log"
 	fi
 
 	act "please wait while downloading mails..."
@@ -271,8 +271,8 @@ fetch() {
 
 
 
-	total=`mailstat -k $MAILDIRS/logs/procmail.log | tail -n1 | awk '{print $2}'`
-	briefing=`mailstat -kt $MAILDIRS/logs/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+	total=`mailstat -k "$MAILDIRS/logs/procmail.log" | tail -n1 | awk '{print $2}'`
+	briefing=`mailstat -kt "$MAILDIRS/logs/procmail.log" | awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
 	notice "$total emails fetched"
 	print "${briefing}"
 
@@ -286,12 +286,12 @@ fetch() {
 # SEND
 # this function should send all mails in outbox
 send() {
-    adir=$WORKDIR/Accounts
+    adir="$WORKDIR/Accounts"
     typeset -al all
 
 
     # list mails to send
-    queue_outbox=(`${=find} ${MAILDIRS}/outbox -type f -name '*.mail'`)
+    queue_outbox=(`${=find} "${MAILDIRS}/outbox" -type f -name '*.mail'`)
     { test ${#queue_outbox} = 0 } && {
 	act "Outbox is empty, no mails to send."
 	return 0 }
@@ -315,16 +315,16 @@ send() {
     { test $DRYRUN = 1 } && { return 0 }
 
     # from here on we must unlock on error
-    lock ${MAILDIRS}/outbox
+    lock "${MAILDIRS}/outbox"
 
     ask_password $login $host
     { test $? = 0 } || {
 	error "Error retrieving password for $login on $host"
 	unset password all
-	unlock ${MAILDIRS}/outbox
+	unlock "${MAILDIRS}/outbox"
 	return 1 }
 
-    tmp=$TMPDIR/msmtp.$host.$datestamp.$RANDOM
+    tmp="$TMPDIR/msmtp.$host.$datestamp.$RANDOM"
     newlock $tmp
     cat <<EOF > $tmp
 account default
@@ -335,12 +335,12 @@ port ${port}
 tls on
 tls_starttls on
 tls_certcheck off
-logfile ${MAILDIRS}/logs/msmtp.log
+logfile "${MAILDIRS}/logs/msmtp.log"
 auth ${auth}
 password ${password}
 EOF
 
-    for qbody in ${queue_outbox}; do
+    for qbody in ${(f)queue_outbox}; do
 
 	# check if this is an anonymous mail
 	head -n 20 "$qbody" | grep -i '^from: anon' > /dev/null
@@ -411,14 +411,14 @@ BEGIN { head=1 }
 	else
 	    notice "Mail sent succesfully"
 	    # whitelist those to whom we send mails
-	    cat "$qbody" | $WORKDIR/bin/jaro -q learn recipient
-	    mv "$qbody" $MAILDIRS/sent/new/
+	    cat "$qbody" | "$WORKDIR/bin/jaro" -q learn recipient
+	    mv "$qbody" "$MAILDIRS/sent/new/"
 	fi
 
     done
 
     unset password
-    unlock $MAILDIRS/outbox
+    unlock "$MAILDIRS/outbox"
     unlock $tmp
     ${=rm} $tmp
 
@@ -467,22 +467,22 @@ peek() {
 	    error "Error retrieving password for $login on $host"
 	    unset password all; return 1
 	}
-	tmp=$TMPDIR/$host.peek.$RANDOM
+	tmp="$TMPDIR/$host.peek.$RANDOM"
 	newlock $tmp
 	cat <<EOF >> $tmp
 set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
 	unset password
-	print "source '$tmp'" > $TMPDIR/muttpass
+	print "source '$tmp'" > "$TMPDIR/muttpass"
 	# when peeking don't mark unread messages as Old
 	# and sort date received with no threading (latest up)
-	cat <<EOF >> $TMPDIR/muttpass
+	cat <<EOF >> "$TMPDIR/muttpass"
 unset mark_old
 set sort=reverse-date-received
 EOF
 	(sleep 1;
-	    cp /dev/null $TMPDIR/muttpass
+	    cp /dev/null "$TMPDIR/muttpass"
 	    unlink $tmp # secure delete in ram
 	) &
 	${=mutt} -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
@@ -497,6 +497,6 @@ later() {
     # hostname was set by the main jaro routine
     func "Filename: $filename"
 
-    { maildircheck ${MAILDIRS}/remember } || { maildirmake ${MAILDIRS}/remember }
-    cat > ${MAILDIRS}/remember/new/$filename
+    { maildircheck "${MAILDIRS}/remember" } || { maildirmake "${MAILDIRS}/remember" }
+    cat > "${MAILDIRS}/remember/new/$filename"
 }

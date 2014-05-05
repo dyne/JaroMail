@@ -24,8 +24,8 @@
 switch_identity() {
     if [ "$name" != "" ]; then
 	act "switch to identity: $name <$login>"
-	rm -f $MAILDIRS/Identity
-	cat <<EOF > $MAILDIRS/Identity
+	rm -f "$MAILDIRS/Identity"
+	cat <<EOF > "$MAILDIRS/Identity"
 # Automatically generated, do not modify
 # change or add configs into Accounts instead
 set hostname = $host
@@ -34,18 +34,19 @@ set from = "$name <$login>"
 EOF
     else
 	error "No identity found, left blank."
-	touch $MAILDIRS/Identity
+	touch "$MAILDIRS/Identity"
     fi
 }
 
 list_accounts() {
-    for a in `${=find} $ACCOUNTS -type f | grep -v README | sed 's/.txt//'`; do
+    accts=`${=find} "$ACCOUNTS" -type f | grep -v README | sed 's/.txt//'`
+    for a in ${(f)accts}; do
 	act -n "`basename $a`\t :: "
 	awk '
 /^name/ { for(i=2;i<=NF;i++) printf "%s ", $i }
 /^email/ { printf "<%s>", $2 }
 /^host/ { printf " on %s", $2 }
-{next}' $a.txt
+{next}' "$a.txt"
 	print " (`basename $a | cut -d. -f1`)"
     done
 }
@@ -59,13 +60,13 @@ read_account() {
     unset name email host login transport \
 	port auth cert options folders
     # parse arguments
-    { test "$1" != "" } && { account=$1 }
+    { test "$1" != "" } && { account="$1" }
 
     account=".${account}"
     type=`print ${account} | cut -d. -f2`
     account=`print ${account} | cut -d. -f3`
 
-    { test "$2" != "" } && { account=$2 }
+    { test "$2" != "" } && { account="$2" }
 
     { test "$type" = "default" } && {
 	error "No account type specified"
@@ -76,13 +77,13 @@ read_account() {
 
     # find the account
     func "read_account looking for ${type} ${account}"
-    accountlist=`${=find} $ACCOUNTS -name "$type.$account*" | grep -v 'lock$' | grep -v 'pid$'`
+    accountlist=`${=find} "$ACCOUNTS" -name "$type.$account*" | grep -v 'lock$' | grep -v 'pid$'`
     for a in ${(f)accountlist}; do
 	# check if it is locked
 	func "found account: $a"
 	{ test -r "${a}.lock" } && {
 	    pidcheck "${a}" }
-	all+=($a)
+	all+=("$a")
     done
     if [ ${#all} = 0 ]; then
 	error "No $type account found: $account"
