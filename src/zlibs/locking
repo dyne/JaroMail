@@ -20,8 +20,18 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+command -v mutt_dotlock > /dev/null
+{ test $? = 0 } && { dotlock=mutt_dotlock }
+
+command -v dotlock > /dev/null
+{ test $? = 0 } && { dotlock=dotlock }
+
+{ test -z dotlock } && {
+    error "dotlock not found."
+    exit 1 }
+
 lock() {
-    func "lock: $1"
+    func "$dotlock: $1"
     ${=dotlock} ${1}
     case $? in
 	1) error "Cannot lock non existing file: $1"
