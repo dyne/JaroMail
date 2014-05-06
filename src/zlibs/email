@@ -146,6 +146,7 @@ queue() {
     { test -r "${TMPDIR}/${queue_body}.mail" } && {
 	${=rm} "${TMPDIR}/${queue_body}.mail" }
 
+    return 0
 }
 
 ###########
@@ -216,7 +217,7 @@ fetch() {
 	if ! [ -z $folders ]; then # add folder configuration
 	    fmconf+=(" folder ${folders} "); fi
 
-	fmconf+=(" ssl warnings 3600 and wants mda \"procmail -m $PROCMAILDIR/rc\" ")
+	fmconf+=(" ssl warnings 3600 and wants mda \"jaro -q deliver\" ")
 
 	if [ "$cert" = "check" ]; then
 	    # we now use system-wide certs
@@ -263,18 +264,18 @@ fetch() {
 	    unlock "$MAILDIRS/logs/procmail-${datestamp}.log"
 	fi
 
-	act "please wait while downloading mails..."
+	act "please wait while downloading mails to incoming..."
 
 	print " $fmconf " | fetchmail -f -
 
 	unset $fmconf
 
+	filter_maildir incoming
 
-
-	total=`mailstat -k "$MAILDIRS/logs/procmail.log" | tail -n1 | awk '{print $2}'`
-	briefing=`mailstat -kt "$MAILDIRS/logs/procmail.log" | awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
-	notice "$total emails fetched"
-	print "${briefing}"
+	# total=`mailstat -k $MAILDIRS/logs/procmail.log | tail -n1 | awk '{print $2}'`
+	# briefing=`mailstat -kt $MAILDIRS/logs/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
+	# notice "$total emails fetched"
+	# print "${briefing}"
 
     } # DRYRUN
 

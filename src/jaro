@@ -68,8 +68,6 @@ typeset -h hostname addressbook addressbook_tmp
 # global array for maildirs (filled by list_maildirs)
 typeset -al maildirs
 
-# global variable formail cache (used by rmdupes)
-typeset -h formail_cache
 
 # global variable for mutt binary
 typeset -h mutt pgpewrap dotlock
@@ -564,6 +562,7 @@ main()
     subcommands_opts[rmdupes]=""
     subcommands_opts[merge]=""
     subcommands_opts[filter]=""
+    subcommands_opts[deliver]=""
 
     subcommands_opts[passwd]=""
     subcommands_opts[cert]=""
@@ -666,13 +665,18 @@ main()
     case "$subcommand" in
 	compose) compose ${PARAM} ;;
 	queue)   queue ${PARAM} ;;
-	fetch)   fetch ${PARAM} ;; # was checking is_online
+	fetch)   fetch ${PARAM};; # was checking is_online
 	send)    send ${PARAM} ;; # was checking is_online
 	peek)    peek ${PARAM} ;; # was checking is_online
 
 	later)   later ${PARAM} ;;
 
-	update|init)  update ;;
+	update|init)
+	    init_inbox
+	    update_filters
+	    update_mutt
+	    update_sieve
+	    ;;
 
 	help) CLEANEXIT=0; usage ;;
 
@@ -680,23 +684,25 @@ main()
 
 	stat)   CLEANEXIT=0; stats ${PARAM} ;;
 
-	complete) CLEANEXIT=0; complete ${PARAM} ;;
-	isknown)   CLEANEXIT=0; isknown ${PARAM} ;;
-	learn)   CLEANEXIT=0; learn ${PARAM} ;;
-	forget)  CLEANEXIT=0; forget ${PARAM} ;;
-	list)    CLEANEXIT=0; list_addresses ${PARAM} ;;
-	import)  import_addressbook ${PARAM} ;;
-	"export")  export_vcard ${PARAM} ;;
-	abook)   edit_abook ${PARAM} ;;
+	complete) CLEANEXIT=0; complete ${PARAM}       ;;
+	isknown)  CLEANEXIT=0; isknown ${PARAM}        ;;
+	learn)    CLEANEXIT=0; learn ${PARAM}          ;;
+	forget)   CLEANEXIT=0; forget ${PARAM}         ;;
+	list)     CLEANEXIT=0; list_addresses ${PARAM} ;;
 
-	edit)    CLEANEXIT=0; edit_file ${PARAM} ;;
-	open)    CLEANEXIT=0; open_folder ${PARAM} ;;
+	import)  import_addressbook ${PARAM} ;;
+	"export")  export_vcard ${PARAM}     ;;
+	abook)   edit_abook ${PARAM}         ;;
+
+	edit)    CLEANEXIT=0; edit_file ${PARAM}    ;;
+	open)    CLEANEXIT=0; open_folder ${PARAM}  ;;
 	preview) CLEANEXIT=0; preview_file ${PARAM} ;;
 
-	backup)  backup ${PARAM} ;;
+	backup)  backup ${PARAM}  ;;
 	rmdupes) rmdupes ${PARAM} ;;
-	merge)   merge ${PARAM} ;;
-	filter)  filter ${PARAM} ;;
+	merge)   merge ${PARAM}   ;;
+	filter)  filter_maildir incoming ${PARAM}  ;;
+	deliver) deliver ${PARAM} ;;
 
 	passwd)  change_password ${PARAM} ;;
 
@@ -722,6 +728,7 @@ main()
 	    }
 	    ;;
     esac
+    exitcode=$?
     return 0
 }
 

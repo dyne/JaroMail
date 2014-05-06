@@ -20,6 +20,9 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+# static global variable formail cache (used by rmdupes)
+typeset -h formail_cache
+
 
 # checks if its a maildir
 # returns 0 (success) if yes
@@ -109,7 +112,7 @@ maildirs_lastlog() {
     unset lasts
 }
 
-rmdupes() {    
+rmdupes() {
 
     ## special argument lastlog
     { test "$1" = "lastlog" } && {
@@ -120,13 +123,20 @@ rmdupes() {
 	rmdupes ${=lastdirs}
 	notice "Done pruning"
 	# all the prioritization above is so that duplicates are spotted
-	# across different maildirs and deleted from the filtered source 
+	# across different maildirs and deleted from the filtered source
 	return 0
     }
     ###############
 
     tot=0
     typeset -al msgs
+
+    { test -r "$formail_cache" } || {
+	formail_cache="$TMPDIR/filter.rmdupes.$datestamp.$RANDOM"
+	newlock "$formail_cache"
+	mycache=1
+    }
+
     for folder in ${=@}; do
 	{ test -r "$folder" } || { folder="$MAILDIRS/$folder" }
 	{ test -r "$folder" } || {
@@ -138,13 +148,14 @@ rmdupes() {
 	    continue }
 
 	c=0
-	notice "Checking for duplicates in folder: `basename $folder`"
-	msgs=()
-	for m in `${=find} "${folder}" -type f`; do
-	    msgs+=("$m")
-	done
-	act "${#msgs} messages to check"
-	for m in ${=msgs}; do
+	notice "Checking for duplicates in $folder"
+	msgs=`${=find} "${folder}" -maxdepth 2 -type f`
+	act "Please wait, this can take a while..."
+
+
+
+	for m in ${(f)msgs}; do
+	    func "formail < $m"
 	    # 128MB should be enough ehre?
 	    formail -D 128000000  $formail_cache <"$m" \
 		&& rm "$m" && c=$(( $c + 1 ))
@@ -152,6 +163,8 @@ rmdupes() {
 	act "$c duplicates found and deleted"
 	tot=$(( $tot + $c ))
     done
+
+    { test "$mycache" = "1" } && { unlock "$formail_cache" }
 
     if [ "$tot" = "0" ]; then
 	act "No duplicates found at all"
@@ -272,5 +285,47 @@ filter() {
     # prunes out all duplicates from last filtered mails,
     rmdupes lastlog
 
-    unlink "$formail_cache"
+    unlink $formail_cache
+}
+
+# very simple LDA delivery to a maildir
+# the delicate part is returning all errors
+# so that fetchmail does not deletes mail from server
+deliver() {
+    if [ "$1" = "" ]; then
+	dest="$MAILDIRS/incoming"
+    else
+	dest="$MAILDIRS/$1"
+    fi
+
+    # create destination maildir if not existing
+    { test -r "$dest" } || {
+	act "creating destination maildir: $dest"
+	maildirmake "$dest" }
+
+    maildircheck "$dest"
+    { test $? = 0 } || {
+	error "Invalid maildir destination for delivery, operation aborted."
+	func "Returning error to caller."
+	return 1; }
+
+    base="`hostname`-jaro-`date +%Y-%m-%d-%H.%M.%S`-$RANDOM"
+
+    cat > "$dest/new/$base"
+    { test $? = 0 } || {
+	error "Could not write email file into maildir, operation aborted."
+	func "Returning error to caller."
+	return 1; }
+
+
+    { test "$DEBUG" != "0" } && {
+	func "Delivery successful, log: $MAILDIRS/logs/jaro-deliver.log"
+	awk '
+BEGIN { print "Delivery to maildir: '"$1"'" }
+{ print $0 }
+/^$/ { exit }
+' "$1/new/$base" >> "$MAILDIRS/logs/jaro-deliver.log"
+    }
+
+    return 0
 }

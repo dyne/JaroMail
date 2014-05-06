@@ -154,13 +154,19 @@ complete() {
 }
 
 isknown() {
-    func "is known in $list: (string from stdin)"
     head="`${WORKDIR}/bin/fetchaddr -x From -a`"
+
     email="${head[(ws:,:)1]}"
     exitcode=1
+    { test "$email" = "" } && { return 1 }
+
     lookup="`lookup_email ${email}`"
-    { test "$lookup" != "" } && { exitcode=0 }
-    act "Email <$email> found in $list with id $lookup"
+
+    { test "$lookup" = "" } || {
+	func "isknown() found <$email> in $list (id $lookup)"
+	return 0 }
+
+    return 1
 }
 
 learn() {
