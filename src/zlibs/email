@@ -74,7 +74,6 @@ queue() {
 	    mv "$MAILDIRS/outbox/*" $tmppp/
 	    rmdir "$MAILDIRS/outbox"
 	    maildirmake "$MAILDIRS/outbox"
-	    mkdir -p "$MAILDIRS/outbox/send"
 	    # here we devince two useful arrays:
 	    # bodies: the list of mail bodies to send
 	    # corresponding to files with same name and extension .msmtp
@@ -139,7 +138,7 @@ queue() {
 
     else
 	# recipients are set in the email envelope
-	mv "$TMPDIR/$queue_body.mail" "$MAILDIRS/outbox/new/$queue_body.mail"
+	cat "$TMPDIR/$queue_body.mail" | deliver "outbox"
     fi
 
     unlock "$MAILDIRS/outbox"
@@ -271,7 +270,7 @@ send() {
 
 
     # list mails to send
-    queue_outbox=(`${=find} "${MAILDIRS}/outbox" -type f -name '*.mail'`)
+    queue_outbox=(`${=find} "${MAILDIRS}/outbox" -type f`)
     { test ${#queue_outbox} = 0 } && {
 	act "Outbox is empty, no mails to send."
 	return 0 }
@@ -323,7 +322,7 @@ EOF
     for qbody in ${(f)queue_outbox}; do
 
 	# check if this is an anonymous mail
-	head -n 20 "$qbody" | grep -i '^from: anon' > /dev/null
+	hdr "$qbody" | grep -i '^from: anon' > /dev/null
 	if [ $? = 0 ]; then
 	    anoncfg="${TMPDIR}/${host}.anon.$RANDOM"
 	    cat <<EOF > "$anoncfg"
@@ -351,7 +350,7 @@ EOF
 		act "Sending to: ${r}"
 
 		# parse subject line
-		anonsubj=`head -n 20 "$qbody" | awk '
+		anonsubj=`hdr "$qbody" | awk '
 /^Subject: / { for(i=2;i<=NF;i++) printf "%s ", $i }'`
 		act "Subject: $anonsubj"
 
@@ -381,7 +380,7 @@ BEGIN { head=1 }
 	else # normal send with msmtp
 
 	    act "Sending out email"
-	    head -n 10 "$qbody" | awk '
+	    hdr "$qbody" | awk '
 /^From:/ { print " .  " $0 }
 /^To:/   { print " .  " $0 }
 /^Cc:/   { print " .  " $0 }

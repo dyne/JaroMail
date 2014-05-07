@@ -169,7 +169,10 @@ EOF
     return 0
 }
 
+
 filter_maildir() {
+    typeset -h mdinput
+    mdinput="$1"
 
     # for safety we bail out in case the final fallback
     # maildir is not existing. unsorted should always
@@ -185,27 +188,22 @@ filter_maildir() {
 	source $MAILDIRS/cache/filters
 	ownfilters=1 }
 
-    if [ "$1" = "" ]; then
-	input="incoming"
-    else
-	input="$1"
-    fi
+    { test "$1" = "" } && { mdinput=incoming }
 
-    maildircheck "$MAILDIRS/$input"
+    maildircheck "$MAILDIRS/$mdinput"
     { test $? = 0 } || {
-	error "Invalid maildir to filter: $input"
+	error "Invalid maildir to filter: $mdinput"
 	return 1; }
 
-    numm=`${=find} "$MAILDIRS/$input" -maxdepth 2 -type f|wc -l`
-    mails=`${=find} "$MAILDIRS/$input" -maxdepth 2 -type f`
+    numm=`${=find} "$MAILDIRS/$mdinput" -maxdepth 2 -type f|wc -l`
+    mails=`${=find} "$MAILDIRS/$mdinput" -maxdepth 2 -type f`
 
     { test "$numm" = "0" } && {
-	error "Nothing to filter inside maildir $input"
+	error "Nothing to filter inside maildir $mdinput"
 	return 1 }
 
-    notice "Filtering maildir: $input ($numm mails}"
+    notice "Filtering maildir: $mdinput ($numm mails}"
     c=0
-    typeset -alU ftos
 
     for m in ${(f)mails}; do
 	match=0
@@ -226,10 +224,6 @@ filter_maildir() {
 	    { test $? = 0 } && { rm "$m" }
 	    continue }
 
-	# recompile the array of destination addresses
-	ftos=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x Cc -a | cut -d, -f1`
-	ftos+=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x To -a | cut -d, -f1`
-
 	{ test "$ownfilters" = "1" } && {
 
 	    func "processing through own filters"
@@ -241,12 +235,15 @@ filter_maildir() {
 		for exp in ${(k)filter_from}; do
 		    # special zsh parsing in PCRE (=~)
 		    if [[ "$femail" =~ "$exp" ]]; then
+			# if destination maildir is same as input, skip
+			{ test "${filter_from[$exp]}" = "$mdinput" } && {
+			    act "$c\t\t/ $numm"
+			    match=1; continue }
 			act "$c\t\t/ $numm\t\t-> ${filter_from[$exp]}"
 			cat "$m" | deliver ${filter_from[$exp]}
 			if [ $? = 0 ]; then
 			    func "from filter match: $exp"
-			    rm $m
-			    match=1
+			    match=1; rm "$m"; continue
 			else
 			    error "Error filtering to maildir ${filter_from[$exp]}"
 			    error "File: $m"
@@ -256,18 +253,26 @@ filter_maildir() {
 	    }
 	    { test "$match" = "1" } && { continue }
 
+	    typeset -alU ftos
+	    # recompile the array of destination addresses
+	    ftos=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x cc -a`)
+	    ftos+=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x to -a`)
+
 	    # run all filter regexps on the to: and cc: fields
 	    { test "$ftos" = "" } || {
 		for ft in ${(f)ftos}; do
 		    for exp in ${(k)filter_to}; do
 			# special zsh parsing in PCRE (=~)
 			if [[ "$ft" =~ "$exp" ]]; then
+			    # if destination maildir is same as input, skip
+			    { test "${filter_to[$exp]}" = "$mdinput" } && {
+				act "$c\t\t/ $numm"
+				match=1; continue }
 			    act "$c\t\t/ $numm\t\t-> ${filter_to[$exp]}"
 			    cat "$m" | deliver ${filter_to[$exp]}
 			    if [ $? = 0 ]; then
 				func "to filter match: $exp"
-				rm "$m"
-				match=1
+				match=1; rm "$m"; continue
 			    else
 				error "Error filtering to maildir ${filter_to[$exp]}"
 				error "File: $m"
@@ -276,7 +281,8 @@ filter_maildir() {
 		    done
 		done
 	    }
-	    { test "$match" = "1" } && { continue }
+
+	    { test "$match" = "1" } && { func "own filter match"; continue }
 
 	} # own filters
 
@@ -297,23 +303,22 @@ filter_maildir() {
 
 	# parse own email and aliases
 	for f in $ftos; do
-
 	    # check if destination address is in filter_own array
 	    if [[ ${filter_own[(i)"$ftos"]} -le ${#filter_own} ]] ; then
 		act "$c\t\t/ $numm\t\t-> priv"
 		cat "$m" | deliver priv
 		{ test $? = 0 } && { rm "$m" }
-
-	    else
-
-		# if here then file to unsorted
-		act "$c\t\t/ $numm\t\t-> unsorted"
-		cat "$m" | deliver unsorted
-		{ test $? = 0 } && { rm "$m" }
-
 	    fi
-
 	done
+
+	# if here then file to unsorted
+	if [ "$mdinput" = "unsorted" ]; then
+	    act "$c\t\t/ $numm"
+	else
+	    act "$c\t\t/ $numm\t\t-> unsorted"
+	    cat "$m" | deliver unsorted
+	    { test $? = 0 } && { rm "$m" }
+	fi
 
     done
 

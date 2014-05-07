@@ -235,6 +235,10 @@ deliver() {
 	dest="$MAILDIRS/incoming"
     else
 	dest="$MAILDIRS/$1"
+	{ test -d "$dest" } || { dest="$1"
+	    { test -d "$dest" } || {
+		error "delivery destination path invalid: $1"
+		return 1; } }
     fi
 
     # create destination maildir if not existing
@@ -263,7 +267,7 @@ deliver() {
 BEGIN { print "Delivery to maildir: '"$1"'" }
 { print $0 }
 /^$/ { exit }
-' "$1/new/$base" >> "$MAILDIRS/logs/jaro-deliver.log"
+' "$MAILDIRS/$1/new/$base" >> "$MAILDIRS/logs/jaro-deliver.log"
     }
 
     return 0
