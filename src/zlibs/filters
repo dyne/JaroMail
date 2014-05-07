@@ -255,8 +255,8 @@ filter_maildir() {
 
 	    typeset -alU ftos
 	    # recompile the array of destination addresses
-	    ftos=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x cc -a`)
-	    ftos+=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x to -a`)
+	    ftos=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x cc -a | cut -d, -f1`)
+	    ftos+=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x to -a | cut -d, -f1`)
 
 	    # run all filter regexps on the to: and cc: fields
 	    { test "$ftos" = "" } || {
@@ -303,8 +303,9 @@ filter_maildir() {
 
 	# parse own email and aliases
 	for f in $ftos; do
+	    func "CAZZZ -> $f"
 	    # check if destination address is in filter_own array
-	    if [[ ${filter_own[(i)"$ftos"]} -le ${#filter_own} ]] ; then
+	    if [[ ${filter_own[(r)$f]} == ${f} ]] ; then
 		act "$c\t\t/ $numm\t\t-> priv"
 		cat "$m" | deliver priv
 		{ test $? = 0 } && { rm "$m" }
