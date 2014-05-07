@@ -1,6 +1,6 @@
 # Example filter configuration for Jaro Mail
 
-# mailinglist filters are in order of importance
+# Mailinglist filters are in order of importance
 # syntax: to <list email> save <folder>
 # below some commented out examples, note the use of a prefix,
 # which makes it handy when browsing with file completion.
@@ -20,10 +20,10 @@
 # Other filters for web 2.0 using folder names with a prefix:
 # they can facilitate folder maintainance.
 
-# from      identi.ca		save	web.identica
 # from      Twitter		save	web.twitter
 # from      linkedin		save	web.linkedin
 # from      googlealerts	save	web.google
+# from	    plus.google.com	save	web.google
 # from      facebook		save	web.facebook
 # from      FriendFeed		save	web.friendfeed
 # from      academia.edu	save	web.academia

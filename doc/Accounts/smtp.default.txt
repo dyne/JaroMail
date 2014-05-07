@@ -1,7 +1,7 @@
 # Name and values are separated by spaces or tabs
 # comments start the line with a hash
 
-# Name for this account
+# Give a name to this account
 name To Be Configured
 
 # Internet address

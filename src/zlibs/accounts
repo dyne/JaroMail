@@ -21,23 +21,6 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-switch_identity() {
-    if [ "$name" != "" ]; then
-	act "switch to identity: $name <$login>"
-	rm -f "$MAILDIRS/Identity"
-	cat <<EOF > "$MAILDIRS/Identity"
-# Automatically generated, do not modify
-# change or add configs into Accounts instead
-set hostname = $host
-set realname = "$name"
-set from = "$name <$login>"
-EOF
-    else
-	error "No identity found, left blank."
-	touch "$MAILDIRS/Identity"
-    fi
-}
-
 list_accounts() {
     accts=`${=find} "$ACCOUNTS" -type f | grep -v README | sed 's/.txt//'`
     for a in ${(f)accts}; do

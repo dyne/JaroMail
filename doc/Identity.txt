@@ -1,0 +1,34 @@
+# Configure the identity disclosed by your emails
+
+# Your name
+set realname = "Luther Blisset"
+
+# The from field shown by your mails
+set from = "Luther Blisset <luther@dyne.org>"
+
+# set signature='~/.signature'    # signature file
+# set pgp_sign_as="0xB4DC0FF3"    # UserID/KeyID for signing
+# set locale=""                   # system default locale ("C")
+
+# Customized headers example
+
+unmy_hdr * # remove all extra headers first.
+
+# my_hdr Organization: Dyne.org
+# my_hdr X-GPG-Keyserver: pgp.mit.edu
+# my_hdr X-GPG-Id: 0xB4DC0FF3
+# my_hdr X-GPG-Fingerprint: B2D9 9376 BFB2 60B7 601F  5B62 F6D3 FBD9 B4DC 0FF3
+# my_hdr X-Face: %H:nE)m:Rl>Z?(C7EvRtuUJp4^f@d\#~4pB48~:1:EC)^&9EDcZaKL/*+10(P?g*N0>n8n3&\n kVzfAD`+RofVAx~ew>FGQmmT7NqlSQx+M8LN5`,h^aPF[Njx+A~%f!&VJu9!y:~ma/\'^@mvOr@}DyG\n @\"g`kfy(vyRC
+
+
+# Go wild with Mutt!
+# below you can add any other custom configuration
+
+
+## dark background (uncomment to switch)
+# source /usr/share/mutt/themes/colors-solarized-dark-256
+# source /usr/share/mutt/themes/colors-solarized-dark-16
+
+## light background (uncomment to switch)
+# source /usr/share/mutt/themes/colors-solarized-light-256
+# source /usr/share/mutt/themes/colors-solarized-light-16

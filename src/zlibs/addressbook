@@ -153,7 +153,7 @@ complete() {
     return 0
 }
 
-isknown() {
+sender_isknown() {
     head="`${WORKDIR}/bin/fetchaddr -x From -a`"
 
     email="${head[(ws:,:)1]}"
@@ -163,7 +163,7 @@ isknown() {
     lookup="`lookup_email ${email}`"
 
     { test "$lookup" = "" } || {
-	func "isknown() found <$email> in $list (id $lookup)"
+	func "sender_isknown() found <$email> in $list (id $lookup)"
 	return 0 }
 
     return 1

@@ -1,0 +1,7 @@
+# Setup the aliases to your email: other addresses you
+# receive and that should be treated as your own.
+# One per line.
+
+info@work.com
+desk@volunteering.org
+drugs@blackmarket.net

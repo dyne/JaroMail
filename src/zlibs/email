@@ -181,11 +181,6 @@ fetch() {
     # fetch works with imap and pop, skip smtp
     { test "$account_type" = "smtp" } && { return 0 }
 
-    if ! [ -r "$PROCMAILDIR/rc" ]; then
-	act "updating procmail configuration"
-	{ test $DRYRUN != 1 } && { update }
-    fi
-
     notice "Connecting account ${account} via ${account_type}"
 
     is_online ${host} ${port}
@@ -255,27 +250,11 @@ fetch() {
 		func "fetchmail returns $ret" ;;
 	esac
 
-	# archive old procmail log
-	if [ -r "$MAILDIRS/logs/procmail.log" ]; then
-	    newlock "$MAILDIRS/logs/procmail-${datestamp}.log"
-	    cat "$MAILDIRS/logs/procmail.log" \
-		>> "$MAILDIRS/logs/procmail-${datestamp}.log"
-	    rm -f "$MAILDIRS/logs/procmail.log"
-	    unlock "$MAILDIRS/logs/procmail-${datestamp}.log"
-	fi
-
 	act "please wait while downloading mails to incoming..."
 
 	print " $fmconf " | fetchmail -f -
 
 	unset $fmconf
-
-	filter_maildir incoming
-
-	# total=`mailstat -k $MAILDIRS/logs/procmail.log | tail -n1 | awk '{print $2}'`
-	# briefing=`mailstat -kt $MAILDIRS/logs/procmail.log |awk '!/procmail/ { print "    " $2 "\t" $3 }'|sort -nr`
-	# notice "$total emails fetched"
-	# print "${briefing}"
 
     } # DRYRUN
 
@@ -454,7 +433,6 @@ peek() {
 	act "opening folder ${folder}"
     fi
 
-    switch_identity
     case $transport in
 	ssl|tls) act "using secure connection (SSL)"
 	    iproto="imaps" ;;

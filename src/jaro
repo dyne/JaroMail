@@ -665,7 +665,11 @@ main()
     case "$subcommand" in
 	compose) compose ${PARAM} ;;
 	queue)   queue ${PARAM} ;;
-	fetch)   fetch ${PARAM};; # was checking is_online
+	fetch)
+	    if [ "$account" = "" ]; then fetchall
+	    else fetch; fi
+	    filter_maildir incoming
+	    ;;
 	send)    send ${PARAM} ;; # was checking is_online
 	peek)    peek ${PARAM} ;; # was checking is_online
 
@@ -685,7 +689,7 @@ main()
 	stat)   CLEANEXIT=0; stats ${PARAM} ;;
 
 	complete) CLEANEXIT=0; complete ${PARAM}       ;;
-	isknown)  CLEANEXIT=0; isknown ${PARAM}        ;;
+	isknown)  CLEANEXIT=0; sender_isknown ${PARAM} ;;
 	learn)    CLEANEXIT=0; learn ${PARAM}          ;;
 	forget)   CLEANEXIT=0; forget ${PARAM}         ;;
 	list)     CLEANEXIT=0; list_addresses ${PARAM} ;;
@@ -701,7 +705,12 @@ main()
 	backup)  backup ${PARAM}  ;;
 	rmdupes) rmdupes ${PARAM} ;;
 	merge)   merge ${PARAM}   ;;
-	filter)  filter_maildir incoming ${PARAM}  ;;
+
+	filter)
+	    update_filters ${PARAM}
+	    filter_maildir ${PARAM}
+	    ;;
+
 	deliver) deliver ${PARAM} ;;
 
 	passwd)  change_password ${PARAM} ;;

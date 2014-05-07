@@ -18,9 +18,8 @@ mkdir -p $JARO_LIBEXEC
 { test -r $srcdir/src/fetchdate } || {
     print "Error: first build, then install."; return 1 }
 
-mkdir -p $JARO_SHARE/{.procmail,.mutt,.stats}
+mkdir -p $JARO_SHARE/{.mutt,.stats}
 cp -ra $srcdir/doc/* $JARO_SHARE/
-cp -ra $srcdir/src/procmail/* $JARO_SHARE/.procmail/
 cp -ra $srcdir/src/mutt/* $JARO_SHARE/.mutt/
 cp -ra $srcdir/src/stats/* $JARO_SHARE/.stats/
 
