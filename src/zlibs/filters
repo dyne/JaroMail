@@ -215,7 +215,7 @@ filter_maildir() {
 	hdr "$m" | sender_isknown
 	{ test $? = 0 } && {
 	    cat "$m" | deliver zz.blacklist
-	    { test $? = 0 } && { ${=rm} "$m" }
+	    { test $? = 0 } && { rm "$m" }
 	    act "$c\t\t/ $numm\t\t->\tzz.blacklist"
 	    continue }
 
@@ -223,7 +223,7 @@ filter_maildir() {
 	{ test $? = 0 } || {
 	    act "$c\t\t/ $numm\t\t->\tzz.bounces"
 	    cat "$m" | deliver zz.bounces
-	    { test $? = 0 } && { ${=rm} "$m" }
+	    { test $? = 0 } && { rm "$m" }
 	    continue }
 
 	# recompile the array of destination addresses
@@ -245,7 +245,7 @@ filter_maildir() {
 			cat "$m" | deliver ${filter_from[$exp]}
 			if [ $? = 0 ]; then
 			    func "from filter match: $exp"
-			    ${=rm} $m
+			    rm $m
 			    match=1
 			else
 			    error "Error filtering to maildir ${filter_from[$exp]}"
@@ -266,7 +266,7 @@ filter_maildir() {
 			    cat "$m" | deliver ${filter_to[$exp]}
 			    if [ $? = 0 ]; then
 				func "to filter match: $exp"
-				${=rm} "$m"
+				rm "$m"
 				match=1
 			    else
 				error "Error filtering to maildir ${filter_to[$exp]}"
@@ -282,17 +282,17 @@ filter_maildir() {
 
 	list="whitelist"
 	hdr "$m" | sender_isknown
-	{ test $? = 0 } && { print "hit on whitelist"
+	{ test $? = 0 } && {
 	    act "$c\t\t/ $numm\t\t-> known"
 	    cat "$m" | deliver known
-	    { test $? = 0 } && { ${=rm} "$m" }
+	    { test $? = 0 } && { rm "$m" }
 	    continue }
 
 	hdr "$m" | awk '/X-Spam-Flag.*YES/ { exit 1 }'
 	{ test $? = 0 } || {
 	    act "$c\t\t/ $numm\t\t-> zz.spam"
 	    cat "$m" | deliver zz.spam
-	    { test $? = 0 } && { ${=rm} "$m" }
+	    { test $? = 0 } && { rm "$m" }
 	    continue }
 
 	# parse own email and aliases
@@ -302,14 +302,14 @@ filter_maildir() {
 	    if [[ ${filter_own[(i)"$ftos"]} -le ${#filter_own} ]] ; then
 		act "$c\t\t/ $numm\t\t-> priv"
 		cat "$m" | deliver priv
-		{ test $? = 0 } && { ${=rm} "$m" }
+		{ test $? = 0 } && { rm "$m" }
 
 	    else
 
 		# if here then file to unsorted
 		act "$c\t\t/ $numm\t\t-> unsorted"
 		cat "$m" | deliver unsorted
-		{ test $? = 0 } && { ${=rm} "$m" }
+		{ test $? = 0 } && { rm "$m" }
 
 	    fi
 
