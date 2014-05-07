@@ -85,41 +85,6 @@ mkdir -p build/gnu
     print "All dependencies installed"
 }
 
-# { test "$target" = "dotlock" } || { 
-#     test "$target" = "all" } && {
-#     pushd src
-#     print -n "Compiling the file lock utility... "
-#     ${=cc} -Wno-unused-result -o dotlock dotlock.c
-#     popd
-#     cp src/dotlock build/gnu/dotlock
-#     print OK
-# }
-
-{ test "$target" = "pgpewrap" } || { 
-    test "$target" = "all" } && {
-    pushd src
-    print -n "Compiling the pgp address wrapper... "
-    ${=cc} -c pgpewrap.c
-    ${=cc} -o pgpewrap pgpewrap.o
-    popd
-    cp src/pgpewrap build/gnu/
-    print OK
-}
-
-# { test "$target" = "mairix" } || { 
-#     test "$target" = "all" } && {
-#     print "Compiling the parser library..."
-#     pushd src
-#     parser_sources=(datescan db dotlock expandstr glob md5 nvpscan rfc822 stats tok)
-#     parser_sources+=(writer dates dirscan dumper fromcheck hash mbox nvp reader search)
-#     for s in $parser_sources; do
-# 	${=cc} -I /usr/include -c $s.c
-#     done
-#     popd
-#     print OK
-# }
-
-
 { test "$target" = "fetchaddr" } || { 
     test "$target" = "all" } && {
     pushd src
@@ -168,20 +133,6 @@ mkdir -p build/gnu
 	`pkg-config --cflags --libs glib-2.0 gnome-keyring-1`
     popd
     cp src/gnome-keyring/jaro-gnome-keyring build/gnu/
-}
-
-# build mutt only if specified
-{ test "$target" = "mutt" } && { 
-    print "Compiling Mutt (MUA)"
-    pushd src/mutt-1.5.21
-    { test -r configure } || { autoreconf -i }
-    CC="$cc" LDFLAGS="-lm" ./configure \
-	--with-ssl --with-gnutls --enable-imap --disable-debug --with-slang --disable-gpgme \
-	--enable-hcache --with-regex --with-tokyocabinet --with-mixmaster --enable-pgp 
-    make > make.log
-    popd
-    cp src/mutt-1.5.21/mutt build/gnu/mutt-jaro
-    cp src/mutt-1.5.21/pgpewrap build/gnu/pgpewrap
 }
 
 # build mixmaster only if specified
