@@ -96,9 +96,9 @@ set record = ""
 
 ##################
 ## Forward options
-set forward_decode = yes
+# set forward_decode = yes
 #set forward_format = "[Fwd] %s"
-#set mime_forward
+set mime_forward = ask-yes
 
 ######################
 ## Folders and mailbox
