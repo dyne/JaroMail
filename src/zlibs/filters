@@ -508,7 +508,7 @@ EOF
     # bounces
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # bounces
-if header :contains "Sender" "bounce" {
+if header :contains "Sender" "mailman-bounce" {
     fileinto "zz.bounces";
     stop;
 }
