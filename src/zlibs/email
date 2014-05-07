@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+# Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
@@ -58,7 +58,7 @@ queue() {
     maildirmake "$MAILDIRS/outbox"
     { test $? = 0 } || {
 	act "updating outbox format to Maildir"
-    # silently migrate the outbox from the old format to the new
+	# silently migrate the outbox from the old format to the new
 	tmpp=(`find "$MAILDIRS/outbox" -type f`)
 	if [ ${#tmpp} = 0 ]; then
 	    # the old format outbox is just empty
@@ -77,8 +77,11 @@ queue() {
 	    # here we devince two useful arrays:
 	    # bodies: the list of mail bodies to send
 	    # corresponding to files with same name and extension .msmtp
-	    bodies=(`find $tmppp -type f -name '*.mail'`)
-	    for i in ${bodies}; do mv $i "$MAILDIRS/outbox/new/"; done
+	    bodies=(`find "$tmppp" -type f -name '*.mail'`)
+	    for i in ${bodies}; do
+		cat "$i" | deliver outbox
+		{ test $? = 0 } && { rm "$i" }
+	    done
 	    rmdir $tmppp
 	fi
     }

@@ -10,9 +10,9 @@
 
 *A commandline tool to easily and privately handle your e-mail*
 
-Latest Version: **1.3.1**
+Version: **2.0**
 
-Website: http://dyne.org/software/jaro-mail
+Updates on: http://dyne.org/software/jaro-mail
 
 # INTRODUCTION
 
@@ -152,12 +152,6 @@ Chines, Peter Jeremy, Robert Hofer, Roberto Boati, Samuel Tardieu,
 Sanjoy Mahajan, Satyaki Das, Steven Lumos, Tim Harder, Tom Doherty,
 Vincent Lefevre, Vladimir V. Kisil, Will Yardley, Wolfgang
 Weisselberg.
-
-## Procmail
-
-Procmail was originally designed and developed by Stephen R. van den
-Berg. The Procmail library collection we are including is developed
-and maintained by Jari Aalto.
 
 ## MSmtp
 
