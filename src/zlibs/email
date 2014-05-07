@@ -273,8 +273,9 @@ send() {
 
 
     # list mails to send
-    queue_outbox=(`${=find} "${MAILDIRS}/outbox" -type f`)
-    { test ${#queue_outbox} = 0 } && {
+    queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
+    queue_outbox_num=`${=find} "${MAILDIRS}/outbox" -type f|wc -l`
+    { test "$queue_outbox_num" = "0" } && {
 	act "Outbox is empty, no mails to send."
 	return 0 }
 
@@ -291,7 +292,7 @@ send() {
     is_online ${host} ${port}
     { test $? = 0 } || { return 1 }
 
-    notice "Sending out ${#queue_outbox} mails via ${type}.${account}"
+    notice "Sending out $queue_outbox_num mails via ${type}.${account}"
 
 
     { test $DRYRUN = 1 } && { return 0 }
