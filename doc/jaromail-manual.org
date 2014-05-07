@@ -1,18 +1,48 @@
-#+TITLE: Jaro Mail
+#+TITLE: Jaro Mail 2.0
 #+AUTHOR: by Jaromil @ dyne.org
-#+DATE: Sept 2013
+#+DATE: May 2014
+
+#+OPTIONS: H:3 num:t toc:t \n:nil @:t ::t |:t ^:t f:t TeX:t
 
 #+LaTeX_CLASS: article
 #+LaTeX_CLASS_OPTIONS: [a4,onecolumn,portrait]
-#+LATEX_HEADER: \usepackage[utf8x]{inputenc}
-#+LATEX_HEADER: \usepackage[T1]{fontenc}
+#+LATEX_HEADER: \usepackage[english]{babel}
+
+#+LATEX_HEADER: \usepackage{ucs}
+#+LATEX_HEADER: \usepackage{inputenc}
+#+LATEX_HEADER: \usepackage{fontenc}
 #+LATEX_HEADER: \usepackage{hyperref}
-#+LATEX_HEADER: \usepackage[pdftex]{graphicx}
-#+LATEX_HEADER: \usepackage{fullpage}
+#+LATEX_HEADER: \usepackage{graphicx}
+#+LATEX_HEADER: \usepackage{parskip}
+
+#+LATEX_HEADER: \usepackage{makeidx}
+#+LATEX_HEADER: \makeindex
+
 #+LATEX_HEADER: \usepackage{lmodern}
+#+LATEX_HEADER: \usepackage{fullpage}
+#+LATEX_HEADER: \usepackage{wrapfig}
+#+LATEX_HEADER: \usepackage{verbatim}
+
 #+LATEX_HEADER: \usepackage[hang,small]{caption}
 #+LATEX_HEADER: \usepackage{float}
 
+#+LATEX_HEADER:\usepackage[textheight=1.8\textwidth,lmargin=20mm,rmargin=20mm,driver=pdftex,heightrounded,headsep=7mm,footskip=11mm,vmarginratio=1:1]{geometry}
+
+#+LATEX_HEADER: \usepackage{fancyhdr}
+#+LATEX_HEADER: \setlength{\headheight}{18pt}
+#+LATEX_HEADER: \pagestyle{fancyplain}
+
+#+LATEX: \fancyhf{}
+#+LATEX: \fancyhead[L]{\rule[-2ex]{0pt}{2ex}\small JaroMail manual}
+#+LATEX: \fancyhead[R]{\rule[-2ex]{0pt}{2ex}\small version 2.0}
+#+LATEX: \fancyfoot[C]{-- \thepage\ --}
+#+LATEX: \fancyfoot[R]{\small Dyne.org Foundation}
+#+LATEX: \fancyfoot[L]{\small Free Software Manual}
+
+#+LATEX: \renewcommand{\headrulewidth}{0.4pt}
+#+LATEX: \renewcommand{\footrulewidth}{0.4pt}
+
+#+LATEX: \pagebreak
 
 
 * Introduction
@@ -33,6 +63,7 @@ this manual is made available on http://files.dyne.org/jaromail/jaromail-manual.
 
 [[file:jaromail-shot.jpg]]
 
+#+LATEX: \footnotesize
    + Minimalistic and efficient interface with message threading
    + Targets intensive usage of e-mails and mailinglists
    + Stores e-mails locally in a reliable format (maildir)
@@ -48,8 +79,17 @@ this manual is made available on http://files.dyne.org/jaromail/jaromail-manual.
    + Supports strong encryption messaging (GnuPG)
    + Multi platform: GNU/Linux/BSD, Apple/OSX
    + Old school, used by its author for the past 10 years
+#+LATEX: \normalsize
 
 ** Vision
+
+#+LATEX_BEGIN:
+\begin{wrapfigure}{r}{0.5\textwidth}
+  \begin{center}
+    \includegraphics[width=0.48\textwidth]{foster_privacy.png}
+  \end{center}
+\end{wrapfigure}
+#+LATEX_END:
 
 The internet offers plenty of free services, on the wave of the Web2.0
 fuzz and the community boom, while all private informations are hosted
@@ -73,8 +113,6 @@ users have the habit of keeping all their e-mails on servers,
 accessing them through an often clumsy web interface, while
 downloading them can free space and improve their privacy.
 
-[[file:foster_privacy.png]]
-
 #+LATEX: \pagebreak
 
 * Diagram
@@ -82,16 +120,26 @@ downloading them can free space and improve their privacy.
 A little diagram that clarifies a bit where do we place the components
 and actions involved in managing one's email communication:
 
-[[file:jaromail-diagram.png]]
+#+LATEX_BEGIN:
+\begin{figure}
+  \begin{center}
+    \includegraphics[width=0.4\textwidth]{jaromail-diagram.png}
+  \end{center}
+\end{figure}
+#+LATEX_END:
 
- | Acronym | Function             | Software  |
- |---------+----------------------+-----------|
- | MUA     | Mail User Agent      | [[http://www.mutt.org][Mutt]]      |
- | MTA     | Mail Transport Agent | [[http://www.fetchmail.info][Fetchmail]] |
- |         | Filtering Agent      | [[http://www.procmail.org][Procmail]]  |
- | SMTP    | Mail Delivery Agent  | [[http://msmtp.sourceforge.net][MSmtp]]     |
- |         | Search engine        | [[http://www.rpcurnow.force9.co.uk/mairix/][Mairix]]    |
- |         | Addressbook          | [[http://abook.sf.net][ABook]]     |
+
+
+ | Acronym | Function              | Software  |
+ |---------+-----------------------+-----------|
+ | MUA     | Mail User Agent       | [[http://www.mutt.org][Mutt]]      |
+ | MTA     | Mail Transport Agent  | [[http://www.fetchmail.info][Fetchmail]] |
+ | LDA     | Local Delivery Agent  | Jaro Mail |
+ | MDA     | Remote Delivery Agent | [[http://en.wikipedia.org/wiki/Sieve_(mail_filtering_language)][Sieve]]     |
+ | SMTP    | Mail Delivery Agent   | [[http://msmtp.sourceforge.net][MSmtp]]     |
+ |         | Search engine         | [[http://www.rpcurnow.force9.co.uk/mairix/][Mairix]]    |
+ |         | Addressbook           | [[http://abook.sf.net][ABook]]     |
+ | GPG     | Cryptographic Agent   | [[http://www.gnupg.org][GnuPG]]     |
 
 #+LATEX: \pagebreak
 
@@ -99,57 +147,69 @@ and actions involved in managing one's email communication:
 
 ** Build
 
-   There are two *build-* scripts coming with the sourcecode of Jaro
-   Mail and they are both found in the *build/* subdirectory.
+   Jaro Mail needs to be built on GNU/Linux systems.
 
-   One is for building it on GNU/Linux systems, the other for
-   Apple/OSX.
+   For Apple/OSX users it comes in a pre-compiled bundle.
 
-   A compiler and various dependencies are mandatory in order to build
-   this software. The version for GNU/Linux so far supports only
-   Debian systems and will use apt-get (requiring sudo access) to
-   install all needed packages.
+*** GNU/Linux
 
-   Apple/OSX users that have no experience in building software can
-   obtain a pre-built universal binary from our download zone on
-   http://files.dyne.org/jaromail/binary
+    Some dependencies are needed in order to build this software. The Makefile for GNU/Linux configures the build environment automatically on Debian and Fedora systems, using their packaging to install all needed packages.
 
+    The dependencies to be installed on the system for JaroMail are
+    - to *build*: bison flex make autoconf automake sqlite3 libgnome-keyring-dev
+    - to *run*: procmail fetchmail msmtp mutt mairix pinentry abook wipe
+
+      To install all needed components (done automatically, requires root):
+
+: make
+
+      Once compiled then *make install* will put all JaroMail files in */usr/local/share/jaromail*.
+
+*** Apple/OSX
+
+    Apple/OSX users that have no experience in building software can obtain a pre-built universal binary from our download zone on http://files.dyne.org/jaromail/binary
+
+    One can simply drag JaroMail into Applications. When started JaroMail opens a Terminal window preconfigured with its environment, to activate it for any terminal add this to `~/.profile`:
+: export PATH=/Applications/JaroMail.app/Contents/Resources/jaro/bin:$PATH
 
 ** Install
 
    Installing Jaro Mail once all dependencies are build is fairly
-   easy: the *install.sh* script provided will create a working
-   environment in your *$HOME/Mail* directory or, if you like, you can
-   specify a different one as an argument:
+   easy: make a directory where all the emails and settings needs to be, change to the directory and init the environment:
 
-: $ cd jaromail
-: $ ./install.sh $HOME/Mail
+: $ mkdir $HOME/Mail
+: $ cd $HOME/Mail
+: $ jaro init
 
-   Every installation of Jaro Mail is fully reentrant, meaning the
-   directory where it gets installed contains all maildirs,
-   configurations, filters, whitelist and other necessary files.
+   Every installation of Jaro Mail is fully reentrant, meaning the directory where it gets initialised contains all maildirs, configurations, filters, whitelist, addressbooks and other necessary files.
 
-   Installing it in different directories a single user can have
-   multiple Jaro Mail installations to permit the complete separation
-   of E-Mail identities.
+   A single user can have multiple Jaro Mail installations to permit the complete separation of E-Mail identities.
 
-   If called from outside the installation directory, the *jaro*
-   command will use the default path *$HOME/Mail*. If one is using a
-   different installation path then should first change to that
-   directory and then use the command from inside it.
+   If called from outside the installation directory, the *jaro* command will use the environmental variable *$JAROMAILDIR* to find out the active installation being in use. If one is using a different installation path then should first change that, i.e:
+
+: export JAROMAILDIR=$HOME/OtherIdentities/Luther/Mail
 
 * Configuration
 
    The place where Jaro Mail is installed (*$HOME/Mail* by default)
    contains all configuration files.
 
-   For Apple/OSX users, this directory is inside their *$HOME/Library*
-   and then *Application Support/JaroMail*.
+   For Apple/OSX users, this directory is inside their *$HOME/Library*, then *Application Support* and then *JaroMail*.
 
    From now own, we will call this place the *Mail directory*.
 
-** Receive mail
+   Inside the *Mail directory* are all needed configurations to operate JaroMail. Such configurations are in readable plain text files that can be edited using any editor. Inside them there are comments to explain the settings: all comment lines start by '#' and will be ignored by JaroMail.
 
+   The most important files to start configuring are:
+
+   - Identity.txt : set up the way your email identity appear to others
+   - Accounts/imap.default.txt : main imap account (there can be more)
+   - Accounts/smtp.default.txt : main smtp account
+   - Aliases.txt : more email addresses one may receive as aliases
+   - Filters.txt : simple set of mailinglist sorting rules
+   - Applications.txt : mime type associations to programs used to open attachments
+
+** Receive mail
 
    Inside the Mail directory is found the folder *Accounts* with brief
    instructions and default templates to fill with Imap or Pop account
@@ -167,20 +227,14 @@ and actions involved in managing one's email communication:
 
 ** Send mail
 
-   Also inside the *Accounts* directory is found
-   the *smtp.default.txt* file that configures how to send mail.
+   Also inside the *Accounts* directory is found the *smtp.default.txt* file that configures how to send mail.
 
    When no special account is specified using the *-a* option, then
    the file named *smtp.default.txt* into the Accounts folder will be
    used. To fix a selection it is also possible to use a symbolic
    link.
 
-   Mutt users might want to customize settings by creating
-   a *Mutt.txt* file inside the Mail directory: it will be included
-   automatically if present and can contain any mutt configuration
-   directives for the mail transport agent, such as custom headers
-   appearing in composed e-mails and the default GPG[fn:gpg] key to be
-   used when signing and encrypting them.
+   Mutt users might want add more customizations in *Identity.txt* also found in the Mail directory: it can contain any mutt configuration directives, such as custom headers appearing in composed e-mails and the default GPG[fn:gpg] key to be used when signing and encrypting them.
 
 [fn:gpg] GPG stands for GNU Privacy Guard, a system to securely
 encrypt and decrypt messages and files so that noone can read their
@@ -197,11 +251,6 @@ content, even when intercepting the communication.
 
    The format of the filters configurarion is pretty easy and self
    explanatory, an example is found in the appendix of this manual.
-
-
-
-
-
 
 
 * Organization
@@ -281,9 +330,6 @@ the Mail dir called *Addressbook*[fn:sqlite].  In future we may add
 similar support for other addressbook formats that people use (GnuPG
 keyring, Evolution etc.)[fn:appleaddr]
 
-[fn:sqlite] Jaro Mail uses sqlite3 as its own database storage
-
-[fn:appleaddr] On Apple/OSX systems Jaro Mail has access to the Mail.app addressbook, so all contacts known in your Mac will be automatically whitelisted
 
 Both the white and blacklist can be edited using a text interface,
 this way you can delete entries for instance (removing them from the
@@ -291,35 +337,51 @@ whitelist or blacklist), or add entries by hand (for instance manually
 from visit cards), as well you can change details directly (name and
 email). To edit the addressbook in Jaro Mail the *abook* command is
 available
-: $ jaro abook
+
+: jaro abook
+
 This will open the current whitelist for edit, but one can append
 "blacklist" to this commandline to open that one instead.
 
 To quickly dump to the console all names and addresses in the Jaro
 Mail addressbook, one can use the *list* command
+
 : $ jaro list
+
 To search a string across the addressbook, simply use the command
 search followed by a string, for instance:
+
 : $ jaro search autistici
+
 will list all addresses @autistici in your addressbook.
 
 Even more useful to interface with other addressbook
 software and mobile phones, you can use the *export* and *import*
 functions to transport your addressbook formatted as a series of
 VCards[fn:vcard].
+
 : $ jaro export
+
 Will create or update the file in *Mail/jaro/addressbook.vcf*. On the
 other hand, the import command will include all entries found in a
 given VCard file that have at least one email address.
+
 : $ jaro import 00001.vcf
+
 Imports into the whitelist all contacts found in the 00001.vcf file.
 The VCard format is fully compatible with import and export of
 contacts in Android mobile phones.
 
 Apple Mac/OSX users can simply run the import command without any arguments
+
 : $ jaro import
+
 Imports all the contacts found in the system addressbook used by Mail.app,
 hence making them whitelisted.
+
+[fn:sqlite] Jaro Mail uses sqlite3 as its own database storage
+
+[fn:appleaddr] On Apple/OSX systems Jaro Mail has access to the Mail.app addressbook, so all contacts known in your Mac will be automatically whitelisted
 
 [fn:vcard] A file format standard for electronic business cards, see: http://en.wikipedia.org/wiki/VCard
 
@@ -354,7 +416,9 @@ This section goes through a scenario of simple usage for Jaro Mail
 
 As you acces your computer where Jaro Mail has been configured, you
 can open a Terminal and type:
+
 : $ jaro fetch
+
 This will download all new mails.
 
 If you have configured *fetchall* among the imap account options, then
@@ -363,7 +427,9 @@ will delete them from the server, freeing online space.
 If you have configured the *keep* option, which is the default, Jaro
 Mail will only download the email that you have not yet read and in
 any case it won't delete anything from the server.
+
 : $ jaro
+
 This will open the first folder containing unread emails, starting from
 the *known* folder, then *priv*, then all the rest.
 
@@ -375,7 +441,9 @@ Filters.txt, as well your *unsorted* mails.
 
 If you like to write a mail to someone, just write his/her own address
 as an argument to Jaro Mail
+
 : $ jaro compose friend@home.net
+
 But if you don't remember the email of your friend, then you can just
 start *jaro compose* without options, then start typing the
 name or whatever you remember of it: pressing the *Tab* key a
@@ -386,7 +454,9 @@ If you are writing an email with attachments (and you are sure their
 size is reasonably small to be circulated via email) you can launch
 Jaro Mail with files as arguments, or even wildcards, and they will be
 automatically set as attachments, you can then specify its recipients
+
 : $ jaro picture01.jpg jingle02.mp3 ~/myicons/*
+
 Will send a mail with various separate attachments (using MIME
 encapsulation): a picture, an hopefully small audio file and a list of
 icons which are all the files contained into the myicons/ directory.
@@ -418,7 +488,9 @@ recipients.
 
 If you are around and like to see your new mails without downloading
 them, then you can use the *peek* function:
+
 : $ jaro peek
+
 This will open the default configured IMAP account and folder over SSL
 protocol (securing the data transfer) and show your emails.
 
@@ -436,7 +508,9 @@ you are not able to download because of its size.
 All the time you write an E-mail, Jaro Mail will save it into your
 outbox folder, waiting for the right moment to send it. In fact you
 will have to tell it the right moment by running the *send* command:
+
 : $ jaro send
+
 This will authenticate with your SMTP and send all your emails to
 destination. This way even if you are off-line you will always be able
 to write emails and eventually bring them around for sending them
@@ -470,7 +544,6 @@ Below a recapitulation of keys commonly used in our workflow
 | *m*   | Compose a new message                |
 | *Tab* | Complete addresses and folders input |
 | *r*   | Reply to the sender of a message     |
-| *g*   | Group reply to all recipients        |
 | *f*   | Forward a message to new recipients  |
 | *=*   | List all filtered maildir folders    |
 | *c*   | Change to another folder             |
@@ -490,7 +563,7 @@ Below a recapitulation of keys commonly used in our workflow
 
   If one of the arguments given to the search command is the name of
   an existing email directory folder in ~/Mail, then the search will
-  be on contents of the folder. 
+  be on contents of the folder.
 
   More than one word is aloud to refine the match (they are all AND'ed
   together), plus a number of tricks can be done: every single word
@@ -589,7 +662,9 @@ the machine is switched off for such an operation.
 
 On *Apple/OSX* systems to enable this feature one must explicitly
 activate the ramdisk using the command
+
 : $ jaro ramdisk open
+
 This will create and mount /Volume/JaroTmp which is 10MB large and
 will be used for our delicate security transactions.
 
@@ -607,7 +682,7 @@ from hard-disk sectors or using a cold-boot attack on RAM.
 ** A tip for GNU/Linux users
 
 Those using a GNU/Linux system might want to have a look at our other
-software *Tomb, the Crypto Undertaker*[fn:tomb] which takes care of quick mount
+software *Tomb, the Crypto Undertaker* [fn:tomb] which takes care of quick mount
 and umount of an encrypted volume when desired and includes a *hook*
 mechanism to automatize the execution of commands to make a directory
 inside the encrypted volume immediately available in the user's home.
@@ -629,7 +704,7 @@ often over-complicated and forces us to convert our archives to it.
 
 Jaro Mail stores emails using the well documented format *Maildir*
 which is common to many other free and open source e-mail software and
-was developed and well documented by D.J. Bernstein. 
+was developed and well documented by D.J. Bernstein.
 
 
 We can safely say that the Maildir format to store e-mails will stay
@@ -672,7 +747,9 @@ Jaro Mail can safely merge two different maildirs basically gathering
 all e-mails stored in them into a unique place. This is done using two
 arguments, both maildir folders: the first is the source and the
 second is the destination e-mails from both will be gathered:
+
 : $ jaro merge ml.saved-mails ml.global-archive
+
 The above command will move all emails stored inside the maildir
 folder "ml.saved-mails" to the other maildir folder
 "ml.global-archive". Upon success the first argument "ml.saved-mails"
@@ -687,7 +764,9 @@ occur that a maildir contains duplicates which are also highlighted in
 red in the e-mail index and, if many, can be tedious to eliminate by
 hand. Jaro Mail offers the automatic functionality of removing all
 duplicate emails from a maildir folder using the *rmdupes* command:
+
 : $ jaro rmdupes ml.overflow
+
 Will look for all duplicates emails in the "ml.overlow" maildir,
 matching them by their unique *Message-Id:* header and a SHA1 hash of
 their content[fn:formail], and delete all duplicates for mails that
@@ -701,13 +780,17 @@ To facilitate the separate storage of e-mails that are too old to be
 of any interest, but still might be useful to be retrieved just in
 case, Jaro Mail implements a function that will move all messages
 older than a certain date out of a maildir folder into another.
+
 : $ jaro backup ml.recent ml.yearsago d:5y-1y
+
 The above command will move out of the "ml.recent" maildir all e-mails
 that are older than 1 year (up to 5 years before, can be more) and
 stores them into the "ml.yearsago" maildir which for instance could be
 present on an external usb hard-disk or any other backup device,
 helping us to save space on the desktop in use.
-:  jaro backup unsorted d:may98-may99 unsorted.week.old
+
+: $ jaro backup unsorted d:may98-may99 unsorted.week.old
+
 Will move all emails found in any folder that are dated between May
 1998 and May 1999. Here below more examples of date range expressions:
 d:2002-2003 d:may2002-2003 d:2002may-2003 d:feb98-15may99 d:feb98-15may1999 d:2feb98-1y d:02feb98-1y d:970617-20010618
@@ -718,7 +801,9 @@ d:2002-2003 d:may2002-2003 d:2002may-2003 d:feb98-15may99 d:feb98-15may1999 d:2f
 If filters are updated or one desires to import a maildir into Jaro
 Mail processing it through its filters, the *filter* command is
 provided to (re)filter a maildir.
+
 : $ jaro filter my-old-maildir
+
 Beware that filtering is a lengthy operation, especially on big
 maildirs: it will first pass all messages found through your filters,
 refiling them to folders (even creating duplicates) and then prune all
@@ -749,7 +834,7 @@ on run {input, parameters}
 	end tell
 end run
 #+END_EXAMPLE
-   
+
    Now Save the new service (you can name it "Send file via Jaro
    Mail") and when you will right click on a file, in the submenu
    "Services" you will find the option you just scripted, which will
@@ -804,12 +889,6 @@ Jaro Mail is written and maintained by Denis Roio (aka Jaromil) it
 started from the intention to share his own 10 years old e-mail setup,
 encouraged by the geek tradition of exchanging configuration files
 between friends.
-
-The RFC 822 address parser (fetchaddr) is originally written by
-Michael Elkins for the Mutt MUA.
-
-The gateway to Apple/OSX addressbook (ABQuery) was written by Brendan
-Cully and just slightly updated for our distribution.
 
 Special thanks go to Alvise Gottieri, Anatole Shaw, Francesco Politi
 and Fabio Pietrosanti for early testing and debugging.
@@ -872,18 +951,6 @@ Copyright (C) 2005 - 2006, 2010 Sunil Shetye
 Copyright (C) 2005 - 2010 Matthias Andree
 #+END_EXAMPLE
 
-** Procmail credits
-
-Procmail was originally designed and developed by Stephen R. van den Berg.
-
-In the fall of 1998, recognizing that he didn't have the time to
-maintain procmail on his own, Stephen created a mailing list for
-discussion of future development and deputized Philip Guenther as a
-maintainer.
-
-The included Procmail library collection is developed and maintained
-by Jari Aalto.
-
 ** MSmtp credits
 
 MSmtp is developed and maintained by Martin Lambers.
@@ -920,7 +987,7 @@ version.
    JQuery.sparkline 2.0 is licensed under the New BSD License
 
    Visualize.JQuery is written by Scott Jehl
-   Copyright (c) 2009 Filament Group 
+   Copyright (c) 2009 Filament Group
    licensed under MIT (filamentgroup.com/examples/mit-license.txt)
 #+END_EXAMPLE
 * Appendix
@@ -1023,7 +1090,7 @@ to	  freedombox-discuss	save	debian.freedombox
 # they can facilitate folder maintainance.
 
 # Field   String match          Folder in Mail/
-from      identi.ca	        save	web.identica
+from      identi.ca		save	web.identica
 from      Twitter		save	web.twitter
 from      linkedin		save	web.linkedin
 from      googlealerts		save	web.google
