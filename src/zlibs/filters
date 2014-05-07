@@ -238,12 +238,12 @@ filter_maildir() {
 			# if destination maildir is same as input, skip
 			{ test "${filter_from[$exp]}" = "$mdinput" } && {
 			    act "$c\t\t/ $numm"
-			    match=1; continue }
+			    match=1; break }
 			act "$c\t\t/ $numm\t\t-> ${filter_from[$exp]}"
 			cat "$m" | deliver ${filter_from[$exp]}
 			if [ $? = 0 ]; then
 			    func "from filter match: $exp"
-			    match=1; rm "$m"; continue
+			    match=1; rm "$m"; break
 			else
 			    error "Error filtering to maildir ${filter_from[$exp]}"
 			    error "File: $m"
@@ -267,18 +267,19 @@ filter_maildir() {
 			    # if destination maildir is same as input, skip
 			    { test "${filter_to[$exp]}" = "$mdinput" } && {
 				act "$c\t\t/ $numm"
-				match=1; continue }
+				match=1; break }
 			    act "$c\t\t/ $numm\t\t-> ${filter_to[$exp]}"
 			    cat "$m" | deliver ${filter_to[$exp]}
 			    if [ $? = 0 ]; then
 				func "to filter match: $exp"
-				match=1; rm "$m"; continue
+				match=1; rm "$m"; break
 			    else
 				error "Error filtering to maildir ${filter_to[$exp]}"
 				error "File: $m"
 			    fi
 			fi
 		    done
+		    { test "$match" = "1" } && { break }
 		done
 	    }
 
@@ -302,15 +303,16 @@ filter_maildir() {
 	    continue }
 
 	# parse own email and aliases
+	match=0
 	for f in $ftos; do
-	    func "CAZZZ -> $f"
 	    # check if destination address is in filter_own array
 	    if [[ ${filter_own[(r)$f]} == ${f} ]] ; then
 		act "$c\t\t/ $numm\t\t-> priv"
 		cat "$m" | deliver priv
-		{ test $? = 0 } && { rm "$m" }
+		{ test $? = 0 } && { rm "$m"; match=1; break }
 	    fi
 	done
+	{ test "$match" = "1" } && { continue }
 
 	# if here then file to unsorted
 	if [ "$mdinput" = "unsorted" ]; then
