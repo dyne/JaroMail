@@ -311,22 +311,6 @@ send() {
 	unlock "${MAILDIRS}/outbox"
 	return 1 }
 
-    tmp="$TMPDIR/msmtp.$host.$datestamp.$RANDOM"
-    newlock $tmp
-    cat <<EOF > $tmp
-account default
-from ${email}
-user ${login}
-host ${smtp}
-port ${smtp_port}
-tls on
-tls_starttls on
-tls_certcheck off
-logfile "${MAILDIRS}/logs/msmtp.log"
-auth ${auth}
-password ${password}
-EOF
-
     for qbody in ${(f)queue_outbox}; do
 
 	# check if this is an anonymous mail
@@ -394,10 +378,28 @@ BEGIN { head=1 }
 /^Cc:/   { print " .  " $0 }
 /^Subject:/ { print " .  " $0 }
 '
+
+	    tmp="$TMPDIR/msmtp.$host.$datestamp.$RANDOM"
+	    newlock $tmp
+	    cat <<EOF > $tmp
+account default
+from ${email}
+user ${login}
+host ${smtp}
+port ${smtp_port}
+tls on
+tls_starttls on
+tls_certcheck off
+logfile "${MAILDIRS}/logs/msmtp.log"
+auth ${auth}
+password ${password}
+EOF
 	    msmtp -C $tmp -t < "${qbody}"
 	    res=$?
-
+	    unlink $tmp
 	fi
+
+	unset password
 
 	# evaluate results
 	if [ "$res" != "0" ]; then
@@ -406,15 +408,13 @@ BEGIN { head=1 }
 	    notice "Mail sent succesfully"
 	    # whitelist those to whom we send mails
 	    cat "$qbody" | "$WORKDIR/bin/jaro" -q learn recipient
-	    mv "$qbody" "$MAILDIRS/sent/new/"
+	    cat "$qbody" | deliver sent
+	    { test $? = 0 } && { rm "$qbody" }
 	fi
 
     done
 
-    unset password
     unlock "$MAILDIRS/outbox"
-    unlock $tmp
-    ${=rm} $tmp
 
     return 0
 }

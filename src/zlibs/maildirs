@@ -131,11 +131,8 @@ rmdupes() {
     tot=0
     typeset -al msgs
 
-    { test -r "$formail_cache" } || {
-	formail_cache="$TMPDIR/filter.rmdupes.$datestamp.$RANDOM"
-	newlock "$formail_cache"
-	mycache=1
-    }
+    formail_cache="$TMPDIR/filter.rmdupes.$datestamp.$RANDOM"
+    newlock "$formail_cache"
 
     for folder in ${=@}; do
 	{ test -r "$folder" } || { folder="$MAILDIRS/$folder" }
@@ -157,14 +154,14 @@ rmdupes() {
 	for m in ${(f)msgs}; do
 	    func "formail < $m"
 	    # 128MB should be enough ehre?
-	    formail -D 128000000  $formail_cache <"$m" \
+	    formail -D 128000000  "$formail_cache" <"$m" \
 		&& rm "$m" && c=$(( $c + 1 ))
 	done
 	act "$c duplicates found and deleted"
 	tot=$(( $tot + $c ))
     done
 
-    { test "$mycache" = "1" } && { unlock "$formail_cache" }
+    unlink "$formail_cache"
 
     if [ "$tot" = "0" ]; then
 	act "No duplicates found at all"
@@ -189,6 +186,9 @@ merge() {
 	error "Destination is not a maildir: $dst"
 	return 1 }
 
+    # merge does not uses deliver() because
+    # the new-flag and read-flags must be kept intact.
+    # it will abort on any single error on moving each file.
     notice "Merging maildir ${src} into ${dst}"
     c=0
     fr=`${=find} ${src}/cur -type f`
@@ -216,13 +216,13 @@ merge() {
 	    return 1 }
     done
     notice "$c mails succesfully moved"
+
     act "Removing source directory ${src}"
     ${=rm} -r "${src}"
+
     act "Purging duplicates in destination"
-    formail_cache="$TMPDIR/filter.rmdupes.$datestamp.$RANDOM"
-    newlock "$formail_cache"
     rmdupes "${dst}"
-    unlock "$formail_cache"
+
     act "Done. All mails merged into ${dst}"
 }
 

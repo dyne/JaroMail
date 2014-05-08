@@ -282,8 +282,6 @@ GNOMEKEY=0
 
 cleanexit() {
     func "Clean exit procedures"
-    sleep 3
-    unset name login host protocol port password auth folders accountopt
 
     # security check
     { test "$TMPDIR" = "" } && {
@@ -293,22 +291,20 @@ cleanexit() {
     }
 
     # first delete dirs
-    tmpdirs=`${=find} $TMPDIR/ -maxdepth 1 -type d`
+    tmpdirs=`${=find} "$TMPDIR" -maxdepth 1 -type d`
     for d in ${(f)tmpdirs}; do
-	{ test "$d" = "$TMPDIR/" } || {
+	{ test "$d" = "$TMPDIR" } || {
 	    func "deleting dir: $d"
 	    ${=rm} -r "${d}" }
     done
 
     # then locks, with a warning
-    llist=`${=find} $TMPDIR/ -maxdepth 1 -type f -name '*.lock'`
+    llist=`${=find} "$TMPDIR" -maxdepth 1 -type f -name '*.lock'`
     for l in ${(f)llist}; do
 	lname=`basename ${(s:.lock:)l}`
 	func "cleaning lock for $lname"
 
 	# skip if in course of unlink - parallel operation, see unlink()
-	{ test -r ${TMPDIR}/${lname}.unlink } && { continue }
-
 	pidfile="${TMPDIR}/$lname.pid"
 	if [ -r ${pidfile} ]; then
 	    pid=`cat $pidfile`
@@ -317,10 +313,10 @@ cleanexit() {
 	else
 	    func "forced removal of lock left by unknown pid: $lname"
 	fi
-	rm -f ${TMPDIR}/${lname}.lock
+	rm -f "${TMPDIR}/${lname}.lock"
 
 	# remove the actual file
-	if [ -r ${TMPDIR}/$lname ]; then
+	if [ -r "${TMPDIR}/$lname" ]; then
 	    func "deleting temp file: ${TMPDIR}/$lname"
 	    ${=rm} "${TMPDIR}/$lname"
 	else func "empty lock: file was already removed"; fi
@@ -335,7 +331,7 @@ TRAPINT() {
 	error "Caught signal, aborting operations."
 
 	{ test $CLEANEXIT = 1 } && {
-	    error "Forced removal of locks"
+	    func "Forcing removal of locks"
 	    cleanexit & }
 
 	if [ "$DEBUG" = "1" ]; then return 1
