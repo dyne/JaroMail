@@ -52,8 +52,7 @@ set delete = yes
 ## Sorting
 set sort=threads
 set sort_browser=reverse-date
-set sort_aux=reverse-last-date-received
-# set sort_aux = reverse-date
+set sort_aux=reverse-date
 
 ################
 ## Pager options
