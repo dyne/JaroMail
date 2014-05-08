@@ -172,24 +172,24 @@ fetch() {
 	fetchall; return $? }
 
 # setup global account variables
-    read_account ${account_type} ${account}
+    read_account ${account}
 # name login host protocol port auth folders accountopt
 
     { test  $? != 0 } && {
-	error "Error on account entry: $account_type $account"
+	error "Invalid account: $account"
 	return 1
     }
 
-    # fetch works with imap and pop, skip smtp
-    { test "$account_type" = "smtp" } && { return 0 }
+    notice "Fetching email for account ${account}"
 
-    notice "Connecting account ${account} via ${account_type}"
-
-    is_online ${host} ${port}
+    is_online ${imap} ${imap_port}
     { test $? = 0 } || { return 1 }
 
-    ask_password $login $host
-    { test $? = 0 } || { error "Impossible to fetch ${account_type} account ${account}"; return 1 }
+    type=imap
+    host=$imap
+    port=$imap_port
+    ask_password
+    { test $? = 0 } || { error "Impossible to fetch email for account ${account}"; return 1 }
 
     # this puts total size in $imap_info
     # experimental only, commented out for now
@@ -204,7 +204,7 @@ fetch() {
 
     { test $DRYRUN != 1 } && {
 
-	fmconf=("poll $host with proto IMAP user \"$login\" there with password \"$password\"")
+	fmconf=("poll $imap with proto IMAP user \"$login\" there with password \"$password\"")
 
 	unset password
 
@@ -239,12 +239,12 @@ fetch() {
 		return 1
 		;;
 	    2)
-		error "Invalid or unknown certificate for $host"
+		error "Invalid or unknown certificate for $imap"
 		unset $fmconf
 		return 1
 		;;
 	    3)
-		error "Invalid password for user $login at $host"
+		error "Invalid password for user $login at $imap"
 		unset $fmconf
 		return 1
 		;;
@@ -279,30 +279,34 @@ send() {
 	act "Outbox is empty, no mails to send."
 	return 0 }
 
-    read_account smtp ${account}
+    read_account ${account}
     { test  $? != 0 } && {
-	error "Account configuration not found, or broken. Aborting operation."
+	error "Invalid account: $account"
 	return 1
     }
 
     # defaults
     { test -z $auth } && { auth=plain }
-    { test -z $port } && { port=25 }
+    { test -z $smtp_port } && { smtp_port=25 }
 
-    is_online ${host} ${port}
-    { test $? = 0 } || { return 1 }
+    is_online ${smtp} ${smtp_port}
+    { test $? = 0 } || {
+	error "Smtp host not reachable: $smtp_host:$smtp_port"
+	return 1 }
 
-    notice "Sending out $queue_outbox_num mails via ${type}.${account}"
-
+    notice "Sending out $queue_outbox_num mails via account ${account}"
 
     { test $DRYRUN = 1 } && { return 0 }
 
     # from here on we must unlock on error
     lock "${MAILDIRS}/outbox"
 
-    ask_password $login $host
+    type=smtp
+    host=$smtp
+    port=$smtp_port
+    ask_password
     { test $? = 0 } || {
-	error "Error retrieving password for $login on $host"
+	error "Error retrieving password for $login on $smtp"
 	unset password all
 	unlock "${MAILDIRS}/outbox"
 	return 1 }
@@ -313,8 +317,8 @@ send() {
 account default
 from ${email}
 user ${login}
-host ${host}
-port ${port}
+host ${smtp}
+port ${smtp_port}
 tls on
 tls_starttls on
 tls_certcheck off
@@ -328,7 +332,7 @@ EOF
 	# check if this is an anonymous mail
 	hdr "$qbody" | grep -i '^from: anon' > /dev/null
 	if [ $? = 0 ]; then
-	    anoncfg="${TMPDIR}/${host}.anon.$RANDOM"
+	    anoncfg="${TMPDIR}/${smtp}.anon.$RANDOM"
 	    cat <<EOF > "$anoncfg"
 REMAIL		n
 POOLSIZE	0
@@ -419,13 +423,13 @@ BEGIN { head=1 }
 # PEEK
 # this function will open the MTA to the imap server without fetching mails locally
 peek() {
-    read_account imap ${account}
+    read_account ${account}
     { test  $? != 0 } && {
-	error "Account configuration not found, or broken. Aborting operation."
+	error "Invalid account: $account"
 	return 1
     }
 
-    is_online ${host} ${port}
+    is_online ${imap} ${imap_port}
     { test $? = 0 } || { return 1 }
 
     notice "Peek into remote imap account $name"
@@ -451,12 +455,16 @@ peek() {
 
     { test $DRYRUN != 1 } && {
 
-	ask_password $login $host
+	type=imap
+	host=$imap
+	port=$imap_port
+	ask_password
+
 	{ test $? != 0 } && {
-	    error "Error retrieving password for $login on $host"
+	    error "Error retrieving password for $login on $imap"
 	    unset password all; return 1
 	}
-	tmp="$TMPDIR/$host.peek.$RANDOM"
+	tmp="$TMPDIR/$imap.peek.$RANDOM"
 	newlock $tmp
 	cat <<EOF >> $tmp
 set imap_pass = "${password}"
@@ -474,7 +482,7 @@ EOF
 	    cp /dev/null "$TMPDIR/muttpass"
 	    unlink $tmp # secure delete in ram
 	) &
-	${=mutt} -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${host}${folder}
+	${=mutt} -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${imap}${folder}
 
     } # DRYRUN
     return $?

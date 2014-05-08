@@ -1,8 +1,9 @@
-Directory containing account information
+Directory containing account information.
 
-Each file contains a different account: imap, pop or gmail
-each account contains all information needed to connect it
+Accounts are your login information at email providers.
 
-Examples are: imap.default.txt and smtp.default.txt
+Each file in this directory configures a different account.
 
-One can have multiple accounts named otherwise than default
+Accounts can be selected using the 'jaro -a accountname' option.
+
+The account named default is the one used if none is specified.

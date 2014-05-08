@@ -60,7 +60,8 @@ typeset -h list
 list=whitelist
 
 # global variables for accounts
-typeset -h name login host protocol port password auth folders accountopt
+typeset -h name login imap imap_port smtp smtp_port protocol password auth folders accountopt
+typeset -h host port type
 
 # global variables for addressbook
 typeset -h hostname addressbook addressbook_tmp
@@ -311,10 +312,10 @@ cleanexit() {
 	pidfile="${TMPDIR}/$lname.pid"
 	if [ -r ${pidfile} ]; then
 	    pid=`cat $pidfile`
-	    error "forced removal of lock left by pid $pid: $lname"
+	    func "forced removal of lock left by pid $pid: $lname"
 	    rm -f ${pidfile}
 	else
-	    error "forced removal of lock left by unknown pid: $lname"
+	    func "forced removal of lock left by unknown pid: $lname"
 	fi
 	rm -f ${TMPDIR}/${lname}.lock
 
@@ -322,7 +323,7 @@ cleanexit() {
 	if [ -r ${TMPDIR}/$lname ]; then
 	    func "deleting temp file: ${TMPDIR}/$lname"
 	    ${=rm} "${TMPDIR}/$lname"
-	else act "empty lock: file was already removed"; fi
+	else func "empty lock: file was already removed"; fi
 
     done
 

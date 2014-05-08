@@ -56,7 +56,7 @@ EOF
 ask_password() {
     case $OS in
 	MAC)
-            func "Looking for password in Mac/OSX keyring for $email on $host over $type"
+            func "Looking for password in Mac/OSX keyring for $email ($account)"
 	    security find-internet-password \
 		-c JARO -a $email -s $host \
 		-p $transport -P $port > /dev/null
@@ -75,7 +75,7 @@ ask_password() {
 	    ###################
 	    # USE GNOME KEYRING
 	    if [ "$GNOMEKEY" = "1" ]; then
-                func "Looking for password in Gnome keyring for $email on $host over $type"
+                func "Looking for password in Gnome keyring for $email ($account)"
 		func "path: jaromail/${type}/${email}"
 
 		print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" \
@@ -86,12 +86,12 @@ ask_password() {
 			error "Password input aborted."
 			return 1 }
 		else # password found into gnome keyring
-		    act "Using saved password for $1 @ $2"
+		    act "Using saved password for $login @ $host"
 		    password=`print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" | "$WORKDIR/bin/jaro-gnome-keyring" get`
 		fi
 		return 0
 	    elif [ -r "$KEYRING" ]; then
-                func "Looking for password in local keyring for $type account $account on $host"
+                func "Looking for password in local keyring for $email ($account)"
 		func "new pass hash for: $type:$login:$host"
 		_hash=`print "$type:$login:$host" | shasum | awk '{print $1}'`
 		lookup="`lookup_secret ${_hash}`"
@@ -128,7 +128,7 @@ EOF
 }
 
 new_password() {
-    notice "Setting a new password for $type account $account on $host"
+    notice "Setting a new password for account $account on $host"
     act "please enter password for username '$login'"
     password=`pin_entry $login $host`
     res=0

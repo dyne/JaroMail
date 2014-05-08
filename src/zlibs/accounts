@@ -21,122 +21,94 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-list_accounts() {
-    accts=`${=find} "$ACCOUNTS" -type f | grep -v README | sed 's/.txt//'`
-    for a in ${(f)accts}; do
-	act -n "`basename $a`\t :: "
-	awk '
-/^name/ { for(i=2;i<=NF;i++) printf "%s ", $i }
-/^email/ { printf "<%s>", $2 }
-/^host/ { printf " on %s", $2 }
-{next}' "$a.txt"
-	print " (`basename $a | cut -d. -f1`)"
-    done
-}
-
-# arg 1 : account type, es: imap or smtp
+# account = type.name es: imap.default or smtp.gmail
 # -a defines which account name other than 'default'
 # results in the definition of global account variables:
 # name login host protocol port auth folders accountopt
 read_account() {
     typeset -al all
-    unset name email host login transport \
-	port auth cert options folders
+    unset name email imap imap_port smtp smtp_port \
+	host login transport auth cert options folders
     # parse arguments
-    { test "$1" != "" } && { account="$1" }
 
-    account=".${account}"
-    type=`print ${account} | cut -d. -f2`
-    account=`print ${account} | cut -d. -f3`
-
-    { test "$2" != "" } && { account="$2" }
-
-    { test "$type" = "default" } && {
-	error "No account type specified"
-	act "Available accounts (excluding symbolic links, omit final .txt):"
-	list_accounts
-	return 1 }
-    { test "$account" = "" } && { account=default }
+    { test "$account" = "" } && { account="default" }
 
     # find the account
-    func "read_account looking for ${type} ${account}"
-    accountlist=`${=find} "$ACCOUNTS" -name "$type.$account*" | grep -v 'lock$' | grep -v 'pid$'`
-    for a in ${(f)accountlist}; do
-	# check if it is locked
-	func "found account: $a"
-	{ test -r "${a}.lock" } && {
-	    pidcheck "${a}" }
-	all+=("$a")
-    done
-    if [ ${#all} = 0 ]; then
-	error "No $type account found: $account"
-	act "Refine your argument using '-a type.account'"
-	act "For instance adding to the commandline: -a imap.default"
-	act "Available accounts (excluding symbolic links, omit final .txt):"
-	list_accounts
-	return 1
-    elif [ ${#all} != 1 ]; then
-	error "Too many $type accounts named $account"
-	act -n ""
-	for i in ${=all}; do print -n "`basename ${i}` "; done
-	print; error "Refine your account keyword using -a option"
-	return 1
-    fi
+    func "read_account looking for $account"
+    acct="$MAILDIRS/Accounts/$account";
+    { test -r "$acct" } || {
+        acct="$MAILDIRS/Accounts/$account.txt"
+	{ test -r "$acct" } || {
+	    error "no account found: $acct"
+	    act "Refine your argument using '-a accountname'"
+	    act "Available accounts:"
+	    ls "$MAILDIRS/Accounts/"
+	    return 1
+	}
+    }
 
-    acct="${all[1]}"
-    type=`basename "$acct" | cut -d. -f1`
-
-    case $type in
-	imap|smtp)
-
-	    lock $acct
-	    ttmp=`cat "$acct" | awk '
+    ttmp=`awk '
     /^#/ { next }
     /^name/ { printf "name=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^email/ { printf "email=\"%s\";", $2 }
-    /^host/ { printf "host=\"%s\";", $2 }
+    /^imap / { printf "imap=\"%s\";", $2 }
+    /^smtp / { printf "smtp=\"%s\";", $2 }
+    /^host / { printf "host=\"%s\";", $2 }
+    /^port / { printf "port=\"%s\";", $2 }
     /^login/ { printf "login=\"%s\";", $2 }
     /^transport/ { printf "transport=\"%s\";", $2 }
-    /^port/ { printf "port=\"%s\";", $2 }
+    /^imap_port/ { printf "imap_port=\"%s\";", $2 }
+    /^smtp_port/ { printf "smtp_port=\"%s\";", $2 }
     /^auth/ { printf "auth=\"%s\";", $2 }
     /^cert/ { printf "cert=\"%s\";", $2 }
     /^options/ { printf "accountopt=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^folders/ { printf "folders=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
-    '`
-	    unlock $acct
+    ' "$acct"`
+    { test $? = 0 } || {
+	error "Error parsing account: $acct"
+	return 1 }
 
-	    eval "$ttmp"
-	    # check required fields
-	    { test -z $host }  && { error "Field missing in account $acct: host"; return 1 }
+    eval "$ttmp"
+    # check required fields
 
-	    # fill in defaults
-	    { test -z $name }       && { name="$type" }
-	    { test -z $login }      && { login="$email" } # usually email and login are the same
-	    { test -z $email }      && { email="$login" } # so if one is specified, deduce the other
-	    { test -z $transport }  && { transport=plain }
-	    { test -z $port }       && { port=143 }
-	    { test -z $auth }       && { auth=plain }
-	    { test -z $cert }       && { cert=ignore }
-	    { test -z $accountopt } && { accountopt=keep }
-	    # cert and password can be missing
+    # falling back to old host/port conf directives
 
-	    func "type: $type"
-	    func "name: $name"
-	    func "email: $email"
-	    func "host: $host"
-	    func "login: $login"
-	    func "trans: $transport"
-	    func "port: $port"
-	    func "cert: $cert"
-	    func "auth: $auth"
-	    func "options: $accountopt"
-	    func "folders: $folders"
-	    ;;
-	*)
-	    error "Account type \"$type\" not recognized."
-	    return 1
-	    ;;
-    esac
+    { test -z $imap }  && { imap=$host }
+    { test -z $smtp }  && { smtp=$imap }
+    { test -z $imap_port }  && { imap_port=$port }
+    { test -z $smtp_port }  && { smtp_port=$imap_port }
+
+    # fill in defaults
+    { test -z $name }       && { name="$type" }
+    { test -z $login }      && { login="$email" } # usually email and login are the same
+    { test -z $email }      && { email="$login" } # so if one is specified, deduce the other
+    { test -z $transport }  && { transport=plain }
+    { test -z $imap_port }  && { imap_port=143 }
+    { test -z $smtp_port }  && { smtp_port=25 }
+    
+    { test -z $auth }       && { auth=plain }
+    { test -z $cert }       && { cert=ignore }
+    { test -z $accountopt } && { accountopt=keep }
+    # cert and password can be missing
+    
+    func "name: $name"
+    func "email: $email"
+    func "login: $login"
+
+    func "host: $host"
+    func "port: $port"
+
+    func "imap: $imap"
+    func "imap port: $imap_port"
+    func "smtp: $smtp"
+    func "smtp port: $smtp_port"
+
+    func "trans: $transport"
+    func "cert: $cert"
+    func "auth: $auth"
+    func "options: $accountopt"
+    func "folders: $folders"
+
     return 0
 }
 
