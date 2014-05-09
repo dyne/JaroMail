@@ -806,8 +806,49 @@ maildirs: it will first pass all messages found through your filters,
 refiling them to folders (even creating duplicates) and then prune all
 the affected folders to remove the duplicates.
 
+It is possible to filter any maildir, also those coming from other
+programs of course. Just copy the maildir inside the $JAROMAILDIR
+directory (typically ~/Mail) and then refer to it by its name: all
+arguments to the filter command are relative to that directory.
 
 * Usability tips
+
+** Send anonymous emails
+
+   Some people live difficult situations sometimes and are in need to
+   send anonymous emails: for instance those endangered by the
+   information they have, still in need to communicate it without
+   being traced. Just imagine being a whistleblower part of a corrupt
+   military organization, or a victim of mafia blackmailing, or a self
+   determined woman in patriarcal societies. Situations like those may
+   vary, still anonymity of communication is an important condition
+   for personal safety and integrity.
+
+   Anonymizing an email is not as simple as changing the From: field
+   of an email, since its headers will carry the history of the
+   envelope and server logs will be held by the various Internet hosts
+   interacting with its delivery. Often those hosts are run by
+   corporate organizations ready to sell the logged information to
+   anyone with the money to afford it.
+
+   To help these situations the MixMaster network exists since more
+   than two decades, regularly routing emails across a chain of
+   anonymizing servers that encrypt the envelope and delete logs,
+   making it very difficult to track the origin and identity of those
+   writing them. Anyway, such an operation requires long time and
+   sometimes even fails to deliver: better send multiple copies of an
+   anonymous email, then consider waiting one or two days before it
+   gets delivered.
+
+   Setting up MixMaster and using it is a fairly complex task, but
+   here Jaro Mail comes to the rescue making it easy for its users:
+   after composing your email just change the From: field to
+   *anon@mixmaster*. Our application will recognize that as a request
+   to send the email across the MixMaster anonymous network.
+
+   To change the From: field after composition, just when headers and
+   attachments are shown in Mutt, press *[ESC]* and then *f*, then
+   type the special sender address *anon@mixmaster* and press *[Enter]*.
 
 ** Zsh commandline completion
 
