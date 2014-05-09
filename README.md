@@ -108,6 +108,8 @@ By donating you will encourage further development.
 
 The JaroMail software and user's manual is conceived, designed and put together with a substantial amount of ZShell scripts and some C code by Denis Roio aka [Jaromil](http://jaromil.dyne.org). 
 
+The email envelop NyanCat graphics is kindly contributed by the Société ECOGEX.
+
 JaroMail makes use of many external components to work and here below there is a non-inclusive list of those, with authors and contributors.
 
 ## Mutt

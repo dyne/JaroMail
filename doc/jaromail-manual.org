@@ -2,7 +2,7 @@
 #+AUTHOR: by Jaromil @ dyne.org
 #+DATE: May 2014
 
-#+OPTIONS: H:3 num:t toc:t \n:nil @:t ::t |:t ^:t f:t TeX:t
+#+OPTIONS: H:3 num:t toc:t \n:nil @:t ::t |:t ^:nil f:t TeX:t
 
 #+LaTeX_CLASS: article
 #+LaTeX_CLASS_OPTIONS: [a4,onecolumn,portrait]
@@ -203,42 +203,39 @@ and actions involved in managing one's email communication:
    The most important files to start configuring are:
 
    - Identity.txt : set up the way your email identity appear to others
-   - Accounts/imap.default.txt : main imap account (there can be more)
-   - Accounts/smtp.default.txt : main smtp account
-   - Aliases.txt : more email addresses one may receive as aliases
-   - Filters.txt : simple set of mailinglist sorting rules
+   - Accounts/default.txt : main account configuration (there can be more)
+   - Aliases.txt : more email addresses one may receive on the configured accounts
+   - Filters.txt : Full set of mailinglist sorting rules
    - Applications.txt : mime type associations to programs used to open attachments
 
-** Receive mail
+** Send and receive mail
 
    Inside the Mail directory is found the folder *Accounts* with brief
-   instructions and default templates to fill with Imap or Pop account
+   instructions and default templates to fill with Imap and Smtp account
    configurations to fetch mail. A default template will be found in
-   fresh installations: *Accounts/imap.default.txt*. The configuration
-   can be edited with one's favourite text editor, the format of the
-   file is pretty self-explanatory.
+   fresh installations: *Accounts/default.txt*. The configuration can
+   be edited with one's favourite text editor, the format of the file
+   is pretty self-explanatory.
 
-   It is possible to have more than one account and in fact when
-   retreiving e-mails using the *jaro fetch* command all accounts will
-   be processed, unless one is explicitly selected using the *-a*
-   commandline option.
+   It is possible to have more than one account (simply as a new file
+   in the Accounts/ directory) and in fact when retreiving e-mails
+   using the *jaro fetch* command all accounts will be processed,
+   unless one is explicitly selected using the *-a* commandline
+   option.
 
-
-
-** Send mail
-
-   Also inside the *Accounts* directory is found the *smtp.default.txt* file that configures how to send mail.
-
-   When no special account is specified using the *-a* option, then
-   the file named *smtp.default.txt* into the Accounts folder will be
-   used. To fix a selection it is also possible to use a symbolic
-   link.
-
-   Mutt users might want add more customizations in *Identity.txt* also found in the Mail directory: it can contain any mutt configuration directives, such as custom headers appearing in composed e-mails and the default GPG[fn:gpg] key to be used when signing and encrypting them.
+   The file *Identity.txt* is also found in the Mail directory and it
+   contains basic settings on the published user identity (From:
+   field) and any other Mutt specific configuration directives, such
+   as custom headers appearing in composed e-mails and the default
+   GPG[fn:gpg] key to be used when signing and encrypting them.  For
+   more information about the vast amount of configurations that are
+   supported please refer to the Mutt documentation[fn:muttman]
 
 [fn:gpg] GPG stands for GNU Privacy Guard, a system to securely
 encrypt and decrypt messages and files so that noone can read their
 content, even when intercepting the communication.
+
+[fn:muttman] The Mutt configuration manual is found on http://www.mutt.org/doc/manual or simply typing 'man mutt' in a console terminal.
 
 ** Filter mail
 
@@ -812,6 +809,17 @@ the affected folders to remove the duplicates.
 
 * Usability tips
 
+** Zsh commandline completion
+
+   For Zsh users out there there is a completion recipe that can
+   facilitate the use of Jaro Mail by adding tab completion on the
+   console terminal: commands and accounts will be listed and
+   completed automatically just like with other commands.
+
+   To activate the completion move the file *src/completion/_jaromail*
+   into the path where zsh loads vendor completions, typically that is
+   */usr/share/zsh/vendor-completions*.
+
 ** Quickly send a file via email on Apple/OSX
 
    To right-click on a file and send it via email attach using Jaro
@@ -829,7 +837,7 @@ on run {input, parameters}
 	tell application "Terminal"
 		activate
 		tell window 1
-			do script "~/Mail/jaro/bin/jaro " & POSIX path of input
+			do script "/Applications/JaroMail.app/Contents/Resources/jaro/bin/jaro " & POSIX path of input
 		end tell
 	end tell
 end run
@@ -848,8 +856,8 @@ end run
 
 Jaro Mail would have never been possible without the incredible amount
 of Love shared by the free and open source community, since it is
-relying on the development of software like Procmail, Mutt, Fetchmail
-and even more code which is included and used by this program.
+relying on the development of software like Mutt, Fetchmail and even
+more code which is included and used by this program.
 
 Heartfelt thanks go to all those contributing code and sharing it to
 make the world a better place by not letting down all users in the
@@ -872,7 +880,7 @@ included is licensed under the same or different GNU GPL or BSD
 licenses, or available in the public domain.
 
 #+BEGIN_EXAMPLE
- Copyleft (C) 2010-2012 Denis Roio <jaromil@dyne.org>
+ Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
 
  Permission is granted to copy, distribute and/or modify this document
  under the terms of the GNU Free Documentation License, Version 1.3 or
@@ -892,6 +900,9 @@ between friends.
 
 Special thanks go to Alvise Gottieri, Anatole Shaw, Francesco Politi
 and Fabio Pietrosanti for early testing and debugging.
+
+The email envelop NyanCat graphics is kindly contributed by the
+Société ECOGEX.
 
 ** Mutt credits
 

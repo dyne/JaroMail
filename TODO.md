@@ -33,9 +33,6 @@ John Doe";
    will output only filenames, this way symlink maildirs
    of results can be generated and browsed with mutt
 
-## CC: detection
-   filter in known/ also emails sent to private addresses in cc:
-
 ## Sieve filters for first level naming of mailinglists
    consolidate the use of first level naming of filtered maildirs
    (a la newsgroups) and use it also for sieve filters so that imap
@@ -49,7 +46,7 @@ John Doe";
    with sieve filters and then sync every mailbox (full server-side
    filtering)
 
-## Solve imap idle timeout on Mutt
+## Solve imap idle timeout on Mutt (??)
    use isync/mbsync and open local maildirs
 
 ## Serve local maildirs over imap using dovecot

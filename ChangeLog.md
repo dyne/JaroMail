@@ -1,5 +1,19 @@
 # JaroMail ChangeLog
 
+## 2.0
+### 10 May 2014
+
+This release includes a major rewrite of the filter engine now using
+our own system based on ZSh map arrays in place of Procmail, improving
+speed and reliability.  Also the sending mechanism has been rewritte
+to use maildirs and allow the review of the outbox queue. New features
+are the Group configuration to maintain lists of recipients and the
+Mixmaster3 support to easily send anonymous emails. Custom builds of
+Mutt and Mairix have been dropped in favour of system-wide builds.
+The account configuration has been simplified and the documentation
+has been updated accordingly. Included are also several bugfixes and
+an overall cleanup of the code.
+
 ## 1.3.1
 ### 13 December 2013
 
