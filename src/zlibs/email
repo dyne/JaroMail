@@ -269,7 +269,6 @@ fetch() {
 # this function should send all mails in outbox
 send() {
     adir="$WORKDIR/Accounts"
-    typeset -al all
 
 
     # list mails to send
@@ -307,7 +306,7 @@ send() {
     ask_password
     { test $? = 0 } || {
 	error "Error retrieving password for $login on $smtp"
-	unset password all
+	unset password
 	unlock "${MAILDIRS}/outbox"
 	return 1 }
 
@@ -399,8 +398,6 @@ EOF
 	    unlink $tmp
 	fi
 
-	unset password
-
 	# evaluate results
 	if [ "$res" != "0" ]; then
 	    error "Error sending mail, skipped"
@@ -414,6 +411,7 @@ EOF
 
     done
 
+    unset password
     unlock "$MAILDIRS/outbox"
 
     return 0
