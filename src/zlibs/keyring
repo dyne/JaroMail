@@ -58,15 +58,14 @@ ask_password() {
 	MAC)
             func "Looking for password in Mac/OSX keyring for $email ($account)"
 	    security find-internet-password \
-		-c JARO -a $email -s $host \
-		-p $transport -P $port > /dev/null
+		-c JARO -a $email -s $host > /dev/null
 	    if [ $? != 0 ]; then # its a new password
 		new_password
 		{ test $? != 0 } && {
 		    error "Password input aborted."
 		    return 1 }
 	    else
-		password=`security find-internet-password -c JARO -a $email -s $host -p $transport -P $port -g 2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
+		password=`security find-internet-password -c JARO -a $email -s $host -g 2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
 	    fi
 	    return 0
 	    ;;
@@ -137,12 +136,10 @@ new_password() {
 	    if [ "$password" != "" ]; then
 
 		security delete-internet-password \
-		    -c JARO -a $email -s $host \
-		    -p $transport -P $port > /dev/null
+		    -c JARO -a $email -s $host > /dev/null
 
 		security add-internet-password \
-		    -c JARO -a $email -s $host \
-		    -p $transport -P $port -w "${password}"
+		    -c JARO -a $email -s $host -w "${password}"
 
 		if [ $? != 0 ]; then
 		    error "Error adding password to keyring."
@@ -157,8 +154,7 @@ new_password() {
 
 		# we are not deleting passwords anymore
 		security delete-internet-password \
-		    -c JARO -a $email -s $host \
-		    -p $transport -P $port > /dev/null
+		    -c JARO -a $email -s $host > /dev/null
 		res=$?; unset password
 		{ test $res != 0 } && {
 		    echo
