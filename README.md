@@ -55,21 +55,28 @@ A round-up on JaroMail features follows:
 
 # INSTALL
 
-**Apple/OSX** users can simply drag JaroMail into /Applications
-When started JaroMail opens a Terminal window preconfigured with its
-environment, to activate it for any terminal add this to `~/.profile`:
+**Apple/OSX** users can simply drag JaroMail into /Applications When
+  started JaroMail opens a Terminal window preconfigured with its
+  environment, to activate it for any terminal add this to
+  `~/.profile`:
 ```
 export PATH=/Applications/JaroMail.app/Contents/Resources/jaro/bin:$PATH
 ```
 
-**GNU/Linux** users can run `make` to install all needed components (done automatically, requires root) and compile auxiliary tools. Once compiled then `make install` will put JaroMail in `/usr/local`.
+**GNU/Linux** users can run `make` to install all needed components
+  (done automatically, requires root) and compile auxiliary
+  tools. Once compiled then `make install` will put JaroMail in
+  `/usr/local`.
 
 The dependencies to be installed on the system for JaroMail are
 * build: `bison flex make autoconf automake sqlite3 libgnome-keyring-dev`
 * run: `procmail fetchmail msmtp mutt mairix pinentry abook wipe`
 
 Bare in mind **you need to read the Manual**: this software is not
-graphical, it is not meant to be intuitive, does not contains eyecandies (except for stats on mail traffic). JaroMail is operated via Terminal, configured in plain text and overall made by geeks for geeks.
+graphical, it is not meant to be intuitive, does not contains
+eyecandies (except for stats on mail traffic). JaroMail is operated
+via Terminal, configured in plain text and overall made by geeks for
+geeks.
 
 # Manual and usage instructions
 
@@ -88,7 +95,8 @@ https://github.com/dyne/JaroMail/blob/master/doc/jaromail-manual.org
 
 All revisioned in Git, see: https://github.com/dyne/JaroMail
 
-Pull requests and patches welcome, for an overview of current plans see [TODO](TODO.md)
+Pull requests and patches welcome, for an overview of current plans
+see [TODO](TODO.md)
 
 Our chat channel is **#dyne** on https://irc.dyne.org
 
@@ -106,11 +114,15 @@ By donating you will encourage further development.
 
 # ACKNOWLEDGEMENTS
 
-The JaroMail software and user's manual is conceived, designed and put together with a substantial amount of ZShell scripts and some C code by Denis Roio aka [Jaromil](http://jaromil.dyne.org). 
+The JaroMail software and user's manual is conceived, designed and put
+together with a substantial amount of ZShell scripts and some C code
+by Denis Roio aka [Jaromil](http://jaromil.dyne.org).
 
-The email envelop NyanCat graphics is kindly contributed by the Société ECOGEX.
+The email envelop NyanCat graphics is kindly contributed by the
+Société ECOGEX.
 
-JaroMail makes use of many external components to work and here below there is a non-inclusive list of those, with authors and contributors.
+JaroMail makes use of many external components to work and here below
+there is a non-inclusive list of those, with authors and contributors.
 
 ## Mutt
 
@@ -185,18 +197,18 @@ Visualize.JQuery by Scott Jehl Copyright (c) 2009 Filament Group
 
 # Disclaimer
 
-    JaroMail is Copyright (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+JaroMail is Copyright (C) 2010-2014 Denis Roio <jaromil@dyne.org>
 
-    This source  code is free  software; you can redistribute  it and/or
-    modify it under the terms of  the GNU Public License as published by
-	the Free  Software Foundation; either  version 3 of the  License, or
-	(at your option) any later version.
+This source code is free software; you can redistribute it and/or
+modify it under the terms of the GNU Public License as published by
+the Free Software Foundation; either version 3 of the License, or (at
+your option) any later version.
 
-	This source code is distributed in  the hope that it will be useful,
-	but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-	Please refer to the GNU Public License for more details.
+This source code is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  Please refer to
+the GNU Public License for more details.
 
-	You should have received a copy of the GNU Public License along with
-	this source code; if not, write to:
-	Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+You should have received a copy of the GNU Public License along with
+this source code; if not, write to: Free Software Foundation, Inc.,
+675 Mass Ave, Cambridge, MA 02139, USA.

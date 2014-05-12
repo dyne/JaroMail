@@ -1,7 +1,7 @@
 # JaroMail ChangeLog
 
 ## 2.0
-### 10 May 2014
+### 12 May 2014
 
 This release includes a major rewrite of the filter engine now using
 our own system based on ZSh map arrays in place of Procmail, improving
