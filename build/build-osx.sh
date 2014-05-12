@@ -159,11 +159,11 @@ appdst=JaroMail.app
 # static ones do not require relocated links
     cp -v ${root}/src/fetchdate
     cp -v ${root}/src/fetchaddr
-    cp -v ${root}/src/ABQuery/build/Release/lbdb-ABQuery
+#    cp -v ${root}/src/ABQuery/build/Release/lbdb-ABQuery
     copydeps /opt/local/bin/mutt
     copydeps /opt/local/bin/mutt_dotlock
     copydeps /opt/local/bin/pgpewrap
-    copydeps /opt/local/bin/procmail
+#    copydeps /opt/local/bin/procmail
     copydeps /opt/local/bin/fetchmail
     copydeps /opt/local/bin/elinks
     copydeps /opt/local/bin/gfind

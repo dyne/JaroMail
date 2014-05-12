@@ -26,7 +26,7 @@ appdst=JaroMail.app
 WORKDIR=${appdst}/Contents/Resources/jaro
 bindst=${WORKDIR}/bin
 
-mkdir -p $WORKDIR/{bin,zlibs,.mutt,.procmail,.stats}
+mkdir -p $WORKDIR/{bin,zlibs,.mutt,.stats}
 
 # copying inside the fresh scripts
 print "Compiling Jaro Mail ZLibs"
@@ -38,13 +38,15 @@ done
 
 
 cp -r ../src/mutt/*     $WORKDIR/.mutt/
-cp -r ../src/procmail/* $WORKDIR/.procmail/
 cp -r ../src/stats/*    $WORKDIR/.stats/
 cp ../doc/Applications.txt $WORKDIR/
 cp ../doc/Filters.txt      $WORKDIR/
-cp ../doc/Mutt.txt         $WORKDIR/
+cp ../doc/Identity.txt     $WORKDIR/
+cp ../doc/Aliases.txt      $WORKDIR/
+cp ../doc/jaromail-manual.pdf     $WORKDIR/jaromail-manual.pdf
 cp ../doc/JaroMail.icns	   $appdst/Contents/Resources
-cp -r ../doc/Accounts      $WORKDIR/
+mkdir -p $WORKDIR/Accounts
+cp -r ../doc/Accounts/*      $WORKDIR/Accounts/
 
 
 print "Copying binaries and adjusting relocations"
@@ -57,13 +59,23 @@ cp -v osx/dylib/* $appdst/Contents/Frameworks/
 
 # setting up the OSX app wrappers
 mkdir -p $appdst/Contents/MacOS
-cat <<EOF > $appdst/Contents/MacOS/jaroshell.sh
+cat <<EOF > $appdst/Contents/MacOS/jaroenv.sh
+#!/usr/bin/env zsh
 export PATH="/Applications/JaroMail.app/Contents/Resources/jaro/bin:\$PATH"
 export GNUPGHOME="\$HOME/.gnupg"
 export JAROMAILDIR="\$HOME/Library/Application Support/JaroMail"
 export JAROWORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
+export TERMINFO="/usr/share/terminfo"
+EOF
+
+cat <<EOF > $appdst/Contents/MacOS/jaroshell.sh
+#!/usr/bin/env zsh
+. /Applications/JaroMail.app/Contents/MaxOS/jaroenv.sh
+pushd "\$JAROMAILDIR"
 clear
-zsh -i -c "echo \"Welcome to Jaro Mail\ntype 'jaro help' for a list of commands\nedit config files in: \$HOME/Library/Application Support/JaroMail\""
+print "Welcome to Jaro Mail"
+print type 'jaro help' for a list of commands"
+jaro init
 EOF
 chmod +x $appdst/Contents/MacOS/jaroshell.sh
 
@@ -73,14 +85,22 @@ cat <<EOF > $appdst/Contents/MacOS/JaroMail.command
 # Copyright (C) 2012-2014 by Denis Roio <Jaromil@dyne.org>
 # GNU GPL V3 (see COPYING)
 osascript <<EOF
+tell application "Finder"
+    set _home to system attribute "HOME"
+    set maildirs to _home & "/Library/Application Support/JaroMail"
+    make new Finder window to POSIX file maildirs
+    activate
+end tell
 tell application "System Events" to set terminalOn to (exists process "Terminal")
+if application "Terminal" is not running then
+	tell application "Terminal" to activate
+end if
 tell application "Terminal"
-   activate
    if (terminalOn) then
-        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh"
+	do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh"
    else
-        do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh" in front window
-        set custom title of front window to "Jaro Mail"
+	do script "source /Applications/JaroMail.app/Contents/MacOS/jaroshell.sh" in front window
+	set custom title of front window to "Jaro Mail"
    end if
 end tell
 EOF
@@ -129,7 +149,7 @@ mkdir -p ${dir}
 { test -r JaroMail.app/Contents } && {
 	echo "updating to latest app build"
 	rm -rf ${dir}/JaroMail.app
-        cp -r JaroMail.app ${dir}/
+	cp -r JaroMail.app ${dir}/
 }
 echo "Source app: `du -hs ${dir}/JaroMail.app`"
 
