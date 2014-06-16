@@ -22,6 +22,7 @@
 
 md=""
 uid=""
+upath=""
 pub=""
 pubdb=""
 
@@ -93,6 +94,8 @@ pubdb_getuid() {
     uid=`hdr "$_path" | awk '/^Message-ID:/ { gsub(/<|>|,/ , "" , $2); print $2 }'`
     uid="${(Q)uid%\\n*}" # trim
     { test "$uid" = "" } && { uid=`basename "$_path"` }
+    upath=`print ${uid} | sed -e 's/\///g'`.html
+
 }
     
 pubdb_update() {
@@ -142,12 +145,18 @@ pubdb_extract_body() {
     # check if it has already html
     _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
     { test "$_html" = "" } || {
-    	mu extract --overwrite --parts="$_html" "$_path" 
-	awk '
+    	mu extract --overwrite --parts="$_html" "$_path"
+	# check if there is an html header to weed out
+	grep '<body>' "$_html".part > /dev/null
+	if [ $? = 0 ]; then
+	    awk '
 BEGIN { body=0 }
 /<body/ { body=1; next }
 /<\/body/ { body=0; next }
 { if(body==1) print $0 }' "$_html".part | iconv -c
+	else 
+	    cat "$_html".part | iconv -c
+	fi
 	rm "$_html".part
 	return 0 }
 
@@ -155,9 +164,14 @@ BEGIN { body=0 }
     _text=`mu extract "$_path" | awk '/text\/plain/ {print $1; exit}'`
     { test "$_text" = "" } || {
 	mu extract --overwrite --parts="$_text" "$_path"
-	cat "$_text".part | iconv -c | maruku --html-frag | sed '
+	# here we tweak the origin to avoid headers in markdown
+	# preferring to interpret # as inline preformat
+	cat "$_text".part | sed '
+s/^#/    /g
+' | iconv -c | maruku --html-frag | sed '
 s|http://[^ |<]*|<a href="&">&</a>|g
-s|www\.[^ |<]*|<a href="&">&</a>|g'
+s|https://[^ |<]*|<a href="&">&</a>|g
+s|www\.[^ |<]*|<a href="http://&">&</a>|g'
 	rm "$_text".part
 	return 0
     }
@@ -218,64 +232,121 @@ pubdb_render_maildir() {
 <logo>http://dyne.org/dyne.png</logo>
 
 EOF
-    for m in ${(f)mails}; do
-	_from=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
-	_to=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x To -a`
-	_fname=`print ${(Q)_from[(ws:,:)2]} | iconv -f utf-8 -t utf-8 -c`
-	_tname=`print ${(Q)_to[(ws:,:)2]} | iconv -f utf-8 -t utf-8 -c`
-	_subject=`hdr "$m" | awk '
-/^Subject:/ { print $0 }
-' |sed -e 's/\&/\&amp;/g ; s/</\&gt;/g ; s/>/\&lt;/g'`
-	_date=`hdr "$m" | awk '/^Date:/ { print $0 }'`
 
+    cat <<EOF > "${md}/views/index.html"
+<table class="table table-hover table-condensed">
+<thead><tr>
+<th style="width:100px"><!-- from name --></th>
+<th><!-- subject --></th>
+</tr></thead>
+
+EOF
+
+    # main loop
+    c=0
+    for m in ${(f)mails}; do
+
+	# fill in uid and upath
 	pubdb_getuid "$m"
 
+	# but skip entries no more existing in maildir
+	{ test -r "$m" } || { continue }
+	# TODO: remove $m from database if not in maildir
+
+	_from=`awk '/^From: / {print $0; exit}' "$m" | sed 's/^From: //; s/ *<[^>]*> *//; s/"//g'`
+	_to=`awk '/^To: / {print $0; exit}' "$m" | sed 's/^To: //; s/ *<[^>]*> *//; s/"//g'`
+
+	if [[ "$_from" =~ "=?UTF-8" ]]; then
+	    _fname=`print "${_from%?=}" | sed 's/^=?UTF-8?B?//' | base64 -d`
+	else _fname="${_from}"; fi
+
+	if [[ "$_to" =~ "=?UTF-8" ]]; then
+	    _tname=`print "${_to%?=}" | sed 's/^=?UTF-8?B?//' | base64 -d`
+	else _tname="${_to}"; fi
+
+#	_from=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
+#	_to=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x To -a`
+#	_fname=`print ${(Q)_from[(ws:,:)2]} | iconv -c`
+#       _tname=`print ${(Q)_to[(ws:,:)2]} | iconv -c`
+	func "From: ${_fname}"
+	_subject=`hdr "$m" | awk '
+/^Subject:/ { for(i=2;i<=NF;i++) printf "%s ", $i; printf "\n" }
+' | pubdb_escape_html`
+	_date=`hdr "$m" | awk '/^Date:/ { print $0 }'`
+
+	# fill in uid and upath
+	pubdb_getuid "$m"
+
+	# fill in the body
+	_body=`pubdb_extract_body $m`
+
+	{ test "$_body" = "" } && { error "Error rendering $m" }
 	
-	# if using webnomad write out also the message page
-	{ test -d "${md}/webnomad" } && {
-	    _upath=`print ${uid} | sed -e 's/\///g'`.html
-		cat <<EOF > "${md}/views/${_upath}"
-<markdown>
-# ${_subject}
-## From: ${_fname}
-### To: ${_tname}
-#### ${_date}
-
-`pubdb_extract_body $m`
-</markdown>
-EOF
-	} # webnomad
-
-	# write out the atom entry
-cat <<EOF >> "$pub"/atom.xml
+	(( ++c ))
+	if (( $c < ${FEED_LIMIT:=30} )); then
+	    
+	    # write out the atom entry
+	    cat <<EOF >> "$pub"/atom.xml
 
 <entry>
 	<title type="html" xml:lang="en-US">$_subject</title>
-	<link href="${WEB_ROOT}${_upath}" />
-	<id>${WEB_ROOT}${_upath}</id>
+	<link href="${WEB_ROOT}${upath}" />
+	<id>${WEB_ROOT}${upath}</id>
 	<updated>`date --rfc-3339=seconds`</updated>
-<content>
-`pubdb_extract_body $m | pubdb_escape_html`
+<content type="html" xml:lang="en-US">
+`print ${(f)_body} | pubdb_escape_html`
 </content>
 <author>
 	<name>${_fname}</name>
-	<uri>${WEB_ROOT}${_upath}</uri>
+	<uri>${WEB_ROOT}${upath}</uri>
 </author>
 <source>
 	<title type="html">${_subject}</title>
 	<subtitle type="html">From: ${_fname}</subtitle>
         <updated>`date --rfc-3339=seconds`</updated>
-	<link rel="self" href="${WEB_ROOT}${_upath}" />
-	<id>${WEB_ROOT}${_upath}</id>
+	<link rel="self" href="${WEB_ROOT}${upath}" />
+	<id>${WEB_ROOT}${upath}</id>
 </source>
 </entry>
 
 EOF
-    done
+	    
+	fi # FEED LIMIT not reached
+	
+	#######
+	# now build an index and the sitemap
+	
 
-    cat <<EOF >> $pub/atom.xml
+	# if using webnomad write out also the message page
+	{ test -d "${md}/views" } && {    
+	    cat <<EOF > "${md}/views/${upath}"
+<h2>${_subject}</h2>
+<h4>From: ${_fname} - sent to ${_tname} on ${_date}</h4>
+
+${_body}
+
+EOF
+	    # add entry in index
+	    cat <<EOF >> "${md}/views/index.html"
+
+<tr>
+<td style="vertical-align:middle;"><a href="${WEB_ROOT}${upath}">${_fname}</a></td>
+<td style="vertical-align:middle;font-size:1.5em;word-wrap:break-word">
+<a href="${WEB_ROOT}${upath}">${_subject}</a>
+</td>
+</tr>
+
+EOF
+	}
+    done # loop is over
+
+    cat <<EOF >> "${pub}/atom.xml"
 </feed>
 EOF
 
-    return 0
+    cat <<EOF >> "${md}/views/index.html"
+</table>
+EOF
+
 }
+
