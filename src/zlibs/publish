@@ -1,0 +1,281 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+md=""
+uid=""
+pub=""
+pubdb=""
+
+# creates the database keeping up-to-date information
+# on which emails inside the maildir are already published
+pubdb_create() {
+    func "create PubDB"
+    { test -r "$1" } && {
+	error "PubDBalready exists: $1"
+	return 1
+    }
+    cat <<EOF | ${SQL} -batch "$1"
+CREATE TABLE published
+(
+  uid   text collate nocase unique,
+  file  text collate nocase,
+  path  text collate nocase,
+  date  timestamp
+);
+EOF
+    { test $? != 0 } && {
+	error "Error creating PubDB in $1"
+	return 1 }
+    # make sure is private
+    chmod 600 "$1"
+    chown $_uid:$_gid "$1"
+
+    return 0
+}
+
+pubdb_lookup_uid() {
+    func "lookup uid from PubDB: $1"
+    cat <<EOF | ${SQL} -column -batch "$pubdb"
+SELECT file FROM published
+WHERE uid IS "${(Q)1}";
+EOF
+}
+
+pubdb_insert() {
+    _path="$1"
+    _file=`basename "$_path"`
+    # TODO:
+    #    _time=`${WORKDIR}/bin/fetchdate "$1" "%Y-%m-%d-%H-%M-%S"`
+    func "insert mail in pubdb: $_path"
+    cat <<EOF | ${SQL} -batch "$pubdb"
+INSERT INTO published (uid, file, path)
+VALUES ("${uid}", "${_file}", "${_path}");
+EOF
+    { test $? != 0 } && {
+	error "insert_mail: duplicate insert in $pubdb"
+	return 1
+    }
+    return 0
+}
+
+pubdb_list() {
+    func "pubdb_list() $1"
+    cat <<EOF | ${SQL} -batch "$pubdb"
+.width 64 128
+SELECT path FROM published
+ORDER BY file DESC;
+EOF
+}
+
+pubdb_getuid() {
+    func "pubdb_getuid() $@"
+    _path="$1"
+    { test -r "$_path" } || { error "path not found for getuid: $_path"; return 1 }
+    uid=`hdr "$_path" | awk '/^Message-ID:/ { gsub(/<|>|,/ , "" , $2); print $2 }'`
+    uid="${(Q)uid%\\n*}" # trim
+    { test "$uid" = "" } && { uid=`basename "$_path"` }
+}
+    
+pubdb_update() {
+    func "pubdb_update() $@"
+    md="$1"
+    { test "$md" = "" } && {
+	error "Pubdb_update: maildir not found: $md"
+	return 1 }
+    { maildircheck "${md}" } || {
+	error "Pubdb_update: not a maildir: $md"
+	return 1 }
+    pub="${md}/pub"; ${=mkdir} "$pub"
+    pubdb="${md}/.pubdb"
+    { test -r "$pubdb" } || { pubdb_create "$pubdb" }
+
+    # iterate through emails in maildir and check if new
+    mails=`${=find} "${md}/new" "${md}/cur" "${md}/tmp" -type f`
+    notice "Publishing emails in $md"
+    for m in ${(f)mails}; do
+	pubdb_getuid "$m"
+	u=`pubdb_lookup_uid "$uid"`
+	{ test "$u" = "" } && {
+	    # $u is a new message
+	    func "publish_rss: new message found with uid: $uid"
+	    pubdb_insert "$m"
+	}
+    done
+    return 0
+}
+
+pubdb_escape_html() {
+    sed -e '
+s/\&/\&amp;/g
+s/>/\&gt;/g
+s/</\&lt;/g
+s/"/\&quot;/g
+'
+}
+
+pubdb_extract_body() {
+    func "pubdb_extract_body() $@"
+    _path="$1"
+    { test -r "$_path" } || { error "mail not found for body extraction: $_path"; return 1 }
+
+    pushd ${TMPDIR}/pubdb
+
+    # check if it has already html
+    _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
+    { test "$_html" = "" } || {
+    	mu extract --overwrite --parts="$_html" "$_path" 
+	awk '
+BEGIN { body=0 }
+/<body/ { body=1; next }
+/<\/body/ { body=0; next }
+{ if(body==1) print $0 }' "$_html".part | iconv -c
+	rm "$_html".part
+	return 0 }
+
+    # use the first text/plain
+    _text=`mu extract "$_path" | awk '/text\/plain/ {print $1; exit}'`
+    { test "$_text" = "" } || {
+	mu extract --overwrite --parts="$_text" "$_path"
+	cat "$_text".part | iconv -c | maruku --html-frag | sed '
+s|http://[^ |<]*|<a href="&">&</a>|g
+s|www\.[^ |<]*|<a href="&">&</a>|g'
+	rm "$_text".part
+	return 0
+    }
+
+    # check if its an html only mail
+    # _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
+    # { test "$_html" = "" } || {
+    # 	mu extract --overwrite --parts="$_html" "$_path"
+    # 	elinks -dump "$_html".part
+    # 	rm "$_html".part
+    # 	return 0 }
+
+    return 0
+}
+    
+    
+# iterate through the pubdb and publish an rss
+pubdb_render_maildir() {
+    func "publish_render_maildir() $@"
+    md="$1"
+    { test "$md" = "" } && {
+	error "Publish_render_maildir: not found: $md"
+	return 1 }
+    { maildircheck "${md}" } || {
+	error "Publish_render_maildir: not a maildir: $md"
+	return 1 }
+    { test -r "${md}/pub" } || {
+	error "Publish_render_maildir: webnomad not found in ${md}"
+	error "Initialize Webnomad inside the maildir that you want published."
+	return 1 }
+
+    pub="${md}/pub"
+    pubdb="${md}/.pubdb"
+    { test -r "$pubdb" } || {
+	error "Publish_render_maildir: first run update_pubdb for $md"; return 1 }
+
+    ${=mkdir} $TMPDIR/pubdb
+
+    mails=`pubdb_list $md | head -n ${FEED_LIMIT:=30}`
+
+    # source webnomad's configurations
+    { test -r "${md}/config.zsh" } && { source "${md}/config.zsh" }
+
+    cat <<EOF > $pub/atom.xml
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+<title type="text">${TITLE}</title>
+
+<link rel="self" href="${WEB_ROOT}/atom.xml" />
+<link href="${WEB_ROOT}" />
+<id>${WEB_ROOT}/atom.xml</id>
+
+<updated>`date --rfc-3339=seconds`</updated>
+<generator uri="http://www.dyne.org/software/jaro-mail/">JaroMail</generator>
+
+<subtitle type="html">${DESCRIPTION}</subtitle>
+<logo>http://dyne.org/dyne.png</logo>
+
+EOF
+    for m in ${(f)mails}; do
+	_from=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
+	_to=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x To -a`
+	_fname=`print ${(Q)_from[(ws:,:)2]} | iconv -f utf-8 -t utf-8 -c`
+	_tname=`print ${(Q)_to[(ws:,:)2]} | iconv -f utf-8 -t utf-8 -c`
+	_subject=`hdr "$m" | awk '
+/^Subject:/ { print $0 }
+' |sed -e 's/\&/\&amp;/g ; s/</\&gt;/g ; s/>/\&lt;/g'`
+	_date=`hdr "$m" | awk '/^Date:/ { print $0 }'`
+
+	pubdb_getuid "$m"
+
+	
+	# if using webnomad write out also the message page
+	{ test -d "${md}/webnomad" } && {
+	    _upath=`print ${uid} | sed -e 's/\///g'`.html
+		cat <<EOF > "${md}/views/${_upath}"
+<markdown>
+# ${_subject}
+## From: ${_fname}
+### To: ${_tname}
+#### ${_date}
+
+`pubdb_extract_body $m`
+</markdown>
+EOF
+	} # webnomad
+
+	# write out the atom entry
+cat <<EOF >> "$pub"/atom.xml
+
+<entry>
+	<title type="html" xml:lang="en-US">$_subject</title>
+	<link href="${WEB_ROOT}${_upath}" />
+	<id>${WEB_ROOT}${_upath}</id>
+	<updated>`date --rfc-3339=seconds`</updated>
+<content>
+`pubdb_extract_body $m | pubdb_escape_html`
+</content>
+<author>
+	<name>${_fname}</name>
+	<uri>${WEB_ROOT}${_upath}</uri>
+</author>
+<source>
+	<title type="html">${_subject}</title>
+	<subtitle type="html">From: ${_fname}</subtitle>
+        <updated>`date --rfc-3339=seconds`</updated>
+	<link rel="self" href="${WEB_ROOT}${_upath}" />
+	<id>${WEB_ROOT}${_upath}</id>
+</source>
+</entry>
+
+EOF
+    done
+
+    cat <<EOF >> $pub/atom.xml
+</feed>
+EOF
+
+    return 0
+}

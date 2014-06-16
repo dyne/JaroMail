@@ -76,15 +76,6 @@ init_inbox() {
     return 0
 }
 
-# short utility to print only mail headers
-hdr() {
-    { test -r "$1" } || {
-	error "hdr() called on non existing file: $1"
-	return 1 }
-    awk '{ print $0 }
-/^$/ { exit }' "$1"
-}
-
 # reads all configurations and creates a cache of what is read
 # the cache consists of array and maps declarations for zsh
 update_filters() {

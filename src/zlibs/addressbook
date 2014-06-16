@@ -64,7 +64,7 @@ EOF
 	func "address already present in $list"
 	return 1
     }
-    return $0
+    return 0
 }
 
 # update_name() {

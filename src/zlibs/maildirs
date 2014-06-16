@@ -192,6 +192,10 @@ merge() {
     notice "Merging maildir ${src} into ${dst}"
     c=0
     fr=`${=find} ${src}/cur -type f`
+
+    # TODO: preserve timestamps using cp hardlinks
+    #     cp -p -r -l source/date target/
+    #     rm -rf source/data
     for i in ${(f)fr}; do
 	mv "$i" "${dst}/cur/"; c=$(($c + 1))
 	{ test $? = 0 } || {

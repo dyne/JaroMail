@@ -78,6 +78,30 @@ autostart() {
 }
 
 
+# short utility to print only mail headers
+hdr() {
+    { test -r "$1" } || {
+	error "hdr() called on non existing file: $1"
+	return 1 }
+    awk '{ print $0 }
+/^$/ { exit }' "$1"
+}
+
+# short utility to print only mail body
+body() {
+    { test -r "$1" } || {
+	error "body() called on non existing file: $1"
+	return 1 }
+    awk '
+BEGIN { head=1 }
+/^$/ { head=0 }
+{ if(head==0)
+    print $0
+  else
+    next }' "$1"
+}
+
+
 #########
 ## Editor
 # this part guesses what is the best editor already present on the system

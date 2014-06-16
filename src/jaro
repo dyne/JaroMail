@@ -20,7 +20,7 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=2.0
+VERSION=2.1
 DATE=May/2014
 JAROMAILEXEC=$0
 typeset -a OLDARGS
@@ -571,6 +571,8 @@ main()
 
     subcommands_opts[init]=""
 
+    subcommands_opts[publish]=""
+
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
@@ -717,6 +719,13 @@ main()
 	ramdisk) ramdisk ${PARAM} ;;
 
 	isonline) is_online ${=PARAM}; exitcode=$? ;;
+
+	publish)
+	    md="$1"
+	    { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
+	    pubdb_update "$md"
+	    pubdb_render_maildir "$md"
+	    exitcode=$? ;;
 
 	'source')   CLEANEXIT=0; return 0 ;;
 	__default)  func "no command provided"
