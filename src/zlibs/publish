@@ -68,8 +68,8 @@ pubdb_insert() {
     #    _time=`${WORKDIR}/bin/fetchdate "$1" "%Y-%m-%d-%H-%M-%S"`
     func "insert mail in pubdb: $_path"
     cat <<EOF | ${SQL} -batch "$pubdb"
-INSERT INTO published (uid, file, path)
-VALUES ("${uid}", "${_file}", "${_path}");
+INSERT INTO published (uid, file, path, date)
+VALUES ("${uid}", "${_file}", "${_path}", "`pubdb_date`");
 EOF
     { test $? != 0 } && {
 	error "insert_mail: duplicate insert in $pubdb"
@@ -97,7 +97,12 @@ pubdb_getuid() {
     upath=`print ${uid} | sed -e 's/\///g'`.html
 
 }
-    
+
+pubdb_date() {
+    # ATOM spec wants a T where date puts a space
+    date --rfc-3339=seconds | sed 's/ /T/'
+}
+
 pubdb_update() {
     func "pubdb_update() $@"
     md="$1"
@@ -170,8 +175,8 @@ BEGIN { body=0 }
 s/^#/    /g
 ' | iconv -c | maruku --html-frag | sed '
 s|http://[^ |<]*|<a href="&">&</a>|g
-s|https://[^ |<]*|<a href="&">&</a>|g
-s|www\.[^ |<]*|<a href="http://&">&</a>|g'
+s|https://[^ |<]*|<a href="&">&</a>|g'
+# s|www\.[^ |<]*|<a href="http://&">&</a>|g'
 	rm "$_text".part
 	return 0
     }
@@ -221,11 +226,11 @@ pubdb_render_maildir() {
 
 <title type="text">${TITLE}</title>
 
-<link rel="self" href="${WEB_ROOT}/atom.xml" />
+<link rel="self" href="${WEB_ROOT}atom.xml" />
 <link href="${WEB_ROOT}" />
 <id>${WEB_ROOT}/atom.xml</id>
 
-<updated>`date --rfc-3339=seconds`</updated>
+<updated>`pubdb_date`</updated>
 <generator uri="http://www.dyne.org/software/jaro-mail/">JaroMail</generator>
 
 <subtitle type="html">${DESCRIPTION}</subtitle>
@@ -292,7 +297,7 @@ EOF
 	<title type="html" xml:lang="en-US">$_subject</title>
 	<link href="${WEB_ROOT}${upath}" />
 	<id>${WEB_ROOT}${upath}</id>
-	<updated>`date --rfc-3339=seconds`</updated>
+	<updated>`pubdb_date`</updated>
 <content type="html" xml:lang="en-US">
 `print ${(f)_body} | pubdb_escape_html`
 </content>
@@ -303,7 +308,7 @@ EOF
 <source>
 	<title type="html">${_subject}</title>
 	<subtitle type="html">From: ${_fname}</subtitle>
-        <updated>`date --rfc-3339=seconds`</updated>
+        <updated>`pubdb_date`</updated>
 	<link rel="self" href="${WEB_ROOT}${upath}" />
 	<id>${WEB_ROOT}${upath}</id>
 </source>
@@ -321,7 +326,7 @@ EOF
 	{ test -d "${md}/views" } && {    
 	    cat <<EOF > "${md}/views/${upath}"
 <h2>${_subject}</h2>
-<h4>From: ${_fname} - sent to ${_tname} on ${_date}</h4>
+<h4>From: ${_fname} - sent to ${_tname} - ${_date}</h4>
 
 ${_body}
 
@@ -331,7 +336,7 @@ EOF
 
 <tr>
 <td style="vertical-align:middle;"><a href="${WEB_ROOT}${upath}">${_fname}</a></td>
-<td style="vertical-align:middle;font-size:1.5em;word-wrap:break-word">
+<td style="vertical-align:middle;word-wrap:break-word">
 <a href="${WEB_ROOT}${upath}">${_subject}</a>
 </td>
 </tr>
