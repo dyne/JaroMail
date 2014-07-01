@@ -379,8 +379,8 @@ BEGIN { head=1 }
 '
 
 	    tmp="$TMPDIR/msmtp.$host.$datestamp.$RANDOM"
-	    newlock $tmp
-	    cat <<EOF > $tmp
+	    newlock "$tmp"
+	    cat <<EOF > "$tmp"
 account default
 from ${email}
 user ${login}
@@ -393,9 +393,13 @@ logfile "${MAILDIRS}/logs/msmtp.log"
 auth ${auth}
 password ${password}
 EOF
-	    msmtp -C $tmp -t < "${qbody}"
+	    tsize=`stat -c '%s' "$qbody"`
+	    act "sending $tsize bytes over the network ..."
+	    msmtp -C "$tmp" -t < "${qbody}"
 	    res=$?
-	    unlink $tmp
+	    #	    unlink "$tmp"
+	    unlock "$tmp"
+	    rm -f "$tmp"
 	fi
 
 	# evaluate results
@@ -463,8 +467,8 @@ peek() {
 	    unset password all; return 1
 	}
 	tmp="$TMPDIR/$imap.peek.$RANDOM"
-	newlock $tmp
-	cat <<EOF >> $tmp
+	newlock "$tmp"
+	cat <<EOF >> "$tmp"
 set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
@@ -478,7 +482,7 @@ set sort=reverse-date-received
 EOF
 	(sleep 1;
 	    cp /dev/null "$TMPDIR/muttpass"
-	    unlink $tmp # secure delete in ram
+	    unlink "$tmp" # secure delete in ram
 	) &
 	${=mutt} -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${imap}${folder}
 
