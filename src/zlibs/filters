@@ -494,9 +494,11 @@ EOF
 	sieve_filter_array+=("$i"); done
     unlink "$TMPDIR/blacklist.sieve.$id"
 
-    sieve_filter \
-	'if header :contains "From"' \
-	zz.blacklist
+    { test "${#sieve_filter_array}" = "0" } || {
+	sieve_filter \
+	    'if header :contains "From"' \
+	    zz.blacklist
+    }
 
     # bounces
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
