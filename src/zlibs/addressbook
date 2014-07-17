@@ -338,7 +338,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
     # now parse the temporary list of name and emails
     # made of name, email and a hash for each, newline separated
     addresses=`cat $tmp`
-    ${=rm} $tmp
+#    ${=rm} $tmp
 
     lock $ADDRESSBOOK
 
@@ -346,12 +346,21 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
     for a in ${(f)addresses}; do
 	{ test "${a[1]}" = "#" } && {
 	    newa=1; # its the end of the entry
-	    # check if we have this email already
-	    foundemail=`lookup_email "${_email}"`
-	    { test "$foundemail" = "" } && {
-		insert_address "${_email}" "${_name}"
-		act "${a} ${_name} <${_email}>"
-	    }
+
+	    # handle lines with multiple emails in vcard
+	    # TODO: generate Groups/${_name} from this
+	    for ee in ${=_email}; do
+		# check if we have this email already
+		_e=`print ${ee} | extract_emails`
+		func "lookup_email: ${_e}"
+		foundemail=`lookup_email "${_e}"`		
+#		func "lookup_email: ${_email}"
+		
+		{ test "$foundemail" = "" } && {
+		    insert_address "${_e}" "${_name}"
+		    act "${a} ${_name} <${_e}>"
+		}
+	    done
 
 	    continue }
 	{ test $newa -eq 1 } && {
