@@ -364,7 +364,7 @@ source '$WORKDIR/.mutt/general'
 source '$WORKDIR/.mutt/formats'
 source '$WORKDIR/.mutt/keybindings'
 source '$WORKDIR/.mutt/colors'
-source '$MAILDIRS/Identity.txt
+source '$MAILDIRS/Identity.txt'
 source '$TMPDIR/muttpass'
 EOF
 
