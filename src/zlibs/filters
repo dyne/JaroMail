@@ -521,7 +521,7 @@ EOF
 	    sieve_filter_array+=($f); done
 
 	sieve_filter \
-	    'if header :contains "To"' \
+	    'if header :contains [ "To","Cc" ] ' \
 	    filters
     }
 
