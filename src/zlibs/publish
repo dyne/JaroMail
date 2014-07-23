@@ -31,8 +31,8 @@ pubdb=""
 pubdb_create() {
     func "create PubDB"
     { test -r "$1" } && {
-	error "PubDBalready exists: $1"
-	return 1
+    error "PubDBalready exists: $1"
+    return 1
     }
     cat <<EOF | ${SQL} -batch "$1"
 CREATE TABLE published
@@ -44,8 +44,8 @@ CREATE TABLE published
 );
 EOF
     { test $? != 0 } && {
-	error "Error creating PubDB in $1"
-	return 1 }
+    error "Error creating PubDB in $1"
+    return 1 }
     # make sure is private
     chmod 600 "$1"
     chown $_uid:$_gid "$1"
@@ -69,11 +69,11 @@ pubdb_insert() {
     func "insert mail in pubdb: $_path"
     cat <<EOF | ${SQL} -batch "$pubdb"
 INSERT INTO published (uid, file, path, date)
-VALUES ("${uid}", "${_file}", "${_path}", "`pubdb_date`");
+VALUES ("${uid}", "${_file}", "${_path}", "`pubdb_date ${_path}`");
 EOF
     { test $? != 0 } && {
-	error "insert_mail: duplicate insert in $pubdb"
-	return 1
+    error "insert_mail: duplicate insert in $pubdb"
+    return 1
     }
     return 0
 }
@@ -83,14 +83,18 @@ pubdb_list() {
     cat <<EOF | ${SQL} -batch "$pubdb"
 .width 64 128
 SELECT path FROM published
-ORDER BY file DESC;
+ORDER BY date DESC;
 EOF
 }
 
 pubdb_getuid() {
     func "pubdb_getuid() $@"
+    # TODO: path should be file only, find through all maildir
     _path="$1"
-    { test -r "$_path" } || { error "path not found for getuid: $_path"; return 1 }
+    { test -r "$_path" } || {
+        error "path not found for getuid: $_path"
+        # TODO: remove from pubdb
+        return 1 }
     uid=`hdr "$_path" | awk '/^Message-ID:/ { gsub(/<|>|,/ , "" , $2); print $2 }'`
     uid="${(Q)uid%\\n*}" # trim
     { test "$uid" = "" } && { uid=`basename "$_path"` }
@@ -98,20 +102,38 @@ pubdb_getuid() {
 
 }
 
+# Takes an email file, parse headers and returns an RFC3339 formatted
+# date value that is suitable for both RSS and SQLITE use. Uses the
+# small C program parsedate for RFC822 parsing (borrowed from Mairix)
 pubdb_date() {
+    _path="$1"
+    { test -r "$_path" } || {
+        error "path not found for pubdb_date: $_path"
+        return 1 }
+    _datestring=`hdr "$_path" | awk '/^Date/ { print $0 }'`
+    func "pubdb_date parsed string: $_datestring"
+    _dateseconds=`${WORKDIR}/bin/parsedate "$_datestring"`
+    { test "$_dateseconds" = "-1" } && {
+        error "could not parse date: $_datestring"
+        return 1 }
+    func "pubdb_date parsed seconds: $_dateseconds"
+    _daterss=`date -d"@${_dateseconds}" --rfc-3339=seconds | sed 's/ /T/'`
+    print "${_daterss}"
+    return 0
+
     # ATOM spec wants a T where date puts a space
-    date --rfc-3339=seconds | sed 's/ /T/'
+    #    date --rfc-3339=seconds | sed 's/ /T/'
 }
 
 pubdb_update() {
     func "pubdb_update() $@"
     md="$1"
     { test "$md" = "" } && {
-	error "Pubdb_update: maildir not found: $md"
-	return 1 }
+    error "Pubdb_update: maildir not found: $md"
+    return 1 }
     { maildircheck "${md}" } || {
-	error "Pubdb_update: not a maildir: $md"
-	return 1 }
+    error "Pubdb_update: not a maildir: $md"
+    return 1 }
     pub="${md}/pub"; ${=mkdir} "$pub"
     pubdb="${md}/.pubdb"
     { test -r "$pubdb" } || { pubdb_create "$pubdb" }
@@ -120,13 +142,13 @@ pubdb_update() {
     mails=`${=find} "${md}/new" "${md}/cur" "${md}/tmp" -type f`
     notice "Publishing emails in $md"
     for m in ${(f)mails}; do
-	pubdb_getuid "$m"
-	u=`pubdb_lookup_uid "$uid"`
-	{ test "$u" = "" } && {
-	    # $u is a new message
-	    func "publish_rss: new message found with uid: $uid"
-	    pubdb_insert "$m"
-	}
+    pubdb_getuid "$m"
+    u=`pubdb_lookup_uid "$uid"`
+    { test "$u" = "" } && {
+        # $u is a new message
+        func "publish_rss: new message found with uid: $uid"
+        pubdb_insert "$m"
+    }
     done
     return 0
 }
@@ -150,68 +172,68 @@ pubdb_extract_body() {
     # check if it has already html
     _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
     { test "$_html" = "" } || {
-    	mu extract --overwrite --parts="$_html" "$_path"
-	# check if there is an html header to weed out
-	grep '<body>' "$_html".part > /dev/null
-	if [ $? = 0 ]; then
-	    awk '
+        mu extract --overwrite --parts="$_html" "$_path"
+    # check if there is an html header to weed out
+    grep '<body>' "$_html".part > /dev/null
+    if [ $? = 0 ]; then
+        awk '
 BEGIN { body=0 }
 /<body/ { body=1; next }
 /<\/body/ { body=0; next }
 { if(body==1) print $0 }' "$_html".part | iconv -c
-	else 
-	    cat "$_html".part | iconv -c
-	fi
-	rm "$_html".part
-	return 0 }
+    else
+        cat "$_html".part | iconv -c
+    fi
+    rm "$_html".part
+    return 0 }
 
     # use the first text/plain
     _text=`mu extract "$_path" | awk '/text\/plain/ {print $1; exit}'`
     { test "$_text" = "" } || {
-	mu extract --overwrite --parts="$_text" "$_path"
-	# here we tweak the origin to avoid headers in markdown
-	# preferring to interpret # as inline preformat
-	cat "$_text".part | sed '
+    mu extract --overwrite --parts="$_text" "$_path"
+    # here we tweak the origin to avoid headers in markdown
+    # preferring to interpret # as inline preformat
+    cat "$_text".part | sed '
 s/^#/    /g
-' | iconv -c | maruku --html-frag | sed '
+' | iconv -c | maruku --html-frag 2>/dev/null | sed '
 s|http://[^ |<]*|<a href="&">&</a>|g
 s|https://[^ |<]*|<a href="&">&</a>|g'
 # s|www\.[^ |<]*|<a href="http://&">&</a>|g'
-	rm "$_text".part
-	return 0
+    rm "$_text".part
+    return 0
     }
 
     # check if its an html only mail
     # _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
     # { test "$_html" = "" } || {
-    # 	mu extract --overwrite --parts="$_html" "$_path"
-    # 	elinks -dump "$_html".part
-    # 	rm "$_html".part
-    # 	return 0 }
+    #   mu extract --overwrite --parts="$_html" "$_path"
+    #   elinks -dump "$_html".part
+    #   rm "$_html".part
+    #   return 0 }
 
     return 0
 }
-    
-    
+
+
 # iterate through the pubdb and publish an rss
 pubdb_render_maildir() {
     func "publish_render_maildir() $@"
     md="$1"
     { test "$md" = "" } && {
-	error "Publish_render_maildir: not found: $md"
-	return 1 }
+    error "Publish_render_maildir: not found: $md"
+    return 1 }
     { maildircheck "${md}" } || {
-	error "Publish_render_maildir: not a maildir: $md"
-	return 1 }
+    error "Publish_render_maildir: not a maildir: $md"
+    return 1 }
     { test -r "${md}/pub" } || {
-	error "Publish_render_maildir: webnomad not found in ${md}"
-	error "Initialize Webnomad inside the maildir that you want published."
-	return 1 }
+    error "Publish_render_maildir: webnomad not found in ${md}"
+    error "Initialize Webnomad inside the maildir that you want published."
+    return 1 }
 
     pub="${md}/pub"
     pubdb="${md}/.pubdb"
     { test -r "$pubdb" } || {
-	error "Publish_render_maildir: first run update_pubdb for $md"; return 1 }
+    error "Publish_render_maildir: first run update_pubdb for $md"; return 1 }
 
     ${=mkdir} $TMPDIR/pubdb
 
@@ -230,7 +252,7 @@ pubdb_render_maildir() {
 <link href="${WEB_ROOT}" />
 <id>${WEB_ROOT}/atom.xml</id>
 
-<updated>`pubdb_date`</updated>
+<updated>`date --rfc-3339=seconds | sed 's/ /T/'`</updated>
 <generator uri="http://www.dyne.org/software/jaro-mail/">JaroMail</generator>
 
 <subtitle type="html">${DESCRIPTION}</subtitle>
@@ -251,88 +273,88 @@ EOF
     c=0
     for m in ${(f)mails}; do
 
-	# fill in uid and upath
-	pubdb_getuid "$m"
+    # fill in uid and upath
+    pubdb_getuid "$m"
 
-	# but skip entries no more existing in maildir
-	{ test -r "$m" } || { continue }
-	# TODO: remove $m from database if not in maildir
+    # but skip entries no more existing in maildir
+    { test -r "$m" } || { continue }
+    # TODO: remove $m from database if not in maildir
 
-	_from=`awk '/^From: / {print $0; exit}' "$m" | sed 's/^From: //; s/ *<[^>]*> *//; s/"//g'`
-	_to=`awk '/^To: / {print $0; exit}' "$m" | sed 's/^To: //; s/ *<[^>]*> *//; s/"//g'`
+    _from=`awk '/^From: / {print $0; exit}' "$m" | sed 's/^From: //; s/ *<[^>]*> *//; s/"//g'`
+    _to=`awk '/^To: / {print $0; exit}' "$m" | sed 's/^To: //; s/ *<[^>]*> *//; s/"//g'`
 
-	if [[ "$_from" =~ "=?UTF-8" ]]; then
-	    _fname=`print "${_from%?=}" | sed 's/^=?UTF-8?B?//' | base64 -d`
-	else _fname="${_from}"; fi
+    if [[ "$_from" =~ "=?UTF-8" ]]; then
+        _fname=`print "${_from%?=}" | sed 's/^=?UTF-8?B?//' | base64 -d`
+    else _fname="${_from}"; fi
 
-	if [[ "$_to" =~ "=?UTF-8" ]]; then
-	    _tname=`print "${_to%?=}" | sed 's/^=?UTF-8?B?//' | base64 -d`
-	else _tname="${_to}"; fi
+    if [[ "$_to" =~ "=?UTF-8" ]]; then
+        _tname=`print "${_to%?=}" | sed 's/^=?UTF-8?B?//' | base64 -d`
+    else _tname="${_to}"; fi
 
 #	_from=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
 #	_to=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x To -a`
 #	_fname=`print ${(Q)_from[(ws:,:)2]} | iconv -c`
 #       _tname=`print ${(Q)_to[(ws:,:)2]} | iconv -c`
-	func "From: ${_fname}"
-	_subject=`hdr "$m" | awk '
+    func "From: ${_fname}"
+    _subject=`hdr "$m" | awk '
 /^Subject:/ { for(i=2;i<=NF;i++) printf "%s ", $i; printf "\n" }
 ' | pubdb_escape_html`
-	_date=`hdr "$m" | awk '/^Date:/ { print $0 }'`
 
-	# fill in uid and upath
-	pubdb_getuid "$m"
+    # fill in uid and upath
+    pubdb_getuid "$m"
 
-	# fill in the body
-	_body=`pubdb_extract_body $m`
+    # fill in the body
+    _body=`pubdb_extract_body $m`
 
-	{ test "$_body" = "" } && { error "Error rendering $m" }
-	
-	(( ++c ))
-	if (( $c < ${FEED_LIMIT:=30} )); then
-	    
-	    # write out the atom entry
-	    cat <<EOF >> "$pub"/atom.xml
+    { test "$_body" = "" } && { error "Error rendering $m" }
+
+    (( ++c ))
+    if (( $c < ${FEED_LIMIT:=30} )); then
+
+        # write out the atom entry
+        cat <<EOF >> "$pub"/atom.xml
 
 <entry>
-	<title type="html" xml:lang="en-US">$_subject</title>
-	<link href="${WEB_ROOT}${upath}" />
-	<id>${WEB_ROOT}${upath}</id>
-	<updated>`pubdb_date`</updated>
+    <title type="html" xml:lang="en-US">$_subject</title>
+    <link href="${WEB_ROOT}${upath}" />
+    <id>${WEB_ROOT}${upath}</id>
+    <updated>`pubdb_date "$m"`</updated>
 <content type="html" xml:lang="en-US">
 `print ${(f)_body} | pubdb_escape_html`
 </content>
 <author>
-	<name>${_fname}</name>
-	<uri>${WEB_ROOT}${upath}</uri>
+    <name>${_fname}</name>
+    <uri>${WEB_ROOT}${upath}</uri>
 </author>
 <source>
-	<title type="html">${_subject}</title>
-	<subtitle type="html">From: ${_fname}</subtitle>
-        <updated>`pubdb_date`</updated>
-	<link rel="self" href="${WEB_ROOT}${upath}" />
-	<id>${WEB_ROOT}${upath}</id>
+    <title type="html">${_subject}</title>
+    <subtitle type="html">From: ${_fname}</subtitle>
+        <updated>${_daterss}</updated>
+    <link rel="self" href="${WEB_ROOT}${upath}" />
+    <id>${WEB_ROOT}${upath}</id>
 </source>
 </entry>
 
 EOF
-	    
-	fi # FEED LIMIT not reached
-	
-	#######
-	# now build an index and the sitemap
-	
 
-	# if using webnomad write out also the message page
-	{ test -d "${md}/views" } && {    
-	    cat <<EOF > "${md}/views/${upath}"
+    fi # FEED LIMIT not reached
+
+    #######
+    # now build an index and the sitemap
+
+
+    # if using webnomad write out also the message page
+    { test -d "${md}/views" } && {
+        _datestring=`hdr "$_path" | awk '/^Date/ { print $0 }'`
+        cat <<EOF > "${md}/views/${upath}"
 <h2>${_subject}</h2>
-<h4>From: ${_fname} - sent to ${_tname} - ${_date}</h4>
+<h4>From: ${_fname} - sent to ${_tname} - ${_datestring}</h4>
 
 ${_body}
 
 EOF
-	    # add entry in index
-	    cat <<EOF >> "${md}/views/index.html"
+        # add entry in index
+        cat <<EOF >> "${md}/views/index.html"
 
 <tr>
 <td style="vertical-align:middle;"><a href="${WEB_ROOT}${upath}">${_fname}</a></td>
@@ -342,7 +364,7 @@ EOF
 </tr>
 
 EOF
-	}
+    }
     done # loop is over
 
     cat <<EOF >> "${pub}/atom.xml"
@@ -354,4 +376,3 @@ EOF
 EOF
 
 }
-
