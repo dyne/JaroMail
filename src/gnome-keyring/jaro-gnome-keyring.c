@@ -73,6 +73,7 @@ get_password(jaro_credential_t *cred)
 					      "username", cred->username,
 					      NULL);
     if (keyres != GNOME_KEYRING_RESULT_OK) {
+	error("failed to get password: %s", gnome_keyring_result_to_message(keyres));
 	return 1;
     }
     g_printf("%s\n", pass);
@@ -94,6 +95,7 @@ check_password(jaro_credential_t *cred)
 					      "username", cred->username,
 					      NULL);
     if (keyres != GNOME_KEYRING_RESULT_OK) {
+	error("failed to check password: %s", gnome_keyring_result_to_message(keyres));
 	return 1;
     }
     gnome_keyring_free_password(pass);
@@ -122,7 +124,7 @@ store_password(jaro_credential_t *cred)
 					       "username", cred->username,
 					       NULL);
     if (keyres != GNOME_KEYRING_RESULT_OK) {
-	error("failed to store password");
+	error("failed to store password: %s", gnome_keyring_result_to_message(keyres));
 	return 1;
     }
     return 0;
@@ -140,7 +142,7 @@ erase_password(jaro_credential_t *cred)
 						"username", cred->username,
 						NULL);
     if (keyres != GNOME_KEYRING_RESULT_OK) {
-	error("failed to delete password");
+	error("failed to erase password: %s", gnome_keyring_result_to_message(keyres));
 	return 1;
     }
     return 0;

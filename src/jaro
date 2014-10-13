@@ -272,9 +272,9 @@ MUTTDIR="$MAILDIRS/.mutt"
 
 # use gnome-keyring for passwords on GNU systems
 GNOMEKEY=0
-{ test $GNOME_KEYRING_CONTROL } && {
-    { command -v jaro-gnome-keyring > /dev/null } && { GNOMEKEY=1 }
-}
+[[ -r $WORKDIR/bin/jaro-gnome-keyring ]] && {
+	 act "using gnome-keyring to store secrets"
+	 GNOMEKEY=1 }
 
 
 cleanexit() {
