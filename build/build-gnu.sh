@@ -24,7 +24,6 @@ mkdir -p build/gnu
     debian)
         print "Building on Debian"
         print "Checking software to install"
-        which procmail  >/dev/null || deps+=(procmail)
         which fetchmail >/dev/null || deps+=(fetchmail)
         which msmtp     >/dev/null || deps+=(msmtp)
         which mutt      >/dev/null || deps+=(mutt)

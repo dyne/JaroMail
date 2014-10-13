@@ -254,9 +254,6 @@ hostname=$(hostname) # gather the current hostname
 ${=mkdir} "$MAILDIRS/logs"
 # ${=mkdir} "$MAILDIRS/certs"
 
-PROCMAILDIR="$MAILDIRS/.procmail"
-{ test -d "$PROCMAILDIR" } || { ${=mkdir} "$PROCMAILDIR" }
-
 MUTTDIR="$MAILDIRS/.mutt"
 { test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
 
@@ -342,7 +339,7 @@ TRAPINT() {
 check_bin() {
 
     # required programs
-    for req in pinentry fetchmail procmail gpg; do
+    for req in pinentry fetchmail gpg; do
 	command -v $req >/dev/null
 	{ test $? != 0 } && {
 	    error "Cannot find $req. Please install it."
@@ -495,7 +492,7 @@ maildirs are directories of mails downloaded in Mail/
 
  filter   passes a maildir through the configured and updated Filters.txt
 
- update   updates Filters.txt generating rules (procmail, sieve)
+ update   updates Filters.txt generating rules (sieve format)
 
  ramdisk [open|close]   activates fast cache in RAM on Mac/OSX (root)
 

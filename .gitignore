@@ -64,3 +64,4 @@ src/nvpscan.c
 src/nvpscan.h
 src/nvpscan.report
 src/pgpewrap
+src/parsedate
