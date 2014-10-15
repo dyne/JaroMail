@@ -462,7 +462,7 @@ EOF
 
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
 ]
-{ fileinto "$fileinto"; stop; }
+{ fileinto :create "$fileinto"; stop; }
 
 EOF
     return 0
@@ -479,7 +479,8 @@ update_sieve() {
     touch "$MAILDIRS/Filters.sieve"
     chmod 600 "$MAILDIRS/Filters.sieve"
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
-require "fileinto";
+# mailbox supports fileinto :create
+require ["fileinto","mailbox"];
 
 EOF
 
@@ -504,7 +505,7 @@ EOF
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # bounces
 if header :contains "Sender" "mailman-bounce" {
-    fileinto "zz.bounces";
+    fileinto :create "zz.bounces";
     stop;
 }
 
@@ -563,7 +564,7 @@ EOF
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # spam
 if header :is "X-Spam-Flag" "YES" {
-    fileinto "zz.spam"; stop;
+    fileinto :create "zz.spam"; stop;
 }
 
 EOF
@@ -576,7 +577,14 @@ EOF
 
     # unsorted
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
-fileinto "unsorted";
+if anyof (header :contains "X-BeenThere" "list",
+          header :contains "X-Mailman-Version" ".",
+          header :contains "List-Post" "@",
+          header :matches "List-Id" ".*",
+          header :matches "Mailing-List" ".*")
+{ fileinto :create "ml.unsorted"; stop; }
+
+fileinto :create "unsorted";
 EOF
 
     unlock "$MAILDIRS/Filters.sieve"
