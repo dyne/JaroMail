@@ -1,0 +1,1 @@
+local delivery: /usr/lib/dovecot/dovecot-lda -c dovecot.conf -e
