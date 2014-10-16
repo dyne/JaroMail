@@ -20,70 +20,74 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-get_imap_info() {
-    { test $name } || {
+run_imap_query() { openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1 }
+
+check_imap() {
+    [[ $name == "" ]] &&  {
 	error "get_imap_info() called with no account loaded"
 	return 1 }
-    { test "$type" != "imap" } && {
-	error "get_imap_info() called on a non-imap account: $type.$host"
+    [[ "$imap" == "" ]] && {
+	error "get_imap_info() called on a non-imap account: $name on $imap"
 	return 1 }
+}
+
+imap_list_folders() {
+    func "imap_list_folders()"
+    check_imap && return 1
+
+    notice "Querying the list of folders for $login on $imap"
+
+    query="
+B00000 CAPABILITY
+B00001 LOGIN \"${login}\" \"${password}\"
+B00002 LIST \"\" *
+B00003 LOGOUT
+"
+    response=`print $query | run_imap_query`
+    folders=`print $response | awk '
+/^\* LIST/ {  gsub(/"/, "", $5); print $5 }
+'`
+    print $folders
+}
+
+imap_get_size() {
+    check_imap && return 1
+
     # skip getting size if Gmail
     # (imap there lacks support for RFC822.SIZE)
     { test "$host" = "imap.gmail.com" } && {
 	act "skipping IMAP examination on GMail account"
 	return 1 }
-    func "Querying size on $type.$host"
+    func "Querying size on $imap:$imap_port"
 
-    c=1
-    tot=0
-    grandtot=0
-    imap_info=()
-    typeset -alU ff
-    id=$RANDOM
-    query=$TMPDIR/imap.size.query.$id
-    newlock $query
-    if [ "$folders" = "" ]; then
-	ff+=(INBOX)
-    else # imap folders are explicit in conf
-	for f in ${(s: :)folders}; do
-	    # no composite works, one word each folder
-	    ff+=($f); done
-    fi
+    [[ "$1" == "" ]] && {
+	folders=(`imap_list_folders`)
+    } || {
+	folders=("$1") }
 
-    for f in ${ff}; do
-	rm -f $query; touch $query
-	cat <<EOF >> $query
+    query="
 B00000 CAPABILITY
-B00001 LOGIN "${login}" "${password}"
-EOF
-	
+B00001 LOGIN \"${login}\" \"${password}\"
+"
+    c=1
+    for f in ${folders}; do
+	[[ "$f" == "" ]] && continue
 	c=$(( $c + 1 ))
-        print "B0000$c SELECT \"${f}\"" >> $query
+	query="$query\nB0000$c SELECT \"${f}\""
 	c=$(( $c + 1 ))
-        print "B0000$c FETCH 1:* (FLAGS RFC822.SIZE)" >> $query
-	print >> $query
-
-	typeset -al res
-	for i in `timeout 5 openssl s_client -starttls imap -quiet \
-	    -connect ${host}:${port}  < $query 2>&1 \
-	    | grep RFC822.SIZE | awk '{ print $NF }' \
-	    | tr -d '\r' | sed 's/)//'`; do
-	    res+=($i); done
-
-	{ test $? != 0 } && {
-	    error "Error connecting to $host:$port"
-	    continue }
-	{ test "$res" = "" } && { 
-	    act "Empty folder $f"
-	    continue }
-
-	for rr in ${res}; do
-	    tot=$(( ($rr) + $tot ))
-	done
-	act "Folder $f has ${#res} messages (`human_size $tot`)"
-	imap_info+=("$f;${#res};$tot")
-	grandtot=$(( $grandtot + $tot ))
+        query="$query\nB0000$c FETCH 1:* (FLAGS RFC822.SIZE)"
     done
-    unlink $query
-    imap_info+=($grandtot)
+    c=$(( $c + 1 ))
+    query="$query\nB0000$c LOGOUT"
+    result=(`print "$query" | run_imap_query | awk '
+/^\*.*FETCH.*RFC822.SIZE/ { gsub(/\)/, "", $NF); print $NF }' | tr -d '\r'`)
+    bytes_total=0
+    for i in $result; do
+#	print $i
+	bytes_total=$(( $bytes_total + $i ))
+    done
+    notice "Size of account $login on $host"
+    act "$bytes_total bytes"
+    mib_total=$(( $bytes_total / 1048576 ))
+    act "$mib_total MB (MiB)"
 }

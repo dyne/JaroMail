@@ -570,6 +570,8 @@ main()
 
     subcommands_opts[publish]=""
 
+    subcommands_opts[imap]=""
+
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
@@ -729,6 +731,35 @@ main()
 	    autostart ${PARAM}
 	    exitcode=$?
 	    ;;
+
+	imap)
+	    imapcmd="$1"
+	    case $1 in
+		getsize)
+		    read_account
+		    ask_password
+		    imap_get_size
+		    exitcode=$?
+		    ;;
+		listfolders)
+		    read_account
+		    ask_password
+		    imap_list_folders
+		    exitcode=$?
+		    ;;
+		# interactive)
+		#     read_account
+		#     ask_password
+		#     imap_interactive_shell
+		#     exitcode=$?
+		#     ;;
+		*)
+		    error "imap needs a subcommand: getsize or listfolders"
+		    CLEANEXIT=0
+		    ;;
+	    esac
+	    ;;
+
 	*) # unknown command, pass it to autostart
 	    func "unknown command, remote check"
 	    autostart ${PARAM}
