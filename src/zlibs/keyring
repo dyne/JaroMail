@@ -75,9 +75,9 @@ ask_password() {
 	    # USE GNOME KEYRING
 	    if [ "$GNOMEKEY" = "1" ]; then
                 func "Looking for password in Gnome keyring for $email ($account)"
-		func "path: jaromail/${type}/${email}"
+		func "path: jaromail/${email}"
 
-		print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" \
+		print "protocol=email\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" \
 		    | "$WORKDIR/bin/jaro-gnome-keyring" check
 		if [ $? != 0 ]; then # its a new password
 		    new_password
@@ -86,13 +86,13 @@ ask_password() {
 			return 1 }
 		else # password found into gnome keyring
 		    act "Using saved password for $login @ $host"
-		    password=`print "protocol=${type}\npath=jaromail/${type}/${email}\nusername=${login}\nhost=${host}\n\n" | "$WORKDIR/bin/jaro-gnome-keyring" get`
+		    password=`print "protocol=email\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" | "$WORKDIR/bin/jaro-gnome-keyring" get`
 		fi
 		return 0
 	    elif [ -r "$KEYRING" ]; then
                 func "Looking for password in local keyring for $email ($account)"
-		func "new pass hash for: $type:$login:$host"
-		_hash=`print "$type:$login:$host" | shasum | awk '{print $1}'`
+		func "new pass hash for: $login:$host"
+		_hash=`print "$login:$host" | shasum | awk '{print $1}'`
 		lookup="`lookup_secret ${_hash}`"
 		{ test "$lookup" = "" } || {
 		    act "Saved password found for $email ($transport on $host)"
@@ -172,10 +172,10 @@ new_password() {
 		# USE GNOME KEYRING
 		if [ "$GNOMEKEY" = "1" ]; then
 		    act "using gnome-keyring password storage"
-		    func "path: jaromail/${type}/${email}"
+		    func "path: jaromail/${email}"
 		    cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" store
-protocol=${type}
-path=jaromail/${type}/${email}
+protocol=email
+path=jaromail/${email}
 username=${login}
 host=${host}
 password=${password}
@@ -187,9 +187,9 @@ EOF
 		    { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
 
 		    # calculate the hash for this entry
-		    _hash=`print "$type:$login:$host" | shasum | awk '{print $1}'`
+		    _hash=`print "$login:$host" | shasum | awk '{print $1}'`
 		    # check if the entry is already present
-		    func "new pass hash for: $type:$login:$host"
+		    func "new pass hash for: $login:$host"
 		    lookup="`lookup_secret ${_hash} rowid`"
 		    notice "Select the password to lock this keyring entry:"
 		    _password="`print $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
