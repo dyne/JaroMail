@@ -20,7 +20,15 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-run_imap_query() { openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1 }
+run_imap_query() {
+    if [ "$transport" = "plain" ]; then
+	func "running plain imap query via netcat, no encryption"
+	nc ${imap} ${imap_port} -q 10 2>&1
+    else
+	func "running ssl imap query via openssl, encrypted"
+	openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1 
+    fi
+}
 
 check_imap() {
     [[ $name == "" ]] &&  {
@@ -40,6 +48,7 @@ B00001 LOGIN \"${login}\" \"${password}\"
 B00002 LIST \"\" *
 B00003 LOGOUT"
     response=`print $query | run_imap_query`
+
     folders=`print $response | awk '
 /^\* LIST/ {  gsub(/"/, "", $5); print $5 }' | tr -d '\r'`
     print $folders
