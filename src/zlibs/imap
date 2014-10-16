@@ -35,18 +35,13 @@ imap_list_folders() {
     func "imap_list_folders()"
     check_imap && return 1
 
-    notice "Querying the list of folders for $login on $imap"
-
-    query="
-B00000 CAPABILITY
+    query="B00000 CAPABILITY
 B00001 LOGIN \"${login}\" \"${password}\"
 B00002 LIST \"\" *
-B00003 LOGOUT
-"
+B00003 LOGOUT"
     response=`print $query | run_imap_query`
     folders=`print $response | awk '
-/^\* LIST/ {  gsub(/"/, "", $5); print $5 }
-'`
+/^\* LIST/ {  gsub(/"/, "", $5); print $5 }' | tr -d '\r'`
     print $folders
 }
 
@@ -65,29 +60,38 @@ imap_get_size() {
     } || {
 	folders=("$1") }
 
-    query="
-B00000 CAPABILITY
-B00001 LOGIN \"${login}\" \"${password}\"
-"
+    query="B00000 CAPABILITY
+B00001 LOGIN \"${login}\" \"${password}\""
+
     c=1
     for f in ${folders}; do
+	func "folder: $f"
 	[[ "$f" == "" ]] && continue
 	c=$(( $c + 1 ))
-	query="$query\nB0000$c SELECT \"${f}\""
+
+	query="$query
+B0000$c SELECT \"${f}\""
+
 	c=$(( $c + 1 ))
-        query="$query\nB0000$c FETCH 1:* (FLAGS RFC822.SIZE)"
+        query="$query
+B0000$c FETCH 1:* (RFC822.SIZE)"
+
     done
     c=$(( $c + 1 ))
-    query="$query\nB0000$c LOGOUT"
+    query="$query
+B0000$c LOGOUT"
+    # print $query
+    # print "$query" | run_imap_query
+    # return 0
+
     result=(`print "$query" | run_imap_query | awk '
 /^\*.*FETCH.*RFC822.SIZE/ { gsub(/\)/, "", $NF); print $NF }' | tr -d '\r'`)
+
     bytes_total=0
+    typeset -A fsizes
     for i in $result; do
-#	print $i
+	# TODO: list sizes per-folder
 	bytes_total=$(( $bytes_total + $i ))
     done
-    notice "Size of account $login on $host"
-    act "$bytes_total bytes"
-    mib_total=$(( $bytes_total / 1048576 ))
-    act "$mib_total MB (MiB)"
+    print $bytes_total
 }

@@ -156,10 +156,10 @@ queue() {
 fetchall() {
     notice "Fetching all accounts in $MAILDIRS"
     res=0
-    for i in `${=find} $WORKDIR/Accounts -type f | grep -v README`; do
+    accts=`${=find} $MAILDIRS/Accounts -type f | grep -v README`
+    notice "Fetching mail for all accounts: ${#accts} found"
+    for i in ${(f)accts}; do
 	account=`basename $i`
-	account_type="${account[(ws:.:)1]}"
-	account="${account[(ws:.:)2]}"
 	fetch
 	if [ $? != 0 ]; then res=1; fi
 	# returns an error if just one of the accounts did
@@ -206,15 +206,22 @@ fetch() {
 
 	fmconf=("poll $imap with proto IMAP user \"$login\" there with password \"$password\"")
 
-	unset password
-
 	if ! [ -z $accountopt ]; then # add option configuration
 	    fmconf+=(" ${accountopt} "); fi
 
-	if ! [ -z $folders ]; then # add folder configuration
-	    fmconf+=(" folder ${folders} "); fi
+	# if no folders specified, use all
+	[[ "$folders" == "" ]] && {
+	    folders=(`imap_list_folders`) }
+	act "${#folders} folders found"
 
-	fmconf+=(" ssl warnings 3600 and wants mda \"jaro -q deliver\" ")
+	unset password
+
+	[[ ${#folders} == "0" ]] && { return 1 }
+
+	# add folder configuration
+	fmconf+=(" folder ${=folders} ");
+
+	fmconf+=(" ${transport} warnings 3600 and wants mda \"jaro -q deliver\" ")
 
 	if [ "$cert" = "check" ]; then
 	    # we now use system-wide certs
@@ -227,6 +234,11 @@ fetch() {
 	print $accountopt | grep 'keep' > /dev/null
 	{ test $? = 0 } || {
 	   error "planning to delete mails from server, account option: $accountopt" }
+
+	print $fmconf
+# QUAAA
+#	return 0
+
 
 	# try login without doing anything
 	print "$fmconf" | fetchmail -c -f -
@@ -438,7 +450,7 @@ peek() {
 
     folder=""
     if ! [ -z ${1} ]; then
-	folder="/${1}"
+	folder="${1}"
 	act "opening folder ${folder}"
     fi
 
@@ -484,7 +496,7 @@ EOF
 	    cp /dev/null "$TMPDIR/muttpass"
 	    unlink "$tmp" # secure delete in ram
 	) &
-	${=mutt} -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${imap}${folder}
+	${=mutt} -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}
 
     } # DRYRUN
     return $?
