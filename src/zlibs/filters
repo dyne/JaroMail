@@ -480,7 +480,7 @@ update_sieve() {
     chmod 600 "$MAILDIRS/Filters.sieve"
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # mailbox supports fileinto :create
-require ["fileinto","mailbox"];
+require ["fileinto","mailbox","variables"];
 
 EOF
 
@@ -577,12 +577,16 @@ EOF
 
     # unsorted
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
-if anyof (header :contains "X-BeenThere" "list",
-          header :contains "X-Mailman-Version" ".",
-          header :contains "List-Post" "@",
-          header :matches "List-Id" ".*",
-          header :matches "Mailing-List" ".*")
-{ fileinto :create "ml.unsorted"; stop; }
+if header :matches "List-Id" "*<*>" {
+  fileinto :create "lists.\${2}"; stop; }
+elsif header :matches "X-BeenThere" "*@*" {
+ fileinto :create "lists.\${1}.\${2}"; stop; }
+elsif header :matches "List-Post" "<mailto:*@*" {
+ fileinto :create "lists.\${1}.\${2}"; stop; }
+
+if anyof (header :contains "X-Mailman-Version" ".",
+          header :contains "Mailing-List" ".") {
+  fileinto :create "lists.unsorted"; stop; }
 
 fileinto :create "unsorted";
 EOF
