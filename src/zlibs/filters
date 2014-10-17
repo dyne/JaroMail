@@ -440,6 +440,8 @@ EOF
 
 }
 
+# sieve_filter() gets an array of patterns to match and builds a long rule
+# for which if they match the conditional directive they all go in one folder
 # $1 = conditional directive
 # $2 = folder to fileinto
 # sieve_filter_array: array of entries
@@ -465,6 +467,25 @@ EOF
 { fileinto :create "$fileinto"; stop; }
 
 EOF
+    return 0
+}
+
+typeset -AlU sieve_filter_map
+# sieve_complex_filter gets a map of patterns as an argument and builds a
+# long rule for which any key matching it gets delivered to its value folder
+# $1 = conditional directive
+# sieve_filter_map = map of patterns, key is match and value is destination
+# assign with set -A sieve_filter_map yourmap
+sieve_complex_filter() {
+    [[ ${#sieve_filter_map} == 0 ]] && { return 1 }
+    condition="$1"
+    func "Sieve complex filter entries: ${#sieve_filter_map}"
+    
+    for fil in ${(k)sieve_filter_map}; do
+	print "$condition \"${fil}\" { fileinto :create \"${sieve_filter_map[$fil]}\"; stop; }" \
+	    >> "$MAILDIRS/Filters.sieve"
+    done
+    
     return 0
 }
 
@@ -514,28 +535,14 @@ if header :contains "Sender" "mailman-bounce" {
 
 EOF
 
-    # now do our own filters
-    sieve_filter_array=()
-    { test ${#filter_to} -gt 0 } && {
+    set -A sieve_filter_map ${(kv)filter_to}
+    sieve_complex_filter 'if header :contains [ "To","Cc" ] '
 
-	for f in ${(k)filter_to}; do
-	    sieve_filter_array+=($f); done
+    set -A sieve_filter_map ${(kv)filter_from}
+    sieve_complex_filter 'if header :contains "From"'
 
-	sieve_filter \
-	    'if header :contains [ "To","Cc" ] ' \
-	    filters
-    }
 
-    sieve_filter_array=()
-    { test ${#filter_from} -gt 0 } && {
 
-	for f in ${(k)filter_from}; do
-	    sieve_filter_array+=($f); done
-
-	sieve_filter \
-	    'if header :contains "From"' \
-	    filters
-    }
 
     ##############################################################
     # if the sender is known (whitelist) then put mail in
