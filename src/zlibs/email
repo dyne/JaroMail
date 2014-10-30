@@ -235,11 +235,6 @@ fetch() {
 	{ test $? = 0 } || {
 	   error "planning to delete mails from server, account option: $accountopt" }
 
-	print $fmconf
-# QUAAA
-#	return 0
-
-
 	# try login without doing anything
 	print "$fmconf" | fetchmail -c -f -
 	res=$?

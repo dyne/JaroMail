@@ -22,20 +22,25 @@
 
 run_imap_query() {
     if [ "$transport" = "plain" ]; then
-	func "running plain imap query via netcat, no encryption"
-	nc ${imap} ${imap_port} -q 10 2>&1
+	    func "running plain imap query via netcat, no encryption"
+	    nc ${imap} ${imap_port} -q 10 2>&1
+    elif [ "$transport" = "tls" ]; then
+        func "running tls imap query via openssl, encrypted"
+	    openssl s_client -quiet -connect ${imap}:${imap_port} 2>&1 
+    elif [ "$transport" = "ssl" ]; then
+	    func "running ssl imap query via openssl, encrypted"
+	    openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1 
     else
-	func "running ssl imap query via openssl, encrypted"
-	openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1 
+        error "unknown transport \"$transport\" for a imap query"
     fi
 }
 
 check_imap() {
     [[ $name == "" ]] &&  {
-	error "get_imap_info() called with no account loaded"
-	return 1 }
+	    error "get_imap_info() called with no account loaded"
+	    return 1 }
     [[ "$imap" == "" ]] && {
-	error "get_imap_info() called on a non-imap account: $name on $imap"
+	    error "get_imap_info() called on a non-imap account: $name on $imap"
 	return 1 }
 }
 
@@ -48,7 +53,6 @@ B00001 LOGIN \"${login}\" \"${password}\"
 B00002 LIST \"\" *
 B00003 LOGOUT"
     response=`print $query | run_imap_query`
-
     folders=`print $response | awk '
 /^\* LIST/ {  gsub(/"/, "", $5); print $5 }' | tr -d '\r'`
     print $folders

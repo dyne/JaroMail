@@ -470,7 +470,7 @@ EOF
     return 0
 }
 
-typeset -AlU sieve_filter_map
+typeset -A sieve_filter_map
 # sieve_complex_filter gets a map of patterns as an argument and builds a
 # long rule for which any key matching it gets delivered to its value folder
 # $1 = conditional directive
