@@ -170,11 +170,15 @@ sender_isknown() {
 }
 
 learn() {
-    func "learn ${PARAM[1]} from mail in stdin"
+    func "learning ${PARAM[1]} in stdin piped mails"
+    [[ $DRYRUN == 1 ]] && {
+        func "dryrun parsing ${PARAM[1]} in stdin piped mails" }
 
     what=sender
-    { test -z ${PARAM[1]} } || { what=${PARAM[1]} }
+    [[ "${PARAM[1]}" != "" ]] && { what=${PARAM[1]} }
+
     buffer=`cat`
+
     case ${PARAM[1]} in
 
 	sender) # simple: one address only on From:
@@ -182,7 +186,11 @@ learn() {
 	    # (Q) eliminates quotes, then word split
 	    email="${(Q)head[(ws:,:)1]}"
 	    name="${(Q)head[(ws:,:)2]}"
-	    insert_address "$email" "$name"
+        print "$name" "<$email>"
+        [[ $DRYRUN == 1 ]] || {
+	        insert_address "$email" "$name"
+		    { test $? = 0 } && { act "new: $_name <${_email}>" }
+        }
 	    return 0
 	    ;;
 
@@ -192,8 +200,13 @@ learn() {
 		# (Q) eliminates quotes, then word split
 		email="${(Q)h[(ws:,:)1]}"
 		name="${(Q)h[(ws:,:)2]}"
-		insert_address "$email" "$name"
-		{ test $? = 0 } && { act "new: $_name <${_email}>" }
+
+        print "$name" "<$email>"
+
+        [[ $DRYRUN == 1 ]] || {
+		    insert_address "$email" "$name"
+		    { test $? = 0 } && { act "new: $_name <${_email}>" }
+        }
 	    done
 	    return 0
 	    ;;
@@ -204,7 +217,12 @@ learn() {
 		# (Q) eliminates quotes, then word split
 		email="${(Q)h[(ws:,:)1]}"
 		name="${(Q)h[(ws:,:)2]}"
-		insert_address "$email" "$name"
+        print "$name" "<$email>"
+
+        [[ $DRYRUN == 1 ]] || {
+		    insert_address "$email" "$name"
+		    { test $? = 0 } && { act "new: $_name <${_email}>" }
+        }
 	    done
 
 	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x Cc -a`"
@@ -212,7 +230,12 @@ learn() {
 		# (Q) eliminates quotes, then word split
 		email="${(Q)h[(ws:,:)1]}"
 		name="${(Q)h[(ws:,:)2]}"
-		insert_address "$email" "$name"
+        print "$name" "<$email>"
+
+        [[ $DRYRUN == 1 ]] || {
+		    insert_address "$email" "$name"
+		    { test $? = 0 } && { act "new: $_name <${_email}>" }
+        }
 	    done
 	    return 0
 	    ;;
@@ -221,6 +244,7 @@ learn() {
 	    error "Unknown learning function: $what" ;;
     esac
     return 1
+
 }
 
 forget() {
