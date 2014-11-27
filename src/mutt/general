@@ -68,7 +68,7 @@ auto_view text/html
 
 ##################
 ## Compose options
-set weed = yes
+set weed = no
 
 ################
 ## Reply options
