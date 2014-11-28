@@ -28,7 +28,7 @@
 read_account() {
     typeset -al all
     unset name email imap imap_port smtp smtp_port \
-	host login transport auth cert options folders
+	    host login transport auth cert options folders exclude
     # parse arguments
 
     { test "$account" = "" } && { account="default" }
@@ -62,7 +62,8 @@ read_account() {
     /^auth/ { printf "auth=\"%s\";", $2 }
     /^cert/ { printf "cert=\"%s\";", $2 }
     /^options/ { printf "accountopt=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
-    /^folders/ { printf "folders=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
+    /^folders/ { printf "folders=("; for(i=2;i<=NF;i++) printf "%s ", $i; printf ");" }
+    /^exclude/ { printf "exclude=("; for(i=2;i<=NF;i++) printf "%s ", $i; printf ");" }
     ' "$acct"`
     { test $? = 0 } || {
 	error "Error parsing account: $acct"
@@ -108,6 +109,7 @@ read_account() {
     func "auth: $auth"
     func "options: $accountopt"
     func "folders: $folders"
+    func "exclude: $exclude"
 
     return 0
 }

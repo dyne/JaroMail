@@ -1,4 +1,4 @@
-# Example filter configuration for Jaro Mail
+# Default filter configuration for Jaro Mail
 
 # Mailinglist filters are in order of importance
 # syntax: to <list email> save <folder>
@@ -6,24 +6,31 @@
 # which makes it handy when browsing with file completion.
 
 # to	  crypto@lists.dyne	save	dyne.crypto
-# to	  dynebolic		save	dyne.dynebolic
-# to	  freej			save	dyne.freej
+# to	  dynebolic		    save	dyne.dynebolic
+# to	  freej			    save	dyne.freej
 # to	  frei0r-devel		save	dyne.frei0r
-# to	  taccuino		save	ml.freaknet
-# to	  deadpoets		save	ml.freaknet
+# to	  taccuino		    save	ml.freaknet
+# to	  deadpoets		    save	ml.freaknet
 # to	  linux-libre		save	gnu.linux-libre
 # to	  foundations@lists	save	gnu.foundations
 # to	  debian-mentors	save	debian.mentors
 # to	  debian-blends		save	debian.blends
-# to	  freedombox-discuss	save	debian.freedombox
 
 # Other filters for web 2.0 using folder names with a prefix:
 # they can facilitate folder maintainance.
+# These are on by default, comment out if not desired.
 
-# from      Twitter		save	web.twitter
-# from      linkedin		save	web.linkedin
-# from      googlealerts	save	web.google
-# from	    plus.google.com	save	web.google
-# from      facebook		save	web.facebook
-# from      FriendFeed		save	web.friendfeed
-# from      academia.edu	save	web.academia
+from      github.com            save	zz.social
+from      launchpad	            save	zz.social
+from      identi.ca             save	zz.social
+from      twitter.com		    save	zz.social
+from      linkedin.com		    save	zz.social
+from      googlealerts		    save	zz.social
+from      plus.google.com	    save	zz.social
+from      youtube.com		    save	zz.social
+from      wmt-noreply@google	save	zz.social
+from      facebook		        save	zz.social
+from      FriendFeed		    save	zz.social
+from      academia-mail.com	    save	zz.social
+from      statusnet		        save	zz.social
+from      basecamp		        save	zz.social

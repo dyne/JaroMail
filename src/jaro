@@ -60,7 +60,8 @@ typeset -h list
 list=whitelist
 
 # global variables for accounts
-typeset -h name login imap imap_port smtp smtp_port protocol password auth folders accountopt
+typeset -h name login imap imap_port smtp smtp_port protocol password auth accountopt
+typeset -ah folders exclude
 typeset -h host port type
 
 # global variables for addressbook

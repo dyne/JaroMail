@@ -202,71 +202,84 @@ fetch() {
 
     # notice "Total occupation is `human_size ${imap_info[${#imap_info}]}`"
 
-    { test $DRYRUN != 1 } && {
-
 	fmconf=("poll $imap with proto IMAP user \"$login\" there with password \"$password\"")
-
+    
 	if ! [ -z $accountopt ]; then # add option configuration
 	    fmconf+=(" ${accountopt} "); fi
-
+    
 	# if no folders specified, use all
 	[[ "$folders" == "" ]] && {
 	    folders=(`imap_list_folders`) }
 	act "${#folders} folders found"
-
+    
+    # unset here because listing folders still needs a pass
 	unset password
 
-	[[ ${#folders} == "0" ]] && { return 1 }
+    # nothing to download, bail out with error
+	[[ ${#folders} == "0" ]] && return 1
 
+    # remove excludes
+    [[ ${#exclude} == "0" ]] || {
+        func "exclude folders: $exclude"
+        for e in ${exclude}; do
+            folders=(${folders:#$e})
+        done
+    }
+    func "fetch folders: $folders"
+    
 	# add folder configuration
 	fmconf+=(" folder ${=folders} ");
-
+    
 	fmconf+=(" ${transport} warnings 3600 and wants mda \"jaro -q deliver\" ")
-
+    
 	if [ "$cert" = "check" ]; then
 	    # we now use system-wide certs
 	    fmconf+=(" sslcertck ") # sslcertpath '$WORKDIR/certs'
 	fi
-
-
+    
+    
 	fmconf+=(" antispam 571 550 501 554 ")
-
+    
 	print $accountopt | grep 'keep' > /dev/null
 	{ test $? = 0 } || {
-	   error "planning to delete mails from server, account option: $accountopt" }
-
+	    error "planning to delete mails from server, account option: $accountopt" }
+    
 	# try login without doing anything
 	print "$fmconf" | fetchmail -c -f -
 	res=$?
 	# examine result
 	case $ret in
 	    1)
-		notice "No mails for $name"
-		unset $fmconf
-		return 1
-		;;
+		    notice "No mails for $name"
+		    unset $fmconf
+		    return 1
+		    ;;
 	    2)
-		error "Invalid or unknown certificate for $imap"
-		unset $fmconf
-		return 1
-		;;
+		    error "Invalid or unknown certificate for $imap"
+		    unset $fmconf
+		    return 1
+		    ;;
 	    3)
-		error "Invalid password for user $login at $imap"
-		unset $fmconf
-		return 1
-		;;
+		    error "Invalid password for user $login at $imap"
+		    unset $fmconf
+		    return 1
+		    ;;
 	    *)
-		func "fetchmail returns $ret" ;;
+		    func "fetchmail returns $ret" ;;
 	esac
 
-	act "please wait while downloading mails to incoming..."
-
-	print " $fmconf " | fetchmail -f -
+    if [[ $DRYRUN = 0 ]]; then
+        
+	    act "please wait while downloading mails to incoming..."
+        
+	    print " $fmconf " | fetchmail -f -
+        
+    else
+        act "dryrun: nothing will be fetched really."
+    fi
 
 	unset $fmconf
-
-    } # DRYRUN
-
+    
     return 0
 }
 

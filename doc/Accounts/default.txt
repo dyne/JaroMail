@@ -42,9 +42,16 @@ transport ssl
 # by default this is 'keep': don't delete mails from server
 options keep
 
-# Imap folders
-# uncomment to provide a list of folders to be fetched
-# folders INBOX, known, priv, lists, ml.unsorted, unsorted
+# Remote IMAP folders to be retreived
+# fill to provide a list of folders to be fetched
+# default is to detect and fetch all remote folders
+## folders INBOX priv unsorted filters 
+
+# list of folders to exclude from fetch
+# comment or change to avoid leaving them on server
+# please note we filters social networks by default
+# (see Filters.txt and change it as you like)
+exclude zz.spam zz.bounces zz.blacklist zz.social
 
 
 #

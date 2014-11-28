@@ -176,75 +176,75 @@ learn() {
 
     what=sender
     [[ "${PARAM[1]}" != "" ]] && { what=${PARAM[1]} }
-
+    func "learning from $what"
     buffer=`cat`
 
-    case ${PARAM[1]} in
-
-	sender) # simple: one address only on From:
-	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x From -a`"
-	    # (Q) eliminates quotes, then word split
-	    email="${(Q)head[(ws:,:)1]}"
-	    name="${(Q)head[(ws:,:)2]}"
-        print "$name" "<$email>"
-        [[ $DRYRUN == 1 ]] || {
-	        insert_address "$email" "$name"
-		    { test $? = 0 } && { act "new: $_name <${_email}>" }
-        }
-	    return 0
-	    ;;
-
-	all)
-	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -a`"
-	    for h in ${(f)head}; do
-		# (Q) eliminates quotes, then word split
-		email="${(Q)h[(ws:,:)1]}"
-		name="${(Q)h[(ws:,:)2]}"
-
-        print "$name" "<$email>"
-
-        [[ $DRYRUN == 1 ]] || {
-		    insert_address "$email" "$name"
-		    { test $? = 0 } && { act "new: $_name <${_email}>" }
-        }
-	    done
-	    return 0
-	    ;;
-
-	recipient) # complex: more addresses in To: and Cc:
-	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x To -a`"
-	    for h in ${(f)head}; do
-		# (Q) eliminates quotes, then word split
-		email="${(Q)h[(ws:,:)1]}"
-		name="${(Q)h[(ws:,:)2]}"
-        print "$name" "<$email>"
-
-        [[ $DRYRUN == 1 ]] || {
-		    insert_address "$email" "$name"
-		    { test $? = 0 } && { act "new: $_name <${_email}>" }
-        }
-	    done
-
-	    head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x Cc -a`"
-	    for h in ${(f)head}; do
-		# (Q) eliminates quotes, then word split
-		email="${(Q)h[(ws:,:)1]}"
-		name="${(Q)h[(ws:,:)2]}"
-        print "$name" "<$email>"
-
-        [[ $DRYRUN == 1 ]] || {
-		    insert_address "$email" "$name"
-		    { test $? = 0 } && { act "new: $_name <${_email}>" }
-        }
-	    done
-	    return 0
-	    ;;
-
-	*)
-	    error "Unknown learning function: $what" ;;
+    case ${what} in
+        
+	    sender) # simple: one address only on From:
+	        head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x From -a`"
+	        # (Q) eliminates quotes, then word split
+	        email="${(Q)head[(ws:,:)1]}"
+	        name="${(Q)head[(ws:,:)2]}"
+            print "$name" "<$email>"
+            [[ $DRYRUN == 1 ]] || {
+	            insert_address "$email" "$name"
+		        { test $? = 0 } && { act "new: $_name <${_email}>" }
+            }
+	        return 0
+	        ;;
+        
+	    all)
+	        head="`print $buffer | ${WORKDIR}/bin/fetchaddr -a`"
+	        for h in ${(f)head}; do
+		        # (Q) eliminates quotes, then word split
+		        email="${(Q)h[(ws:,:)1]}"
+		        name="${(Q)h[(ws:,:)2]}"
+                
+                print "$name" "<$email>"
+                
+                [[ $DRYRUN == 1 ]] || {
+		            insert_address "$email" "$name"
+		            { test $? = 0 } && { act "new: $_name <${_email}>" }
+                }
+	        done
+	        return 0
+	        ;;
+        
+	    recipient) # complex: more addresses in To: and Cc:
+	        head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x To -a`"
+	        for h in ${(f)head}; do
+		        # (Q) eliminates quotes, then word split
+		        email="${(Q)h[(ws:,:)1]}"
+		        name="${(Q)h[(ws:,:)2]}"
+                print "$name" "<$email>"
+                
+                [[ $DRYRUN == 1 ]] || {
+		            insert_address "$email" "$name"
+		            { test $? = 0 } && { act "new: $_name <${_email}>" }
+                }
+	        done
+            
+	        head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x Cc -a`"
+	        for h in ${(f)head}; do
+		        # (Q) eliminates quotes, then word split
+		        email="${(Q)h[(ws:,:)1]}"
+		        name="${(Q)h[(ws:,:)2]}"
+                print "$name" "<$email>"
+                
+                [[ $DRYRUN == 1 ]] || {
+		            insert_address "$email" "$name"
+		            { test $? = 0 } && { act "new: $_name <${_email}>" }
+                }
+	        done
+	        return 0
+	        ;;
+        
+	    *)
+	        error "Unknown learning function: $what" ;;
     esac
     return 1
-
+    
 }
 
 forget() {
