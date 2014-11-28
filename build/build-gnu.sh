@@ -132,6 +132,16 @@ mkdir -p build/gnu
     print OK
 }
 
+{ test "$target" = "dotlock" } || {
+    test "$target" = "all" } && {
+    print "Compiling the file dotlock... "
+    pushd src
+    ${=cc} -c dotlock.c -I . -DDL_STANDALONE
+    ${=cc} -o dotlock dotlock.o
+    popd
+    cp src/dotlock build/gnu/
+    print OK
+}
 
 
 { test "$target" = "gnome-keyring" } || {
