@@ -99,12 +99,15 @@ copydeps_brew() {
 	chmod +w $bin/$exe
 	strip $bin/$exe
 	for d in ${libs}; do
-	    dylib=`basename $d`
+        dylib=${d#*/}
+        dylib_path=${homebrew}/lib/$dylib
+
 	    print "  $dylib"
 	    # make sure destination is writable
-	    dylibdest=$lib/`basename $d`
-	    { test -r $dylibdest } || { cp -v "$d" "$dylibdest" }
-	    install_name_tool -change $d \
+	    dylibdest=$lib/$dylib
+
+	    { test -r $dylibdest } || { cp -v "$dylib_path" "$dylibdest" }
+	    install_name_tool -change "$d" \
 		"/Applications/JaroMail.app/Contents/Frameworks/`basename $d`" $bin/$exe
 	done
 
