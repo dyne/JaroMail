@@ -86,7 +86,7 @@ copydeps() {
 print "Building Jaro Mail binary stash for Apple/OSX"
 
 
-if ! [ -r ${homebrew}/bin/port ]; then
+if ! [ -r ${homebrew}/bin ]; then
 	print "Homebrew binaries not found in $homebrew"
 	return 1
 fi
