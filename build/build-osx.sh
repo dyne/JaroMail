@@ -29,14 +29,16 @@ ldflags+=(-L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform
 
 # ${builddir}/clang-static-osx.sh"
 
+homebrew="/usr/local"
+
 #cflags="-arch x86_64 -arch i386 -O2"
-cflags=(-I/opt/local/include -I/usr/include)
+cflags=(-I${homebrew}/include -I/usr/include)
 cflags+=(-arch x86_64)
 #cflags+=(-arch i386)
 cflags+=(-O2)
 
 
-ldflags=(-L/opt/local/lib -L/usr/lib)
+ldflags=(-L${homebrew}/lib -L/usr/lib)
 
 
 target=all
@@ -84,8 +86,8 @@ copydeps() {
 print "Building Jaro Mail binary stash for Apple/OSX"
 
 
-if ! [ -r /opt/local/bin/port ]; then
-	print "MacPorts not found in /opt/local. Operation aborted."
+if ! [ -r ${homebrew}/bin/port ]; then
+	print "Homebrew binaries not found in $homebrew"
 	return 1
 fi
 
@@ -180,18 +182,18 @@ appdst=JaroMail.app
     cp -v ${root}/src/fetchdate
     cp -v ${root}/src/fetchaddr
 #    cp -v ${root}/src/ABQuery/build/Release/lbdb-ABQuery
-    copydeps /opt/local/bin/mutt
-    copydeps /opt/local/bin/mutt_dotlock
-    copydeps /opt/local/bin/pgpewrap
-#    copydeps /opt/local/bin/procmail
-    copydeps /opt/local/bin/fetchmail
-    copydeps /opt/local/bin/elinks
-    copydeps /opt/local/bin/gfind
-    copydeps /opt/local/bin/msmtp
-    copydeps /opt/local/bin/gpg
-    copydeps /opt/local/bin/pinentry
-    copydeps /opt/local/bin/pinentry-curses
-    copydeps /opt/local/bin/abook
+    copydeps ${homebrew}/bin/mutt
+    copydeps ${homebrew}/bin/mutt_dotlock
+    copydeps ${homebrew}/bin/pgpewrap
+#    copydeps ${homebrew}/bin/procmail
+    copydeps ${homebrew}/bin/fetchmail
+    copydeps ${homebrew}/bin/elinks
+    copydeps ${homebrew}/bin/gfind
+    copydeps ${homebrew}/bin/msmtp
+    copydeps ${homebrew}/bin/gpg
+    copydeps ${homebrew}/bin/pinentry
+    copydeps ${homebrew}/bin/pinentry-curses
+    copydeps ${homebrew}/bin/abook
 
     # system wide
     # rm build/osx/dylib/libiconv.2.dylib
