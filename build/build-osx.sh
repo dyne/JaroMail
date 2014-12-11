@@ -83,6 +83,34 @@ copydeps() {
 }
 
 
+copydeps_brew() {
+	# copy a binary and all dependencies until 3rd level
+	# 1st argument is the binary (full path)
+	# 2nd is the .app where to copy it (relative)
+
+	libs=(`otool -L $1 | awk '
+		/^\// {next} /@rpath/ {print $1}'`)
+
+	exe=`basename $1`
+	bin=osx
+	lib=osx/dylib
+	cp -v $1 $bin/$exe
+	{ test $? = 0 } || { print "Error copying $1" }
+	chmod +w $bin/$exe
+	strip $bin/$exe
+	for d in ${libs}; do
+	    dylib=`basename $d`
+	    print "  $dylib"
+	    # make sure destination is writable
+	    dylibdest=$lib/`basename $d`
+	    { test -r $dylibdest } || { cp -v "$d" "$dylibdest" }
+	    install_name_tool -change $d \
+		"/Applications/JaroMail.app/Contents/Frameworks/`basename $d`" $bin/$exe
+	done
+
+}
+
+
 print "Building Jaro Mail binary stash for Apple/OSX"
 
 
@@ -171,6 +199,17 @@ fi
 pushd build
 appdst=JaroMail.app
 
+# if brew is present then install a few needed packages
+command -v brew
+[[ $? = 0 ]] && {
+    brew install mutt
+    brew install fetchmail
+    brew install msmtp
+    brew install findutils
+    brew install elinks
+    brew install abook
+}    
+
 # copy all built binaries in place
 { test "$target" = "install" } || { 
     test "$target" = "all" } && {
@@ -179,21 +218,20 @@ appdst=JaroMail.app
     mkdir -p $appdst/Contents/Frameworks
 
 # static ones do not require relocated links
-    cp -v ${root}/src/fetchdate
-    cp -v ${root}/src/fetchaddr
+    cp -v ${root}/src/fetchdate osx
+    cp -v ${root}/src/fetchaddr osx
 #    cp -v ${root}/src/ABQuery/build/Release/lbdb-ABQuery
-    copydeps ${homebrew}/bin/mutt
-    copydeps ${homebrew}/bin/mutt_dotlock
-    copydeps ${homebrew}/bin/pgpewrap
+    copydeps_brew ${homebrew}/bin/mutt
+    copydeps_brew ${homebrew}/bin/pgpewrap
 #    copydeps ${homebrew}/bin/procmail
-    copydeps ${homebrew}/bin/fetchmail
-    copydeps ${homebrew}/bin/elinks
-    copydeps ${homebrew}/bin/gfind
-    copydeps ${homebrew}/bin/msmtp
-    copydeps ${homebrew}/bin/gpg
-    copydeps ${homebrew}/bin/pinentry
-    copydeps ${homebrew}/bin/pinentry-curses
-    copydeps ${homebrew}/bin/abook
+    copydeps_brew ${homebrew}/bin/fetchmail
+    copydeps_brew ${homebrew}/bin/elinks
+    copydeps_brew ${homebrew}/bin/gfind
+    copydeps_brew ${homebrew}/bin/msmtp
+    copydeps_brew ${homebrew}/bin/gpg
+    copydeps_brew ${homebrew}/bin/pinentry
+    copydeps_brew ${homebrew}/bin/pinentry-curses
+    copydeps_brew ${homebrew}/bin/abook
 
     # system wide
     # rm build/osx/dylib/libiconv.2.dylib
