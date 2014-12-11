@@ -83,28 +83,48 @@ copydeps() {
 
 print "Building Jaro Mail binary stash for Apple/OSX"
 
+
 if ! [ -r /opt/local/bin/port ]; then
 	print "MacPorts not found in /opt/local. Operation aborted."
 	return 1
 fi
 
-{ test "$target" = "abquery" } || { 
+# { test "$target" = "abquery" } || { 
+#     test "$target" = "all" } && {
+# # build apple addressbook query
+#     print "Address book query"
+#     pushd src/ABQuery
+#     xcodebuild > /dev/null
+#     popd
+# }
+
+{ test "$target" = "dfasyn" } || { 
     test "$target" = "all" } && {
-# build apple addressbook query
-    print "Address book query"
-    pushd src/ABQuery
-    xcodebuild > /dev/null
+    pushd src/mairix/dfasyn
+    ./configure
+    make
     popd
 }
 
+{ test "$target" = "mairix" } || { 
+    test "$target" = "all" } && {
+    pushd src/mairix
+    print "Building Mairix"
+    ./configure
+    make
+    popd
+}
   
 { test "$target" = "fetchaddr" } || { 
     test "$target" = "all" } && {
 # build our own address parser
     pushd src
     print "Address parser"
-    $cc ${=cflags} -c fetchaddr.c helpers.c rfc2047.c rfc822.c
-    $cc -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o ${=ldflags};
+    $cc ${=cflags} -c fetchaddr.c
+    $cc ${=cflags} -c helpers.c
+    $cc ${=cflags} -c rfc2047.c
+    $cc ${=cflags} -c rfc822_mutt.c
+    $cc -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822_mutt.o ${=ldflags};
     popd
 }
 
