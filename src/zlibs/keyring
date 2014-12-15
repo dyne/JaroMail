@@ -127,120 +127,106 @@ EOF
 }
 
 new_password() {
-    notice "Setting a new password for account $account on $host"
+    
+    read_account ${account}
+    
+    notice "Setting a new password for account $account"
     act "please enter password for username '$login'"
-    password=`pin_entry $login $host`
+    
+    password=`pin_entry $login "on $account"`
     res=0
     case $OS in
-	MAC)
-	    if [ "$password" != "" ]; then
+	    MAC)
 
-		security delete-internet-password \
-		    -c JARO -a $email -s $host > /dev/null
-
-		security add-internet-password \
-		    -c JARO -a $email -s $host -w "${password}"
-
-		if [ $? != 0 ]; then
-		    error "Error adding password to keyring."
-		else
+            [[ "$password" = "" ]] && {
+		        error "No password given, operation aborted"
+		        return 1
+            }
+            
+            [[ "$imap" = "" ]] || {
+                security delete-internet-password \
+                    -c JARO -a $email -s $imap > /dev/null
+                res=$(( $? + $res ))
+                security add-internet-password \
+                    -c JARO -a $email -s $imap -w "${password}"
+                res=$(( $? + $res ))
+                
+            }
+            
+            [[ "$smtp" = "" ]] || {
+                security delete-internet-password \
+                    -c JARO -a $email -s $smtp > /dev/null
+                res=$(( $? + $res ))
+                security add-internet-password \
+                    -c JARO -a $email -s $smtp -w "${password}"
+                res=$(( $? + $res ))
+            }
+            
+		    [[ $res = 0 ]] || {
+		        error "Error adding password to keyring."
+                return 1
+            }
+            
 		    act "New password saved in keyring"
-		fi
-		return 0
+		    return 0
+            
+	        ;;
 
-	    else
-		error "No password given, operation aborted"
-		return 1
+	    GNU)
 
-		# we are not deleting passwords anymore
-		security delete-internet-password \
-		    -c JARO -a $email -s $host > /dev/null
-		res=$?; unset password
-		{ test $res != 0 } && {
-		    echo
-		    error "Error deleting password from keyring."
-		    return 1 }
-		act "No new password given, old password erased."
-		return 0
-		#########
-
-	    fi
-	    ;;
-	GNU)
-	    if [ "$password" != "" ]; then # password was written
-
-		# USE GNOME KEYRING
-		if [ "$GNOMEKEY" = "1" ]; then
-		    act "using gnome-keyring password storage"
-		    func "path: jaromail/${email}"
-		    cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" store
+            [[ "$password" = "" ]] && {
+		        error "No password given, operation aborted"
+		        return 1
+            }
+            
+		    # USE GNOME KEYRING
+		    if [ "$GNOMEKEY" = "1" ]; then
+		        act "using gnome-keyring password storage"
+		        func "path: jaromail/${email}"
+                for h in "$imap" "$smtp"; do
+		            cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" store
 protocol=email
 path=jaromail/${email}
 username=${login}
-host=${host}
+host=${h}
 password=${password}
 EOF
-		    { test $? != 0 } && { error "Error saving password in Gnome keyring" }
+                done
+		        { test $? != 0 } && { error "Error saving password in Gnome keyring" }
+                
+		    else # USE LOCAL KEYRING
+                
+		        { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
 
-		else # save it into local keyring
-
-		    { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
-
-		    # calculate the hash for this entry
-		    _hash=`print "$login:$host" | shasum | awk '{print $1}'`
-		    # check if the entry is already present
-		    func "new pass hash for: $login:$host"
-		    lookup="`lookup_secret ${_hash} rowid`"
-		    notice "Select the password to lock this keyring entry:"
-		    _password="`print $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
-		    if [ "$lookup" = "" ]; then # new entry
-			cat <<EOF | ${SQL} -batch "$KEYRING"
+                for h in "$imap" "$smtp"; do                
+		            # calculate the hash for this entry
+		            _hash=`print "$login:$host" | shasum | awk '{print $1}'`
+		            # check if the entry is already present
+		            func "new pass hash for: $login:$host"
+		            lookup="`lookup_secret ${_hash} rowid`"
+		            notice "Select the password to lock this keyring entry:"
+		            _password="`print $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
+                                        
+		            if [ "$lookup" = "" ]; then # new entry
+			            cat <<EOF | ${SQL} -batch "$KEYRING"
 INSERT INTO secrets (hash, password)
 VALUES ("${_hash}", "${_password}");
 EOF
-			act "saved new password in local keyring"
-		    else # update entry
-			cat <<EOF | ${SQL} -batch "$KEYRING"
+			            act "saved new password in local keyring"
+		            else # update entry
+			            cat <<EOF | ${SQL} -batch "$KEYRING"
 UPDATE secrets SET password="${_password}" WHERE hash LIKE "${_hash}";
 EOF
-			act "updated local keyring with new password"
-		    fi
-		fi
-
-		return 0
-
-	    else # password is blank or aborted
-
-		# save it into gnome keyring
-		if [ $GNOMEKEY = 1 ]; then
-
-		    cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" erase
-protocol=${type}
-path=jaromail/${email}
-username=${login}
-host=${host}
-EOF
-		    { test $? != 0 } && {
-			error "Error accessing password in Gnome keyring"
-			return 1 }
-		    act "No new password given, old password erased."
+			            act "updated local keyring with new password"
+		            fi
+                done
+            
+            fi
 		    return 0
-	        fi
-		# TODO: delete from local keyring
-
-	    fi
-	    ;;
-	*)
-	    error "Unknown system, can't figure out how to handle passwords"
-	    return 1
+            
+	        ;;
+	    *)
+	        error "Unknown system, can't figure out how to handle passwords"
+	        return 1
     esac
-}
-
-change_password() {
-
-    read_account ${=PARAM}
-
-    { test $? = 0 } && { test $DRYRUN != 1 } && {
-	new_password }
-
 }

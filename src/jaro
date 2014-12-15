@@ -273,7 +273,7 @@ MUTTDIR="$MAILDIRS/.mutt"
 
 # use gnome-keyring for passwords on GNU systems
 GNOMEKEY=0
-pidof gnome-keyring > /dev/null && {
+pidof gnome-keyring-daemon > /dev/null && {
 	 act "using gnome-keyring to store secrets"
 	 GNOMEKEY=1 }
 
@@ -712,13 +712,13 @@ main()
 
 	deliver) deliver ${PARAM} ;;
 
-	passwd)  change_password ${PARAM} ;;
+    passwd) new_password ;;
 
-	cert)    cert ${PARAM} ;; # was checking is_online
+    cert)    cert ${PARAM} ;; # was checking is_online
 
-	ramdisk) ramdisk ${PARAM} ;;
+    ramdisk) ramdisk ${PARAM} ;;
 
-	isonline) is_online ${=PARAM}; exitcode=$? ;;
+    isonline) is_online ${=PARAM}; exitcode=$? ;;
 
 	publish)
 	    md="$1"
