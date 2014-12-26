@@ -223,9 +223,15 @@ forget() {
 
 # list all entries in addressbook or a file
 list_addresses() {
+
+    # without arguments just list all entries in the active list
+    # default is whitelist
     [[ "$1" = "" ]] && {
-        # TODO: list the default addressbook
-        edit_abook
+        awk -F'=' '
+/^name/  { printf("%s ",$2)    }
+/^email/ { printf("<%s>\n",$2) }
+' "$MAILDIRS"/$list.abook
+        return 0
     }
 
     # a map to eliminate duplicates
