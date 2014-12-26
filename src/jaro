@@ -573,6 +573,8 @@ main()
 
     subcommands_opts[imap]=""
 
+    subcommands_opts[extract]=""
+
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
@@ -768,7 +770,12 @@ main()
 		    ;;
 	    esac
 	    ;;
-
+       
+    extract)
+            md_extract ${=@}
+            exitcode=$?
+            ;;
+        
 	*) # unknown command, pass it to autostart
 	    func "unknown command, remote check"
 	    autostart ${PARAM}

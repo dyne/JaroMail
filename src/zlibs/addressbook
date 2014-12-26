@@ -60,9 +60,9 @@ insert_address() {
 INSERT INTO $list (email, name)
 VALUES ("${_email}", "${_name}");
 EOF
-    { test $? != 0 } && {
-	func "address already present in $list"
-	return 1
+    [[ $? = 0 ]] || {
+	    func "address already present in $list"
+	    return 1
     }
     return 0
 }
@@ -154,17 +154,20 @@ complete() {
 }
 
 sender_isknown() {
-    head="`${WORKDIR}/bin/fetchaddr -x From -a`"
+    # extract only headers from stdin
+    head="`awk '
+{ print $0 }
+/^$/ { exit }' | ${WORKDIR}/bin/fetchaddr -x From -a`"
 
     email="${head[(ws:,:)1]}"
     exitcode=1
-    { test "$email" = "" } && { return 1 }
+    [[ "$email" = "" ]] && { return 1 }
 
     lookup="`lookup_email ${email}`"
 
-    { test "$lookup" = "" } || {
-	func "sender_isknown() found <$email> in $list (id $lookup)"
-	return 0 }
+    [[ "$lookup" = "" ]] || {
+	    func "sender_isknown() found <$email> in $list (id $lookup)"
+	    return 0 }
 
     return 1
 }
@@ -175,9 +178,11 @@ learn() {
         func "dryrun parsing ${PARAM[1]} in stdin piped mails" }
 
     what=sender
-    [[ "${PARAM[1]}" != "" ]] && { what=${PARAM[1]} }
+    [[ "$1" = "" ]] || { what="$1" }
     func "learning from $what"
-    buffer=`cat`
+
+    # read in only headers from stdin (till empty line)
+    buffer=`awk '{ print $0 } /^$/ { exit }'`
 
     case ${what} in
         
@@ -186,7 +191,7 @@ learn() {
 	        # (Q) eliminates quotes, then word split
 	        email="${(Q)head[(ws:,:)1]}"
 	        name="${(Q)head[(ws:,:)2]}"
-            print "$name" "<$email>"
+            print "$head"
             [[ $DRYRUN == 1 ]] || {
 	            insert_address "$email" "$name"
 		        { test $? = 0 } && { act "new: $_name <${_email}>" }
@@ -201,7 +206,7 @@ learn() {
 		        email="${(Q)h[(ws:,:)1]}"
 		        name="${(Q)h[(ws:,:)2]}"
                 
-                print "$name" "<$email>"
+                print "$h"
                 
                 [[ $DRYRUN == 1 ]] || {
 		            insert_address "$email" "$name"
@@ -217,7 +222,7 @@ learn() {
 		        # (Q) eliminates quotes, then word split
 		        email="${(Q)h[(ws:,:)1]}"
 		        name="${(Q)h[(ws:,:)2]}"
-                print "$name" "<$email>"
+                print "$h"
                 
                 [[ $DRYRUN == 1 ]] || {
 		            insert_address "$email" "$name"
@@ -230,7 +235,7 @@ learn() {
 		        # (Q) eliminates quotes, then word split
 		        email="${(Q)h[(ws:,:)1]}"
 		        name="${(Q)h[(ws:,:)2]}"
-                print "$name" "<$email>"
+                print "$h"
                 
                 [[ $DRYRUN == 1 ]] || {
 		            insert_address "$email" "$name"
