@@ -321,7 +321,7 @@ md_extract() {
         [[ "${result[$_e]}" = "" ]] && {
             _n=${i[(ws:,:)2]}
             result+=("$_e" "$_n")
-            print "$_n <$_e>"
+            print - "$_n <$_e>"
         }
     done
     notice "Unique $_action found: ${#result}"
@@ -329,8 +329,8 @@ md_extract() {
     # counts which addresses are known to us
     _known=0
     for i in ${(k)result}; do
-        lookup="`lookup_email ${i}`"
-        [[ "$lookup" = "" ]] || {
+        lookup_email ${i}
+        [[ $? = 0 ]] && {
             _known=$(( $_known + 1 )) }
     done
     act "addresses known: $_known"

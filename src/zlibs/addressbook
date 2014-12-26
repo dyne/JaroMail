@@ -68,15 +68,6 @@ insert_address() {
     return 0
 }
 
-# update_name() {
-#     func "update address: $1, $2"
-#     cat <<EOF | ${SQL} -batch $ADDRESSBOOK 2> /dev/null
-# UPDATE $list SET name="${2}" WHERE email LIKE "${1}";
-# EOF
-#     { test $? != 0 } && {
-#   func "address not found or error occurred" }
-# }
-
 remove_address() {
     warning "remove_address() TODO in abook branch"
     return 0
@@ -230,9 +221,129 @@ forget() {
     # remove_address "${head[(ws:,:)1]}"
 }
 
+# list all entries in addressbook or a file
+list_addresses() {
+    [[ "$1" = "" ]] && {
+        # TODO: list the default addressbook
+        edit_abook
+    }
+
+    # a map to eliminate duplicates
+    typeset -AU result
+
+    ######### GPG
+    [[ `file "$1"` =~ "GPG key public ring" ]] && {
+
+        notice "Listing addresses found in GPG keyring: $1"
+        _addrs=`gpg --list-keys --with-colons | awk -F: '{print $10}'`
+        for i in ${(f)_addrs}; do
+            _parsed=`print "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
+            _e="${_parsed[(ws:,:)1]}"
+            isemail "$_e"
+            [[ $? = 0 ]] || continue
+            # check if the email is not already parsed
+            [[ "${result[$_e]}" = "" ]] && {
+                _n="${_parsed[(ws:,:)2]}"
+                result+=("$_e" "$_n")
+                print - "$_n <$_e>"
+            }
+        done
+
+        notice "Unique addresses found: ${#result}"
+            # counts which addresses are known to us
+        _known=0
+        for i in ${(k)result}; do
+            lookup_email ${i}
+            [[ $? = 0 ]] || {
+                _known=$(( $_known + 1 )) }
+        done
+        act "new addresses: $_known"
+    }
+
+    [[ `file "$1"` =~ "PGP public key" ]] && {
+        _gpg="gpg --no-default-keyring --keyring $MAILDIRS/cache/pubkey.gpg --batch --with-colons"
+        rm -f $MAILDIRS/cache/pubkey.gpg
+        ${=_gpg} --import "$1"
+        # first make sure all unknown keys are imported
+        _addrs=`${=_gpg} --list-sigs | awk -F: '{print $5 " " $10}'`
+        for i in ${(f)_addrs}; do
+            [[ "$i" =~ "[User ID not found]" ]] && {
+                act "looking up: $i"
+                ${=_gpg} --recv-key ${i[(w)1]}
+            }
+        done
+        
+        _addrs=`${=_gpg} --list-sigs | awk -F: '{print $10}'`
+        for i in ${(f)_addrs}; do
+            _parsed=`print "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
+            _e="${_parsed[(ws:,:)1]}"
+            isemail "$_e"
+            [[ $? = 0 ]] || continue
+            # check if the email is not already parsed
+            [[ "${result[$_e]}" = "" ]] && {
+                _n="${_parsed[(ws:,:)2]}"
+                result+=("$_e" "$_n")
+                print - "$_n <$_e>"
+            }
+        done
+        
+        notice "Unique addresses found: ${#result}"
+        # counts which addresses are known to us
+        _known=0
+        for i in ${(k)result}; do
+            lookup_email ${i}
+            [[ $? = 0 ]] || {
+                _known=$(( $_known + 1 )) }
+        done
+        act "new addresses: $_known"
+    }
+    
+}
+
+
 # import an addressbook, autodetect its type
 import_addressbook() {
     notice "Importing addressbook"
+    func "$1"
+    # a map to eliminate duplicates
+    typeset -AU result
+
+    # stdin
+    [[ "$1" = "stdin" ]] && {
+        act "reading entries from stdin"
+        _stdin=`cat`
+        _new=0
+        for i in ${(f)_stdin}; do
+
+            # skip comments starting with #
+            [[ "$i[1]" = "#" ]] && continue
+
+            _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
+            _e="${_parsed[(ws:,:)1]}"
+
+            # check if is really an email
+            isemail "$_e"
+            [[ $? = 0 ]] || continue
+
+            # check if the email is not a duplicate
+            [[ "${result[$_e]}" = "" ]] || continue
+
+            _n="${_parsed[(ws:,:)2]}"
+            result+=("$_e" "$_n")
+
+            # check if the email is not already known
+            lookup_email "$_e"
+            [[ $? = 0 ]] && continue
+
+            [[ $DRYRUN = 0 ]] && insert_address "$_e" "$_n"
+            act "new entry imported: $_n <$_e>"
+            _new=$(( $_new + 1 ))
+        done
+        notice "Valid unique entries parsed: ${#result}"
+        act "new addresses found: ${_new}"
+        return 0
+    }
+
     if [[ "$1" != "" ]]; then
         func "file specified: $1"
         # a file was given as argument
@@ -428,7 +539,7 @@ edit_abook() {
 
     abook --config <(cat <<EOF
 set autosave=true
-set mutt_command=jaro
+set mutt_command=jaro compose
 set sort_field=name
 EOF
 ) --datafile "$ADDRESSBOOK"

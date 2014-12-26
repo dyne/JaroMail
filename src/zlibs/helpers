@@ -40,6 +40,17 @@ awk '{ for (i=1;i<=NF;i++)
        gsub(/<|>|,/ , "" , $i); print $i } }'
 }
 
+isemail() {
+    [[ "$1" = "" ]] && {
+        func "isemail() called on an empty string"
+        return 1
+    }
+    print "$1" | \
+        grep -E "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b" \
+        > /dev/null
+   return $?
+}
+
 # parses stdin and converts some characters to html
 escape_html() {
     sed -e '

@@ -355,8 +355,8 @@ VERBOSE=2
 EOF
 
             act "Sending out anonymous email via mixmaster"
-            recipients=(`hdr $qbody | fetchaddr -a -x to | cut -d, -f1`)
-            recipients+=(`hdr $qbody | fetchaddr -a -x cc | cut -d, -f1`)
+            recipients=(`hdr $qbody | ${WORKDIR}/bin/fetchaddr -a -x to | cut -d, -f1`)
+            recipients+=(`hdr $qbody | ${WORKDIR}/bin/fetchaddr -a -x cc | cut -d, -f1`)
             for r in ${recipients}; do
                 act "Sending to: ${r}"
 

@@ -443,20 +443,19 @@ a pipe | in front indicate they take an email body from stdin
 
  import   import entries from a VCard file in the $list
 
- export   export the $list to VCard file (addressbook.vcf)
+ export   export the $list to a VCard file
 
- abook    edit the $list using abook terminal curses editor
+ abook    edit the $list using abook terminal console editor
 
 |learn    learn addresses from mails piped in stdin
 
-|forget   remove addresses found in mails piped in stdin
-
- list     prints to console all the entries in a $list
+ list     prints to console all the entries in $list
 
  search   search into $list using a string parameter
 
 |isknown  read e-mail from stdin, return 0 if sender is known
 
+ extract  list all recipients or senders found in a maildir
 
 == Operational commands (use -a to indicate which $account)
 account names correspond to the filenames, i.e. imap.default
@@ -466,8 +465,8 @@ account names correspond to the filenames, i.e. imap.default
 
  send     send all emails queued in outbox/ to an smtp.$account
 
- peek     connect to an imap.$account with ncurses terminal mutt
-      remote folders supported. use to delete without download
+ peek     connect to an imap folder with ncurses terminal mutt
+      use for server-side operations on emails without download
 
  passwd   set account passwords in the OS native keyring
       or into a simple, file based, gpg encrypted database.
@@ -492,15 +491,14 @@ maildirs are directories of mails downloaded in Mail/
 
  update   updates Filters.txt generating rules (sieve format)
 
- ramdisk [open|close]   activates fast cache in RAM on Mac/OSX (root)
-
 Experimental commands:
 
  stat     prints a statistical overview on stored maildirs
  cert     import most common SSL certificates from the Internet
 
-For a complete introductory documentation, see the User Manual in LaTeX
-Website on <http://jaromail.dyne.org> Report bugs to <https://bugs.dyne.org>
+For a complete introductory documentation, see the User Manual (PDF)
+Website on <http://dyne.org/software/jaro-mail>
+Report bugs to <https://github.com/dyne/JaroMail/issues>
 EOF
 }
 
@@ -696,9 +694,9 @@ main()
     isknown)  CLEANEXIT=0; sender_isknown ${PARAM} ;;
     learn)    CLEANEXIT=0; learn ${PARAM}          ;;
     forget)   CLEANEXIT=0; forget ${PARAM}         ;;
-    list)     CLEANEXIT=0; edit_abook ${PARAM} ;;
+    list)     CLEANEXIT=0; list_addresses ${PARAM} ;;
 
-    import)  import_addressbook ${PARAM} ;;
+    import)  import_addressbook "${PARAM}" ;;
     "export")
             case "$PARAM" in
                 abook)
