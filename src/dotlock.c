@@ -597,7 +597,8 @@ dotlock_lock (const char *realpath)
   int hard_count = 0;
   struct stat sb;
   time_t t;
-  
+  int i;
+
   snprintf (nfslockfile, sizeof (nfslockfile), "%s.%s.%d",
 	   realpath, Hostname, (int) getpid ());
   snprintf (lockfile, sizeof (lockfile), "%s.lock", realpath);
@@ -631,7 +632,7 @@ dotlock_lock (const char *realpath)
   {
 
     BEGIN_PRIVILEGED ();
-    link (nfslockfile, lockfile);
+    i = link (nfslockfile, lockfile);
     END_PRIVILEGED ();
 
     if (stat (nfslockfile, &sb) != 0)
