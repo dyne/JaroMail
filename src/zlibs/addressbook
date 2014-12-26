@@ -224,10 +224,10 @@ forget() {
 # import an addressbook, autodetect its type
 import_addressbook() {
     notice "Importing addressbook"
-    if [ "${PARAM[1]}" != "" ]; then
-        func "file specified: ${PARAM[1]}"
+    if [[ "$1" != "" ]]; then
+        func "file specified: $1"
         # a file was given as argument
-        import_vcard ${PARAM[2]}
+        import_vcard "$1"
     else
         # no file as parameter
         { test "$OS" = "MAC" } && { import_macosx }
@@ -294,7 +294,7 @@ import_vcard() {
     # parse the vcard and print a simple name and email list
     # each value on a single line, entry tuples followed by a #
     # we skip entries that don't have an email
-    addresses `cat ${vcard} | awk '
+    addresses=`cat ${vcard} | awk '
 BEGIN { newcard=0; c=0; name=""; email=""; }
 /^BEGIN:VCARD/ { newcard=1 }
 /^FN:/ { if(newcard = 1) name=$0 }
@@ -343,9 +343,9 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
             continue }
         if [[ $newa -eq 1 ]]; then
             # (V) makes special chars visible, we need to remove them..
-            _name="${(V)a[(ws:^:)1}"; newa=0; continue
+            _name="${(V)a[(ws:^:)1]}"; newa=0; continue
         elif [[ $newa -eq 0 ]]; then
-            _email="${(V)a[(ws:^:)1}"
+            _email="${(V)a[(ws:^:)1]}"
         fi
     done
 
@@ -369,6 +369,6 @@ set autosave=true
 set mutt_command=jaro
 set sort_field=name
 EOF
-) --datafile $MAILDIRS/$list.abook
+) --datafile "$ADDRESSBOOK"
 }
 ###################
