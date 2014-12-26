@@ -153,14 +153,6 @@ pubdb_update() {
     return 0
 }
 
-pubdb_escape_html() {
-    sed -e '
-s/\&/\&amp;/g
-s/>/\&gt;/g
-s/</\&lt;/g
-s/"/\&quot;/g
-'
-}
 
 pubdb_extract_body() {
     func "pubdb_extract_body() $@"
@@ -280,25 +272,16 @@ EOF
     { test -r "$m" } || { continue }
     # TODO: remove $m from database if not in maildir
 
-    _from=`awk '/^From: / {print $0; exit}' "$m" | sed 's/^From: //; s/ *<[^>]*> *//; s/"//g'`
-    _to=`awk '/^To: / {print $0; exit}' "$m" | sed 's/^To: //; s/ *<[^>]*> *//; s/"//g'`
 
-    if [[ "$_from" =~ "=?UTF-8" ]]; then
-        _fname=`print "${_from%?=}" | sed 's/^=?UTF-8?B?//' | base64 -d`
-    else _fname="${_from}"; fi
 
-    if [[ "$_to" =~ "=?UTF-8" ]]; then
-        _tname=`print "${_to%?=}" | sed 's/^=?UTF-8?B?//' | base64 -d`
-    else _tname="${_to}"; fi
+	_from=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
 
-#	_from=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
-#	_to=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x To -a`
-#	_fname=`print ${(Q)_from[(ws:,:)2]} | iconv -c`
-#       _tname=`print ${(Q)_to[(ws:,:)2]} | iconv -c`
+	_fname=`print ${(Q)_from[(ws:,:)2]}` # | iconv -c`
+
     func "From: ${_fname}"
     _subject=`hdr "$m" | awk '
 /^Subject:/ { for(i=2;i<=NF;i++) printf "%s ", $i; printf "\n" }
-' | pubdb_escape_html`
+' | escape_html`
 
     # fill in uid and upath
     pubdb_getuid "$m"
@@ -320,7 +303,7 @@ EOF
     <id>${WEB_ROOT}${upath}</id>
     <updated>`pubdb_date "$m"`</updated>
 <content type="html" xml:lang="en-US">
-`print ${(f)_body} | pubdb_escape_html`
+`print ${(f)_body} | escape_html`
 </content>
 <author>
     <name>${_fname}</name>
@@ -348,7 +331,7 @@ EOF
         _datestring=`hdr "$_path" | awk '/^Date/ { print $0 }'`
         cat <<EOF > "${md}/views/${upath}"
 <h2>${_subject}</h2>
-<h4>From: ${_fname} - sent to ${_tname} - ${_datestring}</h4>
+<h4>From: ${_fname} - ${_datestring}</h4>
 
 ${_body}
 
