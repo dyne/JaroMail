@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+# Copyleft (C) 2010-2015 Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
@@ -275,63 +275,4 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
     }
 
     return 0
-}
-
-# extract and list all recipients in a maildir
-md_extract() {
-    func "md_extract()"
-    _action="$1"
-    case $_action in
-        all) ;;
-        recipient) ;;
-        sender) ;;
-        *) error "unknown extract action: $_action"; return 1 ;;
-    esac
-
-    maildircheck "$2"
-    [[ $? = 0 ]] || {
-        error "Cannot extract $_action from maildir: $2"
-        return 1 }
-    _mails=`find $2 -type f`
-    # TODO ismail() to check if file is a mail
-
-    # we switch dryrun temporarily off to use learn()
-    # without modifying the addressbook
-    _dryrun=$DRYRUN
-    DRYRUN=1
-
-    notice "Extracting and listing $_action in maildir: $2"
-    act "please wait while scanning ${#_mails} mail files..."
-    typeset -a learned
-
-    for i in ${(f)_mails}; do
-        _l=`hdr $i | learn $_action`
-        # handles results on multiple lines (recipients, all)
-        for i in ${(f)_l}; do
-            learned+=("$i")
-        done
-    done
-
-    DRYRUN=$_dryrun
-
-    # eliminates duplicates
-    typeset -A result
-    for i in ${learned}; do
-        _e=${i[(ws:,:)1]}
-        [[ "${result[$_e]}" = "" ]] && {
-            _n=${i[(ws:,:)2]}
-            result+=("$_e" "$_n")
-            print - "$_n <$_e>"
-        }
-    done
-    notice "Unique $_action found: ${#result}"
-
-    # counts which addresses are known to us
-    _known=0
-    for i in ${(k)result}; do
-        lookup_email ${i}
-        [[ $? = 0 ]] && {
-            _known=$(( $_known + 1 )) }
-    done
-    act "addresses known: $_known"
 }

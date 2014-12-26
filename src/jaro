@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+# Copyleft (C) 2010-2015 Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
@@ -694,7 +694,6 @@ main()
     isknown)  CLEANEXIT=0; sender_isknown ${PARAM} ;;
     learn)    CLEANEXIT=0; learn ${PARAM}          ;;
     forget)   CLEANEXIT=0; forget ${PARAM}         ;;
-    list)     CLEANEXIT=0; list_addresses ${PARAM} ;;
 
     import)  import_addressbook "${PARAM}" ;;
     "export")
@@ -783,8 +782,8 @@ main()
         esac
         ;;
 
-    extract)
-            md_extract ${=@}
+    list|extract)
+            extract ${=PARAM}
             exitcode=$?
             ;;
 

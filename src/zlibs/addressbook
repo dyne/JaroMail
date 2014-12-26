@@ -221,9 +221,10 @@ forget() {
     # remove_address "${head[(ws:,:)1]}"
 }
 
-# list all entries in addressbook or a file
-list_addresses() {
-
+# extract all entries in addressbook or all addresses in a pgp keyring
+# or all signatures on a pgp key (even without importing it)
+extract() {
+    func "extract() $@"
     # without arguments just list all entries in the active list
     # default is whitelist
     [[ "$1" = "" ]] && {
@@ -236,6 +237,68 @@ list_addresses() {
 
     # a map to eliminate duplicates
     typeset -AU result
+
+    [[ -r "$1" ]] || {
+        error "file not found: $1"
+        error "nothing to extract."
+        return 1
+    }
+
+    ## arg is a directory
+    [[ -d "$1" ]] && { 
+        func "extract maildir: $1"
+        ## extract from a maildir
+        maildircheck "$1" && {
+            _action="$2"
+            case $_action in
+                all) ;;
+                recipient) ;;
+                sender) ;;
+                *) _action="all" ;;
+            esac
+            _mails=`find $1 -type f`
+            # TODO ismailfile() to check if file is a mail?
+
+            # we switch dryrun temporarily off to use learn()
+            # without modifying the addressbook
+            _dryrun=$DRYRUN
+            DRYRUN=1
+            
+            notice "Extracting and listing $_action in maildir: $2"
+            act "please wait while scanning ${#_mails} mail files..."
+            typeset -a learned
+
+            for i in ${(f)_mails}; do
+                _l=`hdr $i | learn $_action`
+                # handles results on multiple lines (recipients, all)
+                for i in ${(f)_l}; do
+                    learned+=("$i")
+                done
+            done
+            
+            DRYRUN=$_dryrun
+            # eliminates duplicates
+            typeset -A result
+            for i in ${learned}; do
+                _e=${i[(ws:,:)1]}
+                [[ "${result[$_e]}" = "" ]] && {
+                    _n=${i[(ws:,:)2]}
+                    result+=("$_e" "$_n")
+                    print - "$_n <$_e>"
+                }
+            done
+            notice "Unique $_action found: ${#result}"
+            # counts which addresses are known to us
+            _known=0
+            for i in ${(k)result}; do
+                lookup_email ${i}
+                [[ $? = 0 ]] && {
+            _known=$(( $_known + 1 )) }
+            done
+            act "addresses known: $_known"
+            return 0
+        }
+    }
 
     ######### GPG
     [[ `file "$1"` =~ "GPG key public ring" ]] && {
@@ -264,6 +327,7 @@ list_addresses() {
                 _known=$(( $_known + 1 )) }
         done
         act "new addresses: $_known"
+        return 0
     }
 
     [[ `file "$1"` =~ "PGP public key" ]] && {
@@ -302,6 +366,7 @@ list_addresses() {
                 _known=$(( $_known + 1 )) }
         done
         act "new addresses: $_known"
+        return 0
     }
     
 }
