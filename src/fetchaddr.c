@@ -1,26 +1,24 @@
 /*
  *  Copyright (C) 1998-2000  Thomas Roessler <roessler@guug.de>
  *  Copyright (C) 2000       Roland Rosenfeld <roland@spinnaker.de>
+ *  Copyright (C) 2012-2015  Denis Roio <jaromil@dyne.org>
  *
- *  This program is free software; you can redistribute
- *  it and/or modify it under the terms of the GNU
- *  General Public License as published by the Free
- *  Software Foundation; either version 2 of the License,
- *  or (at your option) any later version.
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License as
+ *  published by the Free Software Foundation; either version 3 of the
+ *  License, or (at your option) any later version.
  *
- *  This program is distributed in the hope that it will
- *  be useful, but WITHOUT ANY WARRANTY; without even the
- *  implied warranty of MERCHANTABILITY or FITNESS FOR A
- *  PARTICULAR PURPOSE.  See the GNU General Public
- *  License for more details.
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software Foundation,
- *  Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,, USA.
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ *  02110-1301,, USA.
  *
  */
-
-/* $Id: fetchaddr.c,v 1.23 2007-10-28 16:33:35 roland Exp $ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,7 +29,7 @@
 #include "rfc822_mutt.h"
 #include "rfc2047.h"
 
-#define MAXHDRS 21
+#define MAXHDRS 41
 #define HAVE_ICONV 1
 
 struct header
@@ -43,14 +41,14 @@ struct header
 };
 
 struct header hdr[MAXHDRS] =
-{
-  { "to:",		NULL, 0,  3 },
-  { "from:",		NULL, 0,  5 },
-  { "cc:",		NULL, 0,  3 },
-  { "resent-from:",	NULL, 0, 12 },
-  { "resent-to:",	NULL, 0, 10 },
-  { NULL, 		NULL, 0,  0 }
-};
+  {
+    { "to:",		NULL, 0,  3 },
+    { "from:",		NULL, 0,  5 },
+    { "cc:",		NULL, 0,  3 },
+    { "resent-from:",	NULL, 0, 12 },
+    { "resent-to:",	NULL, 0, 10 },
+    { NULL, 		NULL, 0,  0 }
+  };
 
 void chop(struct header *cur)
 {
@@ -59,7 +57,7 @@ void chop(struct header *cur)
 }
 
 int writeout(struct header *h, const char *datefmt, 
-	     unsigned char create_real_name)
+             unsigned char create_real_name)
 {
   int rv = 0;
   ADDRESS *addr, *p;
@@ -75,37 +73,35 @@ int writeout(struct header *h, const char *datefmt,
 
   rfc2047_decode_adrlist(addr);
   for(p = addr; p; p = p->next)
-  {
-    if(create_real_name == 1 
-       && (!p->personal || !*p->personal)
-       && p->mailbox)
     {
-      if(p->personal)
-	FREE(p->personal);
-      p->personal = safe_strdup(p->mailbox);
-      c=strchr(p->personal, '@');
-      if (c)
-	*c='\0';
+      if(create_real_name == 1 
+         && (!p->personal || !*p->personal)
+         && p->mailbox)
+        {
+          if(p->personal)
+            FREE(p->personal);
+          p->personal = safe_strdup(p->mailbox);
+          c=strchr(p->personal, '@');
+          if (c)
+            *c='\0';
+        }
+      if(!p->group && p->mailbox && *p->mailbox && p->personal)
+        {
+          if(p->personal && strlen(p->personal) > 30)
+            strcpy(p->personal + 27, "...");
+
+          if ((c=strchr(p->mailbox,'@')))
+            for(c++; *c; c++)
+              *c=tolower(*c);
+
+          strftime(timebuf, sizeof(timebuf), datefmt, localtime(&timep));
+
+          printf("%s,%s\n", p->mailbox,
+                 p->personal && *p->personal ? p->personal : " ");
+
+          rv = 1;
+        }
     }
-    if(!p->group && p->mailbox && *p->mailbox && p->personal)
-    {
-      if(p->personal && strlen(p->personal) > 30)
-	strcpy(p->personal + 27, "...");
-
-      if ((c=strchr(p->mailbox,'@')))
-	for(c++; *c; c++)
-	  *c=tolower(*c);
-
-      strftime(timebuf, sizeof(timebuf), datefmt, localtime(&timep));
-      /* printf("%s\t%s\t%s\n", p->mailbox, p->personal && *p->personal ?  */
-      /* 	     p->personal : "no realname given", timebuf); */
-
-      printf("%s,%s\n", p->mailbox,
-	     p->personal && *p->personal ? p->personal : " ");
-
-      rv = 1;
-    }
-  }
 
   rfc822_free_address(&addr);
 
@@ -132,17 +128,17 @@ int main(int argc, char* argv[])
     i = 1;
     while (i < argc) {
       if (!strcmp (argv[i], "-d") && i+1 < argc) {
-	datefmt = argv[++i];
+        datefmt = argv[++i];
       } else if (!strcmp (argv[i], "-x") && i+1 < argc) {
-	headerlist = argv[++i];
+        headerlist = argv[++i];
 #ifdef HAVE_ICONV
       } else if (!strcmp (argv[i], "-c") && i+1 < argc) {
-	*charsetptr = argv[++i];
+        *charsetptr = argv[++i];
 #endif
       } else if (!strcmp (argv[i], "-a")) {
-	create_real_name = 1;
+        create_real_name = 1;
       } else {
-	fprintf (stderr, "%s: `%s' wrong parameter\n", argv[0], argv[i]);
+        fprintf (stderr, "%s: `%s' wrong parameter\n", argv[0], argv[i]);
       }
       i++;
     }
@@ -177,53 +173,53 @@ int main(int argc, char* argv[])
   }
 
   while(fgets(buff, sizeof(buff), stdin))
-  {
-    
-    if(!partial && *buff == '\n')
-      break;
-
-    if(cur_hdr && (partial || *buff == ' ' || *buff == '\t'))
     {
-      size_t nl = cur_hdr->len + strlen(buff);
-      
-      safe_realloc((void **) &cur_hdr->value, nl + 1);
-      strcpy(cur_hdr->value + cur_hdr->len, buff);
-      cur_hdr->len = nl;
-      chop(cur_hdr);
-    }
-    else if(!partial && *buff != ' ' && *buff != '\t')
-    {
-      cur_hdr = NULL;
-
-      for(i = 0; hdr[i].tag; i++)
-      {
-	if(!strncasecmp(buff, hdr[i].tag, hdr[i].taglen))
-	{
-	  cur_hdr = &hdr[i];
-	  break;
-	}
-      }
-      
-      if(cur_hdr)
-      {
-	safe_free(&cur_hdr->value);
-	cur_hdr->value = safe_strdup(buff + cur_hdr->taglen);
-	cur_hdr->len = strlen(cur_hdr->value);
-	chop(cur_hdr);
-      }
-    }
     
-    if(!(t = strchr(buff, '\n')))
-      partial = 1;
-    else
-      partial = 0;
-  }
+      if(!partial && *buff == '\n')
+        break;
+
+      if(cur_hdr && (partial || *buff == ' ' || *buff == '\t'))
+        {
+          size_t nl = cur_hdr->len + strlen(buff);
+      
+          safe_realloc((void **) &cur_hdr->value, nl + 1);
+          strcpy(cur_hdr->value + cur_hdr->len, buff);
+          cur_hdr->len = nl;
+          chop(cur_hdr);
+        }
+      else if(!partial && *buff != ' ' && *buff != '\t')
+        {
+          cur_hdr = NULL;
+
+          for(i = 0; hdr[i].tag; i++)
+            {
+              if(!strncasecmp(buff, hdr[i].tag, hdr[i].taglen))
+                {
+                  cur_hdr = &hdr[i];
+                  break;
+                }
+            }
+      
+          if(cur_hdr)
+            {
+              safe_free(&cur_hdr->value);
+              cur_hdr->value = safe_strdup(buff + cur_hdr->taglen);
+              cur_hdr->len = strlen(cur_hdr->value);
+              chop(cur_hdr);
+            }
+        }
+    
+      if(!(t = strchr(buff, '\n')))
+        partial = 1;
+      else
+        partial = 0;
+    }
 
   for(rv = 0, i = 0; hdr[i].tag; i++)
-  {
-    if(hdr[i].value)
-      rv = writeout(&hdr[i], datefmt, create_real_name) || rv;
-  }
+    {
+      if(hdr[i].value)
+        rv = writeout(&hdr[i], datefmt, create_real_name) || rv;
+    }
 
   return (rv ? 0 : 1);
   

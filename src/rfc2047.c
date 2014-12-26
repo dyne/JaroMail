@@ -41,7 +41,7 @@ enum
 };
 
 const char MimeSpecials[] = "@.,;<>[]\\\"()?/=";
-const char *Charset = "iso-8859-15"; /* XXX - hack */
+const char *Charset = "utf-8"; /* default charset */
 
 
 int Index_hex[128] = {
