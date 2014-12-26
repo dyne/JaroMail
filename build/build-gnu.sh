@@ -91,7 +91,7 @@ mkdir -p build/gnu
     ${=cc} -c helpers.c
     ${=cc} -c rfc2047.c
     ${=cc} -c rfc822_mutt.c;
-    ${=cc} -c fetchaddr.c;
+    ${=cc} -c -DHAVE_ICONV fetchaddr.c;
     ${=cc} -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822_mutt.o
     popd
     cp src/fetchaddr build/gnu/
@@ -101,7 +101,7 @@ mkdir -p build/gnu
 { test "$target" = "dfasyn" } || {
     test "$target" = "all" } && {
     print "Compiling the generator for deterministic finite state automata... "
-    pushd src/dfasyn
+    pushd src/mairix/dfasyn
     make
     popd
 }
@@ -121,7 +121,7 @@ mkdir -p build/gnu
     print "Compiling the date parser... "
     pushd src
     # then the C files made by dfasyn
-    ./dfasyn/dfasyn -o nvpscan.c -ho nvpscan.h -r nvpscan.report -u nvp.nfa
+    ./mairix/dfasyn/dfasyn -o nvpscan.c -ho nvpscan.h -r nvpscan.report -u nvp.nfa
     # then the utilities
     ${=cc} -c rfc822_mairix.c
     ${=cc} -c nvp.c nvpscan.c
