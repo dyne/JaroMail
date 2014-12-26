@@ -95,11 +95,11 @@ error()  { if [[ $QUIET == 0 ]]; then print "$fg[red][!]$fg[default] $1" >&2; fi
 func()   { if [[ $DEBUG == 1 ]]; then print "$fg[blue][D]$fg[default] $1" >&2; fi }
 act()    {
     if [[ $QUIET == 0 ]]; then
-	if [ "$1" = "-n" ]; then
-	    print -n "$fg_bold[white] . $fg_no_bold[default] $2" >&2;
-	else
-	    print "$fg_bold[white] . $fg_no_bold[default] $1" >&2;
-	fi
+    if [ "$1" = "-n" ]; then
+        print -n "$fg_bold[white] . $fg_no_bold[default] $2" >&2;
+    else
+        print "$fg_bold[white] . $fg_no_bold[default] $1" >&2;
+    fi
     fi
 }
 
@@ -112,18 +112,18 @@ if [[ ${@} == *-D* ]]; then DEBUG=1; fi
 # simplifying modes of operation: GNU or MAC
 case $(uname) in
     Linux) OS=GNU
-	notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
+    notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
 
     Darwin) OS=MAC
-	notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
+    notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
 
     *) OS=GNU # default
-	error "Running on an unknown operating system, assuming GNU" ;;
+    error "Running on an unknown operating system, assuming GNU" ;;
 esac
 
 # check if we are inside the directory
 if [ -r jaro/bin/jaro ]; then
-	MAILDIRS=`pwd`
+    MAILDIRS=`pwd`
 
 # check if we are on OSX
 elif [ -r /Applications/JaroMail.app ]; then
@@ -173,15 +173,15 @@ PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
 if [ -d $WORKDIR/zlibs ]; then
     # if testing from source load uncompiled libs
     if [ "$WORKDIR" = "../src" ]; then
-	for z in `find $WORKDIR/zlibs -type f`; do
-	    func "Loading zlib: ${z}"
-	    . ${z}
-	done
+    for z in `find $WORKDIR/zlibs -type f`; do
+        func "Loading zlib: ${z}"
+        . ${z}
+    done
     else
-	for z in `find $WORKDIR/zlibs -type f | grep -v '.zwc$'`; do
-	    func "Loading zlib: ${z}"
-	    . ${z}
-	done
+    for z in `find $WORKDIR/zlibs -type f | grep -v '.zwc$'`; do
+        func "Loading zlib: ${z}"
+        . ${z}
+    done
     fi
     act "full set of auxiliary functions loaded"
 elif [[ $1 = source ]]; then
@@ -200,35 +200,35 @@ addressbook="$MAILDIRS/Addressbook"
 TMPDIR="$MAILDIRS/tmp/jaromil.$USER"
 case $OS in
     GNU)
-	touch /dev/shm/jaromail.test.tmp > /dev/null
-	{ test $? = 0 } && {
-	# we can use volatile ram
-	    TMPDIR=/dev/shm/tmp.jaromail.$USER
-	    TMPRAM=1
-	}
+    touch /dev/shm/jaromail.test.tmp > /dev/null
+    { test $? = 0 } && {
+    # we can use volatile ram
+        TMPDIR=/dev/shm/tmp.jaromail.$USER
+        TMPRAM=1
+    }
 
-	# backward compatibility tests for old paths in JaroMail <1.3
-	{ test -d $WORKDIR/Accounts } && { test ! -d $ACCOUNTS } && {
-	    act "Updating accounts location: $ACCOUNTS"
-	    cp -ra $WORKDIR/Accounts $ACCOUNTS }
+    # backward compatibility tests for old paths in JaroMail <1.3
+    { test -d $WORKDIR/Accounts } && { test ! -d $ACCOUNTS } && {
+        act "Updating accounts location: $ACCOUNTS"
+        cp -ra $WORKDIR/Accounts $ACCOUNTS }
 
-	{ test -r "$WORKDIR/keyring" } && { test ! -r "$KEYRING" } && {
-	    act "Updating keyring location: $KEYRING"
-	    cp $WORKDIR/keyring "$KEYRING" }
+    { test -r "$WORKDIR/keyring" } && { test ! -r "$KEYRING" } && {
+        act "Updating keyring location: $KEYRING"
+        cp $WORKDIR/keyring "$KEYRING" }
 
-	{ test -r $WORKDIR/addressbook } && { test ! -r $addressbook } && {
-	    act "Updating addressbook location: $addressbook"
-	    cp $WORKDIR/addressbook $addressbook }
+    { test -r $WORKDIR/addressbook } && { test ! -r $addressbook } && {
+        act "Updating addressbook location: $addressbook"
+        cp $WORKDIR/addressbook $addressbook }
 
-	;;
+    ;;
     MAC)
-	mount | grep 'JaroTmp' > /dev/null
-	{ test $? = 0 } && {
-	    # our RAM temp directory is active
-	    TMPDIR=/Volumes/JaroTmp/jaromail.$USER
-	    TMPRAM=1
-	}
-	;;
+    mount | grep 'JaroTmp' > /dev/null
+    { test $? = 0 } && {
+        # our RAM temp directory is active
+        TMPDIR=/Volumes/JaroTmp/jaromail.$USER
+        TMPRAM=1
+    }
+    ;;
 esac
 
 # use the TMP in RAM if possible, for acceleration
@@ -274,8 +274,8 @@ MUTTDIR="$MAILDIRS/.mutt"
 # use gnome-keyring for passwords on GNU systems
 GNOMEKEY=0
 pidof gnome-keyring-daemon > /dev/null && {
-	 act "using gnome-keyring to store secrets"
-	 GNOMEKEY=1 }
+     act "using gnome-keyring to store secrets"
+     GNOMEKEY=1 }
 
 
 cleanexit() {
@@ -283,41 +283,41 @@ cleanexit() {
 
     # security check
     { test "$TMPDIR" = "" } && {
-	error "Temporary directory not defined"
-	act "skipping cleanup, this might leave private traces."
-	return 1
+    error "Temporary directory not defined"
+    act "skipping cleanup, this might leave private traces."
+    return 1
     }
 
     # first delete dirs
     tmpdirs=`${=find} "$TMPDIR" -maxdepth 1 -type d`
     for d in ${(f)tmpdirs}; do
-	{ test "$d" = "$TMPDIR" } || {
-	    func "deleting dir: $d"
-	    ${=rm} -r "${d}" }
+    { test "$d" = "$TMPDIR" } || {
+        func "deleting dir: $d"
+        ${=rm} -r "${d}" }
     done
 
     # then locks, with a warning
     llist=`${=find} "$TMPDIR" -maxdepth 1 -type f -name '*.lock'`
     for l in ${(f)llist}; do
-	lname=`basename ${(s:.lock:)l}`
-	func "cleaning lock for $lname"
+    lname=`basename ${(s:.lock:)l}`
+    func "cleaning lock for $lname"
 
-	# skip if in course of unlink - parallel operation, see unlink()
-	pidfile="${TMPDIR}/$lname.pid"
-	if [ -r ${pidfile} ]; then
-	    pid=`cat $pidfile`
-	    func "forced removal of lock left by pid $pid: $lname"
-	    rm -f ${pidfile}
-	else
-	    func "forced removal of lock left by unknown pid: $lname"
-	fi
-	rm -f "${TMPDIR}/${lname}.lock"
+    # skip if in course of unlink - parallel operation, see unlink()
+    pidfile="${TMPDIR}/$lname.pid"
+    if [ -r ${pidfile} ]; then
+        pid=`cat $pidfile`
+        func "forced removal of lock left by pid $pid: $lname"
+        rm -f ${pidfile}
+    else
+        func "forced removal of lock left by unknown pid: $lname"
+    fi
+    rm -f "${TMPDIR}/${lname}.lock"
 
-	# remove the actual file
-	if [ -r "${TMPDIR}/$lname" ]; then
-	    func "deleting temp file: ${TMPDIR}/$lname"
-	    ${=rm} "${TMPDIR}/$lname"
-	else func "empty lock: file was already removed"; fi
+    # remove the actual file
+    if [ -r "${TMPDIR}/$lname" ]; then
+        func "deleting temp file: ${TMPDIR}/$lname"
+        ${=rm} "${TMPDIR}/$lname"
+    else func "empty lock: file was already removed"; fi
 
     done
 
@@ -326,14 +326,14 @@ cleanexit() {
 }
 # make sure tmp is wiped from sensitive data in case of sigINT
 TRAPINT() {
-	error "Caught signal, aborting operations."
+    error "Caught signal, aborting operations."
 
-	{ test $CLEANEXIT = 1 } && {
-	    func "Forcing removal of locks"
-	    cleanexit & }
+    { test $CLEANEXIT = 1 } && {
+        func "Forcing removal of locks"
+        cleanexit & }
 
-	if [ "$DEBUG" = "1" ]; then return 1
-	else exit 1; fi
+    if [ "$DEBUG" = "1" ]; then return 1
+    else exit 1; fi
 }
 
 # binary programs recognition
@@ -341,52 +341,52 @@ check_bin() {
 
     # required programs
     for req in pinentry fetchmail gpg; do
-	command -v $req >/dev/null
-	{ test $? != 0 } && {
-	    error "Cannot find $req. Please install it."
-	    exit 1
-	}
+    command -v $req >/dev/null
+    { test $? != 0 } && {
+        error "Cannot find $req. Please install it."
+        exit 1
+    }
     done
 
     # make sure a gnupg dir exists
     { test -r $HOME/.gnupg/pubring.gpg } || {
-	${=mkdir} $HOME/.gnupg
-	touch $HOME/.gnupg/pubring.gpg
-	touch $HOME/.gnupg/secring.gpg
+    ${=mkdir} $HOME/.gnupg
+    touch $HOME/.gnupg/pubring.gpg
+    touch $HOME/.gnupg/secring.gpg
     }
 
     # which find command to use
     case $OS in
-	GNU) find="find -O3" ;;
-	MAC) find="gfind -O3" ;;
-	*) find="find"
+    GNU) find="find -O3" ;;
+    MAC) find="gfind -O3" ;;
+    *) find="find"
     esac
 
     # which wipe command to use
     if command -v wipe > /dev/null; then
-	rm="wipe -f -s -q -R /dev/urandom"
+    rm="wipe -f -s -q -R /dev/urandom"
     elif command -v srm > /dev/null; then
-	rm="srm -m"
+    rm="srm -m"
     else
-	rm="rm -f"
+    rm="rm -f"
     fi
     func "Rm binary: $rm"
 
     # which mutt binary to use
     if command -v mutt > /dev/null; then
-	# system-wite
-	mutt="mutt"
-	# TODO: check if this is also the location on Fedora
-	pgpewrap="/usr/lib/mutt/pgpewrap"
-	dotlock="mutt_dotlock"
+    # system-wite
+    mutt="mutt"
+    # TODO: check if this is also the location on Fedora
+    pgpewrap="/usr/lib/mutt/pgpewrap"
+    dotlock="mutt_dotlock"
     elif command -v mutt-jaro > /dev/null; then
-	# in-house compiled
-	mutt=mutt-jaro
-	pgpewrap=pgpewrap
-	dotlock=dotlock
+    # in-house compiled
+    mutt=mutt-jaro
+    pgpewrap=pgpewrap
+    dotlock=dotlock
     else
-	error "Cannot find Mutt. Please install it."
-	exit 1
+    error "Cannot find Mutt. Please install it."
+    exit 1
     fi
     func "Mutt binary: $mutt"
     # make sure there is always a muttpass file even if empty
@@ -403,11 +403,11 @@ option_is_set() {
     [[ -n ${(k)opts[$1]} ]];
     r=$?
     if [[ $2 == out ]]; then
-	if [[ $r == 0 ]]; then
-	    echo 'set'
-	else
-	    echo 'unset'
-	fi
+    if [[ $r == 0 ]]; then
+        echo 'set'
+    else
+        echo 'unset'
+    fi
     fi
     return $r;
 }
@@ -465,15 +465,15 @@ a pipe | in front indicate they take an email body from stdin
 account names correspond to the filenames, i.e. imap.default
 
  fetch    downloads emails locally from an $account on-line
-	  option "keep" (default) to avoid deleting from servers
+      option "keep" (default) to avoid deleting from servers
 
  send     send all emails queued in outbox/ to an smtp.$account
 
  peek     connect to an imap.$account with ncurses terminal mutt
-	  remote folders supported. use to delete without download
+      remote folders supported. use to delete without download
 
  passwd   set account passwords in the OS native keyring
-	  or into a simple, file based, gpg encrypted database.
+      or into a simple, file based, gpg encrypted database.
 
 |queue    queue a mail in outbox/ for send
 
@@ -485,7 +485,7 @@ maildirs are directories of mails downloaded in Mail/
  open     open a maildir folder (can use -R for read-only)
 
  backup  (mairix)  move mails from a maildir to another one
-	  match mails to move based on date ranges or strings
+      match mails to move based on date ranges or strings
 
  rmdupes  remove all duplicated e-mails into a maildir
 
@@ -578,9 +578,9 @@ main()
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
-	for opt in ${=optspec}; do
-	    every_opts+=${opt}
-	done
+    for opt in ${=optspec}; do
+        every_opts+=${opt}
+    done
     done
     local -a oldstar
     oldstar=($argv)
@@ -588,21 +588,21 @@ main()
     unset discardme
     subcommand=$1
     if [[ -z $subcommand ]]; then
-	subcommand="__default"
+    subcommand="__default"
     fi
 
 # QUAA
     if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
  # unknown command, pass it to autostart
-	func "unknown command, autostart: $@"
-	autostart ${=@}
-	exitcode=$?
-	{ test $exitcode != 0 } && {
-		error "command \"$subcommand\" not recognized"
-		act "try -h for help"
-		CLEANEXIT=0
-	}
-	return $exitcode
+    func "unknown command, autostart: $@"
+    autostart ${=@}
+    exitcode=$?
+    { test $exitcode != 0 } && {
+        error "command \"$subcommand\" not recognized"
+        act "try -h for help"
+        CLEANEXIT=0
+    }
+    return $exitcode
     fi
 
     argv=(${oldstar})
@@ -612,107 +612,107 @@ main()
     # zsh magic: ${=string} will split to multiple arguments when spaces occur
     set -A cmd_opts ${main_opts} ${=subcommands_opts[$subcommand]}
     if [[ -n $cmd_opts ]]; then #if there is no option, we don't need parsing
-	zparseopts -M -E -D -Aopts ${cmd_opts}
-	if [[ $? != 0 ]]; then
-	    error "Some error occurred during option processing."
-	    exitcode=1
-	    return 1
-	fi
+    zparseopts -M -E -D -Aopts ${cmd_opts}
+    if [[ $? != 0 ]]; then
+        error "Some error occurred during option processing."
+        exitcode=1
+        return 1
+    fi
     fi
   #build PARAM (array of arguments) and check if there are unrecognized options
     local ok=0
     for arg in $*; do
-	if [[ $arg == '--' || $arg == '-' ]]; then
-	    ok=1
-	    continue #it shouldnt be appended to PARAM
-	elif [[ $arg[1] == '-'  ]]; then
-	    if [[ $ok == 0 ]]; then
-		error "unrecognized option $arg"
-		exitcode=1
-		return 1
-	    fi
-	fi
-	PARAM+=$arg
+    if [[ $arg == '--' || $arg == '-' ]]; then
+        ok=1
+        continue #it shouldnt be appended to PARAM
+    elif [[ $arg[1] == '-'  ]]; then
+        if [[ $ok == 0 ]]; then
+        error "unrecognized option $arg"
+        exitcode=1
+        return 1
+        fi
+    fi
+    PARAM+=$arg
     done
   #first parameter actually is the subcommand: delete it and shift
     if [[ $subcommand != '__default' ]]; then
-	PARAM[1]=()
-	shift
+    PARAM[1]=()
+    shift
     fi
   ### End parsing command-specific options
 
     if option_is_set -v; then
-	cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
-	echo
+    cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
+    echo
     fi
     { option_is_set -a } && { account=`option_value -a` }
     { option_is_set -l } && {
-	if [[ "`option_value -l`" =~ "black" ]]; then list=blacklist; fi
-	if [[ "`option_value -l`" =~ "white" ]]; then list=whitelist; fi
+    if [[ "`option_value -l`" =~ "black" ]]; then list=blacklist; fi
+    if [[ "`option_value -l`" =~ "white" ]]; then list=whitelist; fi
     }
     { option_is_set -h } && { CLEANEXIT=0
-	usage; return 0 }
+    usage; return 0 }
     { option_is_set -v } && { CLEANEXIT=0
-	cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'
-	return 0 }
+    cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'
+    return 0 }
     { option_is_set -q } && { QUIET=1 }
     { option_is_set -D } && { DEBUG=1; QUIET=0
-	func "All debug messages ON" }
+    func "All debug messages ON" }
     { option_is_set -n } && { DRYRUN=1
-	act "Dry run, show operations without executing them." }
+    act "Dry run, show operations without executing them." }
     { option_is_set -R } && { muttflags+=" -R " }
     { option_is_set -f } && { FORCE=1 }
 
     case "$subcommand" in
-	compose) compose ${PARAM} ;;
-	queue)   queue ${PARAM} ;;
-	fetch)
-	    if [ "$account" = "" ]; then fetchall
-	    else fetch; fi
-	    filter_maildir incoming
-	    ;;
-	send)    send ${PARAM} ;; # was checking is_online
-	peek)    peek ${PARAM} ;; # was checking is_online
+    compose) compose ${PARAM} ;;
+    queue)   queue ${PARAM} ;;
+    fetch)
+        if [ "$account" = "" ]; then fetchall
+        else fetch; fi
+        filter_maildir incoming
+        ;;
+    send)    send ${PARAM} ;; # was checking is_online
+    peek)    peek ${PARAM} ;; # was checking is_online
 
-	later)   later ${PARAM} ;;
+    later)   later ${PARAM} ;;
 
-	update|init)
-	    init_inbox
-	    update_filters
-	    update_mutt
-	    update_sieve
-	    ;;
+    update|init)
+        init_inbox
+        update_filters
+        update_mutt
+        update_sieve
+        ;;
 
-	help) CLEANEXIT=0; usage ;;
+    help) CLEANEXIT=0; usage ;;
 
-	search)  CLEANEXIT=0; search ${PARAM} ;;
+    search)  CLEANEXIT=0; search ${PARAM} ;;
 
-	stat)   CLEANEXIT=0; stats ${PARAM} ;;
+    stat)   CLEANEXIT=0; stats ${PARAM} ;;
 
-	complete) CLEANEXIT=0; complete ${PARAM}       ;;
-	isknown)  CLEANEXIT=0; sender_isknown ${PARAM} ;;
-	learn)    CLEANEXIT=0; learn ${PARAM}          ;;
-	forget)   CLEANEXIT=0; forget ${PARAM}         ;;
-	list)     CLEANEXIT=0; list_addresses ${PARAM} ;;
+    complete) CLEANEXIT=0; complete ${PARAM}       ;;
+    isknown)  CLEANEXIT=0; sender_isknown ${PARAM} ;;
+    learn)    CLEANEXIT=0; learn ${PARAM}          ;;
+    forget)   CLEANEXIT=0; forget ${PARAM}         ;;
+    list)     CLEANEXIT=0; list_addresses ${PARAM} ;;
 
-	import)  import_addressbook ${PARAM} ;;
-	"export")  export_vcard ${PARAM}     ;;
-	abook)   edit_abook ${PARAM}         ;;
+    import)  import_addressbook ${PARAM} ;;
+    "export")  export_vcard ${PARAM}     ;;
+    abook)   edit_abook ${PARAM}         ;;
 
-	edit)    CLEANEXIT=0; edit_file ${PARAM}    ;;
-	open)    CLEANEXIT=0; open_folder ${PARAM}  ;;
-	preview) CLEANEXIT=0; preview_file ${PARAM} ;;
+    edit)    CLEANEXIT=0; edit_file ${PARAM}    ;;
+    open)    CLEANEXIT=0; open_folder ${PARAM}  ;;
+    preview) CLEANEXIT=0; preview_file ${PARAM} ;;
 
-	backup)  backup ${PARAM}  ;;
-	rmdupes) rmdupes ${PARAM} ;;
-	merge)   merge ${PARAM}   ;;
+    backup)  backup ${PARAM}  ;;
+    rmdupes) rmdupes ${PARAM} ;;
+    merge)   merge ${PARAM}   ;;
 
-	filter)
-	    update_filters ${PARAM}
-	    filter_maildir ${PARAM}
-	    ;;
+    filter)
+        update_filters ${PARAM}
+        filter_maildir ${PARAM}
+        ;;
 
-	deliver) deliver ${PARAM} ;;
+    deliver) deliver ${PARAM} ;;
 
     passwd) new_password ;;
 
@@ -722,70 +722,70 @@ main()
 
     isonline) is_online ${=PARAM}; exitcode=$? ;;
 
-	publish)
-	    md="$1"
-	    { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
-	    pubdb_update "$md"
-	    pubdb_render_maildir "$md"
-	    exitcode=$? ;;
+    publish)
+        md="$1"
+        { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
+        pubdb_update "$md"
+        pubdb_render_maildir "$md"
+        exitcode=$? ;;
 
-	'source')   CLEANEXIT=0; return 0 ;;
-	__default)  func "no command provided"
-	    autostart ${PARAM}
-	    exitcode=$?
-	    ;;
+    'source')   CLEANEXIT=0; return 0 ;;
+    __default)  func "no command provided"
+        autostart ${PARAM}
+        exitcode=$?
+        ;;
 
-	imap)
-	    imapcmd="$1"
-	    case $1 in
-		getsize)
-		    read_account $account
-		    ask_password
-		    bytes_total=`imap_get_size "$2"`
-		    notice "Size of account $login on $imap"
-		    act "$bytes_total bytes"
-		    mib_total=$(( $bytes_total / 1048576 ))
-		    act "$mib_total MB (MiB)"
-		    exitcode=$?
-		    ;;
-		listfolders)
-		    read_account $account
-		    ask_password
-		    folders=(`imap_list_folders`)
-		    notice "List of folders for $login on $imap"
-		    for f in $folders; do
-			print "$f"
-		    done
-		    exitcode=$?
-		    ;;
-		# interactive)
-		#     read_account
-		#     ask_password
-		#     imap_interactive_shell
-		#     exitcode=$?
-		#     ;;
-		*)
-		    error "imap needs a subcommand: getsize or listfolders"
-		    CLEANEXIT=0
-		    ;;
-	    esac
-	    ;;
-       
+    imap)
+        imapcmd="$1"
+        case $1 in
+        getsize)
+            read_account $account
+            ask_password
+            bytes_total=`imap_get_size "$2"`
+            notice "Size of account $login on $imap"
+            act "$bytes_total bytes"
+            mib_total=$(( $bytes_total / 1048576 ))
+            act "$mib_total MB (MiB)"
+            exitcode=$?
+            ;;
+        listfolders)
+            read_account $account
+            ask_password
+            folders=(`imap_list_folders`)
+            notice "List of folders for $login on $imap"
+            for f in $folders; do
+            print "$f"
+            done
+            exitcode=$?
+            ;;
+        # interactive)
+        #     read_account
+        #     ask_password
+        #     imap_interactive_shell
+        #     exitcode=$?
+        #     ;;
+        *)
+            error "imap needs a subcommand: getsize or listfolders"
+            CLEANEXIT=0
+            ;;
+        esac
+        ;;
+
     extract)
             md_extract ${=@}
             exitcode=$?
             ;;
-        
-	*) # unknown command, pass it to autostart
-	    func "unknown command, remote check"
-	    autostart ${PARAM}
-	    exitcode=$?
-	    { $exitcode != 0 } && {
-		error "command \"$subcommand\" not recognized"
-		act "try -h for help"
-		CLEANEXIT=0
-	    }
-	    ;;
+
+    *) # unknown command, pass it to autostart
+        func "unknown command, remote check"
+        autostart ${PARAM}
+        exitcode=$?
+        { $exitcode != 0 } && {
+        error "command \"$subcommand\" not recognized"
+        act "try -h for help"
+        CLEANEXIT=0
+        }
+        ;;
     esac
     exitcode=$?
     return 0
