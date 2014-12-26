@@ -28,7 +28,7 @@
 read_account() {
     typeset -al all
     unset name email imap imap_port smtp smtp_port \
-	    host login transport auth cert options folders exclude
+        host login transport auth cert options folders exclude
     # parse arguments
 
     { test "$account" = "" } && { account="default" }
@@ -38,13 +38,13 @@ read_account() {
     acct="$MAILDIRS/Accounts/$account";
     { test -r "$acct" } || {
         acct="$MAILDIRS/Accounts/$account.txt"
-	{ test -r "$acct" } || {
-	    error "no account found: $acct"
-	    act "Refine your argument using '-a accountname'"
-	    act "Available accounts:"
-	    ls "$MAILDIRS/Accounts/"
-	    return 1
-	}
+        { test -r "$acct" } || {
+            error "no account found: $acct"
+            act "Refine your argument using '-a accountname'"
+            act "Available accounts:"
+            ls "$MAILDIRS/Accounts/"
+            return 1
+        }
     }
 
     ttmp=`awk '
@@ -66,8 +66,8 @@ read_account() {
     /^exclude/ { printf "exclude=("; for(i=2;i<=NF;i++) printf "%s ", $i; printf ");" }
     ' "$acct"`
     { test $? = 0 } || {
-	error "Error parsing account: $acct"
-	return 1 }
+    error "Error parsing account: $acct"
+    return 1 }
 
     eval "$ttmp"
     # check required fields
@@ -86,12 +86,12 @@ read_account() {
     { test -z $transport }  && { transport=plain }
     { test -z $imap_port }  && { imap_port=143 }
     { test -z $smtp_port }  && { smtp_port=25 }
-    
+
     { test -z $auth }       && { auth=plain }
     { test -z $cert }       && { cert=ignore }
     { test -z $accountopt } && { accountopt=keep }
     # cert and password can be missing
-    
+
     func "name: $name"
     func "email: $email"
     func "login: $login"
@@ -113,4 +113,3 @@ read_account() {
 
     return 0
 }
-

@@ -27,6 +27,23 @@
 # which mutt binary to use
 mutt="mutt"
 
+# extract all emails found in a text from stdin
+# outputs them one per line
+extract_emails() {
+awk '{ for (i=1;i<=NF;i++)
+     if ( $i ~ /[[:alnum:]]@[[:alnum:]]/ ) {
+       gsub(/<|>|,/ , "" , $i); print $i } }'
+}
+
+# parses stdin and converts some characters to html
+escape_html() {
+    sed -e '
+s/\&/\&amp;/g
+s/>/\&gt;/g
+s/</\&lt;/g
+s/"/\&quot;/g
+'
+}
 
 
 autostart() {
@@ -34,44 +51,44 @@ autostart() {
 # no argument passed. open first folder with new mail
     { test -z ${1} } && {
 
-	{ test ! -r $MUTTDIR/rc } \
-	    && { error "Jaro Mail is not yet configured."
-		 error "To configure, edit the files in $MAILDIRS/Accounts"
-		 return 1 }
+    { test ! -r $MUTTDIR/rc } \
+        && { error "Jaro Mail is not yet configured."
+         error "To configure, edit the files in $MAILDIRS/Accounts"
+         return 1 }
 
-	${=mutt} -F $MUTTDIR/rc ${=muttflags} -Z
-	return $?
+    ${=mutt} -F $MUTTDIR/rc ${=muttflags} -Z
+    return $?
     }
 
     # argument passed: determine if an email
     print "${1}" \
-	| tr 'A-Z' 'a-z' \
-	| grep '^[a-zA-Z0-9._%+-]*@[a-zA-Z0-9]*[\.[a-zA-Z0-9]*]*[a-zA-Z0-9]$' \
-	> /dev/null
+    | tr 'A-Z' 'a-z' \
+    | grep '^[a-zA-Z0-9._%+-]*@[a-zA-Z0-9]*[\.[a-zA-Z0-9]*]*[a-zA-Z0-9]$' \
+    > /dev/null
     { test $? = 0 } && {
-	notice "Composing message to: ${@}"
-	# its an email, TODO see if we have it in our addressbook
-	${=mutt} -F $MUTTDIR/rc ${=muttflags} ${=@}
-	return 0
+    notice "Composing message to: ${@}"
+    # its an email, TODO see if we have it in our addressbook
+    ${=mutt} -F $MUTTDIR/rc ${=muttflags} ${=@}
+    return 0
     }
 
     # or a directory of file
     { test -r "$1" } && {
-	# is it a maildir? then open
-	{ maildircheck ${1} } && {
-	    ${=mutt} -F $MUTTDIR/rc ${=muttflags} -f ${1}
-	    return 0 }
-	# is it a regular file? then attach it
-	{ test -f "$1" } && {
-	    ${=mutt} -F $MUTTDIR/rc ${=muttflags} -a ${=@}
-	    return 0 }
+    # is it a maildir? then open
+    { maildircheck ${1} } && {
+        ${=mutt} -F $MUTTDIR/rc ${=muttflags} -f ${1}
+        return 0 }
+    # is it a regular file? then attach it
+    { test -f "$1" } && {
+        ${=mutt} -F $MUTTDIR/rc ${=muttflags} -a ${=@}
+        return 0 }
     }
 
     # or the name of a folder in Jaro Mail
     { maildircheck "$MAILDIRS/$1" } && {
-	notice "Opening folder ${1}"
-	${=mutt} -F $MUTTDIR/rc ${=muttflags} -f "$MAILDIRS/${1}"
-	return 0
+    notice "Opening folder ${1}"
+    ${=mutt} -F $MUTTDIR/rc ${=muttflags} -f "$MAILDIRS/${1}"
+    return 0
     }
 
     return $?
@@ -81,8 +98,8 @@ autostart() {
 # short utility to print only mail headers
 hdr() {
     { test -r "$1" } || {
-	error "hdr() called on non existing file: $1"
-	return 1 }
+        error "hdr() called on non existing file: $1"
+        return 1 }
     awk '{ print $0 }
 /^$/ { exit }' "$1"
 }
@@ -90,8 +107,8 @@ hdr() {
 # short utility to print only mail body
 body() {
     { test -r "$1" } || {
-	error "body() called on non existing file: $1"
-	return 1 }
+    error "body() called on non existing file: $1"
+    return 1 }
     awk '
 BEGIN { head=1 }
 /^$/ { head=0 }
@@ -109,7 +126,7 @@ BEGIN { head=1 }
 # however the default is nano if nothing else is choosen.
 jarovim() {
     vim -c 'set fo=tcrq' -c 'set tw=72' \
-	-c 'map <C-j> {gq}' -c 'imap <C-j> <esc>{gq}i' \
+    -c 'map <C-j> {gq}' -c 'imap <C-j> <esc>{gq}i' \
         "${@}"
     return $?
 }
@@ -119,27 +136,27 @@ edit_file() {
     { test ${JARO_EDITOR} } && { _editor="$JARO_EDITOR" }
     { test "$_editor" = "" } && { _editor=vim }
     case $_editor in
-	# refine settings for email
-	vi|vim) jarovim "${PARAM}"; return $? ;;
-	emacs) emacsclient -a emacs "${PARAM}"; return $? ;;
-	*) ${=_editor} "${PARAM}"; return $? ;;
+    # refine settings for email
+    vi|vim) jarovim "${PARAM}"; return $? ;;
+    emacs) emacsclient -a emacs "${PARAM}"; return $? ;;
+    *) ${=_editor} "${PARAM}"; return $? ;;
     esac
 
     # if we are here we need to guess
     case $OS in
-	MAC) open -t ${=PARAM} ;;
-	GNU)
-	    ps ax|grep '[e]macs' > /dev/null
-	    if [ $? = 0 ]; then
-		emacsclient -a ${=PARAM}
-	    elif command -v vim > /dev/null; then
-		jarovim ${=PARAM}
-	    elif command -v nano > /dev/null; then
-		nano -m -S -Q ">" -I -E -D -T 4 -U -W -c -i -k -r 72 ${=PARAM}
-	    else
-		error "No editor found, please configure the JARO_EDITOR environment variable."
-	    fi
-	    ;;
+    MAC) open -t ${=PARAM} ;;
+    GNU)
+        ps ax|grep '[e]macs' > /dev/null
+        if [ $? = 0 ]; then
+        emacsclient -a ${=PARAM}
+        elif command -v vim > /dev/null; then
+        jarovim ${=PARAM}
+        elif command -v nano > /dev/null; then
+        nano -m -S -Q ">" -I -E -D -T 4 -U -W -c -i -k -r 72 ${=PARAM}
+        else
+        error "No editor found, please configure the JARO_EDITOR environment variable."
+        fi
+        ;;
     esac
     return $?
 }
@@ -149,8 +166,8 @@ edit_file() {
 open_folder() {
     notice "Opening folder ${1}"
     { maildircheck ${MAILDIRS}/${1} } && {
-	${=mutt} -F $MUTTDIR/rc ${=muttflags} -f "$MAILDIRS/${1}"
-	return $? }
+    ${=mutt} -F $MUTTDIR/rc ${=muttflags} -f "$MAILDIRS/${1}"
+    return $? }
     return 1
 }
 
@@ -158,12 +175,12 @@ open_folder() {
 ## Open a File
 preview_file() {
     case $OS in
-	GNU)
-	    xdg-open "${PARAM}" &
-	    ;;
-	MAC)
-	    open -g "${PARAM}"
-	    ;;
+    GNU)
+        xdg-open "${PARAM}" &
+        ;;
+    MAC)
+        open -g "${PARAM}"
+        ;;
     esac
 }
 
@@ -173,8 +190,8 @@ preview_file() {
 is_online() {
     func "Test if we are online"
     { test "$FORCE" = "1" } && {
-	act "Internet check skipped (--force in use)"
-	return 0
+    act "Internet check skipped (--force in use)"
+    return 0
     }
     _res=1
     _host=${1:-8.8.8.8}
@@ -182,95 +199,95 @@ is_online() {
 
     _mode=inet # or host
     { test "$_port" = "NONE" } || { _mode=host }
-    
+
     case $_mode in
-	inet)
-	    func "trying to ping ${_host}"
-	    ping -c1 -n ${_host} 2>&1 > /dev/null
-	    { test $? = 0 } || {
-		error "Internet seems unreachable"
-		act "Network connection is checked with a ping to 8.8.8.8"
-		act "if your network doesn't allows it to pass, use -f to force."
-		error "Operation aborted."
-		exit 1
-	    }
-	    act "Internet seems to be reachable"
-	    ;;
-	host)
-	    func "trying to connect ${_host} port ${_port}"
-	    nc -w 16 -z ${_host} ${_port} > /dev/null
-	    { test $? = 0 } || {
-		error "Host unreachable: $_host"
-		act "Network connection is checked with 16s timeout"
-		act "if you want to bypass this check, use -f to force."
-		error "Operation aborted."
-		return 1
-	    }
-	    act "Host $_host responds on port $_port"
-	    ;;
+    inet)
+        func "trying to ping ${_host}"
+        ping -c1 -n ${_host} 2>&1 > /dev/null
+        { test $? = 0 } || {
+        error "Internet seems unreachable"
+        act "Network connection is checked with a ping to 8.8.8.8"
+        act "if your network doesn't allows it to pass, use -f to force."
+        error "Operation aborted."
+        exit 1
+        }
+        act "Internet seems to be reachable"
+        ;;
+    host)
+        func "trying to connect ${_host} port ${_port}"
+        nc -w 16 -z ${_host} ${_port} > /dev/null
+        { test $? = 0 } || {
+        error "Host unreachable: $_host"
+        act "Network connection is checked with 16s timeout"
+        act "if you want to bypass this check, use -f to force."
+        error "Operation aborted."
+        return 1
+        }
+        act "Host $_host responds on port $_port"
+        ;;
     esac
     return 0
 }
-    
+
 
 # opens and closes a ramdisk for temporary files
 # users can do this explicitly between session to speed up operations
 ramdisk() {
     case $OS in
-	GNU)
-	    # TODO
-	    # not so urgent, since usually /dev/shm is mounted and writable
-	    ;;
-	MAC)
-	    case ${PARAM[1]} in
-		open)
-		    mount | grep 'JaroTmp' > /dev/null
-		    { test $? = 0 } && {
-			error "A Jaro Mail ramdisk is already open"
-			return 1 }
-		    { test -z ${PARAM[2]} } && { size=10 } || { size=${PARAM[2]} }
-		    act "Creating ramdisk of ${size}MB"
+    GNU)
+        # TODO
+        # not so urgent, since usually /dev/shm is mounted and writable
+        ;;
+    MAC)
+        case ${PARAM[1]} in
+        open)
+            mount | grep 'JaroTmp' > /dev/null
+            { test $? = 0 } && {
+            error "A Jaro Mail ramdisk is already open"
+            return 1 }
+            { test -z ${PARAM[2]} } && { size=10 } || { size=${PARAM[2]} }
+            act "Creating ramdisk of ${size}MB"
 
-		    # 2048 is a megabyte here
-		    devsize=$((1024*2*$size))
-		    devname=`hdid -nomount ram://${devsize}`
-		    act "Mounting ramdisk on $devname"
-		    diskutil eraseVolume HFS+ JaroTmp `basename $devname` > /dev/null
-		    { test $? != 0 } && {
-			error "Error initializing ramdisk"
-			hdiutil detach `basename $devname`
-			return 1 }
-		    notice "Operation successful, ramdisk ready on /Volume/JaroTmp"
-		    TMPRAM=1
-		    ;;
-		close)
-		    devname=`mount | awk '/JaroTmp/ {print $1}'`
-		    { test "$devname" = "" } && {
-			error "No ramdisk seems to be open"
-			return 1 }
-		    act "Unmounting ramdisk: $devname"
-		    diskutil unmount /Volumes/JaroTmp > /dev/null
-		    hdiutil detach `basename $devname` > /dev/null
-		    notice "Ramdisk succesfully detached"
-		    TMPRAM=0
-		    ;;
-	    esac
-	    ;;
+            # 2048 is a megabyte here
+            devsize=$((1024*2*$size))
+            devname=`hdid -nomount ram://${devsize}`
+            act "Mounting ramdisk on $devname"
+            diskutil eraseVolume HFS+ JaroTmp `basename $devname` > /dev/null
+            { test $? != 0 } && {
+            error "Error initializing ramdisk"
+            hdiutil detach `basename $devname`
+            return 1 }
+            notice "Operation successful, ramdisk ready on /Volume/JaroTmp"
+            TMPRAM=1
+            ;;
+        close)
+            devname=`mount | awk '/JaroTmp/ {print $1}'`
+            { test "$devname" = "" } && {
+            error "No ramdisk seems to be open"
+            return 1 }
+            act "Unmounting ramdisk: $devname"
+            diskutil unmount /Volumes/JaroTmp > /dev/null
+            hdiutil detach `basename $devname` > /dev/null
+            notice "Ramdisk succesfully detached"
+            TMPRAM=0
+            ;;
+        esac
+        ;;
     esac
 }
 
 human_size() {
     { test $1 -gt 0 } || {
-	error "human_size() called with zero argument"
-	return 1 }
+    error "human_size() called with zero argument"
+    return 1 }
     # megabytes
     { test $1 -gt 1048576 } && {
-	print -n "$(( $1 / 1024 / 1024 )) MB"
-	return 0}
+    print -n "$(( $1 / 1024 / 1024 )) MB"
+    return 0}
     # kilobytes
     { test $1 -gt 1024 } && {
-	print -n "$(( $1 / 1024 )) KB"
-	return 0}
+    print -n "$(( $1 / 1024 )) KB"
+    return 0}
     # bytes
     print -n "$1 Bytes"
     return 0
@@ -287,40 +304,40 @@ cert() {
     cc=Equifax_Secure_Certificate_Authority
     if ! [ -r $MAILDIRS/certs/${cc}.pem ]; then
 
-	curl -o $MAILDIRS/certs/${cc}.pem \
-	    "https://www.geotrust.com/resources/root_certificates/certificates/${cc}.cer"
-	openssl x509 -in \
-	    $MAILDIRS/certs/${cc}.pem -fingerprint \
-	    -subject -issuer -serial -hash -noout
+    curl -o $MAILDIRS/certs/${cc}.pem \
+        "https://www.geotrust.com/resources/root_certificates/certificates/${cc}.cer"
+    openssl x509 -in \
+        $MAILDIRS/certs/${cc}.pem -fingerprint \
+        -subject -issuer -serial -hash -noout
     fi
     notice "Google CA succesfully installed"
 
 #	dyne|autistici|freaknet)
     cc=Autistici_Certificate_Authority
     if ! [ -r $MAILDIRS/certs/${cc}.pem ]; then
-	curl -o $MAILDIRS/certs/${cc}.pem \
-	    "http://ca.autistici.org/ca.pem"
-	openssl x509 -in \
-	    $MAILDIRS/certs/${cc}.pem \
-	    -fingerprint -subject -issuer -serial -hash -noout
+    curl -o $MAILDIRS/certs/${cc}.pem \
+        "http://ca.autistici.org/ca.pem"
+    openssl x509 -in \
+        $MAILDIRS/certs/${cc}.pem \
+        -fingerprint -subject -issuer -serial -hash -noout
     fi
     notice "Aut/Inv CA succesfully installed"
 
 #	riseup)
     cc=RiseupCA
     if ! [ -r $MAILDIRS/certs/${cc}.pem ]; then
-	curl -o $MAILDIRS/certs/${cc}.pem "https://help.riseup.net/assets/43052/RiseupCA.pem"
-	openssl x509 -in \
-	    $MAILDIRS/certs/${cc}.pem \
-	    -fingerprint -subject -issuer -serial -hash -noout
+    curl -o $MAILDIRS/certs/${cc}.pem "https://help.riseup.net/assets/43052/RiseupCA.pem"
+    openssl x509 -in \
+        $MAILDIRS/certs/${cc}.pem \
+        -fingerprint -subject -issuer -serial -hash -noout
     fi
     notice "Riseup CA succesfully installed"
 
     act "refreshing certificates"
     c_rehash $MAILDIRS/certs > /dev/null
     if [ $? != 0 ]; then
-	error "Error refreshing certificates in $MAILDIRS/certs"
-	c_rehash $MAILDIRS/certs
+    error "Error refreshing certificates in $MAILDIRS/certs"
+    c_rehash $MAILDIRS/certs
     fi
     notice "Done importing most common certificates."
     return 0
