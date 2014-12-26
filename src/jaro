@@ -701,7 +701,11 @@ main()
     import)  import_addressbook ${PARAM} ;;
     "export")
             case "$PARAM" in
-                abook) export_abook ;;
+                abook)
+                    notice "Exporting old addressbook to new format"
+                    list=whitelist; export_abook
+                    list=blacklist; export_abook
+                    ;;
                 vcard) export_vcard ;;
                 *) export_vcard ;;
             esac

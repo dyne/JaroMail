@@ -32,6 +32,15 @@ create_addressbook() {
         return 1
     }
 
+    [[ -r "$MAILDIRS"/Addressbook ]] && {
+        notice "Updating the old addressbook to a new format"
+        _list=$list
+        list=blacklist; export_abook
+        list=whitelist; export_abook
+        list=$_list
+        mv "$MAILDIRS"/Addressbook "$MAILDIRS"/Addressbook.old 
+    }
+
     touch "$ab"
 
     # make sure is private
@@ -352,6 +361,59 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
     unlock $ADDRESSBOOK
 
     notice "Done importing addresses"
+}
+
+# export old addressbook format to abook
+export_abook() {
+
+    [[ -r $MAILDIRS/Addressbook ]] || {
+        notice "Old addressbook format not found"
+        act "there is nothing to convert to abook"
+        return 1
+    }
+
+    lock $MAILDIRS/Addressbook
+
+    out=$MAILDIRS/$list.abook
+    act "Exporting $list to abook format: $out"
+    rm -f $out
+
+    func "launching SELECT email,name sqlite3 query"
+    addresses=`cat <<EOF | ${SQL} -column -header -batch $MAILDIRS/Addressbook \
+    | grep -v '^email'
+.width 40 100
+.mode list
+.separator '|'
+SELECT email, name FROM $list;
+EOF`
+
+    unlock $MAILDIRS/Addressbook
+    func "converting database into abook format"
+    cat <<EOF > $out
+# abook addressbook file
+
+[format]
+program=JaroMail
+version=$VERSION
+
+EOF
+    c=0
+    for a in ${(f)addresses}; do
+        _email="${(Q)a[(ws:|:)1]}"
+        # remove from name all what is an email between brackets
+        # crop (trim) all beginning and ending whitespaces from name
+        _name=`print ${(Q)a[(ws:|:)2]} | trim`
+        { test "${_email}" != "" } && {
+            cat <<EOF >> $out
+[${c}]
+name=${_name}
+email=${_email}
+
+EOF
+            c=$(( $c + 1 ))
+        }
+    done
+
 }
 
 # export addressbook to vcard
