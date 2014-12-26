@@ -523,22 +523,22 @@ require ["fileinto","mailbox","variables"];
 EOF
 
     # blacklist
-    sieve_filter_array=()
-    newlock "$TMPDIR/blacklist.sieve.$id"
-    cat <<EOF | ${SQL} -batch ${addressbook} \
-    >> "$TMPDIR/blacklist.sieve.$id"
-SELECT email FROM blacklist;
-EOF
-    for i in `cat "$TMPDIR/blacklist.sieve.$id"`; do
-    sieve_filter_array+=("$i"); done
-    unlink "$TMPDIR/blacklist.sieve.$id"
-
-    { test "${#sieve_filter_array}" = "0" } || {
-    sieve_filter \
-        'if header :contains "From"' \
-        zz.blacklist
+    [[ -r "$MAILDIRS"/blacklist.abook ]] && {
+        sieve_filter_array=()
+        
+        for i in `awk -F'=' '
+/^email/ { print $2 }
+' "$MAILDIRS"/blacklist.abook`; do
+            sieve_filter_array+=("$i")
+        done
+        
+        { test "${#sieve_filter_array}" = "0" } || {
+            sieve_filter \
+                'if header :contains "From"' \
+                zz.blacklist
+        }
     }
-
+    
     # bounces
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # bounces
@@ -568,24 +568,20 @@ EOF
     act "compiling whitelist rules from addressbook"
     func "generating whitelist for sieve filters"
 
-    sieve_filter_array=()
-    newlock "$TMPDIR/whitelist.sieve.$id"
-    cat <<EOF | ${SQL} -batch ${addressbook} \
-    >> "$TMPDIR/whitelist.sieve.$id"
-SELECT email FROM whitelist;
+    [[ -r "$MAILDIRS"/whitelist.abook ]] && {
+        sieve_filter_array=()
+        for i in `awk -F'=' '
+/^email/ { print $2 }
+' "$MAILDIRS"/whitelist.abook`; do
+            sieve_filter_array+=("$i")
+        done
 
-EOF
-
-    for i in `cat "$TMPDIR/whitelist.sieve.$id"`; do
-    sieve_filter_array+=("$i"); done
-
-    unlink "$TMPDIR/whitelist.sieve.$id"
-
-    sieve_filter \
-    'if header :contains "From"' \
-    INBOX
-
-    cat <<EOF >> "$MAILDIRS/Filters.sieve"
+        sieve_filter \
+            'if header :contains "From"' \
+            INBOX
+    }
+        
+        cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # spam
 if header :is "X-Spam-Flag" "YES" {
     fileinto :create "zz.spam"; stop;
