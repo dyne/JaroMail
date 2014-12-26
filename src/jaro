@@ -153,6 +153,8 @@ fi
 # env override
 { test "$JAROWORKDIR" = "" } || { WORKDIR="${JAROWORKDIR}" }
 
+# default addressbook
+ADDRESSBOOK="$MAILDIRS/whitelist.abook"
 
 # which command to use when creating dirs
 mkdir="`command -v mkdir` -m 700 -p"
@@ -194,7 +196,6 @@ fi
 
 ACCOUNTS="$MAILDIRS/Accounts"
 KEYRING="$MAILDIRS/Keyring"
-addressbook="$MAILDIRS/Addressbook"
 
 # temporary directory
 TMPDIR="$MAILDIRS/tmp/jaromil.$USER"
@@ -215,10 +216,6 @@ case $OS in
     { test -r "$WORKDIR/keyring" } && { test ! -r "$KEYRING" } && {
         act "Updating keyring location: $KEYRING"
         cp $WORKDIR/keyring "$KEYRING" }
-
-    { test -r $WORKDIR/addressbook } && { test ! -r $addressbook } && {
-        act "Updating addressbook location: $addressbook"
-        cp $WORKDIR/addressbook $addressbook }
 
     ;;
     MAC)
@@ -250,7 +247,7 @@ hostname=$(hostname) # gather the current hostname
 { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
 
 # make sure we have an addressbook
-{ test -r "$addressbook" } || { create_addressbook "$addressbook" }
+[[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
 
 ${=mkdir} "$MAILDIRS/logs"
 # ${=mkdir} "$MAILDIRS/certs"
@@ -647,8 +644,14 @@ main()
     fi
     { option_is_set -a } && { account=`option_value -a` }
     { option_is_set -l } && {
-    if [[ "`option_value -l`" =~ "black" ]]; then list=blacklist; fi
-    if [[ "`option_value -l`" =~ "white" ]]; then list=whitelist; fi
+        if [[ "`option_value -l`" =~ "black" ]]; then 
+            list=blacklist
+        elif [[ "`option_value -l`" =~ "white" ]]; then
+            list=whitelist
+        else
+            list=`option_value -l`
+        fi
+        ADDRESSBOOK="$MAILDIRS"/$list.abook
     }
     { option_is_set -h } && { CLEANEXIT=0
     usage; return 0 }
@@ -693,7 +696,7 @@ main()
     isknown)  CLEANEXIT=0; sender_isknown ${PARAM} ;;
     learn)    CLEANEXIT=0; learn ${PARAM}          ;;
     forget)   CLEANEXIT=0; forget ${PARAM}         ;;
-    list)     CLEANEXIT=0; list_addresses ${PARAM} ;;
+    list)     CLEANEXIT=0; edit_abook ${PARAM} ;;
 
     import)  import_addressbook ${PARAM} ;;
     "export")

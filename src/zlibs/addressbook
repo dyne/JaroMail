@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+# Copyleft (C) 2010-2015 Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
@@ -21,49 +21,41 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-ADDRESSBOOK="$MAILDIRS/Addressbook"
 
 ###################
 # Jaro Brother DB
 create_addressbook() {
-    func "create addressbook"
-    { test -r "$1" } && {
-    error "Addressbook already exists: $1"
-    return 1
+    ab="$ADDRESSBOOK"
+    func "create addressbook: $ab"
+    [[ -r "$ab" ]] && {
+        error "Addressbook already exists: $ab"
+        return 1
     }
-    cat <<EOF | ${SQL} -batch "$1"
-CREATE TABLE whitelist
-(
-  email   text collate nocase unique,
-  name    text collate nocase
-);
-CREATE TABLE blacklist
-(
-  email   text collate nocase unique,
-  name    text collate nocase
-);
-EOF
-    { test $? != 0 } && {
-    error "Error creating addressbook database."
-    return 1 }
+
+    touch "$ab"
+
     # make sure is private
-    chmod 600 "$1"
-    chown $_uid:$_gid "$1"
+    chmod 600 "$ab"
+    chown $_uid:$_gid "$ab"
 
     return 0
 }
 
 insert_address() {
-    _email="${(Q)1}"; _name="${(Q)2}";
+    _email="${1}"; _name="${2}";
     func "insert address: $_name <$_email>"
-    cat <<EOF | ${SQL} -batch $ADDRESSBOOK 2> /dev/null
-INSERT INTO $list (email, name)
-VALUES ("${_email}", "${_name}");
-EOF
-    [[ $? = 0 ]] || {
+
+    lookup_email "$_email"
+
+    [[ $? = 0 ]] && {
         func "address already present in $list"
         return 1
     }
+     
+    print "From: $_name <$_email>" | \
+        abook --datafile "$ADDRESSBOOK" \
+        --add-email-quiet
+
     return 0
 }
 
@@ -77,39 +69,21 @@ EOF
 # }
 
 remove_address() {
-    func "remove address <$1> from $list"
-    cat <<EOF | ${SQL} -batch $ADDRESSBOOK
-DELETE FROM $list
-WHERE email IS "${1}";
-EOF
-    { test $? != 0 } && {
-    func "address not found or error occurred" }
+    warning "remove_address() TODO in abook branch"
+    return 0
 }
 
-search_name() {
-    func "search_name from $list like $1"
-    cat <<EOF | ${SQL} -column -batch $ADDRESSBOOK
-.width 64 128
-SELECT * FROM $list
-WHERE name LIKE "%${1}%";
-EOF
+search_addressbook() {
+    func "search \"$1\" in $list"
+    abook --datafile "$ADDRESSBOOK" --mutt-query "$1"
 }
 
-search_email() {
-    func "search addressbook $list for $1"
-    cat <<EOF | ${SQL} -column -batch $ADDRESSBOOK
-.width 64 128
-SELECT * FROM $list
-WHERE email LIKE "%${1}%";
-EOF
-}
 
 lookup_email() {
-    func "lookup email id from $list where $1"
-    cat <<EOF | ${SQL} -column -batch $ADDRESSBOOK
-SELECT rowid FROM $list
-WHERE email IS "${1}";
-EOF
+    func "lookup email $1 in $list"
+    abook --datafile "$ADDRESSBOOK" \
+        --mutt-query "$1" > /dev/null
+    return $?
 }
 
 complete() {
@@ -117,40 +91,29 @@ complete() {
 
     # completion on configured groups
     { test -r "$MAILDIRS/Groups" } && {
-    if [[ "$1" =~ "group/" ]]; then
-        func "completion will look into groups"
-        needle="${1[(ws:/:)2]}"
-        if [ "$needle" = "" ]; then
-        act "Listing all mailout groups"
-        matches=`${=find} "$MAILDIRS/Groups" -type f`
-        else
-        act "Searching for \"$needle\" in mailout groups"
-        matches=`${=find} "$MAILDIRS/Groups" -type f -name \"*$needle*\"`
+        if [[ "$1" =~ "group/" ]]; then
+            func "completion will look into groups"
+            needle="${1[(ws:/:)2]}"
+            if [ "$needle" = "" ]; then
+                act "Listing all mailout groups"
+                matches=`${=find} "$MAILDIRS/Groups" -type f`
+            else
+                act "Searching for \"$needle\" in mailout groups"
+                matches=`${=find} "$MAILDIRS/Groups" -type f -name \"*$needle*\"`
+            fi
+            print "Groups: `print $matches | wc -l` matches"
+            print
+            for i in ${(f)matches}; do
+                gr=`basename $i`
+                print "$gr@jaromail.group\t`wc -l < $i` recipients"
+            done
+            return 0
         fi
-        print "Groups: `print $matches | wc -l` matches"
-        print
-        for i in ${(f)matches}; do
-        gr=`basename $i`
-        print "$gr@jaromail.group\t`wc -l < $i` recipients"
-        done
-        return 0
-    fi
     }
 
     act "Searching for \"$1\" in addressbook $list"
-    matches="${matches}\n`search_name $1`"
-
-    # mutt query requires something like this
-    print "jaro: $((`print $matches | wc -l` -1)) matches"
-    print "$matches" | awk '
-{ printf "%s\t", $1
-  for(i=2;i<=NF;i++) {
-    sub("<","",$i)
-    sub(">","",$i)
-    if($i!=$1) printf "%s ", $i
-  }
-  printf "\n" }'
-    return 0
+    abook --datafile "$ADDRESSBOOK" --mutt-query "$1"
+    return $?
 }
 
 sender_isknown() {
@@ -160,16 +123,11 @@ sender_isknown() {
 /^$/ { exit }' | ${WORKDIR}/bin/fetchaddr -x From -a`"
 
     email="${head[(ws:,:)1]}"
-    exitcode=1
     [[ "$email" = "" ]] && { return 1 }
 
-    lookup="`lookup_email ${email}`"
-
-    [[ "$lookup" = "" ]] || {
-        func "sender_isknown() found <$email> in $list (id $lookup)"
-        return 0 }
-
-    return 1
+    abook --datafile $MAILDIRS/whitelist.abook \
+        --mutt-query "$email" > /dev/null
+    return $?
 }
 
 learn() {
@@ -194,7 +152,7 @@ learn() {
             print "$head"
             [[ $DRYRUN == 1 ]] || {
                 insert_address "$email" "$name"
-                { test $? = 0 } && { act "new: $_name <${_email}>" }
+                [[ $? = 0 ]] && { act "new: $_name <${_email}>" }
             }
             return 0
             ;;
@@ -210,7 +168,7 @@ learn() {
 
                 [[ $DRYRUN == 1 ]] || {
                     insert_address "$email" "$name"
-                    { test $? = 0 } && { act "new: $_name <${_email}>" }
+                    [[ $? = 0 ]] && { act "new: $_name <${_email}>" }
                 }
             done
             return 0
@@ -226,7 +184,7 @@ learn() {
 
                 [[ $DRYRUN == 1 ]] || {
                     insert_address "$email" "$name"
-                    { test $? = 0 } && { act "new: $_name <${_email}>" }
+                    [[ $? = 0 ]] && { act "new: $_name <${_email}>" }
                 }
             done
 
@@ -239,7 +197,7 @@ learn() {
 
                 [[ $DRYRUN == 1 ]] || {
                     insert_address "$email" "$name"
-                    { test $? = 0 } && { act "new: $_name <${_email}>" }
+                    [[ $? = 0 ]] && { act "new: $_name <${_email}>" }
                 }
             done
             return 0
@@ -253,32 +211,26 @@ learn() {
 }
 
 forget() {
-    func "forget sender from mail in stdin"
-    act "Expecting mail from stdin pipe"
-    head="`${WORKDIR}/bin/fetchaddr -x From -a`"
-    # forget the email part of the parsed head
-    remove_address "${head[(ws:,:)1]}"
-}
-list_addresses() {
-    [[ "$1" = "" ]] || list="$1"
+    warning "forget() TODO in abook branch"
+    return 0
 
-    act "Listing all contents for $list"
-    cat <<EOF | ${SQL} -column -header -batch $ADDRESSBOOK
-.width 32 72
-SELECT * FROM $list;
-EOF
+    # func "forget sender from mail in stdin"
+    # act "Expecting mail from stdin pipe"
+    # head="`${WORKDIR}/bin/fetchaddr -x From -a`"
+    # # forget the email part of the parsed head
+    # remove_address "${head[(ws:,:)1]}"
 }
 
 # import an addressbook, autodetect its type
 import_addressbook() {
     notice "Importing addressbook"
     if [ "${PARAM[1]}" != "" ]; then
-    func "file specified: ${PARAM[1]}"
-    # a file was given as argument
-    import_vcard ${PARAM[2]}
+        func "file specified: ${PARAM[1]}"
+        # a file was given as argument
+        import_vcard ${PARAM[2]}
     else
-    # no file as parameter
-    { test "$OS" = "MAC" } && { import_macosx }
+        # no file as parameter
+        { test "$OS" = "MAC" } && { import_macosx }
     fi
 }
 
@@ -319,30 +271,30 @@ import_macosx() {
     return 0
 }
 
-# import addresbook email from VCard
+# import emails from VCard into abook
+# checks if the emails are already known
 import_vcard() {
-    act "import VCard from file: ${PARAM[1]}"
+    act "import VCard from file: $1"
 
-    { test -r "${PARAM[1]}" } || {
-    error "File not found: ${PARAM[1]}"
-    return 1
+    [[ -r "$1" ]] || {
+        error "File not found: $1"
+        return 1
     }
 
-    vcard=${PARAM[1]}
+    vcard="$1"
     head -n1 $vcard | grep '^BEGIN:VCARD' > /dev/null
 
-    { test $? = 0 } || {
-    error "File to import is not a VCard: $vcard"
-    return 1
+    [[ $? = 0 ]] || {
+        error "File to import is not a VCard: $vcard"
+        return 1
     }
 
-    notice "Import in addressbook VCard ${vcard}"
-    tmp=$TMPDIR/import.$datestamp.$RANDOM
+    notice "Import VCard in addressbook: ${vcard}"
 
     # parse the vcard and print a simple name and email list
     # each value on a single line, entry tuples followed by a #
     # we skip entries that don't have an email
-    cat ${vcard} | awk '
+    addresses `cat ${vcard} | awk '
 BEGIN { newcard=0; c=0; name=""; email=""; }
 /^BEGIN:VCARD/ { newcard=1 }
 /^FN:/ { if(newcard = 1) name=$0 }
@@ -360,40 +312,41 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
     next
   }
 }
-' | cut -d: -f2  > $tmp
+' | cut -d: -f2`
 
     # now parse the temporary list of name and emails
     # made of name, email and a hash for each, newline separated
-    addresses=`cat $tmp`
-#    ${=rm} $tmp
+
+    #    ${=rm} $tmp
 
     lock $ADDRESSBOOK
 
     newa=1; _name=""; _email=""
     for a in ${(f)addresses}; do
-    { test "${a[1]}" = "#" } && {
-        newa=1; # its the end of the entry
+        { test "${a[1]}" = "#" } && {
+            newa=1; # its the end of the entry
 
-        # handle lines with multiple emails in vcard
-        # TODO: generate Groups/${_name} from this
-        for ee in ${=_email}; do
-        # check if we have this email already
-        _e=`print ${ee} | extract_emails`
-        func "lookup_email: ${_e}"
-        foundemail=`lookup_email "${_e}"`
-#		func "lookup_email: ${_email}"
+            # handle lines with multiple emails in vcard
+            # TODO: generate Groups/${_name} from this
+            for ee in ${=_email}; do
+                # check if we have this email already
+                _e=`print ${ee} | extract_emails`
+                func "lookup_email: ${_e}"
+                lookup_email "${_e}"
 
-        { test "$foundemail" = "" } && {
-            insert_address "${_e}" "${_name}"
-            act "${a} ${_name} <${_e}>"
-        }
-        done
+                [[ $? = 0 ]] || {
+                    insert_address "${_e}" "${_name}"
+                    act "${a} ${_name} <${_e}>"
+                }
+            done
 
-        continue }
-    { test $newa -eq 1 } && {
-        # (V) makes special chars visible, we need to remove them..
-        _name=`echo ${(V)a} | cut -d^ -f1`; newa=0; continue }
-    { test $newa -eq 0 } && { _email=`echo ${(V)a} | cut -d^ -f1` }
+            continue }
+        if [[ $newa -eq 1 ]]; then
+            # (V) makes special chars visible, we need to remove them..
+            _name="${(V)a[(ws:^:)1}"; newa=0; continue
+        elif [[ $newa -eq 0 ]]; then
+            _email="${(V)a[(ws:^:)1}"
+        fi
     done
 
     unlock $ADDRESSBOOK
@@ -401,177 +354,21 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
     notice "Done importing addresses"
 }
 
-export_abook() {
-
-    lock $ADDRESSBOOK
-
-    out=$MAILDIRS/$list.abook
-    act "Exporting $list to abook format: $out"
-    rm -f $out
-
-    func "launching SELECT email,name sqlite3 query"
-    addresses=`cat <<EOF | ${SQL} -column -header -batch $ADDRESSBOOK \
-    | grep -v '^email'
-.width 40 100
-.mode list
-.separator '|'
-SELECT email, name FROM $list;
-EOF`
-
-    unlock $ADDRESSBOOK
-    func "converting database into abook format"
-    cat <<EOF > $out
-# abook addressbook file
-
-[format]
-program=JaroMail
-version=$VERSION
-
-EOF
-    c=0
-    for a in ${(f)addresses}; do
-        _email="${(Q)a[(ws:|:)1]}"
-        # remove from name all what is an email between brackets
-        # crop (trim) all beginning and ending whitespaces from name
-        _name=`print ${(Q)a[(ws:|:)2]} | trim`
-        { test "${_email}" != "" } && {
-            cat <<EOF >> $out
-[${c}]
-name=${_name}
-email=${_email}
-
-EOF
-            c=$(( $c + 1 ))
-        }
-    done
-
-}
-
 # export addressbook to vcard
 export_vcard() {
-
-    act "Export addressbook into vCard $ADDRESSBOOK.vcf"
-    tmp=$TMPDIR/export.$datestamp.$RANDOM
-
-    lock $ADDRESSBOOK
-
-    cat <<EOF | ${SQL} -column -header -batch $ADDRESSBOOK \
-    | grep -v '^email' > $tmp
-.width 40 100
-.mode list
-.separator '|'
-SELECT email, name FROM $list;
-EOF
-
-    unlock $ADDRESSBOOK
-
-    addresses=`cat $tmp`
-    ${=rm} $tmp
-
-    rm -f $ADDRESSBOOK.vcf
-    touch $ADDRESSBOOK.vcf
-    for a in ${(f)addresses}; do
-    _email="${a[(ws:|:)1]}"
-    # remove from name all what is an email between brackets
-    # crop (trim) all beginning and ending whitespaces from name
-    _name=`print ${a[(ws:|:)2]} | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
-    { test "${_email}" != "" } && {
-        cat <<EOF >> $ADDRESSBOOK.vcf
-BEGIN:VCARD
-VERSION:3.0
-FN:${_name}
-N:;${_name};;;
-EMAIL;TYPE=HOME:${_email// /}
-END:VCARD
-EOF
-    }
-    done
-
+    abook --convert --informat abook \
+        --infile "$ADDRESSBOOK" \
+        --outformat gcrd --outfile "$MAILDIRS"/$list.vcf
+    return $?
 }
 
 edit_abook() {
-    # take argument even without option -l
-    [[ "$1" = "" ]] || list="$1"
 
-    # check if abook binary is found
-    { command -v abook > /dev/null } || {
-        error "ABook not found, operation aborted."
-        return 1
-    }
-
-    notice "Preparing to edit addressbook $list"
-
-    export_abook "$list"
-
-    func "abook format ready, generating configuration"
-
-    # generate abook configuration
-# new abook supports also:
-# set emailpos=35
-# set extra_column=-1
-
-    func "ready to launch abook."
-
-    abook --config <(cat <<EOF > $abookrc
+    abook --config <(cat <<EOF
 set autosave=true
 set mutt_command=jaro
 set sort_field=name
 EOF
 ) --datafile $MAILDIRS/$list.abook
-
-    act "Saving changes to native addressbook..."
-    func "exporting abook to spruce format"
-
-    addresses=`abook --convert --infile $MAILDIRS/$list.abook \
-    --outformat spruce | awk '
-BEGIN { c=0; name=""; email=""; }
-/^#/ { if(email != "") {
-      c+=1
-      print name
-      print email
-      print "# " c
-       }
-       email=""
-       next
-     }
-/^Name:/ { name=$0 }
-/^Email:/ { email=$0 }
-'`
-
-    func "done, ready to reimport the database"
-
-    tmp=$TMPDIR/abook_edit.$datestamp.$RANDOM
-
-    # move addressbook to old
-    act "Updating the addressbook database"
-    cat <<EOF > $tmp
-DROP TABLE $list;
-CREATE TABLE $list
-(
-  email   text collate nocase unique,
-  name    text collate nocase
-);
-PRAGMA synchronous = OFF;
-EOF
-
-    newa=1; _name=""; _email=""
-    for a in ${(f)addresses}; do
-
-        [[ "${a[1]}" = "#" ]] && {
-            newa=1; #its the end of the entry
-            print "INSERT INTO $list (email, name) VALUES (\"${_email}\", \"${_name}\");" >> $tmp
-            continue }
-
-        [[ $newa -eq 1 ]] && {
-            _name="${a[(ws/:/)2]}"; newa=0; continue }
-        [[ $newa -eq 0 ]] && { a=${a// /}; _email="${a[(ws/:/)2]}" }
-
-    done
-    func "Inserting the updated addressbook"
-    lock $ADDRESSBOOK
-    cat $tmp | ${SQL} -batch $addressbook
-    rm $tmp
-    unlock $ADDRESSBOOK
-    notice "Addressbook updated"
 }
 ###################

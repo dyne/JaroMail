@@ -60,8 +60,7 @@ search() {
 	res=""
 
 	for t in ${term}; do
-	    res+=`search_name ${t}`
-	    res+=`search_email ${t}`
+	    res+=`search_addressbook ${t}`
 	done
 
 	for rr in ${(f)res}; do
