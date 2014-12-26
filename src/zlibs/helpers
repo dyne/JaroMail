@@ -27,6 +27,11 @@
 # which mutt binary to use
 mutt="mutt"
 
+# remote leading and trailing spaces in a string taken from stdin
+trim() {
+    sed -e 's/^[[:space:]]*//g ; s/[[:space:]]*\$//g'
+}
+
 # extract all emails found in a text from stdin
 # outputs them one per line
 extract_emails() {

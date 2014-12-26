@@ -696,7 +696,14 @@ main()
     list)     CLEANEXIT=0; list_addresses ${PARAM} ;;
 
     import)  import_addressbook ${PARAM} ;;
-    "export")  export_vcard ${PARAM}     ;;
+    "export")
+            case "$PARAM" in
+                abook) export_abook ;;
+                vcard) export_vcard ;;
+                *) export_vcard ;;
+            esac
+            ;;
+
     abook)   edit_abook ${PARAM}         ;;
 
     edit)    CLEANEXIT=0; edit_file ${PARAM}    ;;

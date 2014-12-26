@@ -157,14 +157,13 @@ fetchall() {
 }
 
 fetch() {
-    { test "$account" = "" } && {
+    [[ "$account" = "" ]] && {
         fetchall; return $? }
 
     # setup global account variables
     read_account ${account}
     # name login host protocol port auth folders accountopt
-
-    { test  $? != 0 } && {
+    [[  $? = 0 ]] || {
         error "Invalid account: $account"
         return 1
     }
@@ -172,13 +171,13 @@ fetch() {
     notice "Fetching email for account ${account}"
 
     is_online ${imap} ${imap_port}
-    { test $? = 0 } || { return 1 }
+    [[ $? = 0 ]] || { return 1 }
 
     type=imap
     host=$imap
     port=$imap_port
     ask_password
-    { test $? = 0 } || {
+    [[ $? = 0 ]] || {
         error "Impossible to fetch email for account ${account}";
         return 1 }
 
@@ -195,8 +194,8 @@ fetch() {
 
     fmconf=("poll $imap with proto IMAP user \"$login\" there with password \"$password\"")
 
-    if ! [ -z $accountopt ]; then # add option configuration
-        fmconf+=(" ${accountopt} "); fi
+    [[ -z $accountopt ]] || { # add option configuration
+        fmconf+=(" ${accountopt} ") }
 
     # check if folders on commandline
     if [[ "$PARAM[@]" = "" ]]; then
@@ -242,14 +241,14 @@ fetch() {
     fmconf+=(" antispam 571 550 501 554 ")
 
     print $accountopt | grep 'keep' > /dev/null
-    { test $? = 0 } || {
+    [[ $? = 0 ]] || {
         error "planning to delete mails from server, account option: $accountopt" }
 
     # try login without doing anything
     print "$fmconf" | fetchmail -c -f -
     res=$?
     # examine result
-    case $ret in
+    case $res in
         1)
             notice "No mails for $name"
             unset $fmconf
@@ -296,27 +295,27 @@ send() {
     queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
     queue_outbox_num=`${=find} "${MAILDIRS}/outbox" -type f|wc -l`
     { test "$queue_outbox_num" = "0" } && {
-    act "Outbox is empty, no mails to send."
-    return 0 }
+        act "Outbox is empty, no mails to send."
+        return 0 }
 
     read_account ${account}
     { test  $? != 0 } && {
-    error "Invalid account: $account"
-    return 1
+        error "Invalid account: $account"
+        return 1
     }
 
     # defaults
-    { test -z $auth } && { auth=plain }
-    { test -z $smtp_port } && { smtp_port=25 }
+    [[ -z $auth ]] && { auth=plain }
+    [[ -z $smtp_port ]] && { smtp_port=25 }
 
     is_online ${smtp} ${smtp_port}
-    { test $? = 0 } || {
-    error "Smtp host not reachable: $smtp_host:$smtp_port"
-    return 1 }
+    [[ $? = 0 ]] || {
+        error "Smtp host not reachable: $smtp_host:$smtp_port"
+        return 1 }
 
     notice "Sending out $queue_outbox_num mails via account ${account}"
 
-    { test $DRYRUN = 1 } && { return 0 }
+    [[ $DRYRUN = 1 ]] && { return 0 }
 
     # from here on we must unlock on error
     lock "${MAILDIRS}/outbox"
@@ -325,19 +324,19 @@ send() {
     host=$smtp
     port=$smtp_port
     ask_password
-    { test $? = 0 } || {
-    error "Error retrieving password for $login on $smtp"
-    unset password
-    unlock "${MAILDIRS}/outbox"
-    return 1 }
+    [[ $? = 0 ]] || {
+        error "Error retrieving password for $login on $smtp"
+        unset password
+        unlock "${MAILDIRS}/outbox"
+        return 1 }
 
     for qbody in ${(f)queue_outbox}; do
 
-    # check if this is an anonymous mail
-    hdr "$qbody" | grep -i '^from: anon' > /dev/null
-    if [ $? = 0 ]; then
-        anoncfg="${TMPDIR}/${smtp}.anon.$RANDOM"
-        cat <<EOF > "$anoncfg"
+        # check if this is an anonymous mail
+        hdr "$qbody" | grep -i '^from: anon' > /dev/null
+        if [[ $? = 0 ]]; then
+            anoncfg="${TMPDIR}/${smtp}.anon.$RANDOM"
+            cat <<EOF > "$anoncfg"
 REMAIL		n
 POOLSIZE	0
 SENDPOOLTIME	0m
@@ -355,19 +354,19 @@ VERBOSE=2
 
 EOF
 
-        act "Sending out anonymous email via mixmaster"
-        recipients=(`cat $qbody | fetchaddr -a -x to | cut -d, -f1`)
-        recipients+=(`cat $qbody | fetchaddr -a -x cc | cut -d, -f1`)
-        for r in ${recipients}; do
-        act "Sending to: ${r}"
+            act "Sending out anonymous email via mixmaster"
+            recipients=(`hdr $qbody | fetchaddr -a -x to | cut -d, -f1`)
+            recipients+=(`hdr $qbody | fetchaddr -a -x cc | cut -d, -f1`)
+            for r in ${recipients}; do
+                act "Sending to: ${r}"
 
-        # parse subject line
-        anonsubj=`hdr "$qbody" | awk '
+                # parse subject line
+                anonsubj=`hdr "$qbody" | awk '
 /^Subject: / { for(i=2;i<=NF;i++) printf "%s ", $i }'`
-        act "Subject: $anonsubj"
+                act "Subject: $anonsubj"
 
-        # strip headers and send via mixmaster
-        cat  "$qbody" | awk '
+                # strip headers and send via mixmaster
+                cat  "$qbody" | awk '
 BEGIN { head=1 }
 /^To: /           { print $0; next }
 /^Cc: /           { print $0; next }
@@ -382,26 +381,26 @@ BEGIN { head=1 }
 /^$/ { head=0 }
 { if(head==0) print $0 }
 ' | tee -a "$qbody.anon" | mixmaster --config=$anoncfg -m --to="$r" --subject="$anonsubj"
-        res=$?
-        mv "$qbody.anon" "$qbody"
-        func "mixmaster returns $res"
-        done
+                res=$?
+                mv "$qbody.anon" "$qbody"
+                func "mixmaster returns $res"
+            done
 
-        ${=rm} $anoncfg
+            ${=rm} $anoncfg
 
-    else # normal send with msmtp
+        else # normal send with msmtp
 
-        act "Sending out email"
-        hdr "$qbody" | awk '
+            act "Sending out email"
+            hdr "$qbody" | awk '
 /^From:/ { print " .  " $0 }
 /^To:/   { print " .  " $0 }
 /^Cc:/   { print " .  " $0 }
 /^Subject:/ { print " .  " $0 }
 '
 
-        tmp="$TMPDIR/msmtp.$host.$datestamp.$RANDOM"
-        newlock "$tmp"
-        cat <<EOF > "$tmp"
+            tsize=`stat -c '%s' "$qbody"`
+            act "sending `human_size $tsize` over the network ..."
+            msmtp -C <(cat <<EOF
 account default
 from ${email}
 user ${login}
@@ -414,25 +413,21 @@ logfile "${MAILDIRS}/logs/msmtp.log"
 auth ${auth}
 password ${password}
 EOF
-        tsize=`stat -c '%s' "$qbody"`
-        act "sending $tsize bytes over the network ..."
-        msmtp -C "$tmp" -t < "${qbody}"
-        res=$?
-        #       unlink "$tmp"
-        unlock "$tmp"
-        rm -f "$tmp"
-    fi
+            ) -t < "${qbody}"
+            res=$?
+        fi
 
-    # evaluate results
-    if [ "$res" != "0" ]; then
-        error "Error sending mail, skipped"
-    else
-        notice "Mail sent succesfully"
-        # whitelist those to whom we send mails
-        cat "$qbody" | "$WORKDIR/bin/jaro" -q learn recipient
-        cat "$qbody" | deliver sent
-        { test $? = 0 } && { rm "$qbody" }
-    fi
+        # evaluate results
+        if [[ "$res" != "0" ]]; then
+            error "Error sending mail, skipped"
+        else
+            notice "Mail sent succesfully"
+            # whitelist those to whom we send mails
+            cat "$qbody" | \
+                "$WORKDIR/bin/jaro" -q learn recipient > /dev/null
+            cat "$qbody" | deliver sent
+            [[ $? = 0 ]] && { rm "$qbody" }
+        fi
 
     done
 
