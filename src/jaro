@@ -201,9 +201,10 @@ KEYRING="$MAILDIRS/Keyring"
 TMPDIR="$MAILDIRS/tmp/jaromil.$USER"
 case $OS in
     GNU)
-    touch /dev/shm/jaromail.test.tmp > /dev/null
+    touch /dev/shm/test.jaromail.$USER > /dev/null
     { test $? = 0 } && {
     # we can use volatile ram
+        rm /dev/shm/test.jaromail.$USER
         TMPDIR=/dev/shm/tmp.jaromail.$USER
         TMPRAM=1
     }
