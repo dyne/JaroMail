@@ -212,24 +212,22 @@ merge() {
 # so that fetchmail does not deletes mail from server
 deliver() {
     if [ "$1" = "" ]; then
-        dest="$MAILDIRS/incoming"
+        dest="incoming"
     else
-        dest="$MAILDIRS/$1"
-        { test -d "$dest" } || { dest="$1"
-            { test -d "$dest" } || {
-                error "delivery destination path invalid: $1"
-                return 1
-            }
+        dest="$1"
+        { test -d "$MAILDIRS/$dest" } || {
+            error "delivery destination path invalid: $1"
+            return 1
         }
     fi
     
     # create destination maildir if not existing
-    [[ -r "$dest" ]] || {
+    [[ -r "$MAILDIRS/$dest" ]] || {
         act "creating destination maildir: $dest"
-        maildirmake "$dest"
+        maildirmake "$MAILDIRS/$dest"
     }
 
-    maildircheck "$dest"
+    maildircheck "$MAILDIRS/$dest"
     [[ $? = 0 ]] || {
         error "Invalid maildir destination for delivery, operation aborted."
         func "Returning error to caller."
@@ -242,7 +240,7 @@ deliver() {
 BEGIN { print "Delivery to maildir: '"$1"'" }
 { print $0 }
 /^$/ { exit }
-' "$MAILDIRS/$1/new/$base" >> "$MAILDIRS/logs/jaro-deliver.log"
+' "$MAILDIRS/$dest/new/$base" >> "$MAILDIRS/logs/jaro-deliver.log"
     }
     
     # destinations excluded from notmuch indexing
@@ -252,7 +250,7 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
         
         base="`hostname`_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"
         
-        cat > "$dest/new/$base"
+        cat > "$MAILDIRS/$dest/new/$base"
         [[ $? = 0 ]] || {
             error "Could not write email file into maildir $dest."
             func "Returning error to caller."
