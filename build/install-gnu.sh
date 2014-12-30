@@ -32,6 +32,7 @@ for l in `ls $JARO_LIBEXEC/zlibs/ | grep -v '.zwc$'`; do
     zcompile $JARO_LIBEXEC/zlibs/$l
 done
 
+mkdir -p $PREFIX/bin
 cat <<EOF > $PREFIX/bin/jaro
 #!/usr/bin/env zsh
 export JAROWORKDIR=${JARO_SHARE}
