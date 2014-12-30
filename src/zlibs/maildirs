@@ -87,30 +87,6 @@ list_maildirs() {
     return ${#maildirs}
 }
 
-maildirs_lastlog() {
-    # returns an array of destinations maildirs touched by the last filtering operation
-    # based on the procmail log format
-    typeset -alU dests prio lasts
-    _folders=`cat "${MAILDIRS}/logs/procmail.log"|awk '/Folder:/ {print $2}' | cut -d/ -f1`
-    for d in ${(f)_folders}; do
-    func "maildir touched by last operation: $d"
-    # skip procmail glitch
-    { test "$d" = "procmail" } && { continue }
-    # put filtered to last
-    [[ ${PARAM} == *${d}* ]] && { lasts=($lasts $d); continue }
-    # always give priority to known, then to priv, then the rest
-    { test "$d" = "known" } && { prio=(known $prio); continue }
-    { test "$d" = "priv" } && { prio=($prio priv); continue }
-    # skip zz. trash
-    [[ $d == zz.* ]] && { continue }
-    # put them to filter
-        dests+=($d)
-    done
-    print "${=prio} ${=dests} ${=lasts}"
-    unset dests
-    unset prio
-    unset lasts
-}
 
 rmdupes() {
 
@@ -236,34 +212,29 @@ merge() {
 # so that fetchmail does not deletes mail from server
 deliver() {
     if [ "$1" = "" ]; then
-    dest="$MAILDIRS/incoming"
+        dest="$MAILDIRS/incoming"
     else
-    dest="$MAILDIRS/$1"
-    { test -d "$dest" } || { dest="$1"
-        { test -d "$dest" } || {
-        error "delivery destination path invalid: $1"
-        return 1; } }
+        dest="$MAILDIRS/$1"
+        { test -d "$dest" } || { dest="$1"
+            { test -d "$dest" } || {
+                error "delivery destination path invalid: $1"
+                return 1
+            }
+        }
     fi
-
+    
     # create destination maildir if not existing
     [[ -r "$dest" ]] || {
         act "creating destination maildir: $dest"
-        maildirmake "$dest" }
+        maildirmake "$dest"
+    }
 
     maildircheck "$dest"
     [[ $? = 0 ]] || {
         error "Invalid maildir destination for delivery, operation aborted."
         func "Returning error to caller."
-        return 1; }
-
-    base="`hostname`_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"
-
-    cat > "$dest/new/$base"
-    [[ $? = 0 ]] || {
-        error "Could not write email file into maildir, operation aborted."
-        func "Returning error to caller."
-    return 1; }
-
+        return 1
+    }
 
     [[ $DEBUG = 0 ]] || {
         func "Delivery successful, log: $MAILDIRS/logs/jaro-deliver.log"
@@ -273,6 +244,60 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
 /^$/ { exit }
 ' "$MAILDIRS/$1/new/$base" >> "$MAILDIRS/logs/jaro-deliver.log"
     }
+    
+    # destinations excluded from notmuch indexing
+    [[ "$dest" = "outbox" ]] \
+        || [[ "$dest" =~ "^zz." ]] \
+        || [[ "$dest" = "incoming" ]] && {
+        
+        base="`hostname`_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"
+        
+        cat > "$dest/new/$base"
+        [[ $? = 0 ]] || {
+            error "Could not write email file into maildir $dest."
+            func "Returning error to caller."
+            return 1
+        }
+        return 0
+    }
 
+    #########
+    # notmuch indexing from here
+    NOTMUCH_CONFIG="$MAILDIRS"/cache/notmuch/rc
+
+    # tag +inbox
+    [[ "$dest" = "known" ]] \
+        || [[ "$dest" = "priv" ]] \
+        || [[ "$dest" = "sent" ]] && {
+
+        cat | notmuch-insert --folder="$dest" +inbox
+        [[ $? = 0 ]] || {
+            error "Could not write email file into maildir $dest using notmuch-insert."
+            func "Returning error to caller."
+            return 1
+        }
+        return 0
+    }
+
+    # tag +unsorted
+    [[ "$dest" = "unsorted" ]] \
+        || [[ "$dest" =~ "^lists." ]] && {
+
+        cat | notmuch-insert --folder="$dest" +unsorted
+        [[ $? = 0 ]] || {
+            error "Could not write email file into maildir $dest using notmuch-insert."
+            func "Returning error to caller."
+            return 1
+        }
+        return 0
+    }
+
+    # anything else +filters
+    cat | notmuch-insert --folder="$dest" +filters
+    [[ $? = 0 ]] || {
+        error "Could not write email file into maildir $dest using notmuch-insert."
+        func "Returning error to caller."
+        return 1
+    }
     return 0
 }

@@ -168,6 +168,9 @@ fetch() {
         return 1
     }
 
+    # updates the notmuch configuration
+    nm_setup
+
     notice "Fetching email for account ${account}"
 
     is_online ${imap} ${imap_port}
@@ -506,12 +509,3 @@ EOF
     return $?
 }
 
-later() {
-    func "Saving message from stdin into remember"
-    filename=$USER.${hostname}.$datestamp.$RANDOM
-    # hostname was set by the main jaro routine
-    func "Filename: $filename"
-
-    { maildircheck "${MAILDIRS}/remember" } || { maildirmake "${MAILDIRS}/remember" }
-    cat > "${MAILDIRS}/remember/new/$filename"
-}

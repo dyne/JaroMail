@@ -22,108 +22,114 @@
 
 #######################
 ## Search into maildirs
-# using mairix
-search() {
-    # check if the name of a maildir is among params
-    # we need at least 2 maildirs, the second is the destination
-    typeset -al fold
-    typeset -al term
-    # intelligent parse of args, position independent
-    # check if its a folder, if not is an expression
-    for p in ${PARAM}; do
-	if [ -r ${p} ]; then
-	    { maildircheck ${p} } && {
-		func "param ${p} is a maildir"
-		fold+=(${p}) }
-	elif  [ -r "${MAILDIRS}/${p}" ]; then
-	    { maildircheck ${MAILDIRS}/${p} } && {
-		func "param ${p} is a jaro maildir"
-		fold+=(${MAILDIRS}/${p}) }
-	else
-	    func "param ${p} is a search term"
-	    term+=(${p})
-	fi
-    done
-    # now fold is an array of specified folders
-    # term is an array of specified search expressions
+# using notmuch
 
-    { test "${#term}" = "0" } && {
-	error "No search terms specified."
-	act "Parameters: ${PARAM}"
-	return 1
+nm_dir="$MAILDIRS"/cache/notmuch
+
+nm_setup() {
+    mkdir -p "$nm_dir"
+
+    # read if there are other email aliases configured
+    [[ -r "$MAILDIRS"/Aliases.txt ]] && {
+        other_email="other_email"
+        _aliases=`cat "$MAILDIRS"/Aliases.txt`
+        _sep=\=
+        for i in ${(f)_aliases}; do
+            other_email+="${_sep}${i}"
+            _sep=";"
+        done
     }
 
-    # no folders specified, search into the addressbook
-    { test "${#fold}" = "0" } && {
-	typeset -alU results
-	notice "Searching addressbook for: ${PARAM}"
-	res=""
+    rm -f "$nm_dir"/rc
+    cat <<EOF > "$nm_dir"/rc
+[database]
+path=$MAILDIRS
 
-	for t in ${term}; do
-	    res+=`search_addressbook ${t}`
-	done
+[user]
+name=$name
+primary_email=$email
+$other_email
 
-	for rr in ${(f)res}; do
-	    _email=`print $rr | awk '{ print $1 }'`
-	    _name=`print $rr | awk '{ for(c=2;c<=NF;c++) printf "%s ", $c }'`
-	    results+=("$_name <$_email>")
-	done
+[new]
+tags=unread
+ignore=zz.;log;cache;Accounts;Groups;.mutt;webnomad;.abook;.txt;.pdf;.html;.png;.js
 
-	{ test "${#results}" = "0" } || {
-	    act "${#results} matches found:"
-	    for i in ${results}; do
-		print "$i"; done
-	    return 0
-	}
-	notice "No matches found."
-	return 1
+[maildir]
+synchronize_flags=true
+EOF
+}
+
+nm_index() {
+    read_account
+    nm_setup
+    func "notmuch --config=${nm_dir}/rc new"
+
+    notmuch --config="${nm_dir}/rc" new
+}
+
+nm_search() {
+    read_account
+    nm_setup
+    
+    notice "Searching emails for: $=PARAM"
+    local search_results
+    func "notmuch --config=${nm_dir}/rc search --output=files ${=PARAM}"
+
+    # launch the search with notmuch
+    search_results=`notmuch --config="${nm_dir}/rc" search --output=files ${=PARAM}`
+    act "`print ${search_results} | wc -l` results found"
+    [[ $? = 0 ]] || {
+        error "notmuch search failed with an error"
+        return 1 }
+
+    # populate the maildir with results
+    _resdir="${nm_dir}/results"
+    func "notmuch results in $_resdir"
+    rm -rf "$_resdir"
+    act "populating a maildir with results"
+    maildirmake $_resdir
+    for i in ${(f)search_results}; do
+        ln -s $i "$_resdir/new/`basename $i`"
+    done
+}
+
+search() {
+    
+    [[ "$PARAM" = "" ]] && {
+	    error "No search terms specified."
+	    return 1
     }
     
-    # base path is the dir of the first folder
-    pushd `dirname ${fold[1]}`
-    basedir=`pwd`
-    popd
-
-    notice "Searching ${#fold} folders in $basedir for: ${term}"
-    { command -v mairix > /dev/null } || {
-	error "Mairix not found, operation aborted."
-	return 1 }
-    act "Searching through: ${fold}"
-    act "Please wait..."
-    id=$datestamp.$RANDOM
-    rc=$TMPDIR/search.conf.$id
-    # forge the folder string for mairix conf
-    folders=""; for f in ${fold}; do folders="$folders`basename $f`:"; done
-    cat <<EOF > $rc
-base=$basedir
-database=$TMPDIR/search.db.$id
-maildir=${folders}
-mfolder=$TMPDIR/search.result.$id
-mformat=maildir
-EOF
-    { test $DEBUG = 1 } && {
-	func "Mairix conf (debug output)"
-	cat $rc }
-
-    exitcode=0
-    { test "$DRYRUN" = "1" } || {
-	exitcode=1
-	mairix -F -f $rc 2>/dev/null
-	{ test $? = 0 } && {
-	    found=`mairix -F -f $rc ${=term} 2> /dev/null | awk '{ print $2}'`
-	    if [ "$found" = "0" ]; then
-		error "No matches found."
-	    else
-		${=mutt} -F $MUTTDIR/rc -R -f $TMPDIR/search.result.$id
-		notice "Found $found matches looking for '$term' in $folders"
-		exitcode=0
-	    fi
-	}
-    } # DRYRUN
-    ${=rm} $TMPDIR/search.db.$id
-    ${=rm} $TMPDIR/search.conf.$id
-    ${=rm} -r $TMPDIR/search.result.$id
-    return $exitcode
+    typeset -al term
+	typeset -alU results
+    
+    for p in ${PARAM}; do
+        func "param ${p} is a search term"
+        term+=(${p})
+    done
+    
+    [[ "$PARAM" =~ "addr" ]] && {
+        # if addr specified search into the addressbook
+	    notice "Searching addressbook for: ${PARAM//addr/}"
+	    res=""
+	    for t in ${term}; do
+            [[ "$t" =~ "addr" ]] && continue
+            # res+=`search_addressbook ${t}`
+	        search_addressbook ${t} | awk '
+/^$/ { next }
+{ for(c=2;c<=NF;c++) printf "%s ", $c
+  print "<" $1 ">" }'
+	    done
+        return 0
+    }
+    
+    # run search across emails
+    nm_search ${=PARAM}
+    
+    # open the results maildir
+    ${=mutt} -F "$MUTTDIR"/rc ${=muttflags} \
+        -f "$MAILDIRS"/cache/notmuch/results
+    
 }
 
 backup() {

@@ -451,7 +451,9 @@ a pipe | in front indicate they take an email body from stdin
 
  list     prints to console all the entries in $list
 
- search   search into $list using a string parameter
+ index    index fetched email archives for search
+
+ search   search using a string parameter
 
 |isknown  read e-mail from stdin, return 0 if sender is known
 
@@ -532,6 +534,7 @@ main()
 
     subcommands_opts[stat]=""
 
+    subcommands_opts[index]=""
     subcommands_opts[search]=""
 
     subcommands_opts[learn]=""
@@ -548,6 +551,8 @@ main()
     subcommands_opts[preview]=""
 
     subcommands_opts[later]=""
+    subcommands_opts[remember]=""
+
     subcommands_opts[backup]=""
     subcommands_opts[rmdupes]=""
     subcommands_opts[merge]=""
@@ -675,7 +680,7 @@ main()
     send)    send ${PARAM} ;; # was checking is_online
     peek)    peek ${PARAM} ;; # was checking is_online
 
-    later)   later ${PARAM} ;;
+    later|remember) cat | deliver remember ;;
 
     update|init)
         init_inbox
@@ -686,6 +691,7 @@ main()
 
     help) CLEANEXIT=0; usage ;;
 
+    index) CLEANEXIT=0; nm_index ${PARAM} ;;
     search)  CLEANEXIT=0; search ${PARAM} ;;
 
     stat)   CLEANEXIT=0; stats ${PARAM} ;;
@@ -783,7 +789,7 @@ main()
         ;;
 
     list|extract)
-            extract ${=PARAM}
+            extract ${PARAM}
             exitcode=$?
             ;;
 

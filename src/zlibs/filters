@@ -457,6 +457,7 @@ EOF
 
 }
 
+    
 # sieve_filter() gets an array of patterns to match and builds a long rule
 # for which if they match the conditional directive they all go in one folder
 # $1 = conditional directive
