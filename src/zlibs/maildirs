@@ -270,9 +270,9 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
         || [[ "$dest" = "priv" ]] \
         || [[ "$dest" = "sent" ]] && {
 
-        cat | notmuch-insert --folder="$dest" +inbox
+        cat | notmuch insert --folder="$dest" +inbox
         [[ $? = 0 ]] || {
-            error "Could not write email file into maildir $dest using notmuch-insert."
+            error "Could not write email file into maildir $dest using notmuch insert."
             func "Returning error to caller."
             return 1
         }
@@ -283,9 +283,9 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
     [[ "$dest" = "unsorted" ]] \
         || [[ "$dest" =~ "^lists." ]] && {
 
-        cat | notmuch-insert --folder="$dest" +unsorted
+        cat | notmuch insert --folder="$dest" +unsorted
         [[ $? = 0 ]] || {
-            error "Could not write email file into maildir $dest using notmuch-insert."
+            error "Could not write email file into maildir $dest using notmuch insert."
             func "Returning error to caller."
             return 1
         }
@@ -293,9 +293,9 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
     }
 
     # anything else +filters
-    cat | notmuch-insert --folder="$dest" +filters
+    cat | notmuch insert --folder="$dest" +filters
     [[ $? = 0 ]] || {
-        error "Could not write email file into maildir $dest using notmuch-insert."
+        error "Could not write email file into maildir $dest using notmuch insert."
         func "Returning error to caller."
         return 1
     }
