@@ -169,6 +169,7 @@ fetch() {
     }
 
     # updates the notmuch configuration
+    # setup the unread default tag
     nm_setup unread
 
     notice "Fetching email for account ${account}"
@@ -243,8 +244,7 @@ fetch() {
 
     fmconf+=(" antispam 571 550 501 554 ")
 
-    print $accountopt | grep 'keep' > /dev/null
-    [[ $? = 0 ]] || {
+    [[ $accountopt =~ 'keep' ]] || {
         error "planning to delete mails from server, account option: $accountopt" }
 
     # try login without doing anything

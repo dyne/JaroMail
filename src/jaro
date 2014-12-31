@@ -676,8 +676,11 @@ main()
     compose) compose ${PARAM} ;;
     queue)   queue ${PARAM} ;;
     fetch)
-        if [ "$account" = "" ]; then fetchall
-        else fetch; fi
+        if [[ "$account" = "" ]]; then
+            fetchall
+        else
+            fetch
+        fi
         filter_maildir incoming
         ;;
     send)    send ${PARAM} ;; # was checking is_online
@@ -694,7 +697,10 @@ main()
 
     help) CLEANEXIT=0; usage ;;
 
-    index) CLEANEXIT=0; nm_index ;;
+    index) CLEANEXIT=0;
+            nm_index
+            nm compact
+            ;;
     search)  CLEANEXIT=0; search ${PARAM} ;;
 
     notmuch) CLEANEXIT=0;

@@ -133,9 +133,10 @@ EOF
     done
 
     # create the notmuch database if not present
-    notice "Indexing emails in the search database"
-    nm_index
-    nm compact
+    [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || {
+        notice "Indexing emails in the search database"
+        nm_index
+    }
 
     # compile the list of own addresses and aliases
     for i in `awk '
@@ -175,151 +176,151 @@ filter_maildir() {
     # be there.
     maildircheck "$MAILDIRS/unsorted"
     { test $? = 0 } || {
-    error "Invalid fallback maildir destination, operation aborted."
-    func "Returning error to caller."
-    return 1; }
+        error "Invalid fallback maildir destination, operation aborted."
+        func "Returning error to caller."
+        return 1; }
 
     # loads up the filter cache (zsh compiled arrays)
     { test -r "$MAILDIRS/cache/filters" } && {
-    source $MAILDIRS/cache/filters
-    ownfilters=1 }
+        source $MAILDIRS/cache/filters
+        ownfilters=1 }
 
     { test "$1" = "" } && { mdinput=incoming }
 
     maildircheck "$MAILDIRS/$mdinput"
     { test $? = 0 } || {
-    error "Invalid maildir to filter: $mdinput"
-    return 1; }
+        error "Invalid maildir to filter: $mdinput"
+        return 1; }
 
     numm=`${=find} "$MAILDIRS/$mdinput" -maxdepth 2 -type f|wc -l`
     mails=`${=find} "$MAILDIRS/$mdinput" -maxdepth 2 -type f`
 
     { test "$numm" = "0" } && {
-    error "Nothing to filter inside maildir $mdinput"
-    return 1 }
+        error "Nothing to filter inside maildir $mdinput"
+        return 1 }
 
     notice "Filtering maildir: $mdinput ($numm mails}"
     c=0
 
     for m in ${(f)mails}; do
-    match=0
-    c=$(($c + 1))
+        match=0
+        c=$(($c + 1))
 
-    list="blacklist"
-    hdr "$m" | sender_isknown
-    { test $? = 0 } && {
-        cat "$m" | deliver zz.blacklist
-        { test $? = 0 } && { rm "$m" }
-        act "$c\t\t/ $numm\t\t->\tzz.blacklist"
-        continue }
+        list="blacklist"
+        hdr "$m" | sender_isknown
+        { test $? = 0 } && {
+            cat "$m" | deliver zz.blacklist
+            { test $? = 0 } && { rm "$m" }
+            act "$c\t\t/ $numm\t\t->\tzz.blacklist"
+            continue }
 
-    hdr "$m" | awk '/Sender.*mailman-bounce/ { exit 1 }'
-    { test $? = 0 } || {
-        act "$c\t\t/ $numm\t\t->\tzz.bounces"
-        cat "$m" | deliver zz.bounces
-        { test $? = 0 } && { rm "$m" }
-        continue }
+        hdr "$m" | awk '/Sender.*mailman-bounce/ { exit 1 }'
+        { test $? = 0 } || {
+            act "$c\t\t/ $numm\t\t->\tzz.bounces"
+            cat "$m" | deliver zz.bounces
+            { test $? = 0 } && { rm "$m" }
+            continue }
 
-    { test "$ownfilters" = "1" } && {
+        { test "$ownfilters" = "1" } && {
 
-        func "processing through own filters"
-        ffrom=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
+            func "processing through own filters"
+            ffrom=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
 
-        # run all filter regexps on the from: field
-        { test "$ffrom" = "" } || {
-            femail="${ffrom[(ws:,:)1]}"
-            for exp in ${(k)filter_from}; do
-                # special zsh parsing in PCRE (=~)
-                if [[ "$femail" =~ "$exp" ]]; then
-                    # if destination maildir is same as input, skip
-                    { test "${filter_from[$exp]}" = "$mdinput" } && {
-                        act "$c\t\t/ $numm"
-                        match=1; break }
-                    act "$c\t\t/ $numm\t\t-> ${filter_from[$exp]}"
-                    cat "$m" | deliver ${filter_from[$exp]}
-                    if [ $? = 0 ]; then
-                        func "from filter match: $exp"
-                        match=1; rm "$m"; break
-                    else
-                        error "Error filtering to maildir ${filter_from[$exp]}"
-                        error "File: $m"
-                        continue
+            # run all filter regexps on the from: field
+            { test "$ffrom" = "" } || {
+                femail="${ffrom[(ws:,:)1]}"
+                for exp in ${(k)filter_from}; do
+
+                    if [[ "$femail" =~ "$exp" ]]; then
+                        # if destination maildir is same as input, skip
+                        { test "${filter_from[$exp]}" = "$mdinput" } && {
+                            act "$c\t\t/ $numm"
+                            match=1; break }
+                        act "$c\t\t/ $numm\t\t-> ${filter_from[$exp]}"
+                        cat "$m" | deliver ${filter_from[$exp]}
+                        if [ $? = 0 ]; then
+                            func "from filter match: $exp"
+                            match=1; rm "$m"; break
+                        else
+                            error "Error filtering to maildir ${filter_from[$exp]}"
+                            error "File: $m"
+                            continue
+                        fi
                     fi
-                fi
-            done
-        }
+                done
+            }
+            { test "$match" = "1" } && { continue }
+
+            typeset -alU ftos
+            # recompile the array of destination addresses
+            ftos=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x cc -a | cut -d, -f1`)
+            ftos+=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x to -a | cut -d, -f1`)
+
+            # run all filter regexps on the to: and cc: fields
+            { test "$ftos" = "" } || {
+                for ft in ${(f)ftos}; do
+                    for exp in ${(k)filter_to}; do
+                        # special zsh parsing in PCRE (=~)
+                        if [[ "$ft" =~ "$exp" ]]; then
+                            # if destination maildir is same as input, skip
+                            { test "${filter_to[$exp]}" = "$mdinput" } && {
+                                act "$c\t\t/ $numm"
+                                match=1; break }
+                            act "$c\t\t/ $numm\t\t-> ${filter_to[$exp]}"
+                            cat "$m" | deliver ${filter_to[$exp]}
+                            if [ $? = 0 ]; then
+                                func "to filter match: $exp"
+                                match=1; rm "$m"; break
+                            else
+                                error "Error filtering to maildir ${filter_to[$exp]}"
+                                error "File: $m"
+                                continue
+                            fi
+                        fi
+                    done
+                    { test "$match" = "1" } && { break }
+                done
+            }
+
+            { test "$match" = "1" } && { func "own filter match"; continue }
+
+        } # own filters
+
+        list="whitelist"
+        hdr "$m" | sender_isknown
+        { test $? = 0 } && {
+            act "$c\t\t/ $numm\t\t-> known"
+            cat "$m" | deliver known
+            { test $? = 0 } && { rm "$m" }
+            continue }
+
+        hdr "$m" | awk '/X-Spam-Flag.*YES/ { exit 1 }'
+        { test $? = 0 } || {
+            act "$c\t\t/ $numm\t\t-> zz.spam"
+            cat "$m" | deliver zz.spam
+            { test $? = 0 } && { rm "$m" }
+            continue }
+
+        # parse own email and aliases
+        match=0
+        for f in $ftos; do
+            # check if destination address is in filter_own array
+            if [[ ${filter_own[(r)$f]} == ${f} ]] ; then
+                act "$c\t\t/ $numm\t\t-> priv"
+                cat "$m" | deliver priv
+                { test $? = 0 } && { rm "$m"; match=1; break }
+            fi
+        done
         { test "$match" = "1" } && { continue }
 
-        typeset -alU ftos
-        # recompile the array of destination addresses
-        ftos=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x cc -a | cut -d, -f1`)
-        ftos+=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x to -a | cut -d, -f1`)
-
-        # run all filter regexps on the to: and cc: fields
-        { test "$ftos" = "" } || {
-        for ft in ${(f)ftos}; do
-            for exp in ${(k)filter_to}; do
-            # special zsh parsing in PCRE (=~)
-            if [[ "$ft" =~ "$exp" ]]; then
-                # if destination maildir is same as input, skip
-                { test "${filter_to[$exp]}" = "$mdinput" } && {
-                act "$c\t\t/ $numm"
-                match=1; break }
-                act "$c\t\t/ $numm\t\t-> ${filter_to[$exp]}"
-                cat "$m" | deliver ${filter_to[$exp]}
-                if [ $? = 0 ]; then
-                func "to filter match: $exp"
-                match=1; rm "$m"; break
-                else
-                error "Error filtering to maildir ${filter_to[$exp]}"
-                error "File: $m"
-                continue
-                fi
-            fi
-            done
-            { test "$match" = "1" } && { break }
-        done
-        }
-
-        { test "$match" = "1" } && { func "own filter match"; continue }
-
-    } # own filters
-
-    list="whitelist"
-    hdr "$m" | sender_isknown
-    { test $? = 0 } && {
-        act "$c\t\t/ $numm\t\t-> known"
-        cat "$m" | deliver known
-        { test $? = 0 } && { rm "$m" }
-        continue }
-
-    hdr "$m" | awk '/X-Spam-Flag.*YES/ { exit 1 }'
-    { test $? = 0 } || {
-        act "$c\t\t/ $numm\t\t-> zz.spam"
-        cat "$m" | deliver zz.spam
-        { test $? = 0 } && { rm "$m" }
-        continue }
-
-    # parse own email and aliases
-    match=0
-    for f in $ftos; do
-        # check if destination address is in filter_own array
-        if [[ ${filter_own[(r)$f]} == ${f} ]] ; then
-        act "$c\t\t/ $numm\t\t-> priv"
-        cat "$m" | deliver priv
-        { test $? = 0 } && { rm "$m"; match=1; break }
+        # if here then file to unsorted
+        if [ "$mdinput" = "unsorted" ]; then
+            act "$c\t\t/ $numm"
+        else
+            act "$c\t\t/ $numm\t\t-> unsorted"
+            cat "$m" | deliver unsorted
+            { test $? = 0 } && { rm "$m" }
         fi
-    done
-    { test "$match" = "1" } && { continue }
-
-    # if here then file to unsorted
-    if [ "$mdinput" = "unsorted" ]; then
-        act "$c\t\t/ $numm"
-    else
-        act "$c\t\t/ $numm\t\t-> unsorted"
-        cat "$m" | deliver unsorted
-        { test $? = 0 } && { rm "$m" }
-    fi
 
     done
 
