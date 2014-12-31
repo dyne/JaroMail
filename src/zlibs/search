@@ -24,11 +24,24 @@
 ## Search into maildirs
 # using notmuch
 
-nm_dir="$MAILDIRS"/cache/notmuch
+
+# internal use
+nm() {
+    [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || nm_setup
+    notmuch --config="$MAILDIRS"/cache/notmuch/rc ${@} \
+        2>&1 | grep -v '^Note: Ignoring non-mail'
+        
+}
 
 nm_setup() {
-    mkdir -p "$nm_dir"
+    nm_dir="$MAILDIRS"/cache/notmuch
+    mkdir -p $nm_dir
 
+    # setup the default tags for all new messages
+    deftags=${1}
+
+    act "notmuch setup $deftags"
+    
     # read if there are other email aliases configured
     [[ -r "$MAILDIRS"/Aliases.txt ]] && {
         other_email="other_email"
@@ -45,26 +58,43 @@ nm_setup() {
 [database]
 path=$MAILDIRS
 
-[user]
-name=$name
-primary_email=$email
-$other_email
-
 [new]
-tags=unread
-ignore=zz.;log;cache;Accounts;Groups;.mutt;webnomad;.abook;.txt;.pdf;.html;.png;.js
+tags=$deftags
+ignore=tmp;cache;logs;outbox;incoming;zz.social;zz.bounces;zz.blacklist;zz.spam;Accounts;Groups;.mutt;webnomad;Aliases.txt;Filters;Identity.txt;Keyring;Manual.pdf;Mutt.txt;whitelist.abook;blacklist.abook;Applications.txt;Filters.sieve;Filters.txt
 
 [maildir]
 synchronize_flags=true
 EOF
+    [[ "$name" = "" ]] || {
+        cat <<EOF >> "$nm_dir"/rc
+
+[user]
+name=$name
+primary_email=$email
+$other_email
+EOF
+    }
 }
 
 nm_index() {
+    # init the environment
     read_account
+    notice "Indexing all mail archive"
+    act "please wait, this may take a while..."
     nm_setup
-    func "notmuch --config=${nm_dir}/rc new"
-
-    notmuch --config="${nm_dir}/rc" new
+    nm new
+    act "tagging inbox"
+    nm tag +inbox +priv folder:known
+    nm tag +inbox +priv folder:sent
+    act "tagging priv"
+    nm tag +priv folder:priv
+    act "tagging unsorted"
+    nm tag +unsorted folder:unsorted
+    nm tag +unsorted folder:unsorted.ml
+    nm tag +unsorted folder:lists.
+    act "compressing database"
+    nm compact
+    notice "Indexing completed"
 }
 
 nm_search() {
@@ -72,18 +102,90 @@ nm_search() {
     nm_setup
     
     notice "Searching emails for: $=PARAM"
-    local search_results
+
+    # read if there are other email aliases configured
+    [[ -r "$MAILDIRS"/Aliases.txt ]] && {
+        other_email="aliases"
+        _aliases=`cat "$MAILDIRS"/Aliases.txt`
+        _sep=" = "
+        for i in ${(f)_aliases}; do
+            other_email+="${_sep}${i}"
+            _sep=","
+        done
+    }
+
+    # setup alot to show results
+    mkdir -p "$MAILDIRS"/cache/alot
+    cat <<EOF > "$MAILDIRS"/cache/alot/rc
+
+editor_cmd = jaro edit
+edit_headers_whitelist = From,To,Cc,Subject
+displayed_headers = From,To,Cc,Bcc,Subject,User-Agent
+auto_remove_unread = True
+honor_followup_to = True
+hooksfile = $MAILDIRS/cache/alot/hooks.py
+initial_command = search tag:inbox
+prefer_plaintext = True
+tabwidth = 4
+user_agent = Jaro Mail <http://jaromail.dyne.org>
+
+[bindings]
+  i = search tag:inbox
+  p = search tag:priv
+  u = search tag:unsorted
+  / = prompt 'search '
+  l = prompt 'search '
+
+[accounts]
+    [[$account]]
+        realname = $name
+        address = $email
+        sendmail_command = jaro queue
+        sent_box = maildir:///$MAILDIRS/sent
+        $other_email
+        [[[abook]]]
+           type = shellcommand
+           command = jaro -q search addr 
+           regexp = (?P<name>.+)\s*<(?P<email>.*.+?@.+?)>
+
+[tags]
+  [[inbox]]
+    translated = ★
+  [[priv]]
+    translated = ⚡
+  [[attachment]]
+    translated = ⚓
+  [[unsorted]]
+    translated = ?
+  [[flagged]]
+    translated = ⚑
+    normal = '','','light red','','light red',''
+    focus = '','','light red','','light red',''
+  [[unread]]
+    translated = ☉
+  [[replied]]
+    translated = ⏎
+  [[encrypted]]
+    translated = ⚷
+  [[signed]]
+    translated = ✍
+EOF
+
+    alot -c "$MAILDIRS"/cache/alot/rc -n "$MAILDIRS"/cache/notmuch/rc \
+        search ${=PARAM}
+    return $?
+
     func "notmuch --config=${nm_dir}/rc search --output=files ${=PARAM}"
 
     # launch the search with notmuch
-    search_results=`notmuch --config="${nm_dir}/rc" search --output=files ${=PARAM}`
+    search_results=`nm search --output=files ${=PARAM}`
     act "`print ${search_results} | wc -l` results found"
     [[ $? = 0 ]] || {
         error "notmuch search failed with an error"
         return 1 }
 
     # populate the maildir with results
-    _resdir="${nm_dir}/results"
+    _resdir="$MAILDIRS"/cache/notmuch/results
     func "notmuch results in $_resdir"
     rm -rf "$_resdir"
     act "populating a maildir with results"
@@ -125,11 +227,6 @@ search() {
     
     # run search across emails
     nm_search ${=PARAM}
-    
-    # open the results maildir
-    ${=mutt} -F "$MUTTDIR"/rc ${=muttflags} \
-        -f "$MAILDIRS"/cache/notmuch/results
-    
 }
 
 backup() {

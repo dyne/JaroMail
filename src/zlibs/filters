@@ -80,8 +80,8 @@ init_inbox() {
 # the cache consists of array and maps declarations for zsh
 update_filters() {
     { test -r "$MAILDIRS/Filters.txt" } || {
-    error "Filters not found in $MAILDIRS/Filters.txt"
-    return 1 }
+        error "Filters not found in $MAILDIRS/Filters.txt"
+        return 1 }
 
     notice "Updating filters..."
 
@@ -106,31 +106,36 @@ EOF
 
     # insert filter rules in the cache
     for f in ${(f)ffilters}; do
-    header="${f[(ws:;:)1]}"
-    regexp="${f[(ws:;:)2]}"
-    action="${f[(ws:;:)3]}"
-    destination="${f[(ws:;:)4]}"
-    case $header in
-        to)
-        cat <<EOF >> "$ff"
+        header="${f[(ws:;:)1]}"
+        regexp="${f[(ws:;:)2]}"
+        action="${f[(ws:;:)3]}"
+        destination="${f[(ws:;:)4]}"
+        case $header in
+            to)
+                cat <<EOF >> "$ff"
 filter_to+=("${regexp}" "${destination}")
 EOF
-        func "from: <${regexp}> -> ${destination}"
-        maildirmake $MAILDIRS/$destination
-        ;;
-        from)
-        cat <<EOF >> "$ff"
+                func "from: <${regexp}> -> ${destination}"
+                maildirmake $MAILDIRS/$destination
+                ;;
+            from)
+                cat <<EOF >> "$ff"
 filter_from+=("${regexp}" "${destination}")
 EOF
-        func "to: <${regexp}> -> ${destination}"
-        maildirmake $MAILDIRS/$destination
-        ;;
+                func "to: <${regexp}> -> ${destination}"
+                maildirmake $MAILDIRS/$destination
+                ;;
 
-        *)
-        error "invalid filter: $f"
-        ;;
-    esac
+            *)
+                error "invalid filter: $f"
+                ;;
+        esac
     done
+
+    # create the notmuch database if not present
+    notice "Indexing emails in the search database"
+    nm_index
+    nm compact
 
     # compile the list of own addresses and aliases
     for i in `awk '
@@ -138,19 +143,19 @@ EOF
 /^$/ { next }
 /^email/ { print $2 }' \
  "$MAILDIRS"/Accounts/*`; do
-    cat <<EOF >> "$ff"
-filter_own+=($i)
-EOF
-    done
-    { test -r $MAILDIRS/Aliases.txt } && {
-    for i in `awk '
-/^#/ { next }
-/^$/ { next }
-{ print $1 }' "$MAILDIRS/Aliases.txt"`; do
         cat <<EOF >> "$ff"
 filter_own+=($i)
 EOF
     done
+    { test -r $MAILDIRS/Aliases.txt } && {
+        for i in `awk '
+/^#/ { next }
+/^$/ { next }
+{ print $1 }' "$MAILDIRS/Aliases.txt"`; do
+            cat <<EOF >> "$ff"
+filter_own+=($i)
+EOF
+        done
     }
 
     unlock "$ff"

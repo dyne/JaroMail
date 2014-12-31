@@ -169,7 +169,7 @@ fetch() {
     }
 
     # updates the notmuch configuration
-    nm_setup
+    nm_setup unread
 
     notice "Fetching email for account ${account}"
 

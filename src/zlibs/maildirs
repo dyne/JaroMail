@@ -215,10 +215,6 @@ deliver() {
         dest="incoming"
     else
         dest="$1"
-        { test -d "$MAILDIRS/$dest" } || {
-            error "delivery destination path invalid: $1"
-            return 1
-        }
     fi
     
     # create destination maildir if not existing
@@ -234,21 +230,14 @@ deliver() {
         return 1
     }
 
-    [[ $DEBUG = 0 ]] || {
-        func "Delivery successful, log: $MAILDIRS/logs/jaro-deliver.log"
-        awk '
-BEGIN { print "Delivery to maildir: '"$1"'" }
-{ print $0 }
-/^$/ { exit }
-' "$MAILDIRS/$dest/new/$base" >> "$MAILDIRS/logs/jaro-deliver.log"
-    }
+    func "deliver to $dest"
     
     # destinations excluded from notmuch indexing
     [[ "$dest" = "outbox" ]] \
         || [[ "$dest" =~ "^zz." ]] \
         || [[ "$dest" = "incoming" ]] && {
-        
-        base="`hostname`_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"
+
+        base="`hostname`_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"        
         
         cat > "$MAILDIRS/$dest/new/$base"
         [[ $? = 0 ]] || {
@@ -261,14 +250,13 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
 
     #########
     # notmuch indexing from here
-    NOTMUCH_CONFIG="$MAILDIRS"/cache/notmuch/rc
 
     # tag +inbox
     [[ "$dest" = "known" ]] \
         || [[ "$dest" = "priv" ]] \
         || [[ "$dest" = "sent" ]] && {
 
-        cat | notmuch insert --folder="$dest" +inbox
+        cat | nm insert --folder="$dest" +inbox
         [[ $? = 0 ]] || {
             error "Could not write email file into maildir $dest using notmuch insert."
             func "Returning error to caller."
@@ -281,7 +269,7 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
     [[ "$dest" = "unsorted" ]] \
         || [[ "$dest" =~ "^lists." ]] && {
 
-        cat | notmuch insert --folder="$dest" +unsorted
+        cat | nm insert --folder="$dest" +unsorted
         [[ $? = 0 ]] || {
             error "Could not write email file into maildir $dest using notmuch insert."
             func "Returning error to caller."
@@ -291,7 +279,7 @@ BEGIN { print "Delivery to maildir: '"$1"'" }
     }
 
     # anything else +filters
-    cat | notmuch insert --folder="$dest" +filters
+    cat | nm insert --folder="$dest" +filters
     [[ $? = 0 ]] || {
         error "Could not write email file into maildir $dest using notmuch insert."
         func "Returning error to caller."

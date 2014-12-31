@@ -27,10 +27,11 @@ mkdir -p build/gnu
         which fetchmail >/dev/null || deps+=(fetchmail)
         which msmtp     >/dev/null || deps+=(msmtp)
         which mutt      >/dev/null || deps+=(mutt)
-        which mairix    >/dev/null || deps+=(mairix)
         which pinentry  >/dev/null || deps+=(pinentry-curses)
         which abook     >/dev/null || deps+=(abook)
         which wipe      >/dev/null || deps+=(wipe)
+        which notmuch   >/dev/null || deps+=(notmuch)
+        which alot      >/dev/null || deps+=(alot)
 
         print "Checking build dependencies"
         which gcc      >/dev/null || deps+=(gcc)
@@ -64,6 +65,8 @@ mkdir -p build/gnu
         which fetchmail || sudo yum install fetchmail
         which wipe || sudo yum install wipe
         which abook || sudo yum install abook
+        which notmuch || sudo yum install notmuch
+        which alot || sudo yum install alot
 
         print "Checking build dependencies"
         which gcc || sudo yum install gcc
@@ -87,7 +90,7 @@ mkdir -p build/gnu
 { test "$target" = "fetchaddr" } || {
     test "$target" = "all" } && {
     pushd src
-    print -n "Compiling the address parser... "
+    print -n "Compiling the address parser (RFC2047) ... "
     ${=cc} -c helpers.c
     ${=cc} -c rfc2047.c
     ${=cc} -c rfc822_mutt.c;
@@ -98,17 +101,9 @@ mkdir -p build/gnu
     print OK
 }
 
-{ test "$target" = "dfasyn" } || {
-    test "$target" = "all" } && {
-    print "Compiling the generator for deterministic finite state automata... "
-    pushd src/mairix/dfasyn
-    make
-    popd
-}
-
 { test "$target" = "parsedate" } || {
     test "$target" = "all" } && {
-    print "Compiling the minimalistic RFC822 date re-formatter..."
+    print -n "Compiling the date parsers (RFC822) ... "
     pushd src
     ${=cc} -o parsedate parsedate.c
     popd
@@ -116,25 +111,9 @@ mkdir -p build/gnu
     print OK
 }
 
-{ test "$target" = "fetchdate" } || {
-    test "$target" = "all" } && {
-    print "Compiling the date parser... "
-    pushd src
-    # then the C files made by dfasyn
-    ./mairix/dfasyn/dfasyn -o nvpscan.c -ho nvpscan.h -r nvpscan.report -u nvp.nfa
-    # then the utilities
-    ${=cc} -c rfc822_mairix.c
-    ${=cc} -c nvp.c nvpscan.c
-    ${=cc} -I . -c fetchdate.c
-    ${=cc} -o fetchdate rfc822_mairix.o nvpscan.o nvp.o fetchdate.o
-    popd
-    cp src/fetchdate build/gnu/
-    print OK
-}
-
 { test "$target" = "dotlock" } || {
     test "$target" = "all" } && {
-    print "Compiling the file dotlock... "
+    print -n "Compiling the file dotlock... "
     pushd src
     ${=cc} -c dotlock.c -I . -DDL_STANDALONE
     ${=cc} -o dotlock dotlock.o
@@ -146,12 +125,13 @@ mkdir -p build/gnu
 
 { test "$target" = "gnome-keyring" } || {
     test "$target" = "all" } && {
-    print "Compiling gnome-keyring"
+    print -n "Compiling gnome-keyring... "
     pushd src/gnome-keyring
     ${=cc} jaro-gnome-keyring.c -o jaro-gnome-keyring \
     `pkg-config --cflags --libs glib-2.0 gnome-keyring-1`
     popd
     cp src/gnome-keyring/jaro-gnome-keyring build/gnu/
+    print OK
 }
 
 # build mixmaster only if specified

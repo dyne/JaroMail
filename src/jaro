@@ -537,6 +537,7 @@ main()
 
     subcommands_opts[index]=""
     subcommands_opts[search]=""
+    subcommands_opts[notmuch]=""
 
     subcommands_opts[learn]=""
     subcommands_opts[forget]=""
@@ -548,6 +549,7 @@ main()
     subcommands_opts[export]=""
     subcommands_opts[abook]=""
 
+    subcommands_opts[vim]=""
     subcommands_opts[edit]=""
     subcommands_opts[preview]=""
 
@@ -692,8 +694,13 @@ main()
 
     help) CLEANEXIT=0; usage ;;
 
-    index) CLEANEXIT=0; nm_index ${PARAM} ;;
+    index) CLEANEXIT=0; nm_index ;;
     search)  CLEANEXIT=0; search ${PARAM} ;;
+
+    notmuch) CLEANEXIT=0;
+            notice "Command: notmuch ${PARAM}"
+            nm ${PARAM}
+            ;;
 
     stat)   CLEANEXIT=0; stats ${PARAM} ;;
 
@@ -717,7 +724,7 @@ main()
 
     abook)   edit_abook ${PARAM}         ;;
 
-    edit)    CLEANEXIT=0; edit_file ${PARAM}    ;;
+    edit|vim)    CLEANEXIT=0; edit_file ${PARAM}    ;;
     open)    CLEANEXIT=0; open_folder ${PARAM}  ;;
     preview) CLEANEXIT=0; preview_file ${PARAM} ;;
 
