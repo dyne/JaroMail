@@ -253,37 +253,24 @@ deliver() {
 
     # tag +inbox
     [[ "$dest" = "known" ]] \
-        || [[ "$dest" = "priv" ]] \
         || [[ "$dest" = "sent" ]] && {
-
-        cat | nm insert --folder="$dest" +inbox
-        [[ $? = 0 ]] || {
-            error "Could not write email file into maildir $dest using notmuch insert."
-            func "Returning error to caller."
-            return 1
-        }
-        return 0
+        cat | nm insert --folder="$dest" +inbox +priv
+        return $?
     }
 
+    [[ "$dest" = "priv" ]] && {
+        cat | nm insert --folder="$dest" +priv
+        return $?
+    }
+    
     # tag +unsorted
     [[ "$dest" = "unsorted" ]] \
         || [[ "$dest" =~ "^lists." ]] && {
-
         cat | nm insert --folder="$dest" +unsorted
-        [[ $? = 0 ]] || {
-            error "Could not write email file into maildir $dest using notmuch insert."
-            func "Returning error to caller."
-            return 1
-        }
-        return 0
+        return $?
     }
 
     # anything else +filters
     cat | nm insert --folder="$dest" +filters
-    [[ $? = 0 ]] || {
-        error "Could not write email file into maildir $dest using notmuch insert."
-        func "Returning error to caller."
-        return 1
-    }
-    return 0
+    return $?
 }

@@ -28,9 +28,13 @@
 # internal use
 nm() {
     [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || nm_setup
-    notmuch --config="$MAILDIRS"/cache/notmuch/rc ${@} \
-        2>&1 | grep -v '^Note: Ignoring non-mail'
-        
+    notmuch --config="$MAILDIRS"/cache/notmuch/rc ${@}
+    _res=$?
+    [[ $_res = 0 ]] || {
+        error "Notmuch error on command: ${@}"
+        func "Returning status to caller: $_res"
+    }
+    return $_res
 }
 
 nm_setup() {
