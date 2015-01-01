@@ -135,7 +135,8 @@ EOF
     # create the notmuch database if not present
     [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || {
         notice "Indexing emails in the search database"
-        nm_index
+        nm setup
+        nm new
     }
 
     # compile the list of own addresses and aliases

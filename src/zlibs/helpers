@@ -51,6 +51,18 @@ isemail() {
    return $?
 }
 
+ismailinglist() {
+    _head=`awk '{ print $0 }
+/^$/ { exit }'`
+    [[ "$_head" =~ "List-Id" ]] \
+        || [[ "$_head" =~ "X-BeenThere" ]] \
+        || [[ "$_head" =~ "List-Post" ]] \
+        || [[ "$_head" =~ "X-Mailman-Version" ]] \
+        || [[ "$_head" =~ "Mailing-List" ]] \
+        && return 0
+    return 1
+}
+        
 # parses stdin and converts some characters to html
 escape_html() {
     sed -e '

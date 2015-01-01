@@ -27,6 +27,7 @@
 
 # internal use
 nm() {
+    func "notmuch $@"
     [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || nm_setup
     notmuch --config="$MAILDIRS"/cache/notmuch/rc ${@}
     _res=$?
@@ -87,15 +88,10 @@ nm_index() {
     act "please wait, this may take a while..."
     nm_setup
     nm new
-    act "tagging inbox"
-    nm tag +inbox +priv folder:known
-    nm tag +inbox +priv folder:sent
-    act "tagging priv"
-    nm tag +priv folder:priv
-    act "tagging unsorted"
-    nm tag +unsorted folder:unsorted
-    nm tag +unsorted folder:unsorted.ml
-    nm tag +unsorted folder:lists.
+    nm tag +inbox +priv -unsorted folder:known
+    nm tag +inbox +priv -unsorted folder:sent
+    nm tag -inbox +priv -unsorted folder:priv
+    nm tag -inbox -priv +unsorted folder:unsorted
     act "compressing database"
     nm compact
     notice "Indexing completed"
@@ -173,6 +169,10 @@ user_agent = Jaro Mail <http://jaromail.dyne.org>
     translated = ⚷
   [[signed]]
     translated = ✍
+  [[filters]]
+    translated = ⚙
+  [[mailinglist]]
+    translated = ☰
 EOF
 
     alot -c "$MAILDIRS"/cache/alot/rc -n "$MAILDIRS"/cache/notmuch/rc \

@@ -207,8 +207,8 @@ merge() {
 }
 
 
-# very simple LDA delivery to a maildir
-# the delicate part is returning all errors
+# LDA delivery to a maildir
+# important to return 1 on all errors
 # so that fetchmail does not deletes mail from server
 deliver() {
     if [ "$1" = "" ]; then
@@ -270,7 +270,14 @@ deliver() {
         return $?
     }
 
+    _email=`cat`
+    print "$_email" | ismailinglist
+    [[ $? = 0 ]] && {
+        print "$_email" | nm insert --folder="$dest" +filters +mailinglist
+        return $?
+    }
+
     # anything else +filters
-    cat | nm insert --folder="$dest" +filters
+    print "$_email" | nm insert --folder="$dest" +filters
     return $?
 }
