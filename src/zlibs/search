@@ -43,7 +43,7 @@ nm_setup() {
     mkdir -p $nm_dir
 
     # setup the default tags for all new messages
-    deftags=${1}
+    deftags="$1"
 
     act "notmuch setup $deftags"
     
@@ -97,7 +97,24 @@ nm_index() {
     notice "Indexing completed"
 }
 
+
 nm_search() {
+    func "notmuch --config=${nm_dir}/rc search --output=files ${=PARAM}"
+    
+    # launch the search with notmuch
+    search_results=`nm search --output=files ${=PARAM}`
+    [[ $? = 0 ]] || {
+        error "notmuch search failed with an error"
+        return 1 }
+    act "`print ${search_results} | wc -l` results found"
+    for i in ${(f)search_results}; do
+        print $i
+    done
+}
+
+
+# run a search with notmuch and show results with alot
+alot_search() {
     read_account
     nm_setup
     
@@ -178,25 +195,6 @@ EOF
     alot -c "$MAILDIRS"/cache/alot/rc -n "$MAILDIRS"/cache/notmuch/rc \
         search ${=PARAM}
     return $?
-
-    func "notmuch --config=${nm_dir}/rc search --output=files ${=PARAM}"
-
-    # launch the search with notmuch
-    search_results=`nm search --output=files ${=PARAM}`
-    act "`print ${search_results} | wc -l` results found"
-    [[ $? = 0 ]] || {
-        error "notmuch search failed with an error"
-        return 1 }
-
-    # populate the maildir with results
-    _resdir="$MAILDIRS"/cache/notmuch/results
-    func "notmuch results in $_resdir"
-    rm -rf "$_resdir"
-    act "populating a maildir with results"
-    maildirmake $_resdir
-    for i in ${(f)search_results}; do
-        ln -s $i "$_resdir/new/`basename $i`"
-    done
 }
 
 search() {
@@ -230,7 +228,7 @@ search() {
     }
     
     # run search across emails
-    nm_search ${=PARAM}
+    alot_search ${=PARAM}
 }
 
 backup() {
@@ -245,59 +243,59 @@ backup() {
     # check if the name of a maildir is among params
     # we need at least 2 maildirs, the second is the destination
     for p in ${PARAM}; do
-	c=$(( $c + 1 ))
+	    c=$(( $c + 1 ))
 
-	if [ $c = ${#PARAM} ]; then
-	    # last one is always the destination
-	    func "destination is ${p}"
-	    fold+=(${p})
+	    if [ $c = ${#PARAM} ]; then
+	        # last one is always the destination
+	        func "destination is ${p}"
+	        fold+=(${p})
 
-	elif [ -r "${p}" ]; then
+	    elif [ -r "${p}" ]; then
 
-	    { maildircheck ${p} } && {
-		func "param ${p} is a maildir"
-		fold+=(${p})
-		{ test ${#fold} = 1 } && {
-		    # base path is the dir of the first folder
-		    pushd `dirname ${p}`
-		    basedir=`pwd`
-		    popd }
-	    }
+	        { maildircheck ${p} } && {
+		        func "param ${p} is a maildir"
+		        fold+=(${p})
+		        { test ${#fold} = 1 } && {
+		            # base path is the dir of the first folder
+		            pushd `dirname ${p}`
+		            basedir=`pwd`
+		            popd }
+	        }
 
-	elif [ -r "${MAILDIRS}/${p}" ]; then
+	    elif [ -r "${MAILDIRS}/${p}" ]; then
 
-	    { maildircheck ${MAILDIRS}/${p} } && {
-		func "param ${p} is a jaro maildir"
-		fold+=(${MAILDIRS}/${p})
-	    }
+	        { maildircheck ${MAILDIRS}/${p} } && {
+		        func "param ${p} is a jaro maildir"
+		        fold+=(${MAILDIRS}/${p})
+	        }
 
-	else # not a folder, add it to expressions array
-	    func "param ${p} is an expression"
-	    expr+=(${p})
-	fi
+	    else # not a folder, add it to expressions array
+	        func "param ${p} is an expression"
+	        expr+=(${p})
+	    fi
     done
 
     { test ${#fold} -lt 2 } && {
-	error "Not enough folders specified for backup: minimum is 2"
-	act "When specifying more than 2, the last one is the destination"
-	return 1
+	    error "Not enough folders specified for backup: minimum is 2"
+	    act "When specifying more than 2, the last one is the destination"
+	    return 1
     }
 
     dst=${fold[${#fold}]}
     { test -r "$dst" } || { maildirmake "${dst}" }
 
     { test ${#expr} = 0 } && {
-	error "No expression set for backup, please indicate what you want to backup"
-	act "For example: d:10y-2y (all mails older than 1 year up to 10 years ago)"
-	act "Or a simple search string, all expressions can be verified using search."
-	return 1
+	    error "No expression set for backup, please indicate what you want to backup"
+	    act "For example: d:10y-2y (all mails older than 1 year up to 10 years ago)"
+	    act "Or a simple search string, all expressions can be verified using search."
+	    return 1
     }
 
     # forge the folder string for mairix conf
     folders=""
     for f in ${=fold}; do
-	{ test $f = $dst } || {
-	    folders="$folders`basename $f`:" }
+	    { test $f = $dst } || {
+	        folders="$folders`basename $f`:" }
     done
 
     notice "Backup of all mails in '$folders' matching expression '$expr'"
@@ -321,8 +319,8 @@ mformat=maildir
 EOF
     mairix -F -f ${mairixrc} -t -M ${expr}
     { test -r $basedir/$tempdst } && { 
-      merge $basedir/$tempdst $dst
-      notice "Destination folder size is `du -hs $dst | awk '{print $1}'`"
+        merge $basedir/$tempdst $dst
+        notice "Destination folder size is `du -hs $dst | awk '{print $1}'`"
     }
 
     ${=rm} ${mairixrc}
