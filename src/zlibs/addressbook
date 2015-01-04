@@ -284,12 +284,12 @@ extract_maildir() {
 # extract all entries in addressbook or all addresses in a pgp keyring
 # or all signatures on a pgp key (even without importing it)
 extract() {
-    func "calling extract() $PARAM"
+    func "extract() $PARAM"
 
     # without arguments just list all entries in the active list
     # default is whitelist
     [[ "$1" = "" ]] && {
-        func "extract all from list $list"
+        notice "Extracting all addresses in whitelist"
         awk -F'=' '
 /^name/  { printf("%s ",$2)    }
 /^email/ { printf("<%s>\n",$2) }
@@ -304,7 +304,8 @@ extract() {
         typeset -AU result
         
         # if first arg is a directory then extract from maildir
-        [[ -d "$1" ]] && { 
+        [[ -d "$1" ]] && {
+            notice "Extracting $2 addresses from maildir $1"
             extract_maildir "$1" "$2"
             return $?
         }
@@ -316,7 +317,7 @@ extract() {
         # first arg is a GnuPG key ring
         [[ "$_magic" =~ "GPG key public ring" ]] && {
 
-            notice "Listing addresses found in GPG keyring: $1"
+            notice "Extracting addresses found in GPG keyring: $1"
             _addrs=`gpg --list-keys --with-colons | awk -F: '{print $10}'`
             for i in ${(f)_addrs}; do
                 _parsed=`print "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
@@ -345,6 +346,7 @@ extract() {
 
         # first arg is a GnuPG public key
         [[ "$_magic" =~ "PGP public key" ]] && {
+            notice "Extracting addresses from sigs on GPG key $1"
             _gpg="gpg --no-default-keyring --keyring $MAILDIRS/cache/pubkey.gpg --batch --with-colons"
             rm -f $MAILDIRS/cache/pubkey.gpg
             ${=_gpg} --import "$1"
@@ -384,13 +386,9 @@ extract() {
         }
     }
 
-    func "extract from search query"
-
-    # we switch dryrun temporarily off to use learn()
-    # without modifying the addressbook
-    _dryrun=$DRYRUN
-    DRYRUN=1
-
+    # if no file is recognized, use string as search query
+    notice "Extracting addresses from search query: $PARAM"
+    
     # run a search and list email files
     nm_search ${=PARAM} | extract_mails
 }
@@ -398,93 +396,50 @@ extract() {
 
 # import an addressbook, autodetect its type
 import_addressbook() {
-    notice "Importing addressbook"
-    func "$1"
+    [[ "$1" = "" ]] || {
+        notice "Import addressbook from vCard: $1"
+        import_vcard "$1"
+        return $?
+    }
+
     # a map to eliminate duplicates
     typeset -AU result
 
     # stdin
-    [[ "$1" = "stdin" ]] && {
-        act "reading entries from stdin"
-        _stdin=`cat`
-        _new=0
-        for i in ${(f)_stdin}; do
+    notice "Importing addressbook from stdin list of addresses"
+    _stdin=`cat`
+    _new=0
+    for i in ${(f)_stdin}; do
+        # skip comments starting with #
+        [[ "$i[1]" = "#" ]] && continue
 
-            # skip comments starting with #
-            [[ "$i[1]" = "#" ]] && continue
+        _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
+        _e="${_parsed[(ws:,:)1]}"
 
-            _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
-            _e="${_parsed[(ws:,:)1]}"
+        # check if is really an email
+        isemail "$_e"
+        [[ $? = 0 ]] || continue
 
-            # check if is really an email
-            isemail "$_e"
-            [[ $? = 0 ]] || continue
+        # check if the email is not a duplicate
+        [[ "${result[$_e]}" = "" ]] || continue
 
-            # check if the email is not a duplicate
-            [[ "${result[$_e]}" = "" ]] || continue
+        _n="${_parsed[(ws:,:)2]}"
+        result+=("$_e" "$_n")
 
-            _n="${_parsed[(ws:,:)2]}"
-            result+=("$_e" "$_n")
+        # check if the email is not already known
+        lookup_email "$_e"
+        [[ $? = 0 ]] && continue
 
-            # check if the email is not already known
-            lookup_email "$_e"
-            [[ $? = 0 ]] && continue
-
-            [[ $DRYRUN = 0 ]] && insert_address "$_e" "$_n"
-            act "new entry imported: $_n <$_e>"
-            _new=$(( $_new + 1 ))
-        done
-        notice "Valid unique entries parsed: ${#result}"
-        act "new addresses found: ${_new}"
-        return 0
-    }
-
-    if [[ "$1" != "" ]]; then
-        func "file specified: $1"
-        # a file was given as argument
-        import_vcard "$1"
-    else
-        # no file as parameter
-        { test "$OS" = "MAC" } && { import_macosx }
-    fi
-}
-
-
-# import addressbook from Mac/OSX
-import_macosx() {
-    act "system addressbook from Mac/OSX"
-    { test "$OS" = "MAC" } || { error "Not running on Mac/OSX, operation aborted." }
-    { command -v ABQuery > /dev/null } || {
-    error "ABQuery not found, operation aborted." }
-
-    tmp=$TMPDIR/abook.import_osx.$datestamp.$RANDOM
-    newlock $tmp
-
-    # import all the Mac addressbook
-    ABQuery @ | awk '
-{ printf "%s|", $1; for(i=2;i<=NF;i++) { printf "%s ", $i } }
-' >> $tmp
-    addresses=`cat $tmp`
-    unlink $tmp
-
-    lock $ADDRESSBOOK
-    new=0; dupes=0;
-    for a in ${(f)addresses}; do
-    _email="${a[(ws:|:)1]}"
-    # remove from name all what is an email between brackets
-    # crop (trim) all beginning and ending whitespaces from name
-    _name=`print ${a[(ws:|:)2]} | sed 's/<.*>//;s/^[ \t]*//;s/[ \t]*$//'`
-    insert_address ${_email} ${_name}
-    if [ $? = 0 ]; then new=$(( $new + 1 ))
-    else dupes=$(( $dupes + 1 )); fi
+        [[ $DRYRUN = 0 ]] && insert_address "$_e" "$_n"
+        act "new entry imported: $_n <$_e>"
+        _new=$(( $_new + 1 ))
     done
-
-    unlock $ADDRESSBOOK
-    notice "Operation completed"
-    act "$new new addresses imported"
-    act "$dupes duplicate addresses skipped"
+    notice "Valid unique entries parsed: ${#result}"
+    act "new addresses found: ${_new}"
     return 0
 }
+
+
 
 # import emails from VCard into abook
 # checks if the emails are already known

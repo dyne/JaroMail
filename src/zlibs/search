@@ -105,10 +105,11 @@ nm_search() {
     search_results=`nm search --output=files ${=PARAM}`
     [[ $? = 0 ]] || {
         error "notmuch search failed with an error"
-        return 1 }
-    act "`print ${search_results} | wc -l` results found"
+        return 1
+    }
+    act "`print ${search_results} | wc -l` emails found"
     for i in ${(f)search_results}; do
-        print $i
+        print - "$i"
     done
 }
 
