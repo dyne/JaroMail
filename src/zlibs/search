@@ -153,6 +153,7 @@ user_agent = Jaro Mail <http://jaromail.dyne.org>
   u = search tag:unsorted
   / = prompt 'search '
   l = prompt 'search '
+  backspace = bclose
 
 [accounts]
     [[$account]]

@@ -25,6 +25,7 @@
 ###################
 # Jaro Brother DB
 create_addressbook() {
+    # $ADDRESSBOOK is set in jaro
     ab="$ADDRESSBOOK"
     func "create addressbook: $ab"
     [[ -r "$ab" ]] && {
@@ -126,7 +127,7 @@ sender_isknown() {
     email="${head[(ws:,:)1]}"
     [[ "$email" = "" ]] && { return 1 }
 
-    abook --datafile $MAILDIRS/whitelist.abook \
+    abook --datafile $MAILDIRS/$list.abook \
         --mutt-query "$email" > /dev/null
     return $?
 }
