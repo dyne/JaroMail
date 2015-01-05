@@ -169,7 +169,9 @@ EOF
 
 
 filter_maildir() {
-    typeset -h mdinput
+    # Makes glob matching case insensitive
+    unsetopt CASE_MATCH
+
     mdinput="$1"
 
     # for safety we bail out in case the final fallback
