@@ -594,20 +594,19 @@ main()
     subcommand="__default"
     fi
 
-# QUAA
     if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
- # unknown command, pass it to autostart
-    func "unknown command, autostart: $@"
-    autostart ${=@}
-    exitcode=$?
-    { test $exitcode != 0 } && {
-        error "command \"$subcommand\" not recognized"
-        act "try -h for help"
-        CLEANEXIT=0
-    }
-    return $exitcode
+        # unknown command, pass it to autostart
+        func "unknown command, autostart: $@"
+        autostart ${=@}
+        exitcode=$?
+        [[ $exitcode = 0 ]] || {
+            error "command \"$subcommand\" not recognized"
+            act "try -h for help"
+            CLEANEXIT=0
+        }
+        return $exitcode
     fi
-
+    
     argv=(${oldstar})
     unset oldstar
 

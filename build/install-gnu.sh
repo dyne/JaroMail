@@ -15,7 +15,7 @@ mkdir -p $JARO_LIBEXEC
 { test -r doc } && { srcdir=. }
 { test -r install-gnu.sh } && { srcdir=.. }
 
-{ test -r $srcdir/src/fetchdate } || {
+{ test -r $srcdir/src/fetchaddr } || {
     print "Error: first build, then install."; return 1 }
 
 mkdir -p $JARO_SHARE/{.mutt,.stats}
