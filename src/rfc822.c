@@ -24,7 +24,7 @@
 #include <stdio.h>
 
 #include "helpers.h"
-#include "rfc822_mutt.h"
+#include "rfc822.h"
 
 const char RFC822Specials[] = "@.,:;<>[]\\\"()";
 #define is_special(x) strchr(RFC822Specials,x)
