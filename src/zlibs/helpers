@@ -73,6 +73,34 @@ s/"/\&quot;/g
 '
 }
 
+# move an email file from a maildir to another
+# keeping cur/new/tmp positioning
+refile() {
+    src="$1"
+    dst="$2"
+
+    [[ "$2" = "" ]] && {
+        error "refile() needs 2 args: source file and destination maildir"
+        return 1
+    }
+
+    [[ -r "$1" ]] || {
+        error "refile origin file not existing: $1"
+        return 1
+    }
+
+    # weak destination check, called should use maildircheck anyway
+    [[ -d "$2"/new ]] || {
+        error "refile destination not a maildir: $2"
+        return 1
+    }
+
+    srcarr=(  ${=src//\// } )
+    srcnum=${#srcarr}
+    pos=${srcarr[$(( $srcnum - 1 ))]}
+    func "mv $src ${dst}/${pos}/"
+    [[ $DRYRUN = 0 ]] && mv $src ${dst}/${pos}/
+}
 
 autostart() {
 

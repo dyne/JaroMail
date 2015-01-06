@@ -699,7 +699,6 @@ main()
 
     index) CLEANEXIT=0;
             nm_index
-            nm compact
             ;;
     search)  CLEANEXIT=0; search ${PARAM} ;;
 

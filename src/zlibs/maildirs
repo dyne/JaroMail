@@ -147,63 +147,50 @@ rmdupes() {
 }
 
 merge() {
-    src=${1}
-    dst=${2}
+    _src=${1}
+    _dst=${2}
 
-    { test "$src" = "$dst" } && {
-    error "Cannot merge same directory in itself: $src = $dst"
-    return 1 }
+    [[ "$_src" = "$_dst" ]] && {
+        error "Cannot merge same directory in itself: $_src = $_dst"
+        return 1 }
 
-    { maildircheck "$src" } || {
-    error "Source is not a maildir: $src"
-    return 1 }
-
-    { maildircheck "$dst" } || {
-    error "Destination is not a maildir: $dst"
-    return 1 }
+    maildircheck "$_src"
+    [[ $? = 0 ]] || {
+        error "Source is not a maildir: $_src"
+        return 1
+    }
+    
+    maildircheck "$_dst"
+    [[ $? = 0 ]] || {
+        error "Destination is not a maildir: $_dst"
+        return 1
+    }
 
     # merge does not uses deliver() because
     # the new-flag and read-flags must be kept intact.
     # it will abort on any single error on moving each file.
-    notice "Merging maildir ${src} into ${dst}"
-    c=0
-    fr=`${=find} ${src}/cur -type f`
+    notice "Merging maildir ${_src} into ${_dst}"
+    fr=`${=find} ${_src} -type f`
 
-    # TODO: preserve timestamps using cp hardlinks
-    #     cp -p -r -l source/date target/
-    #     rm -rf source/data
+    c=0
     for i in ${(f)fr}; do
-    mv "$i" "${dst}/cur/"; c=$(($c + 1))
-    { test $? = 0 } || {
-        error "error moving file: $i"
-        error "merge aborted."
-        return 1 }
-    done
-    fr=`${=find} ${src}/new -type f`
-    for i in ${(f)fr}; do
-    mv "$i" "${dst}/new/"; c=$(($c + 1))
-    { test $? = 0 } || {
-        error "error moving file: $i"
-        error "merge aborted."
-        return 1 }
-    done
-    fr=`${=find} ${src}/tmp -type f`
-    for i in ${(f)fr}; do
-    mv "$i" "${dst}/tmp/"; c=$(($c + 1))
-    { test $? = 0 } || {
-        error "error moving file: $i"
-        error "merge aborted."
-        return 1 }
+        refile "$i" "$_dst"
+        [[ $? = 0 ]] || {
+            # bail out on every single error
+            error "Error refiling emails to destination maildir"
+            error "Operation aborted, $c files moved."
+            return 1
+        }
+        c=$(($c + 1))
     done
     notice "$c mails succesfully moved"
 
-    act "Removing source directory ${src}"
-    ${=rm} -r "${src}"
-
-    act "Purging duplicates in destination"
-    rmdupes "${dst}"
-
-    act "Done. All mails merged into ${dst}"
+    [[ $DRYRUN = 0 ]] && {
+        act "Removing source directory ${_src}"
+        ${=rm} -r "${_src}"
+    }
+    
+    act "Done. All mails merged into ${_dst}"
 }
 
 

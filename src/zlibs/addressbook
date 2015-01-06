@@ -70,7 +70,7 @@ insert_address() {
 }
 
 remove_address() {
-    warning "remove_address() TODO in abook branch"
+    error "remove_address() TODO in abook branch"
     return 0
 }
 
@@ -213,7 +213,7 @@ learn() {
 }
 
 forget() {
-    warning "forget() TODO in abook branch"
+    error "forget() TODO in abook branch"
     return 0
 
     # func "forget sender from mail in stdin"

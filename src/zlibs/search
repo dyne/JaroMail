@@ -235,98 +235,48 @@ search() {
 
 backup() {
     id=$datestamp.$RANDOM
-    mairixrc=$TMPDIR/backup.rc.$id
-    mairixdb=$TMPDIR/backup.db.$id
-    typeset -al expr
-    typeset -al fold
+    c=0
 
-    src=""; dst=""
-    basedir=$MAILDIRS
-    # check if the name of a maildir is among params
-    # we need at least 2 maildirs, the second is the destination
-    for p in ${PARAM}; do
-	    c=$(( $c + 1 ))
+    dst=${PARAM[1]}
+    shift 1 PARAM
+    expr=${PARAM}
 
-	    if [ $c = ${#PARAM} ]; then
-	        # last one is always the destination
-	        func "destination is ${p}"
-	        fold+=(${p})
+    notice "Backup of mails matched by search expression"
+    act "expression: $expr"
+    act "destination folder: $dst"
+    [[ $DRYRUN = 1 ]] && act "Dryrun mode enabled"
 
-	    elif [ -r "${p}" ]; then
-
-	        { maildircheck ${p} } && {
-		        func "param ${p} is a maildir"
-		        fold+=(${p})
-		        { test ${#fold} = 1 } && {
-		            # base path is the dir of the first folder
-		            pushd `dirname ${p}`
-		            basedir=`pwd`
-		            popd }
-	        }
-
-	    elif [ -r "${MAILDIRS}/${p}" ]; then
-
-	        { maildircheck ${MAILDIRS}/${p} } && {
-		        func "param ${p} is a jaro maildir"
-		        fold+=(${MAILDIRS}/${p})
-	        }
-
-	    else # not a folder, add it to expressions array
-	        func "param ${p} is an expression"
-	        expr+=(${p})
-	    fi
-    done
-
-    { test ${#fold} -lt 2 } && {
-	    error "Not enough folders specified for backup: minimum is 2"
-	    act "When specifying more than 2, the last one is the destination"
-	    return 1
+    [[ $DRYRUN = 0 ]] && {
+        maildircheck "$dst"
+        [[ $? = 0 ]] || {
+            error "First argument of backup command must be an existing maildir"
+            return 1
+        }
     }
 
-    dst=${fold[${#fold}]}
-    { test -r "$dst" } || { maildirmake "${dst}" }
-
-    { test ${#expr} = 0 } && {
+    [[ "$expr" = "" ]] && {
 	    error "No expression set for backup, please indicate what you want to backup"
 	    act "For example: d:10y-2y (all mails older than 1 year up to 10 years ago)"
 	    act "Or a simple search string, all expressions can be verified using search."
 	    return 1
     }
 
-    # forge the folder string for mairix conf
-    folders=""
-    for f in ${=fold}; do
-	    { test $f = $dst } || {
-	        folders="$folders`basename $f`:" }
-    done
+    read_account
+    nm_setup
 
-    notice "Backup of all mails in '$folders' matching expression '$expr'"
+    _res=`nm_search ${=expr}`
 
-    act "Indexing folders"
-    cat <<EOF > ${mairixrc}
-base=$basedir
-database=$mairixdb
-maildir=${folders}
-mformat=maildir
-EOF
-    mairix -F -f ${mairixrc} 2> /dev/null
-    tempdst="bck.`basename $dst`"
-    notice "Backup of $dst"
-    rm -f ${mairixrc}; cat <<EOF > ${mairixrc}
-base=$basedir
-database=$mairixdb
-maildir=${folders}
-mfolder=$tempdst
-mformat=maildir
-EOF
-    mairix -F -f ${mairixrc} -t -M ${expr}
-    { test -r $basedir/$tempdst } && { 
-        merge $basedir/$tempdst $dst
-        notice "Destination folder size is `du -hs $dst | awk '{print $1}'`"
+    [[ $DRYRUN = 0 ]] && {
+        for i in ${(f)_res}; do
+            refile $i $dst
+            [[ $? = 0 ]] || {
+                # bail out on every single error
+                error "Error refiling emails to destination maildir"
+                error "Operation aborted"
+                return 1
+            }
+        done
     }
+    
 
-    ${=rm} ${mairixrc}
-    ${=rm} ${mairixdb}
-
-    act "Backup completed to destination: $dst"
 }
