@@ -93,9 +93,9 @@ mkdir -p build/gnu
     print -n "Compiling the address parser (RFC2047) ... "
     ${=cc} -c helpers.c
     ${=cc} -c rfc2047.c
-    ${=cc} -c rfc822_mutt.c;
+    ${=cc} -c rfc822.c;
     ${=cc} -c -DHAVE_ICONV fetchaddr.c;
-    ${=cc} -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822_mutt.o
+    ${=cc} -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o
     popd
     cp src/fetchaddr build/gnu/
     print OK
