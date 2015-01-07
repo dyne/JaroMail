@@ -34,7 +34,7 @@ auth plain # or kerberos, etc
 cert ignore
 
 # Transport protocol: ssl, tls or plain
-transport ssl
+transport tls
 
 
 # Options when fetching

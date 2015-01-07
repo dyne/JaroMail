@@ -34,7 +34,6 @@ DEBUG=0
 DRYRUN=0
 CLEANEXIT=1
 CALLMUTT=1
-TMPRAM=0
 
 # global variables for binaries called
 typeset -h rm mkdir mutt
@@ -87,6 +86,71 @@ typeset -alU imap_info
 typeset -h muttflags
 
 autoload colors; colors
+
+# temporary directory
+typeset TMPPREFIX=${TMPPREFIX:-/tmp}
+typeset -H JAROTMP # Filename of secure temp just created (see _tmp_create())
+typeset -aH JAROTMPFILES      # Keep track of temporary files
+
+# Provide a random filename in shared memory
+_tmp_create() {
+    [[ -d "$TMPPREFIX" ]] || {
+        # we create the tempdir with the sticky bit on
+        sudo mkdir -m 1777 "$TMPPREFIX"
+        [[ $? == 0 ]] || _failure "Fatal error creating the temporary directory: ::1 temp dir::" "$TMPPREFIX"
+    }
+    
+    # We're going to add one more $RANDOM for each time someone complain
+    # about this being too weak of a random.
+    tfile="${TMPPREFIX}/$RANDOM$RANDOM$RANDOM$RANDOM"   # Temporary file
+    umask 066
+    [[ $? == 0 ]] || {
+        error "Fatal error setting the permission umask for temporary files"
+        return 1
+    }
+    
+    [[ -r "$tfile" ]] && {
+        error "Someone is messing up with us trying to hijack temporary files."
+        return 1
+    }
+    
+    touch "$tfile"
+    [[ $? == 0 ]] || {
+        error "Fatal error creating a temporary file: ::1 temp file::" "$tfile"
+        return 1
+    }
+    
+    [[ $? == 0 ]] || {
+        error "Fatal error setting ownership on temporary file: ::1 temp file::" "$tfile"
+        return 1
+    }
+    
+    func "Created tempfile: $tfile"
+    JAROTMP="$tfile"
+    JAROTMPFILES+=("$tfile")
+    
+    return 0
+}
+
+# Cleanup anything sensitive before exiting.
+_endgame() {
+    # Clear temporary files
+    for f in $JAROTMPFILES; do
+        func "endgame() cleaning tempfile $f"
+        rm -f "$f"
+    done
+    unset JAROTMPFILES
+}
+# Trap functions for the _endgame event
+TRAPINT()  { _endgame INT   }
+TRAPEXIT() { _endgame EXIT  }
+TRAPHUP()  { _endgame HUP   }
+TRAPQUIT() { _endgame QUIT  }
+TRAPABRT() { _endgame ABORT }
+TRAPKILL() { _endgame KILL  }
+TRAPPIPE() { _endgame PIPE  }
+TRAPTERM() { _endgame TERM  }
+TRAPSTOP() { _endgame STOP  }
 
 # standard output message routines
 # it's always useful to wrap them, in case we change behaviour later
@@ -197,47 +261,23 @@ fi
 ACCOUNTS="$MAILDIRS/Accounts"
 KEYRING="$MAILDIRS/Keyring"
 
-# temporary directory
-TMPDIR="$MAILDIRS/tmp/jaromil.$USER"
+
 case $OS in
-    GNU)
-    touch /dev/shm/test.jaromail.$USER > /dev/null
-    { test $? = 0 } && {
-    # we can use volatile ram
-        rm /dev/shm/test.jaromail.$USER
-        TMPDIR=/dev/shm/tmp.jaromail.$USER
-        TMPRAM=1
-    }
-
-    # backward compatibility tests for old paths in JaroMail <1.3
-    { test -d $WORKDIR/Accounts } && { test ! -d $ACCOUNTS } && {
-        act "Updating accounts location: $ACCOUNTS"
-        cp -ra $WORKDIR/Accounts $ACCOUNTS }
-
-    { test -r "$WORKDIR/keyring" } && { test ! -r "$KEYRING" } && {
-        act "Updating keyring location: $KEYRING"
-        cp $WORKDIR/keyring "$KEYRING" }
-
+    GNU)        
+        # backward compatibility tests for old paths in JaroMail <1.3
+        { test -d $WORKDIR/Accounts } && { test ! -d $ACCOUNTS } && {
+            act "Updating accounts location: $ACCOUNTS"
+            cp -ra $WORKDIR/Accounts $ACCOUNTS
+        }
+        
+        { test -r "$WORKDIR/keyring" } && { test ! -r "$KEYRING" } && {
+            act "Updating keyring location: $KEYRING"
+            cp $WORKDIR/keyring "$KEYRING"
+        }        
     ;;
     MAC)
-    mount | grep 'JaroTmp' > /dev/null
-    { test $? = 0 } && {
-        # our RAM temp directory is active
-        TMPDIR=/Volumes/JaroTmp/jaromail.$USER
-        TMPRAM=1
-    }
     ;;
 esac
-
-# use the TMP in RAM if possible, for acceleration
-{ test $TMPRAM = 1 } && {
-    act "Using temporary directory in volatile RAM" }
-
-# make sure we have a temp dir
-${=mkdir} "$TMPDIR"
-{ test $? != 0 } && {
-    error "Cannot create temporary directory: $TMPDIR"
-    return 1 }
 
 hostname=$(hostname) # gather the current hostname
 
@@ -274,65 +314,6 @@ GNOMEKEY=0
 pidof gnome-keyring-daemon > /dev/null && {
      act "using gnome-keyring to store secrets"
      GNOMEKEY=1 }
-
-
-cleanexit() {
-    func "Clean exit procedures"
-
-    # security check
-    { test "$TMPDIR" = "" } && {
-    error "Temporary directory not defined"
-    act "skipping cleanup, this might leave private traces."
-    return 1
-    }
-
-    # first delete dirs
-    tmpdirs=`${=find} "$TMPDIR" -maxdepth 1 -type d`
-    for d in ${(f)tmpdirs}; do
-    { test "$d" = "$TMPDIR" } || {
-        func "deleting dir: $d"
-        ${=rm} -r "${d}" }
-    done
-
-    # then locks, with a warning
-    llist=`${=find} "$TMPDIR" -maxdepth 1 -type f -name '*.lock'`
-    for l in ${(f)llist}; do
-    lname=`basename ${(s:.lock:)l}`
-    func "cleaning lock for $lname"
-
-    # skip if in course of unlink - parallel operation, see unlink()
-    pidfile="${TMPDIR}/$lname.pid"
-    if [ -r ${pidfile} ]; then
-        pid=`cat $pidfile`
-        func "forced removal of lock left by pid $pid: $lname"
-        rm -f ${pidfile}
-    else
-        func "forced removal of lock left by unknown pid: $lname"
-    fi
-    rm -f "${TMPDIR}/${lname}.lock"
-
-    # remove the actual file
-    if [ -r "${TMPDIR}/$lname" ]; then
-        func "deleting temp file: ${TMPDIR}/$lname"
-        ${=rm} "${TMPDIR}/$lname"
-    else func "empty lock: file was already removed"; fi
-
-    done
-
-
-#    { test $TMPRAM = 1 } && { rmdir $TMPDIR }
-}
-# make sure tmp is wiped from sensitive data in case of sigINT
-TRAPINT() {
-    error "Caught signal, aborting operations."
-
-    { test $CLEANEXIT = 1 } && {
-        func "Forcing removal of locks"
-        cleanexit & }
-
-    if [ "$DEBUG" = "1" ]; then return 1
-    else exit 1; fi
-}
 
 # binary programs recognition
 check_bin() {
@@ -388,7 +369,7 @@ check_bin() {
     fi
     func "Mutt binary: $mutt"
     # make sure there is always a muttpass file even if empty
-    touch $TMPDIR/muttpass
+    touch $MAILDIR/tmp/muttpass
     return 0
 }
 
@@ -713,7 +694,7 @@ main()
     learn)    CLEANEXIT=0; learn ${PARAM}          ;;
     forget)   CLEANEXIT=0; forget ${PARAM}         ;;
 
-    import)  import_addressbook "${PARAM}" ;;
+    import)  import ${PARAM} ;;
     "export")
             case "$PARAM" in
                 abook)
@@ -728,9 +709,9 @@ main()
 
     abook)   edit_abook ${PARAM}         ;;
 
-    edit|vim)    CLEANEXIT=0; edit_file ${PARAM}    ;;
-    open)    CLEANEXIT=0; open_folder ${PARAM}  ;;
-    preview) CLEANEXIT=0; preview_file ${PARAM} ;;
+    edit|vim)  CLEANEXIT=0; edit_file ${PARAM}    ;;
+    open)      CLEANEXIT=0; open_folder ${PARAM}  ;;
+    preview)   CLEANEXIT=0; preview_file ${PARAM} ;;
 
     backup)  backup ${PARAM}  ;;
     rmdupes) rmdupes ${PARAM} ;;
@@ -801,18 +782,18 @@ main()
         ;;
 
     list|extract)
-            extract ${PARAM}
-            exitcode=$?
-            ;;
+        extract ${PARAM}
+        exitcode=$?
+        ;;
 
     *) # unknown command, pass it to autostart
         func "unknown command, remote check"
         autostart ${PARAM}
         exitcode=$?
         { $exitcode != 0 } && {
-        error "command \"$subcommand\" not recognized"
-        act "try -h for help"
-        CLEANEXIT=0
+            error "command \"$subcommand\" not recognized"
+            act "try -h for help"
+            CLEANEXIT=0
         }
         ;;
     esac
@@ -822,5 +803,4 @@ main()
 
 check_bin
 main $@
-{ test "$CLEANEXIT" = "1" } && { cleanexit & }
 return $exitcode

@@ -444,7 +444,7 @@ source '$WORKDIR/.mutt/formats'
 source '$WORKDIR/.mutt/keybindings'
 source '$WORKDIR/.mutt/colors'
 source '$MAILDIRS/Identity.txt'
-source '$TMPDIR/muttpass'
+source '$MAILDIRS/tmp/muttpass'
 EOF
 
 
@@ -496,16 +496,16 @@ EOF
     eval `print $t | awk '
     { print "_type=" $1 "; _app=" $2 ";" }'`
     cat <<EOF >> $MUTTDIR/mailcap
-${_type}; a="${TMPDIR}" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && ${_app} "\$a"/"\$f"
+${_type}; a="${MAILDIRS}/tmp" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && ${_app} "\$a"/"\$f"
 EOF
     done
     cat <<EOF >> $MUTTDIR/mailcap
-application/*; a="${TMPDIR}" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
+application/*; a="${MAILDIRS}/tmp" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
 EOF
     } # Applications.txt
 
     # this one is empty and sources files in temp when necessary
-    touch $TMPDIR/muttpass
+    touch $MAILDIRS/tmp/muttpass
 
     # just the header, will be completed later
     rm -f $MUTTDIR/mboxes
@@ -514,15 +514,17 @@ EOF
     for f in `cat "$MAILDIRS/Filters.txt" | awk '
     /^#/ {next}
     /^./ { print $4 }'`; do
-    # MUTT (generate mailboxes priority this parser)
-    print  " \\" >> $MUTTDIR/mboxes
-    print -n " +${f} " >> $MUTTDIR/mboxes
+        # MUTT (generate mailboxes priority this parser)
+        print  " \\" >> $MUTTDIR/mboxes
+        print -n " +${f} " >> $MUTTDIR/mboxes
     done
     print " \\" >> $MUTTDIR/mboxes
     print " +unsorted.ml +unsorted" >> $MUTTDIR/mboxes
-
-    uniq $MUTTDIR/mboxes > $TMPDIR/mboxes
-    mv $TMPDIR/mboxes $MUTTDIR/mboxes
+    
+    _tmp_create
+    ttmp="$JAROTMP"
+    uniq $MUTTDIR/mboxes > $ttmp
+    mv $ttmp $MUTTDIR/mboxes
 
 }
 

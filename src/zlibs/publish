@@ -159,51 +159,52 @@ pubdb_extract_body() {
     _path="$1"
     { test -r "$_path" } || { error "mail not found for body extraction: $_path"; return 1 }
 
-    pushd ${TMPDIR}/pubdb
+    mkdir -p ${MAILDIRS}/pubdb
+    pushd ${MAILDIRS}/pubdb
 
     # check if it has already html
     _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
-    { test "$_html" = "" } || {
+    [[ "$_html" = "" ]] || {
         mu extract --overwrite --parts="$_html" "$_path"
-    # check if there is an html header to weed out
-    grep '<body>' "$_html".part > /dev/null
-    if [ $? = 0 ]; then
-        awk '
+        # check if there is an html header to weed out
+        grep '<body>' "$_html".part > /dev/null
+        if [ $? = 0 ]; then
+            awk '
 BEGIN { body=0 }
 /<body/ { body=1; next }
 /<\/body/ { body=0; next }
 { if(body==1) print $0 }' "$_html".part | iconv -c
-    else
-        cat "$_html".part | iconv -c
-    fi
-    rm "$_html".part
-    return 0 }
-
+        else
+            cat "$_html".part | iconv -c
+        fi
+        rm "$_html".part
+        return 0 }
+    
     # use the first text/plain
     _text=`mu extract "$_path" | awk '/text\/plain/ {print $1; exit}'`
     { test "$_text" = "" } || {
-    mu extract --overwrite --parts="$_text" "$_path"
-    # here we tweak the origin to avoid headers in markdown
-    # preferring to interpret # as inline preformat
-    cat "$_text".part | sed '
+        mu extract --overwrite --parts="$_text" "$_path"
+        # here we tweak the origin to avoid headers in markdown
+        # preferring to interpret # as inline preformat
+        cat "$_text".part | sed '
 s/^#/    /g
 ' | iconv -c | maruku --html-frag 2>/dev/null | sed '
 s|http://[^ |<]*|<a href="&">&</a>|g
 s|https://[^ |<]*|<a href="&">&</a>|g'
-# s|www\.[^ |<]*|<a href="http://&">&</a>|g'
-    rm "$_text".part
-    return 0
-    }
+        # s|www\.[^ |<]*|<a href="http://&">&</a>|g'
+rm "$_text".part
+return 0
+}
 
-    # check if its an html only mail
-    # _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
-    # { test "$_html" = "" } || {
-    #   mu extract --overwrite --parts="$_html" "$_path"
-    #   elinks -dump "$_html".part
-    #   rm "$_html".part
-    #   return 0 }
+# check if its an html only mail
+# _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
+# { test "$_html" = "" } || {
+#   mu extract --overwrite --parts="$_html" "$_path"
+#   elinks -dump "$_html".part
+#   rm "$_html".part
+#   return 0 }
 
-    return 0
+return 0
 }
 
 

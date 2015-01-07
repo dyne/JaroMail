@@ -183,7 +183,7 @@ BEGIN { head=1 }
 # of course we have a preference for AutOrg, the editor from our suite
 # however the default is nano if nothing else is choosen.
 jarovim() {
-    vim -c 'set fo=tcrq' -c 'set tw=72' \
+    vim -c 'set fo=tcrq' -c 'set tw=72' -c 'set paste' \
     -c 'map <C-j> {gq}' -c 'imap <C-j> <esc>{gq}i' \
         "${@}"
     return $?

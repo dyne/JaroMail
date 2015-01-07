@@ -38,104 +38,73 @@ queue() {
     # set it ready for saving in outbux
     queue_body="$base"
 
+    _tmp_create
+    tmpqueue="$JAROTMP"
+
     # pre-processing of the email headers
-    cat | awk '
+    awk '
 /User-Agent:/ { print "User-Agent: Jaro Mail <http://jaromail.dyne.org>"; next }
 { print $0 }
-' > "$TMPDIR/${queue_body}.mail"
+' > "$tmpqueue"
 
     maildirmake "$MAILDIRS/outbox"
-    { test $? = 0 } || {
-    act "updating outbox format to Maildir"
-    # silently migrate the outbox from the old format to the new
-    tmpp=(`find "$MAILDIRS/outbox" -type f`)
-    if [ ${#tmpp} = 0 ]; then
-        # the old format outbox is just empty
-        rmdir "$MAILDIRS/outbox"
-        maildirmake "$MAILDIRS/outbox"
-    else
-        # there are some mails to be sent in the old format outbox
-        # preserve them while migrating to the new format
-        # this code is less interesting, since it handles an old
-        # format in JaroMail
-        tmppp="$TMPDIR/jaro-outbox-migration-$RANDOM"
-        mkdir -p $tmppp
-        mv "$MAILDIRS/outbox/*" $tmppp/
-        rmdir "$MAILDIRS/outbox"
-        maildirmake "$MAILDIRS/outbox"
-        # here we devince two useful arrays:
-        # bodies: the list of mail bodies to send
-        # corresponding to files with same name and extension .msmtp
-        bodies=(`find "$tmppp" -type f -name '*.mail'`)
-        for i in ${bodies}; do
-        cat "$i" | deliver outbox
-        { test $? = 0 } && { rm "$i" }
-        done
-        rmdir $tmppp
-    fi
-    }
     ${=mkdir} "$MAILDIRS/outbox/send"
-
     lock "$MAILDIRS/outbox"
 
     # check if recipients are a Group
     if [[ "${=queue_to}" =~ '@jaromail.group' ]]; then
-
-
-    groupfile="`print ${=queue_to}|cut -d@ -f1`"
-    act "email recipients are in group ${groupfile}"
-
-    { test -r "$MAILDIRS/Groups/$groupfile" } || {
-        maildirmake "$MAILDIRS/postponed"
-        mv "${TMPDIR}/${queue_body}.mail" "$MAILDIRS/postponed/new"
-        unlock "$MAILDIRS/outbox"
-        error "Group not found: $groupfile"
-        return 1 }
-
-    recipients=`cat "$MAILDIRS/Groups/$groupfile" | grep -v '^#'`
-    groupnum=`print ${recipients} | wc -l`
-    groupmode=`head -n1 "$MAILDIRS/Groups/$groupfile" | awk '/^#mode/ { print $2 } { next }'`
-    { test "$groupmode" = "" } && { groupmode="individual" }
-    act "$groupnum recipients in total, sending mode $groupmode"
-
-
-    case $groupmode in
-
-        # individual group mode hides other recipients and send
-        # multiple mail envelopes with each single recipient in To:
-        individual)
-        for i in ${(f)recipients}; do
-            ig=${base}-${RANDOM}
-            cat "${TMPDIR}/${queue_body}.mail" | \
-            awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
-            > "${MAILDIRS}/outbox/new/${ig}.mail"
-        done
-        ;;
-
-        # carboncopy group mode sends a single envelope where all
-        # recipients can see and reply to each other
-        carboncopy|cc)
-        cc=""
-        for i in ${(f)recipients}; do
-            if [ "$cc" = "" ]; then cc="$i"
-            else cc+=", $i"; fi
-        done
-        ig=${base}-${RANDOM}
-        cat "${TMPDIR}/${queue_body}.mail" | \
-            awk '/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
+        
+        groupfile="`print ${=queue_to}|cut -d@ -f1`"
+        act "email recipients are in group ${groupfile}"
+        
+        [[ -r "$MAILDIRS/Groups/$groupfile" ]] || {
+            maildirmake "$MAILDIRS/postponed"
+            mv "$tmpqueue" "$MAILDIRS/postponed/new"
+            unlock "$MAILDIRS/outbox"
+            error "Group not found: $groupfile"
+            return 1 }
+        
+        recipients=`cat "$MAILDIRS/Groups/$groupfile" | grep -v '^#'`
+        groupnum=`print ${recipients} | wc -l`
+        groupmode=`head -n1 "$MAILDIRS/Groups/$groupfile" | awk '/^#mode/ { print $2 } { next }'`
+        [[ "$groupmode" = "" ]] && { groupmode="individual" }
+        act "$groupnum recipients in total, sending mode $groupmode"
+        
+        case $groupmode in
+            
+            # individual group mode hides other recipients and send
+            # multiple mail envelopes with each single recipient in To:
+            individual)
+                for i in ${(f)recipients}; do
+                    ig=${base}-${RANDOM}
+                    cat "$tmpqueue" | \
+                        awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
+                        > "${MAILDIRS}/outbox/new/${ig}.mail"
+                done
+                ;;
+            
+            # carboncopy group mode sends a single envelope where all
+            # recipients can see and reply to each other
+            carboncopy|cc)
+                cc=""
+                for i in ${(f)recipients}; do
+                    if [ "$cc" = "" ]; then cc="$i"
+                    else cc+=", $i"; fi
+                done
+                ig=${base}-${RANDOM}
+                cat "$tmpqueue" | \
+                    awk '/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
                 { print $0 }' \
                     > "${MAILDIRS}/outbox/new/${ig}.mail"
-        ;;
-    esac
-
+                ;;
+        esac
+        
     else
-    # recipients are set in the email envelope
-    cat "$TMPDIR/$queue_body.mail" | deliver "outbox"
+        # recipients are set in the email envelope
+        cat "$tmpqueue" | deliver "outbox"
     fi
-
+    
     unlock "$MAILDIRS/outbox"
-    { test -r "${TMPDIR}/${queue_body}.mail" } && {
-    ${=rm} "${TMPDIR}/${queue_body}.mail" }
 
     return 0
 }
@@ -338,7 +307,10 @@ send() {
         # check if this is an anonymous mail
         hdr "$qbody" | grep -i '^from: anon' > /dev/null
         if [[ $? = 0 ]]; then
-            anoncfg="${TMPDIR}/${smtp}.anon.$RANDOM"
+
+            _tmp_create
+            anoncfg="$JAROTMP"
+
             cat <<EOF > "$anoncfg"
 REMAIL		n
 POOLSIZE	0
@@ -388,8 +360,6 @@ BEGIN { head=1 }
                 mv "$qbody.anon" "$qbody"
                 func "mixmaster returns $res"
             done
-
-            ${=rm} $anoncfg
 
         else # normal send with msmtp
 
@@ -485,23 +455,26 @@ peek() {
         error "Error retrieving password for $login on $imap"
         unset password all; return 1
     }
-    tmp="$TMPDIR/$imap.peek.$RANDOM"
-    newlock "$tmp"
+
+    _tmp_create
+    tmp="$JAROTMP"
     cat <<EOF >> "$tmp"
 set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
     unset password
-    print "source '$tmp'" > "$TMPDIR/muttpass"
     # when peeking don't mark unread messages as Old
     # and sort date received with no threading (latest up)
-    cat <<EOF >> "$TMPDIR/muttpass"
+    touch "$MAILDIRS/tmp/muttpass"
+    cat <<EOF >> "$MAILDIRS/tmp/muttpass"
+source '$tmp'
 unset mark_old
 set sort=reverse-date-received
 EOF
+    # fork a process to delete the pass files after use
     (sleep 1;
-        cp /dev/null "$TMPDIR/muttpass"
-        unlink "$tmp" # secure delete in ram
+        cp /dev/null "$MAILDIRS/tmp/muttpass"
+        cp /dev/null "$tmp" # zero the tmp passfile
     ) &
     ${=mutt} -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}
 

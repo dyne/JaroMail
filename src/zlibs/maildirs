@@ -92,57 +92,55 @@ rmdupes() {
 
     ## special argument lastlog
     { test "$1" = "lastlog" } && {
-    lastdirs=(`maildirs_lastlog`)
-    act "Pruning duplicates across ${#lastdirs} destination maildirs:"
-    act "${lastdirs}"
-    # recursion here
-    rmdupes ${=lastdirs}
-    notice "Done pruning"
-    # all the prioritization above is so that duplicates are spotted
-    # across different maildirs and deleted from the filtered source
-    return 0
+        lastdirs=(`maildirs_lastlog`)
+        act "Pruning duplicates across ${#lastdirs} destination maildirs:"
+        act "${lastdirs}"
+        # recursion here
+        rmdupes ${=lastdirs}
+        notice "Done pruning"
+        # all the prioritization above is so that duplicates are spotted
+        # across different maildirs and deleted from the filtered source
+        return 0
     }
     ###############
-
+    
     tot=0
     typeset -al msgs
-
-    formail_cache="$TMPDIR/filter.rmdupes.$datestamp.$RANDOM"
-    newlock "$formail_cache"
-
+    
+    _tmp_create
+    formail_cache="$JAROTMP"
+    
     for folder in ${=@}; do
-    { test -r "$folder" } || { folder="$MAILDIRS/$folder" }
-    { test -r "$folder" } || {
-        error "Directory not found: $folder"
-        continue }
-
-    { maildircheck "${folder}" } || {
-        error "Not a maildir folder: $folder"
-        continue }
-
-    c=0
-    notice "Checking for duplicates in $folder"
-    msgs=`${=find} "${folder}" -maxdepth 2 -type f`
-    act "Please wait, this can take a while..."
-
-
-
-    for m in ${(f)msgs}; do
-        func "formail < $m"
-        # 128MB should be enough ehre?
-        formail -D 128000000  "$formail_cache" <"$m" \
-        && rm "$m" && c=$(( $c + 1 ))
+        { test -r "$folder" } || { folder="$MAILDIRS/$folder" }
+        { test -r "$folder" } || {
+            error "Directory not found: $folder"
+            continue }
+        
+        { maildircheck "${folder}" } || {
+            error "Not a maildir folder: $folder"
+            continue }
+        
+        c=0
+        notice "Checking for duplicates in $folder"
+        msgs=`${=find} "${folder}" -maxdepth 2 -type f`
+        act "Please wait, this can take a while..."
+        
+        
+        
+        for m in ${(f)msgs}; do
+            func "formail < $m"
+            # 128MB should be enough ehre?
+            formail -D 128000000  "$formail_cache" <"$m" \
+                && rm "$m" && c=$(( $c + 1 ))
+        done
+        act "$c duplicates found and deleted"
+        tot=$(( $tot + $c ))
     done
-    act "$c duplicates found and deleted"
-    tot=$(( $tot + $c ))
-    done
-
-    unlink "$formail_cache"
-
+    
     if [ "$tot" = "0" ]; then
-    act "No duplicates found at all"
+        act "No duplicates found at all"
     else
-    act "$tot total duplicates found and deleted"
+        act "$tot total duplicates found and deleted"
     fi
 }
 
