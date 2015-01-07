@@ -1,4 +1,4 @@
-% Created 2014-05-12 Mon 11:58
+% Created 2015-01-07 Wed 14:45
 \documentclass[a4,onecolumn,portrait]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -7,13 +7,13 @@
 \usepackage{longtable}
 \usepackage{float}
 \usepackage{wrapfig}
+\usepackage{rotating}
 \usepackage[normalem]{ulem}
+\usepackage{amsmath}
 \usepackage{textcomp}
 \usepackage{marvosym}
 \usepackage{wasysym}
-\usepackage{latexsym}
 \usepackage{amssymb}
-\usepackage{amstext}
 \usepackage{hyperref}
 \tolerance=1000
 \usepackage[english]{babel}
@@ -35,12 +35,12 @@
 \setlength{\headheight}{18pt}
 \pagestyle{fancyplain}
 \author{by Jaromil @ dyne.org}
-\date{May 2014}
-\title{Jaro Mail 2.0}
+\date{Jan 2015}
+\title{Jaro Mail 3.0}
 \hypersetup{
   pdfkeywords={},
   pdfsubject={},
-  pdfcreator={Emacs 24.3.1 (Org mode 8.0.6)}}
+  pdfcreator={Emacs 24.3.1 (Org mode 8.2.4)}}
 \begin{document}
 
 \maketitle
@@ -48,13 +48,14 @@
 
 \fancyhf{}
 \fancyhead[L]{\rule[-2ex]{0pt}{2ex}\small JaroMail manual}
-\fancyhead[R]{\rule[-2ex]{0pt}{2ex}\small version 2.0}
+\fancyhead[R]{\rule[-2ex]{0pt}{2ex}\small version 3.0}
 \fancyfoot[C]{-- \thepage\ --}
 \fancyfoot[R]{\small Dyne.org Foundation}
 \fancyfoot[L]{\small Free Software Manual}
 
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
+
 
 \pagebreak
 
@@ -86,13 +87,13 @@ this manual is made available on \url{http://files.dyne.org/jaromail/jaromail-ma
 \item Stores e-mails locally in a reliable format (maildir)
 \item Integrates whitelisting and blacklisting, local and remote
 \item Can do search and backup by advanced expressions
-\item Automatically generates filter rules (procmail, sieve)
-\item Imports and exports VCard contacts to its addressbook
+\item Automatically generates filter rules (sieve)
+\item Imports and exports VCard contacts to addressbook
 \item Computes and shows statistics on mail traffic
-\item Encrypts password storage (using keyrings)
-\item Provides advanced maildir management tools (rmdupes, backup)
+\item Encrypted password storage using OS native keyrings
+\item Advanced maildir tools (merge, backup, address extraction)
 \item Defers connections for off-line operations
-\item Checks SSL certificates over (imap, smtp)
+\item Checks SSL/TLS certificates when fetching and sending mails
 \item Supports strong encryption messaging (GnuPG)
 \item Multi platform: GNU/Linux/BSD, Apple/OSX
 \item Old school, used by its author for the past 10 years
@@ -149,7 +150,7 @@ MTA & Mail Transport Agent & \href{http://www.fetchmail.info}{Fetchmail}\\
 LDA & Local Delivery Agent & Jaro Mail\\
 MDA & Remote Delivery Agent & \href{http://en.wikipedia.org/wiki/Sieve_(mail_filtering_language)}{Sieve}\\
 SMTP & Mail Delivery Agent & \href{http://msmtp.sourceforge.net}{MSmtp}\\
- & Search engine & \href{http://www.rpcurnow.force9.co.uk/mairix/}{Mairix}\\
+ & Search engine & \href{http://notmuchmail.org/}{Notmuch}\\
  & Addressbook & \href{http://abook.sf.net}{ABook}\\
 GPG & Cryptographic Agent & \href{http://www.gnupg.org}{GnuPG}\\
 \end{tabular}
@@ -200,9 +201,9 @@ Installing Jaro Mail once all dependencies are build is fairly
 easy: make a directory where all the emails and settings needs to be, change to the directory and init the environment:
 
 \begin{verbatim}
-$ mkdir $HOME/Mail
-$ cd $HOME/Mail
-$ jaro init
+mkdir $HOME/Mail
+cd $HOME/Mail
+jaro init
 \end{verbatim}
 
 Every installation of Jaro Mail is fully reentrant, meaning the directory where it gets initialised contains all maildirs, configurations, filters, whitelist, addressbooks and other necessary files.
@@ -234,6 +235,7 @@ The most important files to start configuring are:
 \item Aliases.txt : more email addresses one may receive on the configured accounts
 \item Filters.txt : Full set of mailinglist sorting rules
 \item Applications.txt : mime type associations to programs used to open attachments
+\item Mutt.txt : mutt specific custom configurations
 \end{itemize}
 
 \subsection{Send and receive mail}
@@ -298,22 +300,23 @@ Mail, here they are listed in order of priority
 Folder & What goes in there\\
 \hline
 \textbf{known} & Mails whose sender is known (Whitelist)\\
-\textbf{priv} & Unknown sender, we are the explicit destination\\
-\textbf{unsorted} & Unknown sender, we are in cc: or somehow reached\\
+\textbf{priv} & Unknown sender, we are among explicit recipients\\
+\textbf{unsorted} & Unknown sender, we are not among recipients\\
 \textbf{unsorted.ml} & From a mailinglist that we haven't filtered yet\\
 \textbf{zz.blacklist} & Mails whose sender is not desired (Blacklist)\\
+\textbf{zz.spam} & Mails that are tagged as spam (server-side)\\
+\textbf{zz.bounces} & Mail bounces like mailman and similar\\
 \end{tabular}
 \end{center}
 
-The advantage using such a folder organization is that every time we
-open up the mail reader we will be presented with something we are
-likely to be most interested in (known people replying our mails) and
-progressively, as we will have the time to scroll through, mails from
-"new people" or mass mailings of sort. Please note this organization
-does not includes spam, which is supposedly weeded out on the server
-via spamlists: White/Blacklisting has more to do with our own
-selection of content sources than with the generic protection from
-random pieces of information.
+The advantage using such a folder organization is that every time we open up the mail reader we will be presented with something we are likely to be most interested in (known people replying our mails) and progressively, as we will have the time to scroll through, mails from "new people" or mass mailings of sort.
+
+This setup is handy especially considering it produces \textbf{sieve} filters that can be uploaded to mail servers and processed server-side. Imagine having your email on a fixed computer, but occasionally checking it from a mobile phone: server-side filtering will save you time by presenting a clean INBOX of whitelisted contacts for the mobile phone use.
+
+Please note this organization does not includes spam, which is supposedly weeded out on the server via spamlists: White/Blacklisting has more to do with our own selection of content sources than with the generic protection from random pieces of information.
+
+At last, anything that is matched by filters configured in \textbf{Filters.txt} will be saved into the named maildir, whose name can be freely choosen.
+
 \subsection{Whitelist}
 \label{sec-5-2}
 
@@ -346,79 +349,8 @@ To blacklist an address instead one can use the [ \textbf{z} ] key while an
 e-mail is selected on the index: the sender indicated in the From:
 field will be downgraded to the very bottom of your priorities, closes
 to spam than the rest, the most infamous \textbf{zz.blacklist/} folder.
-
-To remove addresses from the blacklist, use \textbf{jaro abook blacklist} which will open the addressbook editor where you can delete, add and modify entries.
-\subsection{Addressbook}
-\label{sec-5-4}
-
-What we call addressbook here basically consists of both the whitelist
-and the blacklist. We store both lists in a unique database file in
-the Mail dir called *Addressbook*\footnote{Jaro Mail uses sqlite3 as its own database storage}.  In future we may add
-similar support for other addressbook formats that people use (GnuPG
-keyring, Evolution etc.)\footnote{On Apple/OSX systems Jaro Mail has access to the Mail.app addressbook, so all contacts known in your Mac will be automatically whitelisted}
-
-
-Both the white and blacklist can be edited using a text interface,
-this way you can delete entries for instance (removing them from the
-whitelist or blacklist), or add entries by hand (for instance manually
-from visit cards), as well you can change details directly (name and
-email). To edit the addressbook in Jaro Mail the \textbf{abook} command is
-available
-
-\begin{verbatim}
-jaro abook
-\end{verbatim}
-
-This will open the current whitelist for edit, but one can append
-"blacklist" to this commandline to open that one instead.
-
-To quickly dump to the console all names and addresses in the Jaro
-Mail addressbook, one can use the \textbf{list} command
-
-\begin{verbatim}
-$ jaro list
-\end{verbatim}
-
-To search a string across the addressbook, simply use the command
-search followed by a string, for instance:
-
-\begin{verbatim}
-$ jaro search autistici
-\end{verbatim}
-
-will list all addresses @autistici in your addressbook.
-
-Even more useful to interface with other addressbook
-software and mobile phones, you can use the \textbf{export} and \textbf{import}
-functions to transport your addressbook formatted as a series of
-VCards\footnote{A file format standard for electronic business cards, see: \url{http://en.wikipedia.org/wiki/VCard}}.
-
-\begin{verbatim}
-$ jaro export
-\end{verbatim}
-
-Will create or update the file in \textbf{Mail/jaro/addressbook.vcf}. On the
-other hand, the import command will include all entries found in a
-given VCard file that have at least one email address.
-
-\begin{verbatim}
-$ jaro import 00001.vcf
-\end{verbatim}
-
-Imports into the whitelist all contacts found in the 00001.vcf file.
-The VCard format is fully compatible with import and export of
-contacts in Android mobile phones.
-
-Apple Mac/OSX users can simply run the import command without any arguments
-
-\begin{verbatim}
-$ jaro import
-\end{verbatim}
-
-Imports all the contacts found in the system addressbook used by Mail.app,
-hence making them whitelisted.
 \subsection{Organization In Brief}
-\label{sec-5-5}
+\label{sec-5-4}
 
 Below a recapitulation of keys related to the white and blacklisting
 functionality, to be used in the e-mail index or when an e-mail is
@@ -431,21 +363,7 @@ List & Key & Function & Fields\\
 White & \textbf{a} & Add the sender address & From:\\
 White & \textbf{A} (shift) & Add all addresses & From: To: Cc:\\
 Black & \textbf{z} & Blacklist the sender & From:\\
-\end{tabular}
-\end{center}
-
-And here the addressbook commands that are available from the
-commandline:
-
-\begin{center}
-\begin{tabular}{ll}
-Command & Function\\
-\hline
-\textbf{abook} & edit the addressbook\\
-\textbf{list} & list the addressbook\\
-\textbf{search} & search a name or address\\
-\textbf{export} & export to a VCard file\\
-\textbf{import} & import from a VCard file\\
+Black & \textbf{Z} (shift) & Blacklist all addresses & From: To: Cc:\\
 \end{tabular}
 \end{center}
 \section{Workflow}
@@ -456,11 +374,10 @@ This section goes through a scenario of simple usage for Jaro Mail
 \subsection{Fetch and read your mail at home}
 \label{sec-6-1}
 
-As you acces your computer where Jaro Mail has been configured, you
-can open a Terminal and type:
+As you acces your computer where Jaro Mail has been configured, you can open a Terminal and type:
 
 \begin{verbatim}
-$ jaro fetch
+jaro fetch
 \end{verbatim}
 
 This will download all new mails.
@@ -468,20 +385,16 @@ This will download all new mails.
 If you have configured \textbf{fetchall} among the imap account options, then
 will delete them from the server, freeing online space.
 
-If you have configured the \textbf{keep} option, which is the default, Jaro
-Mail will only download the email that you have not yet read and in
-any case it won't delete anything from the server.
+If you have configured the \textbf{keep} option, which is the default, Jaro Mail will only download the email that you have not yet read and in any case it won't delete anything from the server. Remove the \textbf{keep} option to delete on the server all emails that are downloaded.
 
 \begin{verbatim}
-$ jaro
+jaro
 \end{verbatim}
 
 This will open the first folder containing unread emails, starting from
-the \textbf{known} folder, then \textbf{priv}, then all the rest.
+the \textbf{known} folder, then \textbf{priv}, then all the destinations specified by \textbf{Filters.txt} exactly in the ascending order they are listed in that configuration file..
 
-From there on, pressing \textbf{=} or \textbf{c} you can change the folder and
-explore your \textbf{priv} folder, the mailinglist ones as configured by your
-Filters.txt, as well your \textbf{unsorted} mails.
+From there on, pressing \textbf{=} or \textbf{c} you can change to other folders and your \textbf{unsorted} and \textbf{unsorted.ml} mails.
 \subsection{Write a new mail}
 \label{sec-6-2}
 
@@ -489,14 +402,14 @@ If you like to write a mail to someone, just write his/her own address
 as an argument to Jaro Mail
 
 \begin{verbatim}
-$ jaro compose friend@home.net
+jaro compose friend@home.net
 \end{verbatim}
 
 But if you don't remember the email of your friend, then you can just
 start \textbf{jaro compose} without options, then start typing the
 name or whatever you remember of it: pressing the \textbf{Tab} key a
 completion will help to remind what you are looking for, offering a
-list of options to choose from.
+list of options to choose from, taken from your whitelist addressbook.
 
 If you are writing an email with attachments (and you are sure their
 size is reasonably small to be circulated via email) you can launch
@@ -504,16 +417,30 @@ Jaro Mail with files as arguments, or even wildcards, and they will be
 automatically set as attachments, you can then specify its recipients
 
 \begin{verbatim}
-$ jaro picture01.jpg jingle02.mp3 ~/myicons/*
+jaro picture01.jpg jingle02.mp3 ~/myicons/*
 \end{verbatim}
 
 Will send a mail with various separate attachments (using MIME
 encapsulation): a picture, an hopefully small audio file and a list of
 icons which are all the files contained into the myicons/ directory.
 
-After composing the email you will be able to review all those
-attachments and eventually remove some of them by hand: move up and
-down across them and then click [ \textbf{D} ] to remove the selected one.
+The email is composed using a special \href{http://www.vim.org/}{Vim} configuration that facilitates justifying text to 72 columns using \textbf{ctrl-j}. After composing the email you will be able to review it, change the From: field (\textbf{ESC f}), the recipient on To: (\textbf{t}), add recipients in Cc: (\textbf{c}), change the subject string (\textbf{s}), add more attachments (\textbf{a}) or move over the existing ones and delete them (\textbf{D}).
+
+At last, when ready, pressing \textbf{y} will queue the email into the outbox, ready for sending.
+
+One can review at any time the sending queue (\textbf{outbox}), which is just another maildir from which emails can also be deleted to abort sending them:
+
+\begin{verbatim}
+jaro outbox
+\end{verbatim}
+
+Once sure the outbox contains emails that need to be sent, make sure the computer is connected to the Internet and issue the \textbf{send} command:
+
+\begin{verbatim}
+jaro send
+\end{verbatim}
+
+Jaro Mail will send all emails in outbox, one by one, listing their recipients and size while doing so. If successful, mails will be removed from the outbox and put into the \textbf{sent} folder.
 \subsection{Reply messages}
 \label{sec-6-3}
 
@@ -525,14 +452,14 @@ editor to compose your text.
 If the email you are replying has been sent to multiple recipients
 (for instance using multiple addresses in the Cc: or From: fields)
 they will all be included, but you will have the possibility to
-exclude them by hand editing those fields.
+exclude them by hand editing those fields before queuing to outbox, as explained in the previous paragraph.
 
 It is also possible to forward a message to someone else than the
 sender, for instance to submit it to his or her attention, or that of
 a mailinglist. To do that, you can use the [ \textbf{f} ] key which will
 present you with the full message and the possibility to write
 something on top of it, to describe its contents to its new
-recipients.
+recipients. Forwards include all attachments and are sent as attachments themselves, but this behavious can be changed as a confirmation to "send forward as attach" is asked.
 \subsection{Peek without downloading anything}
 \label{sec-6-4}
 
@@ -540,7 +467,7 @@ If you are around and like to see your new mails without downloading
 them, then you can use the \textbf{peek} function:
 
 \begin{verbatim}
-$ jaro peek
+jaro peek
 \end{verbatim}
 
 This will open the default configured IMAP account and folder over SSL
@@ -554,23 +481,14 @@ This functionality can be also very useful if you are from a slow
 connection and need to delete some email that is clogging it and that
 you are not able to download because of its size.
 
-\subsection{Send emails whenever possible}
-\label{sec-6-5}
-
-All the time you write an E-mail, Jaro Mail will save it into your
-outbox folder, waiting for the right moment to send it. In fact you
-will have to tell it the right moment by running the \textbf{send} command:
+The peek command will automatically open the INBOX, but also other remote imap folders can be specified, like for instance \textbf{priv} or \textbf{unsorted}, in case the sieve filters generated by Jaro Mail are uploaded on the server. To have a list of imap folders on the server a command is also available:
 
 \begin{verbatim}
-$ jaro send
+jaro imap listfolders
 \end{verbatim}
 
-This will authenticate with your SMTP and send all your emails to
-destination. This way even if you are off-line you will always be able
-to write emails and eventually bring them around for sending them
-whenever possible.
 \subsection{Save important emails for later}
-\label{sec-6-6}
+\label{sec-6-5}
 
 Sometimes one can be on the rush while reading emails (local or via
 imap) and flagging them as important can be useful to keep focus on
@@ -589,7 +507,7 @@ also be edited with annotations on the task they refer to, for
 instance using the [ \textbf{e} ] key, without affecting the original
 message.
 \subsection{Workflow in brief}
-\label{sec-6-7}
+\label{sec-6-6}
 
 Below a recapitulation of keys commonly used in our workflow
 
@@ -600,6 +518,7 @@ Key & Function\\
 \textbf{m} & Compose a new message\\
 \textbf{Tab} & Complete addresses and folders input\\
 \textbf{r} & Reply to the sender of a message\\
+\textbf{y} & Queue a message for sending in outbox\\
 \textbf{f} & Forward a message to new recipients\\
 \textbf{=} & List all filtered maildir folders\\
 \textbf{c} & Change to another folder\\
@@ -609,153 +528,357 @@ Key & Function\\
 \textbf{C} & Copy a message to another folder\\
 \end{tabular}
 \end{center}
-\section{Searching}
+
+\section{Addressbook}
 \label{sec-7}
 
-Searching across all your emails it is as important as demanding of
-a task. Jaro Mail implements it using Mairix, a portable program
-written by a bunch of talented programmers in portable C language.
+Addressbooks are the files storing the whitelist, the blacklist and optionally other custom lists of addresses. The format we use is native \textbf{abook} database files, by convention in \emph{\$JAROMAILDIR/whitelist.abook} and \emph{\$JAROMAILDIR/blacklist.abook}. More custom addressbooks can be used by specifying them using \textbf{-l} on the commandline, for instance \textbf{-l family} will query the \emph{\$JAROMAILDIR/family.abook} addressbook; when not used, \textbf{whitelist} is the default.
 
-After the indexing is done, you can use the command \textbf{jaro search}
-followed by any number of arguments to run the search.
+Addressbooks can be edited using a interactive console interface, for instance to add or delete entries by hand: use the \textbf{abook} command and optionally the \textbf{-l} option.
 
-If one of the arguments given to the search command is the name of
-an existing email directory folder in \textasciitilde{}/Mail, then the search will
-be on contents of the folder.
+\begin{verbatim}
+jaro abook -l whitelist
+\end{verbatim}
 
-More than one word is aloud to refine the match (they are all AND'ed
-together), plus a number of tricks can be done: every single word
-following the command can be a particular expression that indicates
-in which header to search and for what.
+This will open the current whitelist for edit. To edit the blacklist use \textbf{-l blacklist} instead.
 
-Here below a short reference of possible expressions:\footnote{For a reference on how the date range works in search expressions, you can look into the \textbf{Backup} section in this manual.}
+To quickly dump to the console all names and addresses in the Jaro
+Mail addressbook, one can use the \textbf{extract} command
+
+\begin{verbatim}
+jaro extract -l whitelist
+\end{verbatim}
+
+To match a string across the addressbook, simply use the composite
+command \textbf{search addr} followed by strings, for instance:
+
+\begin{verbatim}
+jaro search addr dyne -l whitelist
+\end{verbatim}
+
+will list all addresses containing 'dyne' in your whitelist.
+
+\subsection{Address lists}
+\label{sec-7-1}
+
+Jaro Mail makes it easy to handle lists of addresses as plain text \textbf{address lists} composed by a '\emph{Name <email>}' entries on each new line.
+
+Entries inside address lists are newline separated strings conforming to the RFC822 standard and their charset encoding must be UTF-8.   We use this simple interchange format of address lists as input or output of various commands, taking advantage of console piping from stdin to stdout.
+
+Address lists are the output of the previously mentioned \textbf{search addr} command, as well of the \textbf{extract} command:
+
+\begin{verbatim}
+jaro extract -l whitelist
+\end{verbatim}
+
+Will print to stdout the address list of all entries in the whitelist addressbook, one on each new line.
+
+\begin{verbatim}
+jaro extract date:1y.. and folder:known
+\end{verbatim}
+
+Will print the address list of all unique addresses in the headers of emails found by the search expression '\emph{date:1y.. and folder:known}', matching all messages stored in the '\emph{known}' folder and not older than 1 year.
+
+\begin{verbatim}
+jaro extract priv
+\end{verbatim}
+
+Will print the address list of all unique addresses contained in the headers of emails stored in the maildir '\emph{priv}', which is found in \$JAROMAILDIR. A full path to a maildir outside of \$JAROMAILDIR can also be used.
+
+The \textbf{import} command is complementary to extraction: it reads an address list from stdin and imports it inside an addressbook specified using '-l' or an address list file provided as argument, removing duplicates.
+
+\begin{verbatim}
+jaro extract unsorted | jaro import -l blacklist
+\end{verbatim}
+
+Will extract all addresses found in unsorted (the maildir collecting all non-mailinglist emails in which we are not an explicit recipient) and put them into our blacklist.
+\subsection{VCards}
+\label{sec-7-2}
+
+VCard is an exchange format useful to interface with other addressbook software and mobile phones. Jaro Mail supports is via the \textbf{extract} command followed by a vcard file argument:
+
+\begin{verbatim}
+jaro extract 0001.vcard
+\end{verbatim}
+
+Will print out the address list of all entries found in the file '\emph{0001.vcard}'.
+
+The special command \textbf{vcard} can be used to convert an address list from stdin to a VCard file, exporting entries used inside Jaro Mail to a format supported by the majority of addressbook programs:
+
+\begin{verbatim}
+jaro extract -l whitelist | jaro vcard > whitelist.vcard
+\end{verbatim}
+
+Will save in the file '/whitelist.vcard'/ all addresses stored inside the whitelist addressbook. This is done concatenating multiple commands: the address list extracted from the whitelist is piped as stdin to the vcard command, whose output is redirected to a file.
+\subsection{Addressbook in brief}
+\label{sec-7-3}
+
+Here a roundup on the addressbook commands that are available from the commandline. Arguments '-l abook' take the string to identify
 
 \begin{center}
-\begin{tabular}{ll}
-word & match word in message body and major headers\\
-t:word & match word in To: header\\
-c:word & match word in Cc: header\\
-f:word & match word in From: header\\
-a:word & match word in To:, Cc: or From: headers (address)\\
-s:word & match word in Subject: header\\
-b:word & match word in message body\\
-m:word & match word in Message-ID: header\\
-n:word & match name of attachment within message\\
-F:flags & match on message flags (s=seen,r=replied,f=flagged,-=negate)\\
-p:substring & match substring of path\\
-d:start-end & match date range\\
-z:low-high & match messages in size range\\
-bs:word & match word in Subject: header or body (or any other group of prefixes)\\
-s:word1,word2 & match both words in Subject:\\
-s:word1/word2 & match either word or both words in Subject:\\
-s:\textasciitilde{}word & match messages not containing word in Subject:\\
-s:substring= & match substring in any word in Subject:\\
-s:\^{}substring= & match left-anchored substring in any word in Subject:\\
-s:substring=2 & match substring with <=2 errors in any word in Subject:\\
+\begin{tabular}{lll}
+Command & Arguments & Function (print on stdout, import from stdin)\\
+\hline
+\textbf{abook} & -l listname & edit the addressbook (default whitelist)\\
+\textbf{extract} & -l listname & print address list of all entries in addressbook\\
+\textbf{extract} & search expr & print address list of messages found by search\\
+\textbf{extract} & maildir & print address list of all mails in maildir\\
+\textbf{extract} & gpg keyring & print address list of gpg public keyring\\
+\textbf{extract} & gpg pubkey & print address list of gpg key signatures\\
+\textbf{extract} & vcard file & print address list of entries in VCard file\\
+\textbf{vcard} &  & print VCard from address list on stdin\\
+\textbf{import} & -l listname & import address list from stdin to addressbook\\
+\textbf{import} & filename & import address list into an address list file\\
+\textbf{search addr} & (-l) string & print address list of matches in addressbook\\
 \end{tabular}
 \end{center}
 
-If none of the arguments is an email folder existing in \textasciitilde{}/Mail then
-the search will be run over addressbook whitelist entries, returning
-addresses of found contacts.
 
-\section{Security}
+\section{Searching}
 \label{sec-8}
 
-\subsection{Password storage}
+Searching across all your emails it is as important as demanding of a task. Jaro Mail implements it using Notmuch which is relying on the Xapian search engine. To index and tag all your downloaded emails use:
+
+\begin{verbatim}
+jaro index
+\end{verbatim}
+
+This will take a while and increase the size of the storage, but will definitely come useful when in need of searching rapidly across all available emails.
+
+Searching has also an interactive interface called \textbf{alot} which pops up to show search results and browse through them, refine the terms and in general operate on emails with the usual keys. One can also reply to emails directly from alot:
+
+\begin{verbatim}
+jaro search
+\end{verbatim}
+
+To restrict the search to a single folder, one can use the \textbf{folder:} prefix to search terms. Tags can be used also with \textbf{tag:} as well dates can be specified with ranges using \textbf{date:}. Consecutive string expressions are aloud to refine the search match, connected with logical and/or, plus also the header to search can be indicated, as for instance \textbf{from:} or \textbf{to:}. Read more about this below in the \emph{Search term} and \emph{Date and time search} sections (extracts from the \textbf{notmuch-search-terms} manpage).
+
+
+If the first argument following the search command is \textbf{addr} then the search will be run on the whitelist addressbook entries instead. Also the blacklist can be searched this way using \textbf{-l blacklist}:
+
+\begin{verbatim}
+jaro search addr -l blacklist spammer-joe
+\end{verbatim}
+
+Will list all addresses matching the string 'spammer-joe' inside the \emph{blacklist} addressbook.
+
+\subsection{Combining terms}
 \label{sec-8-1}
 
-Our MUA (Mutt) and our MTA (Fetchmail) normally required the user to
-input the email account password every time or write it clear inside a
-plain text file, jeopardizing the secrecy of it.
+In addition to individual terms, multiple terms can be combined with Boolean operators ( \textbf{and}, \textbf{or}, \textbf{not} , etc.). Each term in the query will be implicitly connected by a logical AND if no explicit operator is provided.
 
-But most desktops nowadays have a keyring that stores passwords that
-are often used during a session, saving the user from retyping them
-every time.
+Parentheses can also be used to control the combination of the Boolean operators, but will have to be protected from interpretation by the shell, (such as by putting quotation marks around any parenthesized expression).
+\subsection{Search terms}
+\label{sec-8-2}
 
-Jaro Mail provides an interesting (and long awaited) feature even for
-those who are already using Mutt for their email: \textbf{it stores passwords
-securely}. This is done in different ways depending from the operating
-system is being running on.
+The search terms can consist of free-form text (and quoted phrases) which will match all messages that contain all of the given terms/phrases in the body, the subject, or any of the sender or recipient headers.
 
-Jaro Mail will use the default keyring whenever present to store all
-new passwords for each account used: the first time will prompt for a
-password and, while using it, will save it in relation to the
-particular account. This way the user can simply authenticate into the
-keyring at login and, while managing such sensitive informations using
-OS specific tools, Jaro Mail can be launched without the tedious task
-of a password input every time e-mails are being checked.
+As a special case, a search string consisting of exactly a single asterisk "*" will match all messages.
+
+In addition to free text, the following prefixes can be used to force terms to match against specific portions of an email, (where <brackets> indicate user-supplied values):
+
+\begin{verbatim}
+from:<name-or-address>
+to:<name-or-address>
+subject:<word-or-quoted-phrase>
+attachment:<word>
+tag:<tag> (or is:<tag>)
+id:<message-id>
+thread:<thread-id>
+folder:<directory-path>
+date:<since>..<until>
+\end{verbatim}
+
+The \emph{from:} prefix is used to match the name or address of the sender of an email message.
+
+The \emph{to:} prefix is used to match the names or addresses of any recipient of an email message, (whether To, Cc, or Bcc).
+
+Any term prefixed with \emph{subject:} will match only text from the subject of an email. Searching for a phrase in the subject is supported by including quotation marks around the phrase, immediately following \emph{subject:}.
+
+The \emph{attachment:} prefix can be used to search for specific filenames (or extensions) of attachments to email messages.
+
+For \emph{tag:} and \emph{is:} valid tag values include \emph{inbox} and \emph{unread} by default for new messages added by \emph{notmuch new} as well as any other tag values added manually with \emph{notmuch tag}.
+
+For \emph{id:}, message ID values are the literal contents of the Message-ID: header of email messages, but without the '<', '>' delimiters.
+
+The \emph{thread:} prefix can be used with the thread ID values that are generated internally by notmuch (and do not appear in email messages).  These thread ID values can be seen in the first column of output from \emph{notmuch search}
+
+The \emph{folder:} prefix can be used to search for email message files that are contained within particular directories within the mail store. If the same email message has multiple message files associated with it, it's sufficient for a match that at least one of the files is contained within a matching directory. Only the directory components below the top-level mail database path are available to be searched.
+
+\subsection{Date and time search}
+\label{sec-8-3}
+
+See \emph{DATE AND TIME SEARCH} below for details on the range expression,
+and supported syntax for <since> and <until> date and time expressions.
+
+The \emph{date:} prefix can be used to restrict the results to only messages within a particular time range (based on the Date: header) with a range syntax of:
+
+\begin{verbatim}
+date:<since>..<until>
+\end{verbatim}
+
+The syntax \emph{<initial-timestamp>..<final-timestamp>} can be represented using the number of seconds since 1970-01-01 00:00:00 UTC.
+
+The search syntax also understands a variety of standard and natural ways of expressing dates and times, both in absolute terms '\emph{2012-10-24}' and in relative terms '\emph{yesterday}'. Any number of relative terms can be combined '\emph{1 hour 25 minutes}' and an absolute date/time can be combined with relative terms to further adjust it. A non-exhaustive description of the syntax supported for absolute and relative terms is given below.
+
+\subsubsection{The range expression}
+\label{sec-8-3-1}
+
+\begin{verbatim}
+date:<since>..<until>
+\end{verbatim}
+
+The above expression restricts the results to only messages from <since> to <until>, based on the Date: header.
+
+<since> and <until> can describe imprecise times, such as "yesterday". In this case, <since> is taken as the earliest time it could describe (the beginning of yesterday) and <until> is taken as the latest time it could describe (the end of yesterday).  Similarly, date:january..february matches from the beginning of January to the end of February.
+
+Currently, we do not support spaces in range expressions. You can replace the spaces with '$\backslash$\_', or (in most cases) '-', or (in some cases) leave the spaces out altogether. Examples in this man page use spaces for clarity.
+
+Open-ended ranges are supported (since Xapian 1.2.1), i.e. it's possible to specify date:..<until> or date:<since>.. to not limit the start or end time, respectively.
+
+Entering date:expr without ".." (for example date:yesterday) won't work, as it's not interpreted as a range expression at all. You can achieve the expected result by duplicating the expr both sides of ".." (for example date:yesterday..yesterday).
+\subsubsection{Relative date and time}
+\label{sec-8-3-2}
+
+\begin{verbatim}
+[N|number]
+   (years|months|weeks|days|hours|hrs|minutes|mins|seconds|secs) [...]
+\end{verbatim}
+
+All refer to past, can be repeated and will be accumulated.
+
+Units can be abbreviated to any length, with the otherwise ambiguous single m being m for minutes and M for months.
+
+Number can also be written out one, two, \ldots{}, ten, dozen, hundred.  Additionally, the unit may be preceded by "last" or "this" (e.g., "last week" or "this month").
+
+When combined with absolute date and time, the relative date and time specification will be relative from the specified absolute date and time.
+
+Examples:
+
+\begin{verbatim}
+5M2d
+\end{verbatim}
+
+\begin{verbatim}
+two weeks
+\end{verbatim}
+\subsubsection{Supported absolute time formats}
+\label{sec-8-3-3}
+
+\begin{verbatim}
+H[H]:MM[:SS]
+[(am|a.m.|pm|p.m.)]
+H[H] (am|a.m.|pm|p.m.)
+HHMMSS
+now
+noon
+midnight
+\end{verbatim}
+
+Examples:
+
+\begin{verbatim}
+17:05
+\end{verbatim}
+
+\begin{verbatim}
+5pm
+\end{verbatim}
+\subsubsection{Supported absolute date formats}
+\label{sec-8-3-4}
+
+\begin{verbatim}
+YYYY-MM[-DD]
+DD-MM[-[YY]YY]
+MM-YYYY
+M[M]/D[D][/[YY]YY]
+M[M]/YYYY
+D[D].M[M][.[YY]YY]
+D[D][(st|nd|rd|th)] Mon[thname] [YYYY]
+Mon[thname] D[D][(st|nd|rd|th)] [YYYY]
+Wee[kday]
+\end{verbatim}
+
+Month names can be abbreviated at three or more characters.
+
+Weekday names can be abbreviated at three or more characters.
+
+Examples:
+
+\begin{verbatim}
+2012-07-31
+\end{verbatim}
+
+\begin{verbatim}
+31-07-2012
+\end{verbatim}
+
+\begin{verbatim}
+7/31/2012
+\end{verbatim}
+
+\begin{verbatim}
+August 3
+\end{verbatim}
+\subsubsection{Time zones}
+\label{sec-8-3-5}
+
+\begin{verbatim}
+(+|-)HH:MM
+\end{verbatim}
+
+\begin{verbatim}
+(+|-)HH[MM]
+\end{verbatim}
+
+Some time zone codes.
+
+Examples:
+
+\begin{verbatim}
+UTC
+EET
+\end{verbatim}
+\section{Security}
+\label{sec-9}
+
+\subsection{Password storage}
+\label{sec-9-1}
+
+Our MUA (Mutt) and our MTA (Fetchmail) normally required the user to input the email account password every time or write it clear inside a plain text file, jeopardizing the secrecy of it.
+
+But most desktops nowadays have a keyring that stores passwords that are often used during a session, saving the user from retyping them every time.
+
+Jaro Mail provides an interesting (and long awaited) feature even for those who are already using Mutt for their email: \textbf{it stores passwords securely}. This is done in different ways depending from the operating system is being running on.
+
+Jaro Mail will use the default keyring whenever present to store all new passwords for each account used: the first time will prompt for a password and, while using it, will save it in relation to the particular account. This way the user can simply authenticate into the keyring at login and, while managing such sensitive informations using OS specific tools, Jaro Mail can be launched without the tedious task of a password input every time e-mails are being checked.
 
 On \textbf{Apple/OSX} the default internal keyring is being used.
 
-On \textbf{GNU/Linux} gnome-keyring is supported if found, else JaroMail will
-revert to use its own encrypted\footnote{The keyring is encrypted using weak symmetric
+On \textbf{GNU/Linux} gnome-keyring is supported if found, else JaroMail will revert to use its own encrypted\footnote{The keyring is encrypted using weak symmetric
 encryption via GnuPG, the only protection for the data inside then is
 the password memorized by the used.
 
-To explicitly change a password one can operate the default keyring
-manager or use the command \textbf{jaro passwd -a imap.default} (or other
-accounts) which will prompt to set for a new password even if an old
-one is known.} database called \textbf{keyring}. Every time
-a password will be retrieved or saved, the keyring password will be
-asked.
-\subsection{Temporary directory}
-\label{sec-8-2}
-
-For its password management system to work, Jaro Mail often requires
-to write down passwords in clear text, at least until software like
-Fetchmail and Mutt is updated to avoid such a stupid need.
-
-The way we overcome this limitation is by using a temporary directory,
-making sure that all sensitive files created in it are deleted as soon
-as possible, as well that no other user on the system has access to
-them, but still we can't deny that an administrator access them.
-
-If a ramdisk is present on the system it will be used by Jaro Mail:
-that is a "volatile" directory in RAM whose contents are never written
-on the disk. This prevents an intruder to seize the machine and
-recover deleted data from unused sectors on the hard-disk, because all
-data saved in RAM gets irremediably lost after approximately 2 minutes
-the machine is switched off for such an operation.
-
-On \textbf{Apple/OSX} systems to enable this feature one must explicitly
-activate the ramdisk using the command
-
-\begin{verbatim}
-$ jaro ramdisk open
-\end{verbatim}
-
-This will create and mount /Volume/JaroTmp which is 10MB large and
-will be used for our delicate security transactions.
-
-On \textbf{GNU/Linux} systems this is done automatically if the shared memory
-volume is available and writable (/dev/shm) without the need to use
-the ramdisk command.
-
-For the aforementioned reasons of writing passwords in clear text,
-Jaro Mail also requires the use of safe deletion techniques as those
-provided by \textbf{srm} (on Apple/OSX) and \textbf{wipe} (on GNU/Linux) every time
-a file is deleted. So even if a ramdisk is not activated it will be
-very hard if not impossible for an attacker to retreive information
-from hard-disk sectors or using a cold-boot attack on RAM.
+To explicitly change a password one can operate the default keyring manager or use the command \textbf{jaro passwd} (and specify other acconts using \textbf{-a accountname})) which will prompt to set for a new password even if an old one is known.} database called \textbf{keyring}. Every time a password will be retrieved or saved, the keyring password will be asked. However, it is recommended to use Gnome-Keyring over the native one, which has still some glitches.
 \subsection{A tip for GNU/Linux users}
-\label{sec-8-3}
+\label{sec-9-2}
 
-Those using a GNU/Linux system might want to have a look at our other
-software \textbf{Tomb, the Crypto Undertaker} \footnote{\url{http://tomb.dyne.org}
+Those using a GNU/Linux system might want to have a look at our other software \textbf{Tomb, the Crypto Undertaker} \footnote{\url{http://tomb.dyne.org}
 
-Using a light combination of scripts between Jaro Mail and Tomb is
-possible to achieve a strong level of personal security, definitely
-above the average.
+Using a light combination of scripts between Jaro Mail and Tomb is possible to achieve a strong level of personal security, definitely above the average.
 
-For more information about Tomb please refer to its own documentation.} which takes care of quick mount
-and umount of an encrypted volume when desired and includes a \textbf{hook}
-mechanism to automatize the execution of commands to make a directory
-inside the encrypted volume immediately available in the user's home.
+In particular, Jaro Mail does not needs system-wide installation, but can be installed and used in a way that makes it totally self-contained and transportable across systems inside a Tomb. When installing, just specify a prefix that is writable by the user, then make sure the \textbf{JAROMAILDIR} environmental variable points to the path where downloaded maildirs must be stored and the \textbf{JAROWORKDIR} environmental variable points to the path where jaromail was installed:
+
+\$ cd JaroMail-3.0
+\$ make
+\$ PREFIX=/media/secrets.tomb/usr make install
+\$ export JAROWORKDIR=/media/secrets.tomb/usr/share/jaromail
+\$ export JAROMAILDIR=/media/secrets.tomb/Mail
+
+For more information about Tomb please refer to its own documentation: environmental variables can also be set via hooks and file paths can be automatically overlayed into \$HOME when the Tomb is open.} which takes care of quick mount and umount of an encrypted volume when desired and includes a \textbf{hook} mechanism to automatize the execution of commands to make a directory inside the encrypted volume immediately available in the user's home.
 
 \section{Storage and backup}
-\label{sec-9}
-
+\label{sec-10}
 
 Most existing e-mail systems have their own storage format which is
 often over-complicated and forces us to convert our archives to it.
@@ -764,12 +887,10 @@ Jaro Mail stores emails using the well documented format \textbf{Maildir}
 which is common to many other free and open source e-mail software and
 was developed and well documented by D.J. Bernstein.
 
-
 We can safely say that the Maildir format to store e-mails will stay
 the same and well compatible in 10 years from now, if not more, mostly
 because of its simplicity: that's what we need the most from a storage
 format after all.
-
 
 Quoting him about the wonders of this format:
 
@@ -798,7 +919,7 @@ users.}
 \end{quote}
 
 \subsection{Merge maildir}
-\label{sec-9-1}
+\label{sec-10-1}
 
 Jaro Mail can safely merge two different maildirs basically gathering
 all e-mails stored in them into a unique place. This is done using two
@@ -806,7 +927,7 @@ arguments, both maildir folders: the first is the source and the
 second is the destination e-mails from both will be gathered:
 
 \begin{verbatim}
-$ jaro merge ml.saved-mails ml.global-archive
+jaro merge ml.saved-mails ml.global-archive
 \end{verbatim}
 
 The above command will move all emails stored inside the maildir
@@ -814,75 +935,64 @@ folder "ml.saved-mails" to the other maildir folder
 "ml.global-archive". Upon success the first argument "ml.saved-mails"
 will be deleted and all its contents will be found in
 "ml.global-archive".
-
-\subsection{Remove duplicates from maildir}
-\label{sec-9-2}
-
-As a result of a merge or a multiple fetch of e-mails, it can often
-occur that a maildir contains duplicates which are also highlighted in
-red in the e-mail index and, if many, can be tedious to eliminate by
-hand. Jaro Mail offers the automatic functionality of removing all
-duplicate emails from a maildir folder using the \textbf{rmdupes} command:
-
-\begin{verbatim}
-$ jaro rmdupes ml.overflow
-\end{verbatim}
-
-Will look for all duplicates emails in the "ml.overlow" maildir,
-matching them by their unique \textbf{Message-Id:} header and a SHA1 hash of
-their content\footnote{The standard utility 'formail -D' is used for this operation}, and delete all duplicates for mails that
-are present more than once.
 \subsection{Backup mails older than}
-\label{sec-9-3}
+\label{sec-10-2}
 
-To facilitate the separate storage of e-mails that are too old to be
-of any interest, but still might be useful to be retrieved just in
-case, Jaro Mail implements a function that will move all messages
-older than a certain date out of a maildir folder into another.
+To facilitate the separation of stored email files across maildirs, for instance to move from a maildir to another all those mails that are older than a certain period, Jaro Mail implements the \textbf{backup} command. Backup will move all messages matched by a search expression (see previous section) into another maildir folder and delete them from the original.
 
 \begin{verbatim}
-$ jaro backup ml.recent ml.yearsago d:5y-1y
+jaro backup old.backup date:..3y
 \end{verbatim}
 
-The above command will move out of the "ml.recent" maildir all e-mails
-that are older than 1 year (up to 5 years before, can be more) and
-stores them into the "ml.yearsago" maildir which for instance could be
-present on an external usb hard-disk or any other backup device,
-helping us to save space on the desktop in use.
+The above command will move out all indexed emails that are older than
+3 years into the maildir 'old.backup', which must exist already: it
+could be present on an external usb hard-disk or any other backup
+device, helping us to save space on the desktop in use.
 
 \begin{verbatim}
-$ jaro backup unsorted d:may98-may99 unsorted.week.old
+jaro backup /media/backup.tomb/old.unsorted folder:unsorted and date:..1y
 \end{verbatim}
 
-Will move all emails found in any folder that are dated between May
-1998 and May 1999. Here below more examples of date range expressions:
-d:2002-2003 d:may2002-2003 d:2002may-2003 d:feb98-15may99 d:feb98-15may1999 d:2feb98-1y d:02feb98-1y d:970617-20010618
-
+Will move all emails found in the 'unsorted' folder that are older than one year inside the old.unsorted folder in our mounted backup tomb.
 \subsection{Filter a maildir}
-\label{sec-9-4}
+\label{sec-10-3}
 
 If filters are updated or one desires to import a maildir into Jaro
 Mail processing it through its filters, the \textbf{filter} command is
-provided to (re)filter a maildir.
+provided to (re)filter a maildir. First edit \textbf{Filters.txt} with matches for the to: (which includes cc:) and from: header fields, then run:
 
 \begin{verbatim}
-$ jaro filter my-old-maildir
+jaro filter my-old-maildir
 \end{verbatim}
 
 Beware that filtering is a lengthy operation, especially on big
 maildirs: it will first pass all messages found through your filters,
-refiling them to folders (even creating duplicates) and then prune all
-the affected folders to remove the duplicates.
+refiling them to folders (which may create duplicates if filenames are different).
 
 It is possible to filter any maildir, also those coming from other
-programs of course. Just copy the maildir inside the \$JAROMAILDIR
-directory (typically \textasciitilde{}/Mail) and then refer to it by its name: all
-arguments to the filter command are relative to that directory.
-\section{Usability tips}
-\label{sec-10}
+programs of course. Best practice is to copy the maildir inside the
+\$JAROMAILDIR directory (typically \textasciitilde{}/Mail) and then refer to it by its
+name: all arguments to the filter command can be relative to that
+directory.
+\subsection{Storage in brief}
+\label{sec-10-4}
+
+Here a recap of the commands dealing with maildir storage in Jaro Mail. Please note the syntax is subject to change in future:
+
+\begin{center}
+\begin{tabular}{ll}
+Command & Syntax\\
+\hline
+backup & destination-maildir search-expression(s)\ldots{}\\
+merge & origin-maildir destination-maildir\\
+filter & maildir\\
+\end{tabular}
+\end{center}
+\section{Advanced usage}
+\label{sec-11}
 
 \subsection{Send anonymous emails}
-\label{sec-10-1}
+\label{sec-11-1}
 
 Some people live difficult situations sometimes and are in need to
 send anonymous emails: for instance those endangered by the
@@ -919,7 +1029,7 @@ To change the From: field after composition, just when headers and
 attachments are shown in Mutt, press \textbf{[ESC]} and then \textbf{f}, then
 type the special sender address \textbf{anon@mixmaster} and press \textbf{[Enter]}.
 \subsection{Zsh commandline completion}
-\label{sec-10-2}
+\label{sec-11-2}
 
 For Zsh users out there there is a completion recipe that can
 facilitate the use of Jaro Mail by adding tab completion on the
@@ -930,7 +1040,7 @@ To activate the completion move the file \textbf{src/completion/\_jaromail}
 into the path where zsh loads vendor completions, typically that is
 \textbf{/usr/share/zsh/vendor-completions}.
 \subsection{Quickly send a file via email on Apple/OSX}
-\label{sec-10-3}
+\label{sec-11-3}
 
 To right-click on a file and send it via email attach using Jaro
 Mail you must create a "Service" using the application
@@ -964,7 +1074,7 @@ be already configured as attach.
 
 
 \section{Acknowledgements}
-\label{sec-11}
+\label{sec-12}
 
 Jaro Mail would have never been possible without the incredible amount
 of Love shared by the free and open source community, since it is
@@ -986,7 +1096,7 @@ people that contributed to free and open source software that Jaro
 Mail makes use of.
 
 \subsection{License}
-\label{sec-11-1}
+\label{sec-12-1}
 
 The following copyright notice applies to this manual, the software
 included is licensed under the same or different GNU GPL or BSD
@@ -1004,7 +1114,7 @@ notice are preserved on all copies.
 \end{verbatim}
 
 \subsection{Jaro Mail credits}
-\label{sec-11-2}
+\label{sec-12-2}
 
 Jaro Mail is written and maintained by Denis Roio (aka Jaromil) it
 started from the intention to share his own 10 years old e-mail setup,
@@ -1017,7 +1127,7 @@ and Fabio Pietrosanti for early testing and debugging.
 The email envelop NyanCat graphics is kindly contributed by the
 Société ECOGEX.
 \subsection{Mutt credits}
-\label{sec-11-3}
+\label{sec-12-3}
 
 Please note that this is by no means an exhaustive list of all the
 persons who have been contributing to Mutt.  Please see the
@@ -1036,37 +1146,34 @@ Copyright (C) 1999-2002 Tommi Komulainen <Tommi.Komulainen@iki.fi>
 Copyright (C) 2000-2004 Edmund Grimley Evans <edmundo@rano.org>
 Copyright (C) 2006-2008 Rocco Rutte <pdmef@gmx.net>
 \end{verbatim}
-\subsection{Mairix credits}
-\label{sec-11-4}
+\subsection{Notmuch credits}
+\label{sec-12-4}
 Jaro Mail includes a search engine for e-mails that is also licensed
-GNU GPL v2. Here below the names of the copyright holders and all
+GNU GPL v3+. Here below the names of the copyright holders and all
 those who have written it:
 
 \begin{verbatim}
-Copyright (C) Richard P. Curnow  2002,2003,2004,2005,2006,2007,2008
-Copyright (C) Sanjoy Mahajan 2005
-Copyright (C) James Cameron 2005
-Copyright (C) Paul Fox 2006
+Carl Worth <cworth@cworth.org> is the primary author of Notmuch.
+But there's really not much that he's done. There's been a lot of
+standing on shoulders here:
+
+William Morgan deserves credit for providing the primary inspiration
+for Notmuch with his program Sup (http://sup.rubyforge.org/).
+
+Some people have contributed code that has made it into Notmuch
+without their specific knowledge (but with their full permission
+thanks to the GNU General Public License). This includes:
+
+Brian Gladman (with Mikhail Gusarov <dottedmag@dottedmag.net>)
+	Implementation of SHA-1 (nice and small) (libsha1.c)
+
+Please see the various files in the Notmuch distribution for
+individual copyright statements.
 \end{verbatim}
-
-Mairix received contributions from: Anand Kumria André Costa, Andreas
-Amann, Andre Costa, Aredridel, Balázs Szabó, Bardur Arantsson,
-Benj. Mako Hill, Chris Mason, Christoph Dworzak, Christopher Rosado,
-Chung-chieh Shan, Claus Alboege, Corrin Lakeland, Dan Egnor, Daniel
-Jacobowitz, Dirk Huebner, Ed Blackman, Emil Sit, Felipe Gustavo de
-Almeida, Ico Doornekamp, Jaime Velasco Juan, James Leifer, Jerry
-Jorgenson, Joerg Desch, Johannes Schindelin, Johannes Weißl, John
-Arthur Kane, John Keener, Jonathan Kamens, Josh Purinton, Karsten
-Petersen, Kevin Rosenberg, Mark Hills, Martin Danielsson, Matthias
-Teege, Mikael Ylikoski, Mika Fischer, Oliver Braun, Paramjit Oberoi,
-Paul Fox, Peter Chines, Peter Jeremy, Robert Hofer, Roberto Boati,
-Samuel Tardieu, Sanjoy Mahajan, Satyaki Das, Steven Lumos, Tim Harder,
-Tom Doherty, Vincent Lefevre, Vladimir V. Kisil, Will Yardley,
-Wolfgang Weisselberg.
 \subsection{Fetchmail credits}
-\label{sec-11-5}
+\label{sec-12-5}
 
-Fetchmail is also licensed GNU GPL v2
+Fetchmail is licensed GNU GPL v2
 
 \begin{verbatim}
 Copyright (C) 2002, 2003 Eric S. Raymond
@@ -1075,7 +1182,7 @@ Copyright (C) 2005 - 2006, 2010 Sunil Shetye
 Copyright (C) 2005 - 2010 Matthias Andree
 \end{verbatim}
 \subsection{MSmtp credits}
-\label{sec-11-6}
+\label{sec-12-6}
 
 MSmtp is developed and maintained by Martin Lambers.
 
@@ -1084,7 +1191,7 @@ General Public License as published by the Free Software Foundation;
 either version 3 of the License, or (at your option) any later
 version.
 \subsection{Statistics modules}
-\label{sec-11-7}
+\label{sec-12-7}
 We are including some (experimental, still) modules for statistical
 visualization using JQuery libraries. The first module inspiring us
 to implement such a functionality is Timecloud, then other modules
@@ -1116,115 +1223,115 @@ licensed under MIT (filamentgroup.com/examples/mit-license.txt)
 \end{verbatim}
 
 \section{Appendix}
-\label{sec-12}
+\label{sec-13}
 
 \subsection{Configuration examples}
-\label{sec-12-1}
+\label{sec-13-1}
 
-\subsubsection{Accounts/imap.default}
-\label{sec-12-1-1}
+\subsubsection{Accounts/default.txt}
+\label{sec-13-1-1}
 
 \begin{verbatim}
 # Name and values are separated by spaces or tabs
 # comments start the line with a hash
 
-# Name appearing in From: field
+# Give a name to this account
 name To Be Configured
+# configure Identity.txt to set your From: field
 
 # Email address (default is same as login)
-email unknown@gmail.com
-
-# Aliases also received on this mail
-# alias mimesis@gmail.com
-# alias nemesis@gmail.com
-
-# Internet address
-host imap.gmail.com
+email unknown@dyne.org
 
 # Username
-login USERNAME@gmail.com
+login USERNAME@dyne.org
+
+## Change the settings only if you need
+
+# Imap host address
+imap mail.dyne.org
+
+# Imap port: usually 443, 220 or 993
+imap_port 993
+
+
+# Smtp host address
+smtp mail.dyne.org
+
+# Smtp port: usually 25 or 465
+smtp_port 25
 
 # Authentication type
 auth plain # or kerberos, etc
 
-# Identity certificate: check or ignore
+# Server certificate: check or ignore
 cert ignore
 
-# Transport protocol
-transport ssl
+# Transport protocol: ssl, tls or plain
+transport tls
 
-# Service port
-port 993
 
 # Options when fetching
-# to empty your mailbox you can also use: fetchall
-# by default this is 'keep' which will not delete mails from server
+# to empty your mailbox you can use: 'fetchall' 'flush'
+# by default this is 'keep': don't delete mails from server
 options keep
-# we encourage you to store emails locally, hence using a fetchall
-# configuration from a machine that you keep at home and secured.
 
-# Imap folders
-# uncommend to provide a list of folders to be fetched
-# folders INBOX, known, priv, lists, unsorted, unsorted.ml
+# Remote IMAP folders to be retreived
+# fill to provide a list of folders to be fetched
+# default is to detect and fetch all remote folders
+## folders INBOX priv unsorted filters 
+
+# list of folders to exclude from fetch
+# comment or change to avoid leaving them on server
+# please note we filters social networks by default
+# (see Filters.txt and change it as you like)
+exclude zz.spam zz.bounces zz.blacklist zz.social
+
+
+#
+# The password field will be filled in automatically
+#
 \end{verbatim}
-\subsubsection{Accounts/smtp.default}
-\label{sec-12-1-2}
 
-\begin{verbatim}
-# Name and values are separated by spaces or tabs
-# comments start the line with a hash
-
-# Name for this account
-name To Be Configured
-
-# Internet address
-host smtp.gmail.com
-
-# Username
-login USERNAME@gmail.com
-
-# Transport protocol
-transport ssl # or "tls" or "plain"
-
-# Service port
-# port 465
-port 25
-\end{verbatim}
 \subsubsection{Filters.txt}
-\label{sec-12-1-3}
+\label{sec-13-1-2}
 
 \begin{verbatim}
-# Example filter configuration for Jaro Mail
+# Default filter configuration for Jaro Mail
 
-# mailinglist filters are in order of importance
+# Mailinglist filters are in order of importance
 # syntax: to <list email> save <folder>
 # below some commented out examples, note the use of a prefix,
 # which makes it handy when browsing with file completion.
 
-# Field   String match          Folder in Mail/
-to	  crypto@lists.dyne	save	dyne.crypto
-to	  dynebolic		save	dyne.dynebolic
-to	  freej			save	dyne.freej
-to	  frei0r-devel		save	dyne.frei0r
-to	  taccuino		save	ml.freaknet
-to	  deadpoets		save	ml.freaknet
-to	  linux-libre		save	gnu.linux-libre
-to	  foundations@lists	save	gnu.foundations
-to	  debian-mentors	save	debian.mentors
-to	  debian-blends		save	debian.blends
-to	  freedombox-discuss	save	debian.freedombox
+# to	  crypto@lists.dyne	save	dyne.crypto
+# to	  dynebolic		    save	dyne.dynebolic
+# to	  freej			    save	dyne.freej
+# to	  frei0r-devel		save	dyne.frei0r
+# to	  taccuino		    save	ml.freaknet
+# to	  deadpoets		    save	ml.freaknet
+# to	  linux-libre		save	gnu.linux-libre
+# to	  foundations@lists	save	gnu.foundations
+# to	  debian-mentors	save	debian.mentors
+# to	  debian-blends		save	debian.blends
 
 # Other filters for web 2.0 using folder names with a prefix:
 # they can facilitate folder maintainance.
+# These are on by default, comment out if not desired.
 
-# Field   String match          Folder in Mail/
-from      identi.ca		save	web.identica
-from      Twitter		save	web.twitter
-from      linkedin		save	web.linkedin
-from      googlealerts		save	web.google
-from      facebook		save	web.facebook
-from      FriendFeed		save	web.friendfeed
-from      academia.edu		save	web.academia
+from      github.com            save	zz.social
+from      launchpad	            save	zz.social
+from      identi.ca             save	zz.social
+from      twitter.com		    save	zz.social
+from      linkedin.com		    save	zz.social
+from      googlealerts		    save	zz.social
+from      plus.google.com	    save	zz.social
+from      youtube.com		    save	zz.social
+from      wmt-noreply@google	save	zz.social
+from      facebook		        save	zz.social
+from      FriendFeed		    save	zz.social
+from      academia-mail.com	    save	zz.social
+from      statusnet		        save	zz.social
+from      basecamp		        save	zz.social
 \end{verbatim}
-% Emacs 24.3.1 (Org mode 8.0.6)
+% Emacs 24.3.1 (Org mode 8.2.4)
 \end{document}
