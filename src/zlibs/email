@@ -266,8 +266,8 @@ send() {
     # list mails to send
     queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
     queue_outbox_num=`print $queue_outbox | wc -l`
-    { test "$queue_outbox_num" = "0" } && {
-        act "Outbox is empty, no mails to send."
+    [[ "$queue_outbox" = "" ]] && {
+        notice "Outbox is empty, no mails to send."
         return 0 }
 
     read_account ${account}
