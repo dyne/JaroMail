@@ -198,8 +198,8 @@ filter_maildir() {
         return 1
     }
 
-    numm=`${=find} "$MAILDIRS/$mdinput" -maxdepth 2 -type f|wc -l`
     mails=`${=find} "$MAILDIRS/$mdinput" -maxdepth 2 -type f`
+    numm=`print $mails | wc -l`
 
     [[ $numm = 0 ]] && {
         error "Nothing to filter inside maildir $mdinput"
@@ -210,6 +210,13 @@ filter_maildir() {
     c=0
 
     for m in ${(f)mails}; do
+
+        # clean interrupt
+        [[ $global_quit = 1 ]] && {
+            error "User break requested, interrupting operation"
+            break
+        }
+
         match=0
         c=$(($c + 1))
 
@@ -217,24 +224,24 @@ filter_maildir() {
         hdr "$m" | sender_isknown
         [[ $? = 0 ]] && {
             [[ "$mdinput" = "zz.blacklist" ]] && {
-                act "$c\t\t/ $numm"
+                act "$c\t/ $numm"
                 continue
             }
             cat "$m" | deliver zz.blacklist
             [[ $? = 0 ]] && { rm "$m" }
-            act "$c\t\t/ $numm\t\t-> zz.blacklist"
+            act "$c\t/ $numm\t-> zz.blacklist"
             continue
         }
         
         hdr "$m" | awk '/Sender.*mailman-bounce/ { exit 1 }'
         [[ $? = 0 ]] || {
             [[ "$mdinput" = "zz.bounces" ]] && {
-                act "$c\t\t/ $numm"
+                act "$c\t/ $numm"
                 continue
             }
             cat "$m" | deliver zz.bounces
             [[ $? = 0 ]] && { rm "$m" }
-            act "$c\t\t/ $numm\t\t-> zz.bounces"
+            act "$c\t/ $numm\t-> zz.bounces"
             continue
         }
         
@@ -245,20 +252,19 @@ filter_maildir() {
 
             # run all filter regexps on the from: field
             [[ "$ffrom" = "" ]] || {
-                femail="${ffrom[(ws:,:)1]}"
+                femail="${ffrom[(ws:,:)1]:l}"
                 for exp in ${(k)filter_from}; do
 
                     if [[ "$femail" =~ "$exp" ]]; then
                         # if destination maildir is same as input, skip
                         [[ "${filter_from[$exp]}" = "$mdinput" ]] && {
-                            act "$c\t\t/ $numm"
+                            act "$c\t/ $numm"
                             match=1
                             break 
                         }
-                        act "$c\t\t/ $numm\t\t-> ${filter_from[$exp]}"
                         cat "$m" | deliver ${filter_from[$exp]}
                         if [[ $? = 0 ]]; then
-                            func "from filter match: $exp"
+                            act "$c\t/ $numm\t-> ${filter_from[$exp]}"
                             match=1
                             rm "$m"
                             break
@@ -277,8 +283,8 @@ filter_maildir() {
 
             typeset -alU ftos
             # recompile the array of destination addresses
-            ftos=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x cc -a | cut -d, -f1`)
-            ftos+=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x to -a | cut -d, -f1`)
+            ftos=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x cc -e`)
+            ftos+=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x to -e`)
 
             # run all filter regexps on the to: and cc: fields
             { test "$ftos" = "" } || {
@@ -288,15 +294,13 @@ filter_maildir() {
                         if [[ "$ft" =~ "$exp" ]]; then
                             # if destination maildir is same as input, skip
                             [[ "${filter_to[$exp]}" = "$mdinput" ]] && {
-                                act "$c\t\t/ $numm"
-                                func "same dir"
+                                act "$c\t/ $numm"
                                 match=1
                                 break
                             }
-                            act "$c\t\t/ $numm\t\t-> ${filter_to[$exp]}"
                             cat "$m" | deliver ${filter_to[$exp]}
                             if [[ $? = 0 ]]; then
-                                func "to filter match: $exp"
+                                act "$c\t/ $numm\t-> ${filter_to[$exp]}"
                                 match=1
                                 rm "$m"
                                 break
@@ -322,24 +326,24 @@ filter_maildir() {
         hdr "$m" | sender_isknown
         [[ $? = 0 ]] && {
             [[ "$mdinput" = "known" ]] && {
-                act "$c\t\t/ $numm"
+                act "$c\t/ $numm"
                 continue
             }
             cat "$m" | deliver known
             [[ $? = 0 ]] && { rm "$m" }
-            act "$c\t\t/ $numm\t\t-> known"
+            act "$c\t/ $numm\t-> known"
             continue
         }
 
         hdr "$m" | awk '/X-Spam-Flag.*YES/ { exit 1 }'
         { test $? = 0 } || {
             [[ "$mdinput" = "zz.spam" ]] && {
-                act "$c\t\t/ $numm"
+                act "$c\t/ $numm"
                 continue
             }
             cat "$m" | deliver zz.spam
             [[ $? = 0 ]] && { rm "$m" }
-            act "$c\t\t/ $numm\t\t-> zz.spam"
+            act "$c\t/ $numm\t-> zz.spam"
             continue
         }
 
@@ -349,14 +353,14 @@ filter_maildir() {
             # check if destination address is in filter_own array
             if [[ ${filter_own[(r)$f]} == ${f} ]] ; then
                 [[ "$mdinput" = "priv" ]] && {
-                    act "$c\t\t/ $numm"
+                    act "$c\t/ $numm"
                     match=1
                     break
                 }
                 cat "$m" | deliver priv
                 [[ $? = 0 ]] && {
                     rm "$m";
-                    act "$c\t\t/ $numm\t\t-> priv"
+                    act "$c\t/ $numm\t-> priv"
                     match=1
                     break
                 }
@@ -368,7 +372,7 @@ filter_maildir() {
         hdr "$m" | ismailinglist
         [[ $? = 0 ]] && {
             [[ "$mdinput" = "unsorted.ml" ]] && {
-                act "$c\t\t/ $numm"
+                act "$c\t/ $numm"
                 continue
             }
             cat "$m" | deliver unsorted.ml
@@ -378,9 +382,9 @@ filter_maildir() {
         
         # if here then file to unsorted
         if [ "$mdinput" = "unsorted" ]; then
-            act "$c\t\t/ $numm"
+            act "$c\t/ $numm"
         else
-            act "$c\t\t/ $numm\t\t-> unsorted"
+            act "$c\t/ $numm\t-> unsorted"
             cat "$m" | deliver unsorted
             [[ $? = 0 ]] && { rm "$m" }
         fi
@@ -402,7 +406,7 @@ update_mutt() {
     func "lock: $dotlock"
     ${=mkdir} "$MUTTDIR"
     ${=mkdir} "$MUTTDIR"/cache
-    rm -f "$MUTTDIR"/rc
+    ${=rm}    "$MUTTDIR"/rc
 
     gpgkey=""
     # detect the default gpg key to always encrypt also to self

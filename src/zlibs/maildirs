@@ -256,13 +256,13 @@ deliver() {
     }
 
     _email=`cat`
-    print "$_email" | ismailinglist
+    print - "$_email" | ismailinglist
     [[ $? = 0 ]] && {
-        print "$_email" | nm insert --folder="$dest" +filters +mailinglist
+        print - "$_email" | nm insert --folder="$dest" +filters +mailinglist
         return $?
     }
 
     # anything else +filters
-    print "$_email" | nm insert --folder="$dest" +filters
+    print - "$_email" | nm insert --folder="$dest" +filters
     return $?
 }

@@ -41,6 +41,7 @@ nm() {
 nm_setup() {
     nm_dir="$MAILDIRS"/cache/notmuch
     mkdir -p $nm_dir
+    lock $nm_dir
 
     # setup the default tags for all new messages
     deftags="$1"

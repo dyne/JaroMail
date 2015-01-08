@@ -41,14 +41,9 @@ awk '{ for (i=1;i<=NF;i++)
 }
 
 isemail() {
-    [[ "$1" = "" ]] && {
-        func "isemail() called on an empty string"
-        return 1
-    }
-    print "$1" | \
-        grep -E "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b" \
-        > /dev/null
-   return $?
+    [[ "$1" -regex-match "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b" ]] && return 0
+    
+    return 1
 }
 
 ismailinglist() {
@@ -152,10 +147,36 @@ autostart() {
     return 1
 }
 
+e_parse() {
+    _arg=""
+    # optional second argument limits parsing to header fields
+    [[ "$1" = "" ]] || [[ "$1" = "all" ]] || _arg="-x $1"
+
+    # use RFC822 parser in fetchaddr
+    e_parsed=`${WORKDIR}/bin/fetchaddr ${=_arg} -a`
+
+    e_addr=()
+    for _p in ${(f)e_parsed}; do
+        _e="${(Q)_p[(ws:,:)1]:l}"
+        # check if an email address was found
+        isemail "$_e" && {
+            _n="${(Q)_p[(ws:,:)2]}"
+            # reformat output using comma as separator
+            e_addr+=("$_e" "$_n")
+            func "parsed: $_n <$_e>"
+        }
+    done
+
+    # no emails found
+    [[ ${#e_addr} = 0 ]] && return 1
+
+    return 0
+}
+
 
 # short utility to print only mail headers
 hdr() {
-    { test -r "$1" } || {
+   [[ -r "$1" ]] || {
         error "hdr() called on non existing file: $1"
         return 1 }
     awk '{ print $0 }

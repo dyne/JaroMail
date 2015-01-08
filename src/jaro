@@ -20,8 +20,8 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=2.1
-DATE=May/2014
+VERSION=3.0
+DATE=Jan/2015
 JAROMAILEXEC=$0
 typeset -a OLDARGS
 for arg in ${argv}; do OLDARGS+=($arg); done
@@ -35,22 +35,31 @@ DRYRUN=0
 CLEANEXIT=1
 CALLMUTT=1
 
+# default permission on files
+umask 066
+
 # global variables for binaries called
 typeset -h rm mkdir mutt
+
+# load zsh regex module
+zmodload zsh/regex
+# zmodload zsh/mapfile
 
 
 # date stamp
 datestamp=`date '+%d%b%y'`
 ##########################
 
-# # # # SQL
-# command
+# SQL command
 SQL=sqlite3
 
 
 PARAM=()
 typeset -A global_opts
 typeset -A opts
+
+typeset -h global_quit
+global_quit=0
 
 # global variable for account selection
 typeset -h account account_type
@@ -65,6 +74,10 @@ typeset -h host port type
 
 # global variables for addressbook
 typeset -h hostname addressbook addressbook_tmp
+
+# global variables for email parsers
+typeset -A e_addr
+typeset -h e_parsed
 
 # global array for maildirs (filled by list_maildirs)
 typeset -al maildirs
@@ -131,26 +144,6 @@ _tmp_create() {
     
     return 0
 }
-
-# Cleanup anything sensitive before exiting.
-_endgame() {
-    # Clear temporary files
-    for f in $JAROTMPFILES; do
-        func "endgame() cleaning tempfile $f"
-        rm -f "$f"
-    done
-    unset JAROTMPFILES
-}
-# Trap functions for the _endgame event
-TRAPINT()  { _endgame INT   }
-TRAPEXIT() { _endgame EXIT  }
-TRAPHUP()  { _endgame HUP   }
-TRAPQUIT() { _endgame QUIT  }
-TRAPABRT() { _endgame ABORT }
-TRAPKILL() { _endgame KILL  }
-TRAPPIPE() { _endgame PIPE  }
-TRAPTERM() { _endgame TERM  }
-TRAPSTOP() { _endgame STOP  }
 
 # standard output message routines
 # it's always useful to wrap them, in case we change behaviour later
@@ -241,12 +234,12 @@ if [ -d $WORKDIR/zlibs ]; then
     if [ "$WORKDIR" = "../src" ]; then
     for z in `find $WORKDIR/zlibs -type f`; do
         func "Loading zlib: ${z}"
-        . ${z}
+        source ${z}
     done
     else
     for z in `find $WORKDIR/zlibs -type f | grep -v '.zwc$'`; do
         func "Loading zlib: ${z}"
-        . ${z}
+        source ${z}
     done
     fi
     act "full set of auxiliary functions loaded"
@@ -261,6 +254,36 @@ fi
 ACCOUNTS="$MAILDIRS/Accounts"
 KEYRING="$MAILDIRS/Keyring"
 
+
+# Cleanup anything sensitive before exiting.
+_endgame() {
+    func "endgame() $1"
+    [[ "$1" = "EXIT" ]] || {
+        global_quit=1
+        sleep 2
+    }
+    # Clear temporary files
+    for f in $JAROTMPFILES; do
+        func "endgame() cleaning tempfile $f"
+        rm -f "$f"
+    done
+    JAROTMPFILES=()
+
+    [[ -e "$MAILDIRS"/cache/notmuch.lock ]] && {
+        func "unlocking notmuch/Xapian search cache"
+        unlock "$MAILDIRS"/cache/notmuch
+    }
+}
+# Trap functions for the _endgame event
+TRAPINT()  { _endgame INT   }
+TRAPEXIT() { _endgame EXIT  }
+TRAPHUP()  { _endgame HUP   }
+TRAPQUIT() { _endgame QUIT  }
+TRAPABRT() { _endgame ABORT }
+TRAPKILL() { _endgame KILL  }
+TRAPPIPE() { _endgame PIPE  }
+TRAPTERM() { _endgame TERM  }
+TRAPSTOP() { _endgame STOP  }
 
 case $OS in
     GNU)        
@@ -651,6 +674,9 @@ main()
     act "Dry run, show operations without executing them." }
     { option_is_set -R } && { muttflags+=" -R " }
     { option_is_set -f } && { FORCE=1 }
+
+    # clean up options from param
+    PARAM=(${PARAM// -? /})
 
     case "$subcommand" in
     compose) compose ${PARAM} ;;

@@ -61,29 +61,25 @@ insert_address() {
         func "address already present in $list"
         return 1
     }
-     
+
     print "From: $_name <$_email>" | \
         abook --datafile "$ADDRESSBOOK" \
-        --add-email-quiet
+        --add-email-quiet > /dev/null
 
-    return 0
-}
-
-remove_address() {
-    error "remove_address() TODO in abook branch"
     return 0
 }
 
 search_addressbook() {
     func "search \"$@\" in $list"
-    abook --datafile "$ADDRESSBOOK" --mutt-query "$@"
+    abook --datafile "$ADDRESSBOOK" --mutt-query "${@:l}"
 }
 
 
 lookup_email() {
-    func "lookup address $1 in $list"
+    _addr=${1:l}
+    func "lookup address $_addr in $list"
     abook --datafile "$ADDRESSBOOK" \
-        --mutt-query "$1" > /dev/null
+        --mutt-query "$_addr" > /dev/null
     return $?
 }
 
@@ -124,8 +120,9 @@ sender_isknown() {
 { print $0 }
 /^$/ { exit }' | ${WORKDIR}/bin/fetchaddr -x From -a`"
 
-    email="${head[(ws:,:)1]}"
-    [[ "$email" = "" ]] && { return 1 }
+    email="${head[(ws:,:)1]:l}"
+    isemail $email
+    [[ $? = 0 ]] || { return 1 }
 
     abook --datafile $MAILDIRS/$list.abook \
         --mutt-query "$email" > /dev/null
@@ -134,77 +131,71 @@ sender_isknown() {
 
 learn() {
     func "learning ${PARAM[1]} in stdin piped mails"
-    [[ $DRYRUN == 1 ]] && {
-        func "dryrun parsing ${PARAM[1]} in stdin piped mails" }
+    [[ $DRYRUN == 1 ]] && func "running in dryrun mode, no entries added to addressbook"
 
     what=sender
     [[ "$1" = "" ]] || { what="$1" }
     func "learning from $what"
 
-    # read in only headers from stdin (till empty line)
-    buffer=`awk '{ print $0 } /^$/ { exit }'`
-
     case ${what} in
 
         sender|from) # simple: one address only on From:
-            head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x From -a`"
-            # (Q) eliminates quotes, then word split
-            email="${(Q)head[(ws:,:)1]}"
-            name="${(Q)head[(ws:,:)2]}"
-            print "$head"
-            [[ $DRYRUN == 1 ]] || {
-                insert_address "$email" "$name"
-                [[ $? = 0 ]] && { act "new: $_name <${_email}>" }
+
+            # now e_name e_mail and e_parsed are filled in
+            awk '{ print $0 } /^$/ { exit }' | e_parse From
+            
+            # no need to cycle, From is always only one field
+            [[ $DRYRUN == 0 ]] && {
+                _e="${(k)e_addr}"
+                _n="${(v)e_addr}"
+                insert_address "$_e" "$_n"
+                [[ $? = 0 ]] && { act "$list <- $_n <$_e>" }
             }
             return 0
             ;;
 
         all)
-            head="`print $buffer | ${WORKDIR}/bin/fetchaddr -a`"
-            for h in ${(f)head}; do
-                # (Q) eliminates quotes, then word split
-                email="${(Q)h[(ws:,:)1]}"
-                name="${(Q)h[(ws:,:)2]}"
 
-                print "$h"
+            awk '{ print $0 } /^$/ { exit }' | e_parse
 
-                [[ $DRYRUN == 1 ]] || {
-                    insert_address "$email" "$name"
-                    [[ $? = 0 ]] && { act "new: $_name <${_email}>" }
-                }
-            done
+            [[ $DRYRUN == 0 ]] && {
+                # complex: more addresses in To: and Cc:
+                for _e in ${(k)e_addr}; do
+                    _n="${e_addr[$_e]}"
+                    insert_address "$_e" "$_n"
+                    [[ $? = 0 ]] && { act "$list <- $_n <${_e}>" }
+                done
+            }
             return 0
             ;;
+        
+        recipient|to)
 
-        recipient|to) # complex: more addresses in To: and Cc:
-            head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x To -a`"
-            for h in ${(f)head}; do
-                # (Q) eliminates quotes, then word split
-                email="${(Q)h[(ws:,:)1]}"
-                name="${(Q)h[(ws:,:)2]}"
-                print "$h"
+            awk '{ print $0 } /^$/ { exit }' | e_parse To
 
-                [[ $DRYRUN == 1 ]] || {
-                    insert_address "$email" "$name"
-                    [[ $? = 0 ]] && { act "new: $_name <${_email}>" }
-                }
-            done
+            [[ $DRYRUN == 0 ]] && {
+                # complex: more addresses in To: and Cc:
+                for _e in ${(k)e_addr}; do
+                    _n="${e_addr[$_e]}"
+                    insert_address "$_e" "$_n"
+                    [[ $? = 0 ]] && { act "$list <- $_n <${_e}>" }
+                done
+            }
 
-            head="`print $buffer | ${WORKDIR}/bin/fetchaddr -x Cc -a`"
-            for h in ${(f)head}; do
-                # (Q) eliminates quotes, then word split
-                email="${(Q)h[(ws:,:)1]}"
-                name="${(Q)h[(ws:,:)2]}"
-                print "$h"
+            e_parse Cc
 
-                [[ $DRYRUN == 1 ]] || {
-                    insert_address "$email" "$name"
-                    [[ $? = 0 ]] && { act "new: $_name <${_email}>" }
-                }
-            done
+            [[ $DRYRUN == 0 ]] && {
+                # complex: more addresses in To: and Cc:
+                for _e in ${(k)e_addr}; do
+                    _n="${e_addr[$_e]}"
+                    insert_address "$_e" "$_n"
+                    [[ $? = 0 ]] && { act "$list <- $_n <${_e}>" }
+                done
+            }
+
             return 0
             ;;
-
+        
         *)
             error "Unknown learning function: $what" ;;
     esac
@@ -226,35 +217,45 @@ forget() {
 # extract all addresses found in a list of email files from stdin
 extract_mails() {
     _mails=`cat`
-    # we switch dryrun temporarily off to use learn()
-    # without modifying the addressbook
-    _dryrun=$DRYRUN
-    DRYRUN=1
+
+    _tot=`print $_mails | wc -l`
+    act "$_tot emails to parse"
+
+    [[ $_tot -gt 100 ]] && {
+        act "operation will take a while, showing progress"
+        _prog=0
+        c=0
+    }
 
     # learn from senders, recipients or all
     _action="$1"
 
-    typeset -a learned
-    for m in ${(f)_mails}; do
-        _l=`hdr $m | learn $_action`
-        # handles results on multiple lines (recipients, all)
-        for ii in ${(f)_l}; do
-            learned+=("$ii")
-        done
-    done
 
-    DRYRUN=$_dryrun
-    # eliminates duplicates
-    typeset -A result
-    for i in ${learned}; do
-        _e=${i[(ws:,:)1]}
-        [[ "${result[$_e]}" = "" ]] && {
-            _n=${i[(ws:,:)2]}
-            result+=("$_e" "$_n")
-            print - "$_n <$_e>"
+    # -U eliminates duplicates
+    typeset -aU _res
+
+    for m in ${(f)_mails}; do
+
+        # e_parse fills in e_addr(map) and e_parsed(newline term str)
+        hdr $m | e_parse $_action
+        for _e in ${(k)e_addr}; do
+            _res+=("${(v)e_addr[$_e]} <$_e>")
+        done
+        
+        [[ $_tot -gt 100 ]] && {
+            c=$(( $c + 1 ))
+            [[ $c -gt 99 ]] && {
+                _prog=$(( $_prog + $c ))
+                act "$_prog / $_tot processed so far"
+                c=1
+            }
         }
     done
-    notice "${#result} addresses extracted"
+    # print out results
+    for r in $_res; do
+        print - $r
+    done
+    notice "${#_res} unique addresses extracted"
 }
 
 # extract all addresses found into a maildir
@@ -375,6 +376,9 @@ extract() {
     # default is whitelist
 
     arg=${PARAM[1]}
+
+    func "extract() arg: $arg (param: $PARAM)"
+
     # no arg means print all entries from adressbook
     [[ "$arg" = "" ]] && {
         notice "Extracting all addresses in $list"
@@ -411,7 +415,7 @@ extract() {
             _addrs=`gpg --list-keys --with-colons | awk -F: '{print $10}'`
             for i in ${(f)_addrs}; do
                 _parsed=`print "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
-                _e="${_parsed[(ws:,:)1]}"
+                _e="${_parsed[(ws:,:)1]:l}"
                 isemail "$_e"
                 [[ $? = 0 ]] || continue
                 # check if the email is not already parsed
@@ -438,7 +442,7 @@ extract() {
         [[ "$_magic" =~ "PGP public key" ]] && {
             notice "Extracting addresses from sigs on GPG key $arg"
             _gpg="gpg --no-default-keyring --keyring $MAILDIRS/cache/pubkey.gpg --batch --with-colons"
-            rm -f $MAILDIRS/cache/pubkey.gpg
+            ${=rm} $MAILDIRS/cache/pubkey.gpg
             ${=_gpg} --import "$arg"
             # first make sure all unknown keys are imported
             _addrs=`${=_gpg} --list-sigs | awk -F: '{print $5 " " $10}'`
@@ -452,7 +456,7 @@ extract() {
             _addrs=`${=_gpg} --list-sigs | awk -F: '{print $10}'`
             for i in ${(f)_addrs}; do
                 _parsed=`print "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
-                _e="${_parsed[(ws:,:)1]}"
+                _e="${_parsed[(ws:,:)1]:l}"
                 isemail "$_e"
                 [[ $? = 0 ]] || continue
                 # check if the email is not already parsed
@@ -486,25 +490,27 @@ extract() {
 
 # import address lists from stdin
 import() {
-    
-    arg=${PARAM[1]}
-    # remove options and trim
-    arg=`trim ${arg//-?/}`
 
+    # case insensitive match
+    unsetopt CASE_MATCH
+
+    _arg=${PARAM[1]}
+
+    func "import() arg: $_arg (param: $PARAM)"
     # a map to eliminate duplicates
     typeset -AU result
 
-    [[ "$arg" = "" ]] || {
-        notice "Import address list from stdin into addressbook"
+    [[ "$_arg" = "" ]] && {
+        notice "Import address list from stdin into addressbook $list"
         _stdin=`cat`
-        print - $_stdin
         _new=0
+        act "imported new entries will be printed on stdout"
         for i in ${(f)_stdin}; do
             # skip comments starting with #
             [[ "$i[1]" = "#" ]] && continue
             
             _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
-            _e="${_parsed[(ws:,:)1]}"
+            _e="${_parsed[(ws:,:)1]:l}"
             
             # check if is really an email
             isemail "$_e"
@@ -529,10 +535,9 @@ import() {
                 continue
             }
 
-            act "import new entry: $_n <$_e>"            
-            [[ $DRYRUN = 0 ]] && {
-                insert_address "$_e" "$_n"
-            }
+            print - "$_n <$_e>"            
+            [[ $DRYRUN = 0 ]] && insert_address "$_e" "$_n"
+
             _new=$(( $_new + 1 ))
         done
         notice "Valid unique entries parsed: ${#result}"
@@ -540,9 +545,72 @@ import() {
         return $?
     }
 
+    [[ -r "$_arg" ]] && {
+        notice "Import address list from stdin into group file $arg"
+        act "parsing entries in group file"
+        _group=`cat $arg`
+        for i in ${(f)_group}; do
+            # skip comments starting with #
+            [[ "$i[1]" = "#" ]] && continue
+            
+            _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
+            _e="${_parsed[(ws:,:)1]:l}"
+            
+            # check if is really an email
+            isemail "$_e"
+            [[ $? = 0 ]] || {
+                func "not an email: $_e"
+                continue
+            }
 
-    # stdin
-    notice "Importing addressbook from stdin list of addresses"
+            # check if the email is a duplicate
+            [[ "${result[$_e]}" = "" ]] || {
+                func "duplicate email: $_e"
+                continue
+            }
+            
+            _n="${_parsed[(ws:,:)2]}"
+            result+=("$_e" "$_n")            
+        done
+
+        # imported all group file contents in results
+        notice "${#result} entries parsed in $arg"
+        act "reading entries from stdin, printing out new entries"
+        
+        _stdin=`cat`
+        _new=0
+        for i in ${(f)_stdin}; do
+            # skip comments starting with #
+            [[ "$i[1]" = "#" ]] && continue
+            
+            _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
+            _e="${_parsed[(ws:,:)1]:l}"
+            
+            # check if is really an email
+            isemail "$_e"
+            [[ $? = 0 ]] || {
+                func "not an email: $_e"
+                continue
+            }
+
+            # check if the email is a duplicate
+            [[ "${result[$_e]}" = "" ]] || {
+                func "duplicate email: $_e"
+                continue
+            }
+
+            _n="${_parsed[(ws:,:)2]}"
+            result+=("$_e" "$_n")
+
+            print - "$_n <$_e>"            
+            _new=$(( $_new + 1 ))
+        done
+        # TODO: overwrite group file with all entries
+        notice "Valid unique entries parsed: ${#result}"
+        act "new addresses found: ${_new}"
+
+    }
+
     return 0
 }
 

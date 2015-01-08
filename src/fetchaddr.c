@@ -56,6 +56,8 @@ void chop(struct header *cur)
     cur->value[--cur->len] = '\0';
 }
 
+char print_email_only = 0;
+
 int writeout(struct header *h, const char *datefmt, 
              unsigned char create_real_name)
 {
@@ -96,9 +98,12 @@ int writeout(struct header *h, const char *datefmt,
 
           strftime(timebuf, sizeof(timebuf), datefmt, localtime(&timep));
 
-          printf("%s,%s\n", p->mailbox,
-                 p->personal && *p->personal ? p->personal : " ");
-
+          if(print_email_only == 1) {
+            printf("%s\n", p->mailbox);
+          } else {
+            printf("%s,%s\n", p->mailbox,
+                   p->personal && *p->personal ? p->personal : " ");
+          }
           rv = 1;
         }
     }
@@ -137,6 +142,8 @@ int main(int argc, char* argv[])
 #endif
       } else if (!strcmp (argv[i], "-a")) {
         create_real_name = 1;
+      } else if (!strcmp (argv[i], "-e")) {
+        print_email_only = 1;
       } else {
         fprintf (stderr, "%s: `%s' wrong parameter\n", argv[0], argv[i]);
       }

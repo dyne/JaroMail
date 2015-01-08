@@ -265,7 +265,7 @@ send() {
 
     # list mails to send
     queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
-    queue_outbox_num=`${=find} "${MAILDIRS}/outbox" -type f|wc -l`
+    queue_outbox_num=`print $queue_outbox | wc -l`
     { test "$queue_outbox_num" = "0" } && {
         act "Outbox is empty, no mails to send."
         return 0 }
@@ -303,6 +303,12 @@ send() {
         return 1 }
 
     for qbody in ${(f)queue_outbox}; do
+
+        # clean interrupt
+        [[ $global_quit = 1 ]] && {
+            error "User break requested, interrupting operation"
+            break
+        }
 
         # check if this is an anonymous mail
         hdr "$qbody" | grep -i '^from: anon' > /dev/null
@@ -396,8 +402,7 @@ EOF
         else
             notice "Mail sent succesfully"
             # whitelist those to whom we send mails
-            cat "$qbody" | \
-                "$WORKDIR/bin/jaro" -q learn recipient > /dev/null
+            hdr "$qbody" | learn recipient
             cat "$qbody" | deliver sent
             [[ $? = 0 ]] && { rm "$qbody" }
         fi
