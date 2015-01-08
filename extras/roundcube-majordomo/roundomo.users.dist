@@ -1,0 +1,6 @@
+# list of roundcube users Roundcube Majordomo should take care of
+# this is one username per line, on multi-domain setups are full emails
+# if user has never logged into webmail then it will not be found.
+test@dyne.org
+foo@dyne.org
+bar@dyne.org

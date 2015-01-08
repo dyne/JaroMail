@@ -1,0 +1,21 @@
+# Roundcube Majordomo configuration
+
+# Don't forget to also configure roundomo.users
+# with a list of roundcube users, one per line.
+
+# sieve setup
+sieve_path="/var/vmail/sieve-scripts"
+
+# vmail setup
+# this only supports per-domain subdirs for now
+# path is extracted from the user string
+# for instance /var/vmail/domains/dyne.org/test/Maildir
+vmail_path="/var/vmail/domains"
+
+# database setup
+roundcube_db="roundcubemail"
+roundcube_db_user="roundcube"
+roundcune_db_pass="xxx"
+
+# logs
+ratosi_log="roundomo.log"

@@ -1,0 +1,178 @@
+#!/usr/bin/env zsh
+#
+# Copyright (C) 2014 Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+REVISION="Oct/2014"
+
+QUIET=0
+DEBUG=0
+
+SCRIPT=$0
+
+TEST=0
+
+# export ROUNDOMO to env with path to the installation
+# else start it from inside the dir with ./dowse
+DIR=${ROUNDOMO:-`pwd`}
+
+# For gettext
+TEXTDOMAIN=roundomo
+
+
+source $DIR/zlibs/messaging.sh
+
+
+# system configuration
+[[ -r $DIR/roundomo.conf ]] || {
+    error "configuration not found: roundomo.conf"; return 1 }
+
+source $DIR/roundomo.conf
+
+myquery() {
+    mysql -B -N -L -u $roundcube_db_user -p$roundcube_db_pass $roundcube_db }
+
+# quick command to login into the database to debug schemas
+[[ "$1" == "login" ]] && {
+    mysql -u $roundcube_db_user -p$roundcube_db_pass $roundcube_db; return 0 }
+
+
+whitelist() {
+    [[ "$1" == "" ]] && { error "no user specified to whitelist()"; return 1 }    
+    user="$1"
+    check_user="select user_id from users where username='$user';"
+    user_id=`print $check_user | myquery`
+    
+    [[ "$user_id" == "" ]] && { error "user not found: $user"; return 1 }
+    
+    notice "Roundomo taking care of: $user (id: $user_id)"
+
+    list_contacts="select email from contacts where user_id='$user_id';"
+    contacts=(`print $list_contacts | myquery`)
+    contacts_count=${#contacts}
+    act "contacts found in addressbook: ${contacts_count}"
+    [[ $contacts_count == 0 ]] && return 1
+    
+    contacts_hash="`print ${=contacts}|sha1sum|awk '{print $1}'`"
+
+    # if --force is used then refresh whitelist for all account even
+    # if no new contacts have been detected
+    option_is_set -f || { 
+        [[ -r ".$user" ]] && {
+	        contacts_hash_prev=`cat ".$user"`
+	        [[ "$contacts_hash_prev" == "$contacts_hash" ]] && {
+	            act "no new contacts detected."; return 0 }
+        }
+    }
+
+    act "refreshing whitelist with new contacts"
+    
+    cat <<EOF > ".$user.sieve"
+require ["fileinto","mailbox","variables"];
+if header :contains "From" [
+EOF
+    for i in $contacts; do
+	    contacts_count=$(( $contacts_count - 1 ))
+        # a single entry may contain more comma separated addresses
+        ii=(${(s:,:)i}) 
+        for c in $ii; do
+	        print -n "\"$c\"" >> ".$user.sieve"
+	        [[ $contacts_count -gt 0 ]] && {
+	            print -n "," >> ".$user.sieve" }
+        done
+	    print >> ".$user.sieve"
+    done
+    cat <<EOF >> ".$user.sieve"
+]
+{ fileinto "INBOX"; stop; }
+
+# spam
+if header :is "X-Spam-Flag" "YES" {
+    fileinto :create "zz.spam"; stop;
+}
+
+if header :contains [ "To","Cc" ] "$user" {
+    fileinto :create "priv"; stop;
+}
+
+# lists auto filters
+if header :matches "List-Id" "*<*>" {
+  fileinto :create "lists.\${2}"; stop; }
+elsif header :matches "X-BeenThere" "*@*" {
+ fileinto :create "lists.\${1}.\${2}"; stop; }
+elsif header :matches "List-Post" "<mailto:*@*" {
+ fileinto :create "lists.\${1}.\${2}"; stop; }
+
+if anyof (header :contains "X-Mailman-Version" ".",
+          header :contains "Mailing-List" ".") {
+  fileinto :create "lists.unsorted"; stop; }
+
+# social networks
+if header :contains "From" "basecamp" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "linkedin.com" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "github.com" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "facebook" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "FriendFeed" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "twitter.com" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "identi.ca" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "wmt-noreply@google" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "plus.google.com" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "launchpad" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "statusnet" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "googlealerts" { fileinto :create "zz.social"; stop; }
+if header :contains "From" "youtube.com" { fileinto :create "zz.social"; stop; }
+
+fileinto :create "unsorted";
+EOF
+    
+    act "sieve filter generated"
+    sievec .$user.sieve
+    [[ $? = 0 ]] || {
+        error "error: filters don't compile."; return 1 }
+
+    # save the latest hash to avoid duplicate effort
+    print "$contacts_hash" > ".$user"
+    
+    func "cp .$user.sieve $sieve_path/$user"
+    [[ $TEST = 1 ]] || { 
+        cp ".$user.sieve" $sieve_path/$user
+    }
+}
+
+# main()
+
+typeset -A opts
+typeset -A subcommands_opts
+
+main_opts=(q -quiet=q D -debug=D h -help=h v -version=v f -force=f -no-color)
+subcommands_opts[__default]=""
+subcommands_opts[test]=""  
+
+init_commandline ${=argv}
+
+[[ -r $DIR/roundomo.users ]] || {
+    error "roundomo.users is not configured with a list of users."; return 1 }
+
+case "$subcommand" in
+    test) TEST=1 ; DEBUG=1 ;;
+esac
+
+roundomo_users=`awk '/^#/ {next} {print $0}' $DIR/roundomo.users`
+for u in ${(f)roundomo_users}; do
+    whitelist "$u"
+done
+
+
