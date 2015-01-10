@@ -1,8 +1,20 @@
 # TODO notes for Jaro Mail
 
   Contribute code or donate to complete this TODO
-  https://dyne.org/donate
+  https://www.dyne.org/donate
 
+## Notmuch web
+
+Fire up the web interface for notmuch searches
+
+## Dovecot local service
+
+Serve maildirs to all kinds of imap clients (MUA) locally
+
+## DIME specification
+
+Jaro Mail will support DIME
+https://darkmail.info/downloads/dark-internet-mail-environment-december-2014.pdf
 
 ## Vacation trigger
 sieve script example

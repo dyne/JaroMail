@@ -1,5 +1,22 @@
 # JaroMail ChangeLog
 
+## 3.0
+### 10 Jan 2015
+
+New addressbook format using Abook natively for storage, improving
+speed and usability, with UTF-8 encapsulation support. New search
+engine using Notmuch instead of Mairix New usage scheme for
+import/export of addressbooks and advanced functionalities for email
+address extraction from maildirs and search results. Core refactoring
+and cleanup. Updates to the user manual.
+
+## 2.1
+### 26 Dec 2014
+
+New publish feature to render in HTML a maildir and all its contents,
+making them browsable and producing an RSS/Atom feed. Several fixes to
+keyring handling, UTF-8 parsing, locking and source build scripts.
+
 ## 2.0
 ### 12 May 2014
 

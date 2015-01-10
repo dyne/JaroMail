@@ -35,12 +35,7 @@ mkdir -p build/gnu
 
         print "Checking build dependencies"
         which gcc      >/dev/null || deps+=(gcc)
-        which bison    >/dev/null || deps+=(bison)
-        which flex     >/dev/null || deps+=(flex)
         which make     >/dev/null || deps+=(make)
-        which autoconf >/dev/null || deps+=(autoconf)
-        which automake >/dev/null || deps+=(automake)
-        which sqlite3  >/dev/null || deps+=(sqlite3)
 #       which gpgme-config || sudo apt-get install libgpgme11-dev
 
         { test -r /usr/share/doc/libgnome-keyring-dev/copyright } || {

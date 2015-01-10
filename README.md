@@ -10,75 +10,82 @@
 
 *A commandline tool to easily and privately handle your e-mail*
 
-Version: **2.0**
+Version: **3.0**
 
 Updates on: http://dyne.org/software/jaro-mail
 
 # INTRODUCTION
 
-JaroMail is an integrated suite of interoperable tools for GNU/Linux
+Jaro Mail is an integrated suite of interoperable tools for GNU/Linux
 and Apple/OSX to manage e-mail communication in a private and efficient
 way, without relying too much on on-line services, in fact encouraging
 users to store e-mail locally.
 
-Rather than reinventing the wheel, JaroMail reuses existing free and
-open source tools working since more than 10 years: 
+Rather than reinventing the wheel, Jaro Mail reuses some existing free
+and open source tools working since more than 10 years, generating
+their configurations and setting up integrations automatically.
 
  executable | function
  ---------- | --------------------
-  ZShell    | scripting language
+  ZShell    | Scripting language
   Mutt      | Mail User Agent
-  Fetchmail | Mail Transport Agent
-  Procmail  | Filtering Agent
-  MSmtp     | the mini SMTP
-  Mairix    | search engine
-  ABook     | addressbook
+  Fetchmail | Mail Transport (fetch)
+  Vim       | Mail editor
+  GnuPG     | Content encryption
+  MSmtp     | Mail Transport (send)
+  Notmuch   | Search engine
+  ABook     | Addressbook
   Elinks    | HTML rendering
 
-A round-up on JaroMail features follows:
+A round-up on Jaro Mail features follows:
 
-![JaroMail functions diagram](http://files.dyne.org/jaromail/diagram.png)
+![Jaro Mail functions diagram](http://files.dyne.org/jaromail/diagram.png)
 
-* Minimalistic interface with automatic threading
-* Targets intensive usage of mailinglists
-* Does whitelisting and integrates addressbooks
-* Can do search and backup using easy expressions
-* Automatically generates filter rules for procmail and sieve
+* Minimalistic and efficient interface with message threading
+* Targets intensive usage of e-mails and mailinglists
+* Stores e-mails locally in a reliable format (maildir)
+* Integrates whitelisting and blacklisting, local and remote
+* Can do search and backup by advanced expressions
+* Automatically generates filter rules (sieve)
+* Imports and exports VCard contacts to addressbook
 * Computes and shows statistics on mail traffic
-* Secure password storage (GPG native, OSX and Gnome keyrings)
-* Stores e-mails locally in a reliable format (Maildir)
-* Defers connections, all operations run off-line
-* Checks SSL server certificates (imap, smtp)
+* Encrypted password storage using OS native keyrings
+* Advanced maildir tools (merge, backup, address extraction)
+* Defers connections for off-line operations
+* Checks SSL/TLS certificates when fetching and sending mails
 * Supports strong encryption messaging (GnuPG)
-* Is multi platform: GNU/Linux/BSD, Apple/OSX
-* Old school, used by its author for the past 15 years
+* Multi platform: GNU/Linux/BSD, Apple/OSX
+* Old school, used by its author for the past 10 years
 
 # INSTALL
 
-**Apple/OSX** users can simply drag JaroMail into /Applications When
-  started JaroMail opens a Terminal window preconfigured with its
-  environment, to activate it for any terminal add this to
-  `~/.profile`:
+**GNU/Linux** users can run `make` to install all needed components
+  (done automatically, requires root) and compile auxiliary
+  tools. Once compiled then `make install` will put Jaro Mail in
+  `/usr/local`. To install it in another place use `PREFIX=$HOME/usr
+  make install` (recommended for people customizing their own
+  scripts).
+
+The dependencies to be installed on the system for Jaro Mail are
+* build: `make gcc libglib2.0-dev libgnome-keyring-dev`
+* run: `fetchmail msmtp mutt notmuch pinentry-curses abook wipe alot`
+
+Bare in mind **you need to read the Manual**: this software is not
+graphical, it is not meant to be intuitive, does not contains
+eyecandies (except for stats on mail traffic). Jaro Mail is operated
+via Terminal, configured in plain text and overall made by geeks for
+geeks.
+
+
+**Apple/OSX** Jaro Mail 3.0 has not yet been updated to Apple/OSX. With
+  2.0 users can simply drag Jaro Mail into /Applications When started
+  Jaro Mail opens a Terminal window preconfigured with its environment,
+  to activate it for any terminal add this to `~/.profile`:
 ```
 export PATH=/Applications/JaroMail.app/Contents/Resources/jaro/bin:$PATH
 ```
 
-**GNU/Linux** users can run `make` to install all needed components
-  (done automatically, requires root) and compile auxiliary
-  tools. Once compiled then `make install` will put JaroMail in
-  `/usr/local`.
-
-The dependencies to be installed on the system for JaroMail are
-* build: `bison flex make autoconf automake sqlite3 libgnome-keyring-dev`
-* run: `procmail fetchmail msmtp mutt mairix pinentry abook wipe`
-
-Bare in mind **you need to read the Manual**: this software is not
-graphical, it is not meant to be intuitive, does not contains
-eyecandies (except for stats on mail traffic). JaroMail is operated
-via Terminal, configured in plain text and overall made by geeks for
-geeks.
-
-# Manual and usage instructions
+# USAGE MANUAL
 
 For a brief overview see the commandline help:
 ```
@@ -114,90 +121,13 @@ By donating you will encourage further development.
 
 # ACKNOWLEDGEMENTS
 
-The JaroMail software and user's manual is conceived, designed and put
+The Jaro Mail software and user's manual is conceived, designed and put
 together with a substantial amount of ZShell scripts and some C code
 by Denis Roio aka [Jaromil](http://jaromil.dyne.org).
 
-The email envelop NyanCat graphics is kindly contributed by the
-Société ECOGEX.
+Jaro Mail would have never been possible without the incredible amount of Love shared by the free and open source community, a more complete list of contributors is included in the [user manual](https://files.dyne.org/jaromail/jaromail-manual.pdf) in the `Acknowledgments` section.
 
-JaroMail makes use of many external components to work and here below
-there is a non-inclusive list of those, with authors and contributors.
-
-## Mutt
-
-The Mutt sourcecode included is maintained by Antonio Radici
-<antonio@dyne.org> who is also the original maintainer of the Debian
-package. Here below the list of Mutt authors:
-
-```
- Copyright (C) 1996-2007 Michael R. Elkins <me@cs.hmc.edu>
- Copyright (C) 1996-2002 Brandon Long <blong@fiction.net>
- Copyright (C) 1997-2008 Thomas Roessler <roessler@does-not-exist.org>
- Copyright (C) 1998-2005 Werner Koch <wk@isil.d.shuttle.de>
- Copyright (C) 1999-2009 Brendan Cully <brendan@kublai.com>
- Copyright (C) 1999-2002 Tommi Komulainen <Tommi.Komulainen@iki.fi>
- Copyright (C) 2000-2004 Edmund Grimley Evans <edmundo@rano.org>
- Copyright (C) 2006-2008 Rocco Rutte <pdmef@gmx.net>
-```
-
-## Mairix
-
-The Mairix search engine is licensed GNU GPL v2, made by:
-
-```
- Copyright (C) Richard P. Curnow  2002,2003,2004,2005,2006,2007,2008
- Copyright (C) Sanjoy Mahajan 2005
- Copyright (C) James Cameron 2005
- Copyright (C) Paul Fox 2006
-```
-
-With contributions by: Anand Kumria, André Costa, Andreas Amann, Andre
-Costa, Aredridel, Balázs Szabó, Bardur Arantsson, Benj. Mako Hill,
-Chris Mason, Christoph Dworzak, Christopher Rosado, Chung-chieh Shan,
-Claus Alboege, Corrin Lakeland, Dan Egnor, Daniel Jacobowitz, Dirk
-Huebner, Ed Blackman, Emil Sit, Felipe Gustavo de Almeida, Ico
-Doornekamp, Jaime Velasco Juan, James Leifer, Jerry Jorgenson, Joerg
-Desch, Johannes Schindelin, Johannes Weißl, John Arthur Kane, John
-Keener, Jonathan Kamens, Josh Purinton, Karsten Petersen, Kevin
-Rosenberg, Mark Hills, Martin Danielsson, Matthias Teege, Mikael
-Ylikoski, Mika Fischer, Oliver Braun, Paramjit Oberoi, Paul Fox, Peter
-Chines, Peter Jeremy, Robert Hofer, Roberto Boati, Samuel Tardieu,
-Sanjoy Mahajan, Satyaki Das, Steven Lumos, Tim Harder, Tom Doherty,
-Vincent Lefevre, Vladimir V. Kisil, Will Yardley, Wolfgang
-Weisselberg.
-
-## MSmtp
-
-MSmtp is developed and maintained by Martin Lambers.
-
-The RFC 822 address parser (fetchaddr) is originally written by
-Michael Elkins for the Mutt MUA.
-
-## ABQuery
-
-The gateway to Apple/OSX addressbook (ABQuery) was written by Brendan
-Cully and just slightly updated for our distribution.
-
-## Stats modules
-We are also including some (experimental, still) modules for statistical
-visualization using JQuery libraries:
-
-```
-Timecloud is Copyright (C) 2008-2009 by Stefan Marsiske
-TagCloud version 1.1.2 (c) 2006 Lyo Kato <lyo.kato@gmail.com>
-ExCanvas is Copyright 2006 Google Inc.
-jQuery project is distributed by the JQuery Foundation under the
- terms of either the GNU General Public License (GPL) Version 2.
-The Sizzle selector engine is held by the Dojo Foundation and is
- licensed under the MIT, GPL, and BSD licenses.
-JQuery.sparkline 2.0 is licensed under the New BSD License
-Visualize.JQuery by Scott Jehl Copyright (c) 2009 Filament Group 
-```
-
-# Disclaimer
-
-JaroMail is Copyright (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+Jaro Mail is Copyright (C) 2010-2014 Denis Roio <jaromil@dyne.org>
 
 This source code is free software; you can redistribute it and/or
 modify it under the terms of the GNU Public License as published by
