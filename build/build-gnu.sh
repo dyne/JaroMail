@@ -117,6 +117,17 @@ mkdir -p build/gnu
     print OK
 }
 
+{ test "$target" = "gpgewrap" } || {
+    test "$target" = "all" } && {
+    print -n "Compiling the GnuPG wrapper... "
+    pushd src
+    ${=cc} -c gpgewrap.c -I .
+    ${=cc} -o gpgewrap gpgewrap.o
+    popd
+    cp src/gpgewrap build/gnu/
+    print OK
+}
+
 
 { test "$target" = "gnome-keyring" } || {
     test "$target" = "all" } && {

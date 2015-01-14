@@ -377,6 +377,27 @@ human_size() {
 ######
 # CERT
 # downloads and/or installs certificates
+
+
+# TODO: save fingeprints of servers and check connections
+fingerprint() {
+    read_account ${account}
+    { test  $? != 0 } && {
+        error "Invalid account: $account"
+        return 1
+    }
+    # defaults
+    [[ -z $smtp_port ]] && { smtp_port=25 }
+
+    print QUIT \
+        | openssl s_client -starttls smtp \
+        -connect $smtp:$smtp_port \
+        -showcerts 2>/dev/null \
+        | openssl x509 -fingerprint -md5 -noout \
+        | awk -F '=' '/^MD5 Fingerprint/ {print $2}'
+
+}
+
 cert() {
 
     act "Downloading all known certificates (needs Internet connectivity)"

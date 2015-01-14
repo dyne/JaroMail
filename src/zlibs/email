@@ -255,21 +255,9 @@ fetch() {
     return 0
 }
 
-
-######
-# SEND
-# this function should send all mails in outbox
-send() {
-    adir="$WORKDIR/Accounts"
-
-
-    # list mails to send
-    queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
-    queue_outbox_num=`print $queue_outbox | wc -l`
-    [[ "$queue_outbox" = "" ]] && {
-        notice "Outbox is empty, no mails to send."
-        return 0 }
-
+################################################
+# read an email from stdin and send it via msmtp 
+smtp_send() {
     read_account ${account}
     { test  $? != 0 } && {
         error "Invalid account: $account"
@@ -280,27 +268,59 @@ send() {
     [[ -z $auth ]] && { auth=plain }
     [[ -z $smtp_port ]] && { smtp_port=25 }
 
-    is_online ${smtp} ${smtp_port}
+    notice "SMTP send via account ${account}"
+
+    type=smtp
+    host=$smtp
+    port=$smtp_port
+
+    ask_password
     [[ $? = 0 ]] || {
-        error "Smtp host not reachable: $smtp_host:$smtp_port"
+        error "Error retrieving password for $login on $smtp"
+        unset password
         return 1 }
 
-    notice "Sending out $queue_outbox_num mails via account ${account}"
+    _tmp_create
+    msmtpcfg="$JAROTMP"
+    cat <<EOF > $msmtpcfg
+account default
+from ${email}
+user ${login}
+host ${smtp}
+port ${smtp_port}
+tls on
+tls_starttls on
+tls_certcheck on
+# tls_fingerprint sha1 44:e8:10:ef:35:fc:54:51:fd:84:cf:59:de:af:a9:ab:a1:55:b8:41
+# tls_fingerprint md5 88:65:6e:6d:a5:66:92:a1:9c:47:18:66:d5:b8:56:49
+tls_fingerprint 6A:D4:DF:E4:20:32:F9:66:94:35:0C:33:9D:74:96:5C
+logfile "${MAILDIRS}/logs/msmtp.log"
+auth ${auth}
+password ${password}
+EOF
+    unset password
+    msmtp -C $msmtpcfg -t
+    res=$?
+    func "msmtp returns: $res"
+    return $res
+}
+
+
+######
+# SEND
+# this function should send all mails in outbox
+send() {
+    # list mails to send
+    queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
+    queue_outbox_num=`print $queue_outbox | wc -l`
+    [[ "$queue_outbox" = "" ]] && {
+        notice "Outbox is empty, no mails to send."
+        return 0 }
 
     [[ $DRYRUN = 1 ]] && { return 0 }
 
     # from here on we must unlock on error
     lock "${MAILDIRS}/outbox"
-
-    type=smtp
-    host=$smtp
-    port=$smtp_port
-    ask_password
-    [[ $? = 0 ]] || {
-        error "Error retrieving password for $login on $smtp"
-        unset password
-        unlock "${MAILDIRS}/outbox"
-        return 1 }
 
     for qbody in ${(f)queue_outbox}; do
         func "processing outbox queue: $qbody"
@@ -317,22 +337,6 @@ send() {
             _tmp_create
             anoncfg="$JAROTMP"
 
-            _tmp_create
-            msmtpcfg="$JAROTMP"
-            cat <<EOF > $msmtpcfg
-account default
-from ${email}
-user ${login}
-host ${smtp}
-port ${smtp_port}
-tls on
-tls_starttls on
-tls_certcheck off
-logfile "${MAILDIRS}/logs/msmtp.log"
-auth ${auth}
-password ${password}
-EOF
-
             cat <<EOF > "$anoncfg"
 REMAIL		n
 POOLSIZE	0
@@ -345,13 +349,13 @@ TYPE1LIST	/var/lib/mixmaster/used-stats/rlist.txt
 TYPE2REL	/var/lib/mixmaster/used-stats/mlist.txt
 TYPE2LIST	/var/lib/mixmaster/used-stats/type2.list
 
-SENDMAIL=msmtp -C $msmtpcfg -t
+SENDMAIL=jaro -q smtp
 ERRLOG=${MAILDIRS}/logs/mixmaster.log
 VERBOSE=2
 
 EOF
 
-            act "Sending out anonymous email via mixmaster"
+            notice "Sending out anonymous email via mixmaster"
             e_addr=()
             hdr $qbody | e_parse To
             hdr $qbody | e_parse Cc
@@ -378,7 +382,7 @@ BEGIN { body=0 }
 
         else # normal send with msmtp
 
-            act "Sending out email"
+            act "Sending out email via ${account:-default}"
             hdr "$qbody" | awk '
 /^From:/ { print " .  " $0 }
 /^To:/   { print " .  " $0 }
@@ -388,20 +392,7 @@ BEGIN { body=0 }
 
             tsize=`stat -c '%s' "$qbody"`
             act "sending `human_size $tsize` over the network ..."
-            msmtp -C <(cat <<EOF
-account default
-from ${email}
-user ${login}
-host ${smtp}
-port ${smtp_port}
-tls on
-tls_starttls on
-tls_certcheck off
-logfile "${MAILDIRS}/logs/msmtp.log"
-auth ${auth}
-password ${password}
-EOF
-            ) -t < "${qbody}"
+            jaro -q smtp -a ${account:-default} < "${qbody}"
             res=$?
         fi
 
@@ -418,10 +409,9 @@ EOF
 
     done
 
-    unset password
     unlock "$MAILDIRS/outbox"
 
-    return 0
+    return $res
 }
 
 ######

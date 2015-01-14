@@ -32,7 +32,6 @@ for arg in ${argv}; do OLDARGS+=($arg); done
 QUIET=0
 DEBUG=0
 DRYRUN=0
-CLEANEXIT=1
 CALLMUTT=1
 
 # default permission on files
@@ -88,7 +87,7 @@ typeset -h mutt pgpewrap dotlock
 
 # global variable for exit code
 typeset exitcode
-exitcode=0
+# exitcode=0
 
 # global variable for infos on imap folder
 # format: name;num_of_messages;size_in_bytes
@@ -259,6 +258,7 @@ KEYRING="$MAILDIRS/Keyring"
 _endgame() {
     func "endgame() $1"
     [[ "$1" = "EXIT" ]] || {
+        error "QUIT signal sent to processes, waiting 2 seconds..."
         global_quit=1
         sleep 2
     }
@@ -273,17 +273,19 @@ _endgame() {
         func "unlocking notmuch/Xapian search cache"
         unlock "$MAILDIRS"/cache/notmuch
     }
+    func "endgame() exit code: $exitcode"
 }
 # Trap functions for the _endgame event
-TRAPINT()  { _endgame INT   }
-TRAPEXIT() { _endgame EXIT  }
-TRAPHUP()  { _endgame HUP   }
-TRAPQUIT() { _endgame QUIT  }
-TRAPABRT() { _endgame ABORT }
-TRAPKILL() { _endgame KILL  }
-TRAPPIPE() { _endgame PIPE  }
-TRAPTERM() { _endgame TERM  }
-TRAPSTOP() { _endgame STOP  }
+TRAPINT()  { _endgame INT;   return $exitcode }
+# TRAPEXIT() { _endgame EXIT;  return $exitcode }
+TRAPHUP()  { _endgame HUP;   return $exitcode }
+TRAPQUIT() { _endgame QUIT;  return $exitcode }
+TRAPABRT() { _endgame ABORT; return $exitcode }
+TRAPKILL() { _endgame KILL;  return $exitcode }
+TRAPPIPE() { _endgame PIPE;  return $exitcode }
+TRAPTERM() { _endgame TERM;  return $exitcode }
+TRAPSTOP() { _endgame STOP;  return $exitcode }
+# TRAPZERR() { func "function returns non-zero." }
 
 case $OS in
     GNU)        
@@ -582,6 +584,11 @@ main()
 
     subcommands_opts[extract]=""
 
+    subcommands_opts[smtp]=""
+    
+    subcommands_opts[crypt]=""
+    subcommands_opts[cryptsign]=""
+
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
@@ -606,7 +613,6 @@ main()
         [[ $exitcode = 0 ]] || {
             error "command \"$subcommand\" not recognized"
             act "try -h for help"
-            CLEANEXIT=0
         }
         return $exitcode
     fi
@@ -662,11 +668,11 @@ main()
         fi
         ADDRESSBOOK="$MAILDIRS"/$list.abook
     }
-    { option_is_set -h } && { CLEANEXIT=0
-    usage; return 0 }
-    { option_is_set -v } && { CLEANEXIT=0
-    cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'
-    return 0 }
+    { option_is_set -h } && { usage; return 0 }
+    { option_is_set -v } && {
+        cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'
+        return 0
+    }
     { option_is_set -q } && { QUIET=1 }
     { option_is_set -D } && { DEBUG=1; QUIET=0
     func "All debug messages ON" }
@@ -701,24 +707,21 @@ main()
         update_sieve
         ;;
 
-    help) CLEANEXIT=0; usage ;;
+    help) usage ;;
 
-    index) CLEANEXIT=0;
-            nm_index
-            ;;
-    search)  CLEANEXIT=0; search ${PARAM} ;;
-
-    notmuch) CLEANEXIT=0;
+    index) nm_index ;;
+    search) search ${PARAM} ;;
+    notmuch)
             notice "Command: notmuch ${PARAM}"
             nm ${PARAM}
             ;;
 
-    stat)   CLEANEXIT=0; stats ${PARAM} ;;
+    stat) stats ${PARAM} ;;
 
-    complete) CLEANEXIT=0; complete ${PARAM}       ;;
-    isknown)  CLEANEXIT=0; sender_isknown ${PARAM} ;;
-    learn)    CLEANEXIT=0; learn ${PARAM}          ;;
-    forget)   CLEANEXIT=0; forget ${PARAM}         ;;
+    complete) complete ${PARAM}       ;;
+    isknown) sender_isknown ${PARAM} ;;
+    learn)   learn ${PARAM}          ;;
+    forget)  forget ${PARAM}         ;;
 
     import)  import ${PARAM} ;;
     "export")
@@ -735,9 +738,9 @@ main()
 
     abook)   edit_abook ${PARAM}         ;;
 
-    edit|vim)  CLEANEXIT=0; edit_file ${PARAM}    ;;
-    open)      CLEANEXIT=0; open_folder ${PARAM}  ;;
-    preview)   CLEANEXIT=0; preview_file ${PARAM} ;;
+    edit|vim)   edit_file ${PARAM}    ;;
+    open)       open_folder ${PARAM}  ;;
+    preview)    preview_file ${PARAM} ;;
 
     backup)  backup ${PARAM}  ;;
     rmdupes) rmdupes ${PARAM} ;;
@@ -765,7 +768,7 @@ main()
         pubdb_render_maildir "$md"
         exitcode=$? ;;
 
-    'source')   CLEANEXIT=0; return 0 ;;
+    'source')   return 0 ;;
     __default)  func "no command provided"
         autostart ${PARAM}
         exitcode=$?
@@ -802,7 +805,6 @@ main()
         #     ;;
         *)
             error "imap needs a subcommand: getsize or listfolders"
-            CLEANEXIT=0
             ;;
         esac
         ;;
@@ -812,21 +814,30 @@ main()
         exitcode=$?
         ;;
 
+    crypt)
+        crypt_queue ${PARAM}
+        exitcode=$?
+        ;;
+
+    smtp)
+        smtp_send ${PARAM}
+        exitcode=$res
+        ;;
+
     *) # unknown command, pass it to autostart
         func "unknown command, remote check"
         autostart ${PARAM}
         exitcode=$?
-        { $exitcode != 0 } && {
+        [[ $exitcode = 0 ]] || {
             error "command \"$subcommand\" not recognized"
             act "try -h for help"
-            CLEANEXIT=0
         }
         ;;
     esac
-    exitcode=$?
-    return 0
 }
+
 
 check_bin
 main $@
+_endgame EXIT
 return $exitcode
