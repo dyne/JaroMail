@@ -303,7 +303,7 @@ send() {
         return 1 }
 
     for qbody in ${(f)queue_outbox}; do
-
+        func "processing outbox queue: $qbody"
         # clean interrupt
         [[ $global_quit = 1 ]] && {
             error "User break requested, interrupting operation"
@@ -317,6 +317,22 @@ send() {
             _tmp_create
             anoncfg="$JAROTMP"
 
+            _tmp_create
+            msmtpcfg="$JAROTMP"
+            cat <<EOF > $msmtpcfg
+account default
+from ${email}
+user ${login}
+host ${smtp}
+port ${smtp_port}
+tls on
+tls_starttls on
+tls_certcheck off
+logfile "${MAILDIRS}/logs/msmtp.log"
+auth ${auth}
+password ${password}
+EOF
+
             cat <<EOF > "$anoncfg"
 REMAIL		n
 POOLSIZE	0
@@ -329,17 +345,20 @@ TYPE1LIST	/var/lib/mixmaster/used-stats/rlist.txt
 TYPE2REL	/var/lib/mixmaster/used-stats/mlist.txt
 TYPE2LIST	/var/lib/mixmaster/used-stats/type2.list
 
-SENDMAIL=msmtp -C $tmp -t
+SENDMAIL=msmtp -C $msmtpcfg -t
 ERRLOG=${MAILDIRS}/logs/mixmaster.log
 VERBOSE=2
 
 EOF
 
             act "Sending out anonymous email via mixmaster"
-            recipients=(`hdr $qbody | ${WORKDIR}/bin/fetchaddr -a -x to | cut -d, -f1`)
-            recipients+=(`hdr $qbody | ${WORKDIR}/bin/fetchaddr -a -x cc | cut -d, -f1`)
-            for r in ${recipients}; do
-                act "Sending to: ${r}"
+            e_addr=()
+            hdr $qbody | e_parse To
+            hdr $qbody | e_parse Cc
+            # cycle through recipients
+            for _e in ${(k)e_addr}; do
+                _n="${(v)e_addr[$_e]}"
+                act "Sending to: $_n <$_e>"
 
                 # parse subject line
                 anonsubj=`hdr "$qbody" | awk '
@@ -347,23 +366,13 @@ EOF
                 act "Subject: $anonsubj"
 
                 # strip headers and send via mixmaster
-                cat  "$qbody" | awk '
-BEGIN { head=1 }
-/^To: /           { print $0; next }
-/^Cc: /           { print $0; next }
-/^Bcc: /          { print $0; next }
-/^Date: /         { print $0; next }
-/^Subject: /      { print $0; next }
-/^In-Reply-To: /  { print $0; next }
-/^References: /   { print $0; next }
-/^Mime-Version: / { print $0; next }
-/^Content-Type: / { print $0; next }
-/^Content-Disposition: / { print $0; next }
-/^$/ { head=0 }
-{ if(head==0) print $0 }
-' | tee -a "$qbody.anon" | mixmaster --config=$anoncfg -m --to="$r" --subject="$anonsubj"
+                awk '
+BEGIN { body=0 }
+/^$/ { body=1 }
+{ if(body==1) print $0 }
+' "$qbody" \
+    | mixmaster --config="$anoncfg" -m --to="$_e" --subject="$anonsubj"
                 res=$?
-                mv "$qbody.anon" "$qbody"
                 func "mixmaster returns $res"
             done
 

@@ -155,16 +155,18 @@ e_parse() {
     # use RFC822 parser in fetchaddr
     e_parsed=`${WORKDIR}/bin/fetchaddr ${=_arg} -a`
 
-    e_addr=()
     for _p in ${(f)e_parsed}; do
         _e="${(Q)_p[(ws:,:)1]:l}"
         # check if an email address was found
-        isemail "$_e" && {
-            _n="${(Q)_p[(ws:,:)2]}"
-            # reformat output using comma as separator
-            e_addr+=("$_e" "$_n")
-            func "parsed: $_n <$_e>"
-        }
+        isemail "$_e" || continue
+        # avoid duplicates
+        [[ "${(v)e_addr[$_e]}" = "" ]] || continue
+        
+        # extract also the name using comma separator
+        _n="${(Q)_p[(ws:,:)2]}"
+
+        e_addr+=("$_e" "$_n")
+        func "parsed: $_n <$_e>"
     done
 
     # no emails found

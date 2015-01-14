@@ -137,11 +137,15 @@ learn() {
     [[ "$1" = "" ]] || { what="$1" }
     func "learning from $what"
 
+    # zero e_addr map before using e_parse
+    e_addr=()
+
     case ${what} in
-
+        
         sender|from) # simple: one address only on From:
-
+            
             # now e_name e_mail and e_parsed are filled in
+            
             awk '{ print $0 } /^$/ { exit }' | e_parse From
             
             # no need to cycle, From is always only one field
@@ -173,16 +177,7 @@ learn() {
 
             awk '{ print $0 } /^$/ { exit }' | e_parse To
 
-            [[ $DRYRUN == 0 ]] && {
-                # complex: more addresses in To: and Cc:
-                for _e in ${(k)e_addr}; do
-                    _n="${e_addr[$_e]}"
-                    insert_address "$_e" "$_n"
-                    [[ $? = 0 ]] && { act "$list <- $_n <${_e}>" }
-                done
-            }
-
-            e_parse Cc
+            awk '{ print $0 } /^$/ { exit }' | e_parse Cc
 
             [[ $DRYRUN == 0 ]] && {
                 # complex: more addresses in To: and Cc:
