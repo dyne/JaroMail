@@ -41,7 +41,6 @@ nm() {
 nm_setup() {
     nm_dir="$MAILDIRS"/cache/notmuch
     mkdir -p $nm_dir
-    lock $nm_dir
 
     # setup the default tags for all new messages
     deftags="$1"
@@ -88,6 +87,7 @@ nm_index() {
     notice "Indexing all mail archive"
     act "please wait, this may take a while..."
     nm_setup
+    lock "$MAILDIRS"/cache/notmuch
     nm new
     nm tag +inbox +priv -unsorted folder:known
     nm tag +inbox +priv -unsorted folder:sent
@@ -95,6 +95,7 @@ nm_index() {
     nm tag -inbox -priv +unsorted folder:unsorted
     act "compressing database"
     nm compact
+    unlock "$MAILDIRS"/cache/notmuch
     notice "Indexing completed"
 }
 
@@ -103,7 +104,9 @@ nm_search() {
     func "notmuch --config=${nm_dir}/rc search --output=files ${=PARAM}"
     
     # launch the search with notmuch
+    lock "$MAILDIRS"/cache/notmuch
     search_results=`nm search --output=files ${=PARAM}`
+    unlock "$MAILDIRS"/cache/notmuch
     [[ $? = 0 ]] || {
         error "notmuch search failed with an error"
         return 1
@@ -195,8 +198,11 @@ user_agent = Jaro Mail <http://jaromail.dyne.org>
     translated = ☰
 EOF
 
+    lock "$MAILDIRS"/cache/notmuch
     alot -c "$MAILDIRS"/cache/alot/rc -n "$MAILDIRS"/cache/notmuch/rc \
         search ${=PARAM}
+    unlock "$MAILDIRS"/cache/notmuch
+
     return $?
 }
 
