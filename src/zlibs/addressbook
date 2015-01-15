@@ -198,16 +198,6 @@ learn() {
 
 }
 
-forget() {
-    error "forget() TODO in abook branch"
-    return 0
-
-    # func "forget sender from mail in stdin"
-    # act "Expecting mail from stdin pipe"
-    # head="`${WORKDIR}/bin/fetchaddr -x From -a`"
-    # # forget the email part of the parsed head
-    # remove_address "${head[(ws:,:)1]}"
-}
 
 # extract all addresses found in a list of email files from stdin
 extract_mails() {

@@ -34,6 +34,9 @@ DEBUG=0
 DRYRUN=0
 CALLMUTT=1
 
+# use gnome-keyring for passwords on GNU systems
+GNOMEKEY=0
+
 # default permission on files
 umask 066
 
@@ -86,7 +89,7 @@ typeset -al maildirs
 typeset -h mutt pgpewrap dotlock
 
 # global variable for exit code
-typeset exitcode
+typeset -h exitcode
 # exitcode=0
 
 # global variable for infos on imap folder
@@ -255,10 +258,10 @@ KEYRING="$MAILDIRS/Keyring"
 
 
 # Cleanup anything sensitive before exiting.
-_endgame() {
+endgame() {
     func "endgame() $1"
-    [[ "$1" = "EXIT" ]] || {
-        error "QUIT signal sent to processes, waiting 2 seconds..."
+    [[ "$1" = "NOERRORS" ]] || {
+        error "$1 signal sent to processes, waiting to quit..."
         global_quit=1
         sleep 2
     }
@@ -274,17 +277,18 @@ _endgame() {
         unlock "$MAILDIRS"/cache/notmuch
     }
     func "endgame() exit code: $exitcode"
+    return $exitcode
 }
 # Trap functions for the _endgame event
-TRAPINT()  { _endgame INT;   return $exitcode }
-# TRAPEXIT() { _endgame EXIT;  return $exitcode }
-TRAPHUP()  { _endgame HUP;   return $exitcode }
-TRAPQUIT() { _endgame QUIT;  return $exitcode }
-TRAPABRT() { _endgame ABORT; return $exitcode }
-TRAPKILL() { _endgame KILL;  return $exitcode }
-TRAPPIPE() { _endgame PIPE;  return $exitcode }
-TRAPTERM() { _endgame TERM;  return $exitcode }
-TRAPSTOP() { _endgame STOP;  return $exitcode }
+TRAPINT()  { _endgame INT;   return $? }
+# TRAPEXIT() { _endgame EXIT;  return $? }
+TRAPHUP()  { _endgame HUP;   return $? }
+TRAPQUIT() { _endgame QUIT;  return $? }
+TRAPABRT() { _endgame ABORT; return $? }
+TRAPKILL() { _endgame KILL;  return $? }
+TRAPPIPE() { _endgame PIPE;  return $? }
+TRAPTERM() { _endgame TERM;  return $? }
+TRAPSTOP() { _endgame STOP;  return $? }
 # TRAPZERR() { func "function returns non-zero." }
 
 case $OS in
@@ -334,11 +338,6 @@ MUTTDIR="$MAILDIRS/.mutt"
     cp "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
     notice "Default Mutt configuration template created" }
 
-# use gnome-keyring for passwords on GNU systems
-GNOMEKEY=0
-pidof gnome-keyring-daemon > /dev/null && {
-     act "using gnome-keyring to store secrets"
-     GNOMEKEY=1 }
 
 # binary programs recognition
 check_bin() {
@@ -354,47 +353,53 @@ check_bin() {
 
     # make sure a gnupg dir exists
     { test -r $HOME/.gnupg/pubring.gpg } || {
-    ${=mkdir} $HOME/.gnupg
-    touch $HOME/.gnupg/pubring.gpg
-    touch $HOME/.gnupg/secring.gpg
+        ${=mkdir} $HOME/.gnupg
+        touch $HOME/.gnupg/pubring.gpg
+        touch $HOME/.gnupg/secring.gpg
     }
 
     # which find command to use
     case $OS in
-    GNU) find="find -O3" ;;
-    MAC) find="gfind -O3" ;;
-    *) find="find"
+        GNU) find="find -O3" ;;
+        MAC) find="gfind -O3" ;;
+        *) find="find"
     esac
 
     # which wipe command to use
     if command -v wipe > /dev/null; then
-    rm="wipe -f -s -q -R /dev/urandom"
+        rm="wipe -f -s -q -R /dev/urandom"
     elif command -v srm > /dev/null; then
-    rm="srm -m"
+        rm="srm -m"
     else
-    rm="rm -f"
+        rm="rm -f"
     fi
     func "Rm binary: $rm"
 
     # which mutt binary to use
     if command -v mutt > /dev/null; then
-    # system-wite
-    mutt="mutt"
-    # TODO: check if this is also the location on Fedora
-    pgpewrap="/usr/lib/mutt/pgpewrap"
-    dotlock="mutt_dotlock"
+        # system-wite
+        mutt="mutt"
+        # TODO: check if this is also the location on Fedora
+        pgpewrap="/usr/lib/mutt/pgpewrap"
+        dotlock="mutt_dotlock"
     elif command -v mutt-jaro > /dev/null; then
-    # in-house compiled
-    mutt=mutt-jaro
-    pgpewrap=pgpewrap
-    dotlock=dotlock
+        # in-house compiled
+        mutt=mutt-jaro
+        pgpewrap=pgpewrap
+        dotlock=dotlock
     else
-    error "Cannot find Mutt. Please install it."
-    exit 1
+        error "Cannot find Mutt. Please install it."
+        exit 1
     fi
     func "Mutt binary: $mutt"
     # make sure there is always a muttpass file even if empty
     touch $MAILDIR/tmp/muttpass
+
+
+    pidof gnome-keyring-daemon > /dev/null && {
+        act "using gnome-keyring to store secrets"
+        GNOMEKEY=1 }
+    
     return 0
 }
 
@@ -513,17 +518,16 @@ EOF
 
 typeset -A subcommands_opts
 
-main()
-    {
+main() {
     ### Options configuration
     #Hi, dear developer! Are you trying to add a new subcommand, or to add some options?
     #Well, keep in mind that:
     # 1. An option CAN'T have differente meanings/behaviour in different subcommands.
     #    For example, "-s" means "size" and accept an argument. If you are tempted to add
     #    an option "-s" (that means, for example "silent", and doesn't accept an argument)
-    #              DON'T DO IT!
-    #     There are two reasons for that:
-    #       I. usability; user expect that "-s" is "size
+#              DON'T DO IT!
+        #     There are two reasons for that:
+        #       I. usability; user expect that "-s" is "size
     #       II. Option parsing WILL EXPLODE if you do this kind of bad things
     #               (it will say "option defined more than once, and he's right)
     main_opts=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n f -force=f)
@@ -592,9 +596,9 @@ main()
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
     for optspec in $subcommands_opts$main_opts; do
-    for opt in ${=optspec}; do
-        every_opts+=${opt}
-    done
+        for opt in ${=optspec}; do
+            every_opts+=${opt}
+        done
     done
     local -a oldstar
     oldstar=($argv)
@@ -602,9 +606,9 @@ main()
     unset discardme
     subcommand=$1
     if [[ -z $subcommand ]]; then
-    subcommand="__default"
+        subcommand="__default"
     fi
-
+    
     if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
         # unknown command, pass it to autostart
         func "unknown command, autostart: $@"
@@ -619,7 +623,7 @@ main()
     
     argv=(${oldstar})
     unset oldstar
-
+    
     ### Parsing global + command-specific options
     # zsh magic: ${=string} will split to multiple arguments when spaces occur
     set -A cmd_opts ${main_opts} ${=subcommands_opts[$subcommand]}
@@ -685,8 +689,15 @@ main()
     PARAM=(${PARAM// -? /})
 
     case "$subcommand" in
-    compose) compose ${PARAM} ;;
-    queue)   queue ${PARAM} ;;
+
+    compose) compose ${PARAM}
+            exitcode=$?
+            ;;
+
+    queue)  queue ${PARAM}
+            exitcode=$?
+            ;;
+
     fetch)
         if [[ "$account" = "" ]]; then
             fetchall
@@ -695,10 +706,19 @@ main()
         fi
         filter_maildir incoming
         ;;
-    send)    send ${PARAM} ;; # was checking is_online
-    peek)    peek ${PARAM} ;; # was checking is_online
 
-    later|remember) cat | deliver remember ;;
+    send)   send ${PARAM}
+            exitcode=$?
+            ;;
+
+    peek)   peek ${PARAM}
+            exitcode=$?
+            ;;
+
+    later|remember)
+            cat | deliver remember
+            exitcode=$?
+            ;;
 
     update|init)
         init_inbox
@@ -709,21 +729,37 @@ main()
 
     help) usage ;;
 
-    index) nm_index ;;
+    index) nm_index
+           exitcode=$?
+           ;;
+
     search) search ${PARAM} ;;
+
     notmuch)
             notice "Command: notmuch ${PARAM}"
             nm ${PARAM}
+            exitcode=$?
             ;;
 
     stat) stats ${PARAM} ;;
 
-    complete) complete ${PARAM}       ;;
-    isknown) sender_isknown ${PARAM} ;;
-    learn)   learn ${PARAM}          ;;
-    forget)  forget ${PARAM}         ;;
 
-    import)  import ${PARAM} ;;
+    complete) complete ${PARAM}
+              exitcode=$?
+              ;;
+
+    isknown) sender_isknown ${PARAM}
+             exitcode=$?
+             ;;
+
+    learn)  learn ${PARAM}
+            exitcode=$?
+            ;;
+
+    import) import ${PARAM}
+            exitcode=$?
+            ;;
+
     "export")
             case "$PARAM" in
                 abook)
@@ -736,22 +772,35 @@ main()
             esac
             ;;
 
-    abook)   edit_abook ${PARAM}         ;;
+    abook)  edit_abook ${PARAM}
+            exitcode=$?
+            ;;
 
     edit|vim)   edit_file ${PARAM}    ;;
     open)       open_folder ${PARAM}  ;;
     preview)    preview_file ${PARAM} ;;
 
-    backup)  backup ${PARAM}  ;;
+    backup)  backup ${PARAM}
+            exitcode=$?
+            ;;
+
     rmdupes) rmdupes ${PARAM} ;;
     merge)   merge ${PARAM}   ;;
 
     filter)
         update_filters ${PARAM}
+        [[ $? = 0 ]] || {
+            error "error updating filters, operation aborted."
+            break
+        }
         filter_maildir ${PARAM}
+        exitcode=$?
         ;;
 
-    deliver) deliver ${PARAM} ;;
+    deliver)
+            deliver ${PARAM}
+            exitcode=$?
+            ;;
 
     passwd) new_password ;;
 
@@ -781,21 +830,19 @@ main()
             read_account $account
             ask_password
             bytes_total=`imap_get_size "$2"`
+            exitcode=$?
             notice "Size of account $login on $imap"
             act "$bytes_total bytes"
             mib_total=$(( $bytes_total / 1048576 ))
             act "$mib_total MB (MiB)"
-            exitcode=$?
             ;;
         listfolders)
             read_account $account
             ask_password
             folders=(`imap_list_folders`)
-            notice "List of folders for $login on $imap"
-            for f in $folders; do
-            print "$f"
-            done
             exitcode=$?
+            notice "List of folders for $login on $imap"
+            for f in $folders; do print "$f"; done
             ;;
         # interactive)
         #     read_account
@@ -821,7 +868,7 @@ main()
 
     smtp)
         smtp_send ${PARAM}
-        exitcode=$res
+        exitcode=$?
         ;;
 
     *) # unknown command, pass it to autostart
@@ -834,10 +881,12 @@ main()
         }
         ;;
     esac
+
+    return $exitcode
 }
 
 
 check_bin
 main $@
-_endgame EXIT
+endgame NOERRORS
 return $exitcode

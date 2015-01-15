@@ -138,8 +138,8 @@ fetch() {
     }
 
     # updates the notmuch configuration
-    # setup the unread default tag
     nm_setup unread
+    # setup :unread: as default tag
 
     notice "Fetching email for account ${account}"
 

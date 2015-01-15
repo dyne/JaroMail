@@ -190,7 +190,8 @@ filter_maildir() {
         ownfilters=1
     }
 
-    [[ "$1" = "" ]] && { mdinput=incoming }
+    # default maildir to filter is incoming
+    mdinput=${1:-incoming}
 
     maildircheck "$MAILDIRS/$mdinput"
     [[ $? = 0 ]] || {
@@ -220,6 +221,19 @@ filter_maildir() {
         match=0
         c=$(($c + 1))
 
+        # check if its an empty file
+        _fsize=`stat -c '%s' "$m"`
+        [[ $_fsize = 0 ]] && {
+            act "$c\t/ $numm\t(empty)"
+            rm "$m"
+            continue
+        }
+
+        # parse if its a mailinglist
+        _md=0
+        hdr "$m" | ismailinglist
+        [[ $? = 0 ]] && _md=1
+
         list="blacklist"
         hdr "$m" | sender_isknown
         [[ $? = 0 ]] && {
@@ -248,28 +262,42 @@ filter_maildir() {
         [[ "$ownfilters" = "1" ]] && {
 
             func "processing through own filters"
-            ffrom=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
 
             # run all filter regexps on the from: field
-            [[ "$ffrom" = "" ]] || {
-                femail="${ffrom[(ws:,:)1]:l}"
+            _dest=""
+            e_addr=()
+            hdr "$m" | e_parse From
+            [[ $? = 0 ]] && {
+                femail="${(k)e_addr}" # e_parse From hit is always one
                 for exp in ${(k)filter_from}; do
-
+                    
+                    # fuzzy match on a string (PCRE)
                     if [[ "$femail" =~ "$exp" ]]; then
+
+                        # retrieve the filter destination maildir
+                        _dest="${filter_from[$exp]}"
+
                         # if destination maildir is same as input, skip
-                        [[ "${filter_from[$exp]}" = "$mdinput" ]] && {
+                        [[ "$_dest" = "$mdinput" ]] && {
                             act "$c\t/ $numm"
                             match=1
                             break 
                         }
-                        cat "$m" | deliver ${filter_from[$exp]}
+
+                        # tag mailinglists
+                        if [[ $_md = 1 ]]; then
+                            cat "$m" | deliver "$_dest" "+filtered +mailinglist"
+                        else
+                            cat "$m" | deliver "$_dest" "+filtered"
+                        fi
+
                         if [[ $? = 0 ]]; then
-                            act "$c\t/ $numm\t-> ${filter_from[$exp]}"
+                            act "$c\t/ $numm\t-> $_dest\t(from $femail)"
                             match=1
                             rm "$m"
                             break
                         else
-                            error "Error filtering to maildir ${filter_from[$exp]}"
+                            error "Error filtering to maildir $_dest"
                             error "File: $m"
                             continue
                         fi
@@ -281,31 +309,43 @@ filter_maildir() {
                 }
             }
 
-            typeset -alU ftos
+            _dest=""
             # recompile the array of destination addresses
-            ftos=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x cc -e`)
-            ftos+=(`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x to -e`)
-
+            e_addr=()
+            hdr "$m" | e_parse To
+            hdr "$m" | e_parse Cc
             # run all filter regexps on the to: and cc: fields
-            { test "$ftos" = "" } || {
-                for ft in ${(f)ftos}; do
+            [[ $? = 0 ]] && {
+                for ft in ${(k)e_addr}; do
                     for exp in ${(k)filter_to}; do
-                        # special zsh parsing in PCRE (=~)
+                        
+                        # fuzzy match on a string (PCRE)
                         if [[ "$ft" =~ "$exp" ]]; then
+                            
+                            # retrieve the filter destination maildir
+                            _dest="${filter_to[$exp]}"
+                            
                             # if destination maildir is same as input, skip
-                            [[ "${filter_to[$exp]}" = "$mdinput" ]] && {
+                            [[ "$_dest" = "$mdinput" ]] && {
                                 act "$c\t/ $numm"
                                 match=1
                                 break
                             }
-                            cat "$m" | deliver ${filter_to[$exp]}
+
+                            # tag mailinglists
+                            if [[ $_md = 1 ]]; then
+                                cat "$m" | deliver "$_dest" "+filtered +mailinglist"
+                            else
+                                cat "$m" | deliver "$_dest" "+filtered"
+                            fi
+                            
                             if [[ $? = 0 ]]; then
-                                act "$c\t/ $numm\t-> ${filter_to[$exp]}"
+                                act "$c\t/ $numm\t-> $_dest\t(to $ft)"
                                 match=1
                                 rm "$m"
                                 break
                             else
-                                error "Error filtering to maildir ${filter_to[$exp]}"
+                                error "Error filtering to maildir $_dest"
                                 error "File: $m"
                                 continue
                             fi
@@ -329,7 +369,7 @@ filter_maildir() {
                 act "$c\t/ $numm"
                 continue
             }
-            cat "$m" | deliver known
+            cat "$m" | deliver known "+inbox +priv"
             [[ $? = 0 ]] && { rm "$m" }
             act "$c\t/ $numm\t-> known"
             continue
@@ -357,7 +397,7 @@ filter_maildir() {
                     match=1
                     break
                 }
-                cat "$m" | deliver priv
+                cat "$m" | deliver priv "+priv"
                 [[ $? = 0 ]] && {
                     rm "$m";
                     act "$c\t/ $numm\t-> priv"
@@ -368,14 +408,13 @@ filter_maildir() {
         done
         [[ $match = 1 ]] && continue
 
-        # parse if its an unknown mailinglist
-        hdr "$m" | ismailinglist
-        [[ $? = 0 ]] && {
+        # its an unkown mailinglist
+        [[ $_ml = 1 ]] && {
             [[ "$mdinput" = "unsorted.ml" ]] && {
                 act "$c\t/ $numm"
                 continue
             }
-            cat "$m" | deliver unsorted.ml
+            cat "$m" | deliver unsorted.ml "+unsorted +mailinglist"
             [[ $? = 0 ]] && { rm "$m" }
             continue
         }
@@ -385,7 +424,7 @@ filter_maildir() {
             act "$c\t/ $numm"
         else
             act "$c\t/ $numm\t-> unsorted"
-            cat "$m" | deliver unsorted
+            cat "$m" | deliver unsorted "+unsorted"
             [[ $? = 0 ]] && { rm "$m" }
         fi
 
