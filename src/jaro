@@ -397,6 +397,8 @@ check_bin() {
     fi
     func "Mutt binary: `command -v mutt`"
     func "Notmuch binary: `command -v notmuch`"
+    func "Alot binary: `command -v alot`"
+
     pidof gnome-keyring-daemon > /dev/null && {
         act "using gnome-keyring to store secrets"
         GNOMEKEY=1 }

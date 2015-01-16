@@ -518,10 +518,10 @@ EOF
         sysread -o 1 <<EOF >> "$MUTTDIR"/rc
 ## GnuPG specific settings
 # create a pgp/mime encrypted attachment
-set pgp_encrypt_only_command="pgpewrap gpg --batch --quiet --no-verbose --output - --encrypt --textmode --armor --always-trust --encrypt-to $gpgkey -- -r %r -- '%f'"
+set pgp_encrypt_only_command="gpgewrap gpg --batch --quiet --no-verbose --output - --encrypt --textmode --armor --always-trust --encrypt-to $gpgkey -- -r %r -- '%f'"
 
 # create a pgp/mime encrypted and signed attachment
-set pgp_encrypt_sign_command="pgpewrap gpg %?p?--passphrase-fd 0? --batch --quiet --no-verbose --textmode --output - --encrypt --sign %?a?-u %a? --armor --always-trust --encrypt-to $gpgkey -- -r %r -- '%f'"
+set pgp_encrypt_sign_command="gpgewrap gpg %?p?--passphrase-fd 0? --batch --quiet --no-verbose --textmode --output - --encrypt --sign %?a?-u %a? --armor --always-trust --encrypt-to $gpgkey -- -r %r -- '%f'"
 
 ## end of Jaro Mail generated muttrc
 ####################################
