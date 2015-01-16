@@ -1,5 +1,12 @@
 # JaroMail ChangeLog
 
+## 3.1
+### 16 Jan 2015
+
+Fixes to locking, email fetching and anonymous mixmaster mailer.
+Several improvemends to code readability, stability and speed using
+zsh builtins.
+
 ## 3.0
 ### 10 Jan 2015
 

@@ -10,7 +10,7 @@
 
 *A commandline tool to easily and privately handle your e-mail*
 
-Version: **3.0**
+Version: **3.1**
 
 Updates on: http://dyne.org/software/jaro-mail
 
@@ -62,15 +62,24 @@ A round-up on Jaro Mail features follows:
 **GNU/Linux** users can run `make` to install all needed components
   (done automatically, requires root) and compile auxiliary
   tools. Once compiled then `make install` will put Jaro Mail in
-  `/usr/local`. To install it in another place use `PREFIX=$HOME/usr
-  make install` (recommended for people customizing their own
-  scripts).
+  `/usr/local`. Or To install it as user into a self-contained place:
+
+```
+   PREFIX=$HOME/Postbox make install
+``
+
+Will create the directory `Postbox` in your home directory and install
+Jaro Mail inside it, with the `jaro` executable in `Postbox/bin`.
+
+When Jaro Mail is installed system-wide, the `JAROMAILDIR`
+environmental variable can be changed to point to where all emails
+will be stored, by default it is `$HOME/Mail`.
 
 The dependencies to be installed on the system for Jaro Mail are
 * build: `make gcc libglib2.0-dev libgnome-keyring-dev`
 * run: `fetchmail msmtp mutt notmuch pinentry-curses abook wipe alot`
 
-Bare in mind **you need to read the Manual**: this software is not
+Keep in mind **you need to read the Manual**: this software is not
 graphical, it is not meant to be intuitive, does not contains
 eyecandies (except for stats on mail traffic). Jaro Mail is operated
 via Terminal, configured in plain text and overall made by geeks for

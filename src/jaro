@@ -20,7 +20,7 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=3.0
+VERSION=3.1
 DATE=Jan/2015
 JAROMAILEXEC=$0
 typeset -a OLDARGS
@@ -229,7 +229,7 @@ ${=mkdir} "$MAILDIRS"
 #chmod 700 $WORKDIR
 chmod 700 "$MAILDIRS"
 
-PATH=$WORKDIR/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/opt/local/bin
+PATH=$WORKDIR/bin:/bin:/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin::/opt/local/bin
 
 # load our ZLibs
 if [ -d $WORKDIR/zlibs ]; then
@@ -395,8 +395,8 @@ check_bin() {
         error "Cannot find Mutt. Please install it."
         exit 1
     fi
-    func "Mutt binary: $mutt"
-
+    func "Mutt binary: `command -v mutt`"
+    func "Notmuch binary: `command -v notmuch`"
     pidof gnome-keyring-daemon > /dev/null && {
         act "using gnome-keyring to store secrets"
         GNOMEKEY=1 }

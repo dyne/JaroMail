@@ -132,12 +132,12 @@ EOF
         esac
     done
 
-    # create the notmuch database if not present
-    [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || {
-        notice "Indexing emails in the search database"
-        nm setup
-        nm new
-    }
+    # # create the notmuch database if not present
+    # [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || {
+    #     notice "Indexing emails in the search database"
+    #     nm setup
+    #     nm new
+    # }
 
     # compile the list of own addresses and aliases
     for i in `awk '
@@ -464,12 +464,9 @@ update_mutt() {
     act "updating mutt settings"
     func "MUTTDIR:     $MUTTDIR"
 
-    func "binary: $mutt"
-    func "pgpewrap: $pgpewrap"
-    func "lock: $dotlock"
     ${=mkdir} "$MUTTDIR"
     ${=mkdir} "$MUTTDIR"/cache
-    ${=rm}    "$MUTTDIR"/rc
+    rm -f "$MUTTDIR"/rc
 
     gpgkey=""
     # detect the default gpg key to always encrypt also to self

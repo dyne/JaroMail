@@ -6,6 +6,12 @@ PREFIX=${PREFIX:-/usr/local}
 JARO_LIBEXEC=$PREFIX/share/jaromail
 JARO_SHARE=$PREFIX/share/jaromail
 
+[[ -w "$JARO_SHARE" ]] || {
+    print "Error: cannot write to $JARO_SHARE"
+    print "Run as root or set PREFIX to another location"
+    return 1
+}
+
 rm -rf "$JARO_SHARE"
 mkdir -p "$JARO_SHARE"
 
@@ -41,6 +47,28 @@ mkdir -p $PREFIX/bin
 cat <<EOF > $PREFIX/bin/jaro
 #!/usr/bin/env zsh
 export JAROWORKDIR=${JARO_SHARE}
+EOF
+
+zmodload zsh/pcre
+# if not installed system-wide then place the Mail into prefix
+[[ "$PREFIX" =~ "^/usr" ]] || {
+    cat <<EOF >> $PREFIX/bin/jaro
+export JAROMAILDIR=${PREFIX}
+EOF
+}
+cat <<EOF >> $PREFIX/bin/jaro
 ${JARO_SHARE}/bin/jaro \${=@}
 EOF
 chmod +x $PREFIX/bin/jaro
+
+source ${JARO_SHARE}/bin/jaro source
+
+[[ "$PREFIX" =~ "^/usr" ]] || $PREFIX/bin/jaro init
+notice "Jaro Mail succesfully installed in: $PREFIX"
+act "Executable path: $PREFIX/bin/jaro"
+[[ "$PREFIX" =~ "^/usr" ]] && {
+    notice "To initialize your Mail dir use: jaro init"
+    act "Default is $HOME/Mail"
+    act "Change it via environment variable JAROMAILDIR"
+}
+return 0

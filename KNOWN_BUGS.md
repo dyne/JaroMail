@@ -11,7 +11,4 @@ mutt problem, one way to solve it would be to mirror maildirs locally
 in tmp. But then that would not be a peek anymore...
 
 
-Mairix progressive indexing does not work Search needs to be more
-efficient To be substituted with MU
-
 
