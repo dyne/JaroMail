@@ -66,7 +66,7 @@ A round-up on Jaro Mail features follows:
 
 ```
    PREFIX=$HOME/Postbox make install
-``
+```
 
 Will create the directory `Postbox` in your home directory and install
 Jaro Mail inside it, with the `jaro` executable in `Postbox/bin`.
