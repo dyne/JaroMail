@@ -237,7 +237,7 @@ deliver() {
     tags="$2"
     func "indexing tags: $tags"
 
-    cat | nm insert --folder="$dest" ${=tags}
+    nm insert --folder="$dest" ${=tags}
     res=$?
     [[ $res = 0 ]] || \
         error "Could not deliver email file into maildir $dest with tags $tags"

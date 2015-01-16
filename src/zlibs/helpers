@@ -27,11 +27,17 @@
 # which mutt binary to use
 mutt="mutt"
 
+
 # remote leading and trailing spaces in a string taken from stdin
 trim() {
     sed -e 's/^[[:space:]]*//g ; s/[[:space:]]*\$//g'
 }
 
+# zmodload zsh/mapfile
+printfile() {
+    print ${mapfile[$1]}
+}
+    
 # extract all emails found in a text from stdin
 # outputs them one per line
 extract_emails() {
@@ -40,6 +46,7 @@ awk '{ for (i=1;i<=NF;i++)
        gsub(/<|>|,/ , "" , $i); print $i } }'
 }
 
+# zmodload zsh/regex
 isemail() {
     [[ "$1" -regex-match "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b" ]] && return 0
     
@@ -108,7 +115,7 @@ autostart() {
             return 1
         }
         
-        ${=mutt} -F $MUTTDIR/rc ${=muttflags} -Z
+        _mutt -Z
         return $?
     }
 
@@ -117,7 +124,7 @@ autostart() {
     [[ $? = 0 ]] && {
         notice "Composing message to: ${@}"
         # its an email, TODO see if we have it in our addressbook
-        ${=mutt} -F $MUTTDIR/rc ${=muttflags} ${=@}
+        _mutt ${=@}
         return 0
     }
 
@@ -126,12 +133,12 @@ autostart() {
         # is it a maildir? then open
         maildircheck ${1}
         [[ $? = 0 ]] && {
-            ${=mutt} -F $MUTTDIR/rc ${=muttflags} -f ${1}
+            _mutt -f ${1}
             return 0
         }
         # is it a regular file? then attach it
         [[ -f "$1" ]] && {
-            ${=mutt} -F $MUTTDIR/rc ${=muttflags} -a ${=@}
+            _mutt -a ${=@}
             return 0
         }
     }
@@ -140,7 +147,7 @@ autostart() {
     maildircheck "$MAILDIRS/$1"
     [[ $? = 0 ]] && {
         notice "Opening folder ${1}"
-        ${=mutt} -F $MUTTDIR/rc ${=muttflags} -f "$MAILDIRS/${1}"
+        _mutt -f "$MAILDIRS/${1}"
         return 0
     }
 
@@ -206,7 +213,7 @@ BEGIN { head=1 }
 # of course we have a preference for AutOrg, the editor from our suite
 # however the default is nano if nothing else is choosen.
 jarovim() {
-    vim -c 'set fo=tcrq' -c 'set tw=72' -c 'set paste' \
+    vim -c 'set fo=tcrq' -c 'set tw=72' \
     -c 'map <C-j> {gq}' -c 'imap <C-j> <esc>{gq}i' \
         "${@}"
     return $?
@@ -245,11 +252,22 @@ edit_file() {
 #####################
 ## Open a mail folder
 open_folder() {
-    notice "Opening folder ${1}"
-    { maildircheck ${MAILDIRS}/${1} } && {
-    ${=mutt} -F $MUTTDIR/rc ${=muttflags} -f "$MAILDIRS/${1}"
-    return $? }
-    return 1
+    notice "Opening folder ${PARAM[1]}"
+
+    if maildircheck "${MAILDIRS}/${PARAM[1]}"; then
+        _mutt -f "$MAILDIRS/${PARAM[1]}"
+        exitcode=$?
+    
+    elif maildircheck "${PARAM[1]}"; then
+        _mutt -f "${PARAM[1]}"
+        exitcode=$?
+
+    else
+        error "No maildir found: ${PARAM[1]}"
+        exitcode=1
+
+    fi
+    return $exitcode
 }
 
 ##############
@@ -381,6 +399,9 @@ human_size() {
 
 # TODO: save fingeprints of servers and check connections
 fingerprint() {
+# dyne.org one:
+# tls_fingerprint 6A:D4:DF:E4:20:32:F9:66:94:35:0C:33:9D:74:96:5C
+
     read_account ${account}
     { test  $? != 0 } && {
         error "Invalid account: $account"

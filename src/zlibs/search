@@ -29,8 +29,10 @@
 nm() {
     func "notmuch $@"
     [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || nm_setup
+    lock "$MAILDIRS"/cache/notmuch
     notmuch --config="$MAILDIRS"/cache/notmuch/rc ${@}
     _res=$?
+    unlock "$MAILDIRS"/cache/notmuch
     [[ $_res = 0 ]] || {
         error "Notmuch error on command: ${@}"
         func "Returning status to caller: $_res"
@@ -101,12 +103,9 @@ nm_index() {
 
 
 nm_search() {
-    func "notmuch --config=${nm_dir}/rc search --output=files ${=PARAM}"
-    
+
     # launch the search with notmuch
-    lock "$MAILDIRS"/cache/notmuch
     search_results=`nm search --output=files ${=PARAM}`
-    unlock "$MAILDIRS"/cache/notmuch
     [[ $? = 0 ]] || {
         error "notmuch search failed with an error"
         return 1
@@ -198,10 +197,8 @@ user_agent = Jaro Mail <http://jaromail.dyne.org>
     translated = ☰
 EOF
 
-    lock "$MAILDIRS"/cache/notmuch
     alot -c "$MAILDIRS"/cache/alot/rc -n "$MAILDIRS"/cache/notmuch/rc \
         search ${=PARAM}
-    unlock "$MAILDIRS"/cache/notmuch
 
     return $?
 }

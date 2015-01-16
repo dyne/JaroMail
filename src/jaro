@@ -35,7 +35,7 @@ DRYRUN=0
 CALLMUTT=1
 
 # use gnome-keyring for passwords on GNU systems
-GNOMEKEY=0
+GNOMTEKEY=0
 
 # default permission on files
 umask 066
@@ -45,9 +45,10 @@ typeset -h rm mkdir mutt
 
 # load zsh regex module
 zmodload zsh/regex
-# zmodload zsh/mapfile
-
-
+zmodload zsh/mapfile
+zmodload zsh/system
+zmodload -F zsh/stat b:zstat
+zmodload zsh/sched
 # date stamp
 datestamp=`date '+%d%b%y'`
 ##########################
@@ -272,23 +273,19 @@ endgame() {
     done
     JAROTMPFILES=()
 
-    [[ -e "$MAILDIRS"/cache/notmuch.lock ]] && {
-        func "unlocking notmuch/Xapian search cache"
-        unlock "$MAILDIRS"/cache/notmuch
-    }
     func "endgame() exit code: $exitcode"
     return $exitcode
 }
-# Trap functions for the _endgame event
-TRAPINT()  { _endgame INT;   return $? }
-# TRAPEXIT() { _endgame EXIT;  return $? }
-TRAPHUP()  { _endgame HUP;   return $? }
-TRAPQUIT() { _endgame QUIT;  return $? }
-TRAPABRT() { _endgame ABORT; return $? }
-TRAPKILL() { _endgame KILL;  return $? }
-TRAPPIPE() { _endgame PIPE;  return $? }
-TRAPTERM() { _endgame TERM;  return $? }
-TRAPSTOP() { _endgame STOP;  return $? }
+# Trap functions for the endgame event
+TRAPINT()  { endgame INT;   return $? }
+# TRAPEXIT() { endgame EXIT;  return $? }
+TRAPHUP()  { endgame HUP;   return $? }
+TRAPQUIT() { endgame QUIT;  return $? }
+TRAPABRT() { endgame ABORT; return $? }
+TRAPKILL() { endgame KILL;  return $? }
+TRAPPIPE() { endgame PIPE;  return $? }
+TRAPTERM() { endgame TERM;  return $? }
+TRAPSTOP() { endgame STOP;  return $? }
 # TRAPZERR() { func "function returns non-zero." }
 
 case $OS in
@@ -338,12 +335,20 @@ MUTTDIR="$MAILDIRS/.mutt"
     cp "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
     notice "Default Mutt configuration template created" }
 
+_mutt() {
+    for i; do _fa+=" $i "; done
+    func "exec: mutt -F $MUTTDIR/rc ${=muttflags} ${_fa}"
+    [[ "$subcommand" = "peek" ]] || rm -f $MUTTDIR/muttpass
+    touch $MUTTDIR/muttpass
+    mutt -F $MUTTDIR/rc ${=muttflags} ${=_fa}
+    return $?
+}
 
 # binary programs recognition
 check_bin() {
 
     # required programs
-    for req in pinentry fetchmail gpg; do
+    for req in pinentry fetchmail gpg mutt msmtp; do
     command -v $req >/dev/null
     { test $? != 0 } && {
         error "Cannot find $req. Please install it."
@@ -377,11 +382,10 @@ check_bin() {
 
     # which mutt binary to use
     if command -v mutt > /dev/null; then
-        # system-wite
-        mutt="mutt"
+        # system-wide
         # TODO: check if this is also the location on Fedora
-        pgpewrap="/usr/lib/mutt/pgpewrap"
-        dotlock="mutt_dotlock"
+        pgpewrap="${WORKDIR}/bin/gpgewrap"
+        dotlock="${WORKDIR}/bin/dotlock"
     elif command -v mutt-jaro > /dev/null; then
         # in-house compiled
         mutt=mutt-jaro
@@ -392,9 +396,6 @@ check_bin() {
         exit 1
     fi
     func "Mutt binary: $mutt"
-    # make sure there is always a muttpass file even if empty
-    touch $MAILDIR/tmp/muttpass
-
 
     pidof gnome-keyring-daemon > /dev/null && {
         act "using gnome-keyring to store secrets"
@@ -592,6 +593,8 @@ main() {
     
     subcommands_opts[crypt]=""
     subcommands_opts[cryptsign]=""
+
+    subcommands_opts[isml]=""
 
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
@@ -868,6 +871,13 @@ main() {
 
     smtp)
         smtp_send ${PARAM}
+        exitcode=$?
+        ;;
+
+    isml)
+        ismailinglist
+        [[ $? = 0 ]] && \
+            notice "Email read from stdin is a mailinglist" 
         exitcode=$?
         ;;
 

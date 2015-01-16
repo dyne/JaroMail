@@ -36,7 +36,7 @@ set ascii_chars
 set auto_tag
 unset beep
 unset help
-set mark_old
+set mark_old = no
 unset markers
 #set resolve
 unset sort_re

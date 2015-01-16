@@ -23,7 +23,7 @@
 # extract all emails found in stdin, one per line
 compose() {
     # no args, open in compose mode
-    ${=mutt} -F $MUTTDIR/rc -H <(print "To: ${PARAM[@]}")
+    _mutt -H <(print "To: ${PARAM[@]}")
     return $?
 }
 
@@ -64,7 +64,7 @@ queue() {
             error "Group not found: $groupfile"
             return 1 }
         
-        recipients=`cat "$MAILDIRS/Groups/$groupfile" | grep -v '^#'`
+        grep -v '^#' $MAILDIRS/Groups/$groupfile | sysread recipients
         groupnum=`print ${recipients} | wc -l`
         groupmode=`head -n1 "$MAILDIRS/Groups/$groupfile" | awk '/^#mode/ { print $2 } { next }'`
         [[ "$groupmode" = "" ]] && { groupmode="individual" }
@@ -101,7 +101,7 @@ queue() {
         
     else
         # recipients are set in the email envelope
-        cat "$tmpqueue" | deliver "outbox"
+        printfile "$tmpqueue" | deliver "outbox"
     fi
     
     unlock "$MAILDIRS/outbox"
@@ -282,7 +282,7 @@ smtp_send() {
 
     _tmp_create
     msmtpcfg="$JAROTMP"
-    cat <<EOF > $msmtpcfg
+    sysread -o 1 <<EOF > $msmtpcfg
 account default
 from ${email}
 user ${login}
@@ -290,10 +290,7 @@ host ${smtp}
 port ${smtp_port}
 tls on
 tls_starttls on
-tls_certcheck on
-# tls_fingerprint sha1 44:e8:10:ef:35:fc:54:51:fd:84:cf:59:de:af:a9:ab:a1:55:b8:41
-# tls_fingerprint md5 88:65:6e:6d:a5:66:92:a1:9c:47:18:66:d5:b8:56:49
-tls_fingerprint 6A:D4:DF:E4:20:32:F9:66:94:35:0C:33:9D:74:96:5C
+tls_certcheck off
 logfile "${MAILDIRS}/logs/msmtp.log"
 auth ${auth}
 password ${password}
@@ -337,7 +334,7 @@ send() {
             _tmp_create
             anoncfg="$JAROTMP"
 
-            cat <<EOF > "$anoncfg"
+            sysread -o 1 <<EOF > "$anoncfg"
 REMAIL		n
 POOLSIZE	0
 SENDPOOLTIME	0m
@@ -390,7 +387,7 @@ BEGIN { body=0 }
 /^Subject:/ { print " .  " $0 }
 '
 
-            tsize=`stat -c '%s' "$qbody"`
+            tsize=`zstat +size "$qbody"`
             act "sending `human_size $tsize` over the network ..."
             jaro -q smtp -a ${account:-default} < "${qbody}"
             res=$?
@@ -403,7 +400,7 @@ BEGIN { body=0 }
             notice "Mail sent succesfully"
             # whitelist those to whom we send mails
             hdr "$qbody" | learn recipient
-            cat "$qbody" | deliver sent
+            printfile "$qbody" | deliver sent
             [[ $? = 0 ]] && { rm "$qbody" }
         fi
 
@@ -461,26 +458,28 @@ peek() {
     }
 
     _tmp_create
-    tmp="$JAROTMP"
-    cat <<EOF >> "$tmp"
+    _pass_tmp="$JAROTMP"
+    sysread -o 1 <<EOF >> "$_pass_tmp"
 set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
     unset password
     # when peeking don't mark unread messages as Old
     # and sort date received with no threading (latest up)
-    touch "$MAILDIRS/tmp/muttpass"
-    cat <<EOF >> "$MAILDIRS/tmp/muttpass"
-source '$tmp'
+    rm -f "$MUTTDIR/muttpass"
+    sysread -o 1 <<EOF > "$MUTTDIR/muttpass"
+source '$_pass_tmp'
 unset mark_old
 set sort=reverse-date-received
 EOF
-    # fork a process to delete the pass files after use
-    (sleep 1;
-        cp /dev/null "$MAILDIRS/tmp/muttpass"
-        cp /dev/null "$tmp" # zero the tmp passfile
-    ) &
-    ${=mutt} -F $MUTTDIR/rc	-f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}
+
+    # schedule deletion of pass files after use
+    sched +1 "
+rm -f $MUTTDIR/muttpass
+touch $MUTTDIR/muttpass
+${=rm} -f $tmp" # zero the tmp passfile after a second
+
+    _mutt -f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}
 
     } # DRYRUN
     return $?

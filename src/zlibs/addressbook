@@ -487,31 +487,18 @@ import() {
 
     [[ "$_arg" = "" ]] && {
         notice "Import address list from stdin into addressbook $list"
-        _stdin=`cat`
+        sysread _stdin # reads into var _stdin
         _new=0
         act "imported new entries will be printed on stdout"
+        e_addr=()
         for i in ${(f)_stdin}; do
             # skip comments starting with #
             [[ "$i[1]" = "#" ]] && continue
             
-            _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
-            _e="${_parsed[(ws:,:)1]:l}"
-            
-            # check if is really an email
-            isemail "$_e"
-            [[ $? = 0 ]] || {
-                func "not an email: $_e"
-                continue
-            }
+            print - "From: $i" | e_parse From
+            [[ $? = 0 ]] || continue
 
-            # check if the email is not a duplicate
-            [[ "${result[$_e]}" = "" ]] || {
-                func "duplicate email: $_e"
-                continue
-            }
-            
-            _n="${_parsed[(ws:,:)2]}"
-            result+=("$_e" "$_n")
+            _e="${e_parsed[(ws:,:)1]:l}"
             
             # check if the email is not already known
             lookup_email "$_e"
@@ -520,12 +507,14 @@ import() {
                 continue
             }
 
+            _n="${e_parsed[(ws:,:)2]}"
+
             print - "$_n <$_e>"            
             [[ $DRYRUN = 0 ]] && insert_address "$_e" "$_n"
 
             _new=$(( $_new + 1 ))
         done
-        notice "Valid unique entries parsed: ${#result}"
+        notice "Valid unique entries parsed: ${#e_addr}"
         act "new addresses found: ${_new}"
         return $?
     }
@@ -664,7 +653,7 @@ export_vcard() {
 
 edit_abook() {
 
-    abook --config <(cat <<EOF
+    abook --config <(sysread <<EOF
 set autosave=true
 set mutt_command=jaro compose
 set sort_field=name
