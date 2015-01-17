@@ -1,4 +1,4 @@
-#+TITLE: Jaro Mail 3.0
+#+TITLE: Jaro Mail 3.1
 #+AUTHOR: by Jaromil @ dyne.org
 #+DATE: Jan 2015
 
@@ -864,8 +864,6 @@ To explicitly change a password one can operate the default keyring manager or u
 
 Those using a GNU/Linux system might want to have a look at our other software *Tomb, the Crypto Undertaker* [fn:tomb] which takes care of quick mount and umount of an encrypted volume when desired and includes a *hook* mechanism to automatize the execution of commands to make a directory inside the encrypted volume immediately available in the user's home.
 
-[fn:tomb] http://tomb.dyne.org
-
 Using a light combination of scripts between Jaro Mail and Tomb is possible to achieve a strong level of personal security, definitely above the average.
 
 In particular, Jaro Mail does not needs system-wide installation, but
@@ -877,13 +875,15 @@ where downloaded maildirs must be stored and the *JAROWORKDIR*
 environmental variable points to the path where jaromail was
 installed:
 
-$ cd JaroMail-3.0
-$ make
-$ PREFIX=/media/secrets.tomb/usr make install
-$ export JAROWORKDIR=/media/secrets.tomb/usr/share/jaromail
-$ export JAROMAILDIR=/media/secrets.tomb/Mail
+: cd JaroMail-3.0
+: make
+: PREFIX=/media/secrets.tomb/usr make install
+: export JAROWORKDIR=/media/secrets.tomb/usr/share/jaromail
+: export JAROMAILDIR=/media/secrets.tomb/Mail
 
 For more information about Tomb please refer to its own documentation: environmental variables can also be set via hooks and file paths can be automatically overlayed into $HOME when the Tomb is open.
+
+[fn:tomb] http://tomb.dyne.org
   
 
 * Advanced usage

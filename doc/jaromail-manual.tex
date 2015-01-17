@@ -1,4 +1,4 @@
-% Created 2015-01-07 Wed 14:45
+% Created 2015-01-17 za 13:34
 \documentclass[a4,onecolumn,portrait]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -36,7 +36,7 @@
 \pagestyle{fancyplain}
 \author{by Jaromil @ dyne.org}
 \date{Jan 2015}
-\title{Jaro Mail 3.0}
+\title{Jaro Mail 3.1}
 \hypersetup{
   pdfkeywords={},
   pdfsubject={},
@@ -518,7 +518,7 @@ Key & Function\\
 \textbf{m} & Compose a new message\\
 \textbf{Tab} & Complete addresses and folders input\\
 \textbf{r} & Reply to the sender of a message\\
-\textbf{y} & Queue a message for sending in outbox\\
+\textbf{y} & Send a message (queue in outbox)\\
 \textbf{f} & Forward a message to new recipients\\
 \textbf{=} & List all filtered maildir folders\\
 \textbf{c} & Change to another folder\\
@@ -613,7 +613,7 @@ Will save in the file '/whitelist.vcard'/ all addresses stored inside the whitel
 \subsection{Addressbook in brief}
 \label{sec-7-3}
 
-Here a roundup on the addressbook commands that are available from the commandline. Arguments '-l abook' take the string to identify
+Here a roundup on the addressbook commands that are available from the \emph{jaro} commandline script. Arguments '-l abook' take the string to identify
 
 \begin{center}
 \begin{tabular}{lll}
@@ -762,7 +762,7 @@ Examples:
 \begin{verbatim}
 two weeks
 \end{verbatim}
-\subsubsection{Supported absolute time formats}
+\subsubsection{Absolute time formats}
 \label{sec-8-3-3}
 
 \begin{verbatim}
@@ -784,7 +784,7 @@ Examples:
 \begin{verbatim}
 5pm
 \end{verbatim}
-\subsubsection{Supported absolute date formats}
+\subsubsection{Absolute date formats}
 \label{sec-8-3-4}
 
 \begin{verbatim}
@@ -839,46 +839,9 @@ Examples:
 UTC
 EET
 \end{verbatim}
-\section{Security}
-\label{sec-9}
-
-\subsection{Password storage}
-\label{sec-9-1}
-
-Our MUA (Mutt) and our MTA (Fetchmail) normally required the user to input the email account password every time or write it clear inside a plain text file, jeopardizing the secrecy of it.
-
-But most desktops nowadays have a keyring that stores passwords that are often used during a session, saving the user from retyping them every time.
-
-Jaro Mail provides an interesting (and long awaited) feature even for those who are already using Mutt for their email: \textbf{it stores passwords securely}. This is done in different ways depending from the operating system is being running on.
-
-Jaro Mail will use the default keyring whenever present to store all new passwords for each account used: the first time will prompt for a password and, while using it, will save it in relation to the particular account. This way the user can simply authenticate into the keyring at login and, while managing such sensitive informations using OS specific tools, Jaro Mail can be launched without the tedious task of a password input every time e-mails are being checked.
-
-On \textbf{Apple/OSX} the default internal keyring is being used.
-
-On \textbf{GNU/Linux} gnome-keyring is supported if found, else JaroMail will revert to use its own encrypted\footnote{The keyring is encrypted using weak symmetric
-encryption via GnuPG, the only protection for the data inside then is
-the password memorized by the used.
-
-To explicitly change a password one can operate the default keyring manager or use the command \textbf{jaro passwd} (and specify other acconts using \textbf{-a accountname})) which will prompt to set for a new password even if an old one is known.} database called \textbf{keyring}. Every time a password will be retrieved or saved, the keyring password will be asked. However, it is recommended to use Gnome-Keyring over the native one, which has still some glitches.
-\subsection{A tip for GNU/Linux users}
-\label{sec-9-2}
-
-Those using a GNU/Linux system might want to have a look at our other software \textbf{Tomb, the Crypto Undertaker} \footnote{\url{http://tomb.dyne.org}
-
-Using a light combination of scripts between Jaro Mail and Tomb is possible to achieve a strong level of personal security, definitely above the average.
-
-In particular, Jaro Mail does not needs system-wide installation, but can be installed and used in a way that makes it totally self-contained and transportable across systems inside a Tomb. When installing, just specify a prefix that is writable by the user, then make sure the \textbf{JAROMAILDIR} environmental variable points to the path where downloaded maildirs must be stored and the \textbf{JAROWORKDIR} environmental variable points to the path where jaromail was installed:
-
-\$ cd JaroMail-3.0
-\$ make
-\$ PREFIX=/media/secrets.tomb/usr make install
-\$ export JAROWORKDIR=/media/secrets.tomb/usr/share/jaromail
-\$ export JAROMAILDIR=/media/secrets.tomb/Mail
-
-For more information about Tomb please refer to its own documentation: environmental variables can also be set via hooks and file paths can be automatically overlayed into \$HOME when the Tomb is open.} which takes care of quick mount and umount of an encrypted volume when desired and includes a \textbf{hook} mechanism to automatize the execution of commands to make a directory inside the encrypted volume immediately available in the user's home.
 
 \section{Storage and backup}
-\label{sec-10}
+\label{sec-9}
 
 Most existing e-mail systems have their own storage format which is
 often over-complicated and forces us to convert our archives to it.
@@ -919,7 +882,7 @@ users.}
 \end{quote}
 
 \subsection{Merge maildir}
-\label{sec-10-1}
+\label{sec-9-1}
 
 Jaro Mail can safely merge two different maildirs basically gathering
 all e-mails stored in them into a unique place. This is done using two
@@ -936,7 +899,7 @@ folder "ml.saved-mails" to the other maildir folder
 will be deleted and all its contents will be found in
 "ml.global-archive".
 \subsection{Backup mails older than}
-\label{sec-10-2}
+\label{sec-9-2}
 
 To facilitate the separation of stored email files across maildirs, for instance to move from a maildir to another all those mails that are older than a certain period, Jaro Mail implements the \textbf{backup} command. Backup will move all messages matched by a search expression (see previous section) into another maildir folder and delete them from the original.
 
@@ -955,7 +918,7 @@ jaro backup /media/backup.tomb/old.unsorted folder:unsorted and date:..1y
 
 Will move all emails found in the 'unsorted' folder that are older than one year inside the old.unsorted folder in our mounted backup tomb.
 \subsection{Filter a maildir}
-\label{sec-10-3}
+\label{sec-9-3}
 
 If filters are updated or one desires to import a maildir into Jaro
 Mail processing it through its filters, the \textbf{filter} command is
@@ -975,7 +938,7 @@ programs of course. Best practice is to copy the maildir inside the
 name: all arguments to the filter command can be relative to that
 directory.
 \subsection{Storage in brief}
-\label{sec-10-4}
+\label{sec-9-4}
 
 Here a recap of the commands dealing with maildir storage in Jaro Mail. Please note the syntax is subject to change in future:
 
@@ -988,6 +951,51 @@ merge & origin-maildir destination-maildir\\
 filter & maildir\\
 \end{tabular}
 \end{center}
+\section{Security}
+\label{sec-10}
+
+\subsection{Password storage}
+\label{sec-10-1}
+
+Our MUA (Mutt) and our MTA (Fetchmail) normally required the user to input the email account password every time or write it clear inside a plain text file, jeopardizing the secrecy of it.
+
+But most desktops nowadays have a keyring that stores passwords that are often used during a session, saving the user from retyping them every time.
+
+Jaro Mail provides an interesting (and long awaited) feature even for those who are already using Mutt for their email: \textbf{it stores passwords securely}. This is done in different ways depending from the operating system is being running on.
+
+Jaro Mail will use the default keyring whenever present to store all new passwords for each account used: the first time will prompt for a password and, while using it, will save it in relation to the particular account. This way the user can simply authenticate into the keyring at login and, while managing such sensitive informations using OS specific tools, Jaro Mail can be launched without the tedious task of a password input every time e-mails are being checked.
+
+On \textbf{Apple/OSX} the default internal keyring is being used.
+
+On \textbf{GNU/Linux} gnome-keyring is supported if found, else JaroMail will revert to use its own encrypted\footnote{The keyring is encrypted using weak symmetric encryption via GnuPG, the only protection for the data inside then is the password memorized by the used.
+
+To explicitly change a password one can operate the default keyring manager or use the command \textbf{jaro passwd} (and specify other acconts using \textbf{-a accountname})) which will prompt to set for a new password even if an old one is known.} database called \textbf{keyring}. Every time a password will be retrieved or saved, the keyring password will be asked. However, it is recommended to use Gnome-Keyring over the native one, which has still some glitches.
+\subsection{A tip for GNU/Linux users}
+\label{sec-10-2}
+
+Those using a GNU/Linux system might want to have a look at our other software \textbf{Tomb, the Crypto Undertaker} \footnote{\url{http://tomb.dyne.org}} which takes care of quick mount and umount of an encrypted volume when desired and includes a \textbf{hook} mechanism to automatize the execution of commands to make a directory inside the encrypted volume immediately available in the user's home.
+
+Using a light combination of scripts between Jaro Mail and Tomb is possible to achieve a strong level of personal security, definitely above the average.
+
+In particular, Jaro Mail does not needs system-wide installation, but
+can be installed and used in a way that makes it totally
+self-contained and transportable across systems inside a Tomb. When
+installing, just specify a prefix that is writable by the user, then
+make sure the \textbf{JAROMAILDIR} environmental variable points to the path
+where downloaded maildirs must be stored and the \textbf{JAROWORKDIR}
+environmental variable points to the path where jaromail was
+installed:
+
+\begin{verbatim}
+cd JaroMail-3.0
+make
+PREFIX=/media/secrets.tomb/usr make install
+export JAROWORKDIR=/media/secrets.tomb/usr/share/jaromail
+export JAROMAILDIR=/media/secrets.tomb/Mail
+\end{verbatim}
+
+For more information about Tomb please refer to its own documentation: environmental variables can also be set via hooks and file paths can be automatically overlayed into \$HOME when the Tomb is open.
+
 \section{Advanced usage}
 \label{sec-11}
 
