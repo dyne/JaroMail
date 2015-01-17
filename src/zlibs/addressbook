@@ -333,8 +333,8 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
                 lookup_email "${_e}"
 
                 [[ $? = 0 ]] || {
-                    insert_address "${_e}" "${_name}"
                     act "${a} ${_name} <${_e}>"
+                    [[ $DRYRUN = 0 ]] && insert_address "${_e}" "${_name}"
                 }
             done
 
@@ -395,10 +395,10 @@ extract() {
         ######### GPG
         # first arg is a GnuPG key ring
         [[ "$_magic" =~ "GPG key public ring" ]] && {
-
             notice "Extracting addresses found in GPG keyring: $arg"
             _addrs=`gpg --list-keys --with-colons | awk -F: '{print $10}'`
             for i in ${(f)_addrs}; do
+                [[ $global_quit = 1 ]] && break
                 _parsed=`print "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
                 _e="${_parsed[(ws:,:)1]:l}"
                 isemail "$_e"
@@ -415,6 +415,8 @@ extract() {
             # counts which addresses are known to us
             _known=0
             for i in ${(k)result}; do
+                [[ $global_quit = 1 ]] && break
+
                 lookup_email ${i}
                 [[ $? = 0 ]] || {
                     _known=$(( $_known + 1 )) }
@@ -432,6 +434,8 @@ extract() {
             # first make sure all unknown keys are imported
             _addrs=`${=_gpg} --list-sigs | awk -F: '{print $5 " " $10}'`
             for i in ${(f)_addrs}; do
+                [[ $global_quit = 1 ]] && break
+
                 [[ "$i" =~ "[User ID not found]" ]] && {
                     act "looking up: $i"
                     ${=_gpg} --recv-key ${i[(w)1]}
@@ -440,6 +444,8 @@ extract() {
             
             _addrs=`${=_gpg} --list-sigs | awk -F: '{print $10}'`
             for i in ${(f)_addrs}; do
+                [[ $global_quit = 1 ]] && break
+
                 _parsed=`print "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
                 _e="${_parsed[(ws:,:)1]:l}"
                 isemail "$_e"
@@ -456,6 +462,8 @@ extract() {
             # counts which addresses are known to us
             _known=0
             for i in ${(k)result}; do
+                [[ $global_quit = 1 ]] && break
+
                 lookup_email ${i}
                 [[ $? = 0 ]] || {
                     _known=$(( $_known + 1 )) }
@@ -463,7 +471,78 @@ extract() {
             act "new addresses: $_known"
             return 0
         }
+
+        [[ "$_magic" =~ "vCard" ]] && {
+            # parse the vcard and print a simple name and email list
+            # each value on a single line, entry tuples followed by a #
+            # we skip entries that don't have an email
+            addresses=`awk '
+BEGIN { newcard=0; c=0; name=""; email=""; }
+/^BEGIN:VCARD/ { newcard=1 }
+/^FN:/ { if(newcard = 1) name=$0 }
+/^EMAIL/ { if(newcard = 1) email=$0 }
+/^END:VCARD/ {
+  if(newcard = 1) {
+    newcard=0
+    if(email != "") {
+      c+=1
+      print name
+      print email
+      print "# " c
     }
+    email=""
+    next
+  }
+}
+' $arg | cut -d: -f2`
+            newa=1; _name=""; _email=""
+            for a in ${(f)addresses}; do
+                [[ $global_quit = 1 ]] && break
+                
+                [[ "${a[1]}" = "#" ]] && {
+                    newa=1; # its the end of the entry
+                    
+                    # handle lines with multiple emails in vcard
+                    for ee in ${=_email}; do
+                        # check if we have this email already
+                        _e=`print ${ee//\^M/} | extract_emails`
+                        isemail "$_e"
+                        [[ $? = 0 ]] || continue
+                        # check if the email is not already parsed
+                        [[ "${result[$_e]}" = "" ]] && {
+                            _n="${_name//\^M/}"
+                            result+=("$_e" "$_n")
+                            print - "$_n <$_e>"
+                        }
+                    done
+                    
+                    continue
+                }
+                if [[ $newa = 1 ]]; then
+                    # (V) makes special chars visible, we need to remove them..
+                    _name="${(V)a[(ws:^:)1]}"; newa=0; continue
+                elif [[ $newa = 0 ]]; then
+                    _email="${(V)a[(ws:^:)1]}"
+                fi
+
+            done
+
+            notice "Unique addresses found: ${#result}"
+            # counts which addresses are known to us
+            _known=0
+            for i in ${(k)result}; do
+                [[ $global_quit = 1 ]] && break
+
+                lookup_email ${i}
+                [[ $? = 0 ]] || {
+                    _known=$(( $_known + 1 )) }
+            done
+            act "new addresses: $_known"
+            return 0
+            
+        }
+
+    } # closes condition in which arg is a file
 
     # if no file is recognized, use string as search query
     notice "Extracting addresses from search query: $PARAM"
@@ -487,11 +566,13 @@ import() {
 
     [[ "$_arg" = "" ]] && {
         notice "Import address list from stdin into addressbook $list"
-        sysread _stdin # reads into var _stdin
+        _stdin=`cat` # reads into var _stdin
         _new=0
         act "imported new entries will be printed on stdout"
         e_addr=()
         for i in ${(f)_stdin}; do
+            [[ $global_quit = 1 ]] && break
+
             # skip comments starting with #
             [[ "$i[1]" = "#" ]] && continue
             
@@ -524,6 +605,8 @@ import() {
         act "parsing entries in group file"
         _group=`cat $arg`
         for i in ${(f)_group}; do
+            [[ $global_quit = 1 ]] && break
+
             # skip comments starting with #
             [[ "$i[1]" = "#" ]] && continue
             
@@ -554,6 +637,8 @@ import() {
         _stdin=`cat`
         _new=0
         for i in ${(f)_stdin}; do
+            [[ $global_quit = 1 ]] && break
+
             # skip comments starting with #
             [[ "$i[1]" = "#" ]] && continue
             
@@ -648,7 +733,9 @@ export_vcard() {
     abook --convert --informat abook \
         --infile "$ADDRESSBOOK" \
         --outformat gcrd --outfile "$MAILDIRS"/$list.vcf
-    return $?
+    _res=$?
+    [[ $_res = 0 ]] && notice "$list addressbook exported to VCard file $MAILDIRS/$list.vcf"
+    return $_res
 }
 
 edit_abook() {

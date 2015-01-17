@@ -283,7 +283,7 @@ TRAPHUP()  { endgame HUP;   return $? }
 TRAPQUIT() { endgame QUIT;  return $? }
 TRAPABRT() { endgame ABORT; return $? }
 TRAPKILL() { endgame KILL;  return $? }
-TRAPPIPE() { endgame PIPE;  return $? }
+# TRAPPIPE() { endgame PIPE;  return $? }
 TRAPTERM() { endgame TERM;  return $? }
 TRAPSTOP() { endgame STOP;  return $? }
 # TRAPZERR() { func "function returns non-zero." }
