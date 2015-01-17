@@ -1,0 +1,44 @@
+#!/usr/bin/env zsh
+
+# uncomment to really download keys and modify the pub keyring
+# DRYRUN=1
+
+zmodload zsh/pcre
+
+command -v jaro > /dev/null 2>/dev/null
+[[ $? = 0 ]] || {
+   print "Error: jaro not found in path. Install Jaro Mail."
+   return 1
+}
+
+print "Import all keys found in public keyring signatures"
+
+if [[ -r gnupg-mass-recv.cache ]]; then
+    print "gathering signatures from cache file..."
+    _addrs=`cat gnupg-mass-recv.cache`
+else
+    print "gathering all signatures in public keyring..."
+    _addrs=`gpg --batch --with-colons --list-sigs | awk -F: '{print $5 " " $10}'| tee gnupg-mass-recv.cache`
+    
+fi
+print "parsing the signatures for unkown IDs..."
+typeset -A received
+received=()
+for i in ${(f)_addrs}; do
+    [[ "$i" =~ "User ID not found" ]] && {
+        nid=${i[(w)1]}
+        [[ "$received[$nid]" = 1 ]] && {
+            print "$nid - duplicate"
+            continue
+        }
+        received+=($nid 1)
+        print "$nid - receiving"
+        [[ $DRYRUN = 1 ]] || {
+            gpg --recv-key ${nid}
+        }
+        continue
+    }
+    print $i
+done
+print "Received ${#received} new keys"
+
