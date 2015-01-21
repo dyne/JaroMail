@@ -195,7 +195,12 @@ fetch() {
     [[ ${#exclude} == "0" ]] || {
         func "exclude folders: $exclude"
         for e in ${exclude}; do
-            folders=(${folders:#$e})
+            # fuzzy match
+            for f in ${folders}; do
+                [[ "$f" =~ "$e" ]] && {
+                    folders=(${folders:#$f})
+                }
+            done
         done
     }
     func "fetch folders: $folders"
