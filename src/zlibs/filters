@@ -404,9 +404,9 @@ filter_maildir() {
 
         # parse own email and aliases
         match=0
-        for f in $ftos; do
+        for f in ${(k)e_addr}; do
             # check if destination address is in filter_own array
-            if [[ ${filter_own[(r)$f]} == ${f} ]] ; then
+            [[ ${filter_own[(r)$f]} == ${f} ]] && {
                 [[ "$mdinput" = "priv" ]] && {
                     act "$c\t/ $numm"
                     match=1
@@ -421,7 +421,7 @@ filter_maildir() {
                         break
                     }
                 }
-            fi
+            }
         done
         [[ $match = 1 ]] && continue
 
