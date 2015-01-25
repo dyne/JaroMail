@@ -10,7 +10,7 @@
 
 *A commandline tool to easily and privately handle your e-mail*
 
-Version: **3.1**
+Version: **3.2**
 
 Updates on: http://dyne.org/software/jaro-mail
 

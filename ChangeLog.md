@@ -1,5 +1,16 @@
 # JaroMail ChangeLog
 
+## 3.2
+## 25 Jan 2015
+
+New ZSh completion extension, now capable of tab-completion for
+addresses, maildirs and even remote imap folders. Included
+emlx2maildir script in extras, to import Apple/OSX mail storage into
+maildirs. New exclude config directive for accounts, to exclude
+fetching certain remote imap folders. Fixes to vcard extraction and
+import, filtering to priv folder and gpg email encryption.  Updates to
+manual and commandline documentation.
+
 ## 3.1
 ### 16 Jan 2015
 
