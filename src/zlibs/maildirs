@@ -29,16 +29,16 @@ typeset -h formail_cache
 # no in all other cases
 maildircheck() {
     { test -r "$1" } || {
-    error "Maildir not existing: $1"
-    return 1 }
+        error "Maildir not existing: $1"
+        return 1 }
     { test -w "$1" } || {
-    error "Directory not writable: $1"
-    return 1 }
+        error "Directory not writable: $1"
+        return 1 }
     { test -r "$1/cur" } \
-    && { return 0 } # Yes is a maildir
-# shortened test to speedup
-#	&& { test -r $1/new } \
-#	&& { test -r $1/tmp } \
+        && { return 0 } # Yes is a maildir
+    # shortened test to speedup
+    #	&& { test -r $1/new } \
+    #	&& { test -r $1/tmp } \
     func "Not a maildir: $1"
     return 1
 }

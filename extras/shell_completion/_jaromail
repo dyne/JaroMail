@@ -1,0 +1,74 @@
+#compdef jaro
+
+# Zsh completion for jaromail
+
+# location hardcoded is Mail
+jarodir=${JAROMAILDIR:-${HOME}/Mail}
+
+_jaromail() { 
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+    typeset -alU results
+
+    _arguments \
+        '1: :->commands'\
+        '*: :->args'
+
+    case $state in
+	    commands)
+            _arguments '1:Commands:(open compose fetch send peek search passwd abook extract import backup merge update filter)'
+	        ;;
+	    *)
+            _last=$(( ${#words} - 1 ))
+            case $words[$_last] in
+
+                '-a')
+		            # for f in `find $jarodir/Accounts -type f | grep -v 'README*'`; do
+			        #     c=`basename ${f}`
+			        #     compadd "$@" "$c"
+		            # done
+                    _acs=(`ls $jarodir/Accounts | grep -v README`)
+                    compadd -a _acs
+		            ;;
+
+                '-l')
+                    _abs=(`ls $jarodir/*.abook`)
+		            # for f in `find $jarodir/ -maxdepth 1 -type f -name '*.abook'`; do
+			        #     c=`basename ${f}`
+			        #     compadd "$@" "${c[(ws:.:)1]}"
+		            # done
+                    compadd -a _abs
+		            ;;
+
+                fetch|peek)
+                    _fds=(`jaro imap listfolders 2>/dev/null`)
+                    compadd -a _fds
+                    ;;
+
+		        open|filter|backup|merge)
+                    _mds=(`ls -d $jarodir/*`)
+                    md=()
+                    for m in $_mds; do
+                        [[ -r "$m/cur" ]] && \
+                            md+=(${m:t})
+                    done
+                    _multi_parts . md
+		            ;;
+
+		        compose)
+                    _adrs=("${(@f)$(jaro search addr . 2>/dev/null)}")
+                    compadd -X "Recipient addresses:" -a _adrs
+		            ;;
+
+		        *)
+                    _files
+                    ;;
+            esac 
+    esac 
+}
+
+_jaromail "$@"
+
+# Local Variables:
+# mode: sh
+# End:

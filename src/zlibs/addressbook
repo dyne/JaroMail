@@ -412,6 +412,7 @@ extract() {
             done
 
             notice "Unique addresses found: ${#result}"
+            act "calculating known and new addresses..."
             # counts which addresses are known to us
             _known=0
             for i in ${(k)result}; do
@@ -459,6 +460,7 @@ extract() {
             done
             
             notice "Unique addresses found: ${#result}"
+            act "calculating known and new addresses..."
             # counts which addresses are known to us
             _known=0
             for i in ${(k)result}; do
@@ -528,6 +530,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
             done
 
             notice "Unique addresses found: ${#result}"
+            act "calculating known and new addresses..."
             # counts which addresses are known to us
             _known=0
             for i in ${(k)result}; do
@@ -730,11 +733,12 @@ EOF
 
 # export addressbook to vcard
 export_vcard() {
+    _out=${1:-"$MAILDIRS"/$list.vcf}
     abook --convert --informat abook \
         --infile "$ADDRESSBOOK" \
-        --outformat gcrd --outfile "$MAILDIRS"/$list.vcf
+        --outformat gcrd --outfile $_out
     _res=$?
-    [[ $_res = 0 ]] && notice "$list addressbook exported to VCard file $MAILDIRS/$list.vcf"
+    [[ $_res = 0 ]] && notice "$list addressbook exported to VCard file $_out"
     return $_res
 }
 

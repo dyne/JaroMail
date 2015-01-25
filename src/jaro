@@ -440,78 +440,61 @@ Main commands:
  fetch  download unread emails from [account]
  send   send all mails queued in the outbox
  peek   look into the [account] mailbox without downloading
- search search maildirs or addressbook for strings
+ index  build or update the search index for all maildirs
+ search search maildirs or addressbook for expressions
 
 Options:
 
- -a     use a particular account instead of default (filename)
- -l     what list to use on Addressbook operations: white or black
-
- -h     print this help
- -v     version information for this tool
- -q     run quietly without printing information
+ -a     use a particular [account] instead of default
+ -l     set [abook] in use, 'whitelist' is default
  -n     dry run, show operations without executing them
+ -q     run quietly without printing information
  -D     print debugging information at runtime
+ -v     version information for this tool
+ -h     print this help
 
-== Addressbook commands (use -l to indicate which addressbook $list)
+== Addressbook commands (use -l to indicate which addressbook)
 a pipe | in front indicate they take an email body from stdin
 
- import   import entries from a VCard file in the $list
+ abook    edit the [abook] using the console editor
 
- export   export the $list to a VCard file
+ extract  list addresses of all recipients or senders found in:
+          maildir, search expr, vcard, gnupg keyring or pubkey
 
- abook    edit the $list using abook terminal console editor
-
-|learn    learn addresses from mails piped in stdin
-
- list     prints to console all the entries in $list
-
- index    index fetched email archives for search
-
- search   search using a string parameter
-
-|isknown  read e-mail from stdin, return 0 if sender is known
-
- extract  list all recipients or senders found in a maildir
-
-== Operational commands (use -a to indicate which $account)
-account names correspond to the filenames, i.e. imap.default
-
- fetch    downloads emails locally from an $account on-line
-      option "keep" (default) to avoid deleting from servers
-
- send     send all emails queued in outbox/ to an smtp.$account
-
- peek     connect to an imap folder with ncurses terminal mutt
-      use for server-side operations on emails without download
-
- passwd   set account passwords in the OS native keyring
-      or into a simple, file based, gpg encrypted database.
-
-|queue    queue a mail in outbox/ for send
+|import   read address list from stdin into addressbook or group
+          (the output of extract commands can be piped to import)
 
 
-== Storage commands (all take path to maildirs as arguments + mairix)
-(mairix) commandline parsed intuitive expressions for date and strings
-maildirs are directories of mails downloaded in Mail/
+== Operational commands (use -a to indicate [account])
+
+ fetch    downloads emails locally from [account]
+
+ send     send all outbox/ queue via the [account]'s smtp
+
+ peek     interactive connection to an [account]'s imap folder
+          (takes folder names as argument, default is INBOX)
+
+ passwd   set [account]'s passwords in the OS native keyring
+
+|queue    read a mail from stdin and queue it in outbox/ for sending
+
+|smtp     read a mail from stdin and send it via [accounts]'s smtp
+
+
+== Storage commands 
 
  open     open a maildir folder (can use -R for read-only)
 
- backup  (mairix)  move mails from a maildir to another one
-      match mails to move based on date ranges or strings
+ backup   move search results from a maildir to another one
+          (string or date range matches, can use -n for dry-run)
 
- rmdupes  remove all duplicated e-mails into a maildir
+ merge    merge a source maildir into destination, then delete source
 
- merge    merge a maildir into another, removing all duplicates
+ update   updates all filter engine according to Filters.txt
+          (also generates Sieve format rules ready for server use)
 
- filter   passes a maildir through the configured and updated Filters.txt
-
- update   updates Filters.txt generating rules (sieve format)
-
-Experimental commands:
-
- stat     prints a statistical overview on stored maildirs
- cert     import most common SSL certificates from the Internet
+ filter   process a maildir distributing emails according to Filters.txt
+          (if none specified, processes incoming/ - called by fetch)
 
 For a complete introductory documentation, see the User Manual (PDF)
 Website on <http://dyne.org/software/jaro-mail>
@@ -560,6 +543,7 @@ main() {
 
     subcommands_opts[import]=""
     subcommands_opts[export]=""
+    subcommands_opts[vcard]=""
     subcommands_opts[abook]=""
 
     subcommands_opts[vim]=""
@@ -597,6 +581,7 @@ main() {
     subcommands_opts[cryptsign]=""
 
     subcommands_opts[isml]=""
+    subcommands_opts[ismd]=""
 
     ### Detect subcommand
     local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
@@ -746,7 +731,7 @@ main() {
             exitcode=$?
             ;;
 
-    stat) stats ${PARAM} ;;
+#    stat) stats ${PARAM} ;;
 
 
     complete) complete ${PARAM}
@@ -763,6 +748,10 @@ main() {
 
     import) import ${PARAM}
             exitcode=$?
+            ;;
+
+    vcard)
+            export_vcard ${PARAM}
             ;;
 
     "export")
@@ -815,6 +804,7 @@ main() {
 
     isonline) is_online ${=PARAM}; exitcode=$? ;;
 
+        
     publish)
         md="$1"
         { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
@@ -880,6 +870,13 @@ main() {
         ismailinglist
         [[ $? = 0 ]] && \
             notice "Email read from stdin is a mailinglist" 
+        exitcode=$?
+        ;;
+
+    ismd)
+        maildircheck ${PARAM}
+        [[ $? = 0 ]] && \
+            notice "Directory is a maildir: ${PARAM}"
         exitcode=$?
         ;;
 

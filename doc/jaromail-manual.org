@@ -552,7 +552,7 @@ Here a roundup on the addressbook commands that are available from the /jaro/ co
 | *extract*     | gpg keyring | print address list of gpg public keyring         |
 | *extract*     | gpg pubkey  | print address list of gpg key signatures         |
 | *extract*     | vcard file  | print address list of entries in VCard file      |
-| *vcard*       |             | print VCard from address list on stdin           |
+| *vcard*       | vcard file  | export the addressbook into a VCard file         |
 | *import*      | -l listname | import address list from stdin to addressbook    |
 | *import*      | filename    | import address list into an address list file    |
 | *search addr* | (-l) string | print address list of matches in addressbook     |
