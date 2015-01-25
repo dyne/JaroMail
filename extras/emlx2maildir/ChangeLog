@@ -1,0 +1,98 @@
+commit fafd368a52de08c1d72507ae30377b1649fbbf9a
+Author: Mike Laiosa <mike@laiosa.org>
+Date:   Fri May 17 08:52:25 2013 -0700
+
+    Make the usage slightly more useful
+
+commit 24f1cf432e89dbbb69577d7de527a86e229588d5
+Author: Mike Laiosa <mike@laiosa.org>
+Date:   Fri May 17 08:51:01 2013 -0700
+
+    Remove DOCTYPE from the plist XML.
+    
+    Remove DOCTYPE from the plist XML before feeding it to the parser, so it
+    doesn't try to download the DTD.  This speeds things up, and makes it
+    more reliable
+
+commit 2cfdf826147660aeb63b8fd254446ab63b4a62be
+Author: Mike Laiosa <mike@laiosa.org>
+Date:   Thu May 16 07:31:49 2013 -0700
+
+    Skip .emlx files that start with a .
+    
+    Based on feedback from https://github.com/cusco
+
+commit 7c3c8719adf0960fdc9915a171ceba685c994e09
+Author: Mike Laiosa <mike@laiosa.org>
+Date:   Mon Feb 18 21:01:02 2013 -0800
+
+    License under GPLv2+
+
+commit 85a6effc542a206b91e9ec375ef48bc4dfe16caa
+Author: Mike Laiosa <mike@laiosa.org>
+Date:   Mon Feb 18 20:54:33 2013 -0800
+
+    Remove a debugging print
+
+commit dba6780de524df970cd5ee5ce8a724b87778f431
+Merge: 10dfdab 1221d16
+Author: Mike Laiosa <mike@laiosa.org>
+Date:   Mon Feb 18 20:53:36 2013 -0800
+
+    Merge pull request #1 from tonklon/master
+    
+    Adapted to Lion - thanks tonklon.
+
+commit 1221d162700b532f2bfb8b1195015da50d3a6150
+Author: Tobias Klonk <tobias.klonk@tklonk.net>
+Date:   Thu Jan 12 14:36:29 2012 +0100
+
+    adapted to new mailbox layout
+    
+    Mail.app in OSX 10.7 Lion uses a new Mailbox layout that is split into
+    a much deeper folder hierarchy.
+
+commit 5e78448b57ecdaba63400eb86df84b22b89e96bc
+Author: Tobias Klonk <tobias.klonk@tklonk.net>
+Date:   Thu Jan 12 14:23:31 2012 +0100
+
+    Enable deep Mailbox recursion
+    
+    The --recursive option did only go one level deep before.
+
+commit 10dfdabd6bea6431c70ab732a71e67dd6d424bf2
+Author: Mike Laiosa <mike@bullwinkle.socal.rr.com>
+Date:   Wed Mar 4 21:50:21 2009 -0800
+
+    Update the ctime of the file, because apperently some things care
+
+commit 0309cc4b70374312df65dc7bd09eb67b6a56f41b
+Author: Mike Laiosa <mike@bullwinkle.socal.rr.com>
+Date:   Sun Mar 1 13:48:15 2009 -0800
+
+    * handle trailing / better
+    * make Maildir subfolders correctly
+
+commit 6706be3cfd85696b4a00ec0f0f4438910277eff5
+Author: Mike Laiosa <mike@bullwinkle.socal.rr.com>
+Date:   Sat Feb 28 17:35:33 2009 -0800
+
+    All done
+
+commit 6eca1cca62bf949bfb5df8dcdb0eda3ab40898f5
+Author: Mike Laiosa <mike@bullwinkle.socal.rr.com>
+Date:   Sat Feb 28 16:58:36 2009 -0800
+
+    Can find emlx subfolders
+
+commit 37ffc28b19cada111d8ce5dc6b2f68f813951a0c
+Author: Mike Laiosa <mike@bullwinkle.socal.rr.com>
+Date:   Sat Feb 28 16:00:16 2009 -0800
+
+    convert_one works
+
+commit bacda7b643c96669a5a0d1eafe35ca9a0e30539b
+Author: Mike Laiosa <mike@bullwinkle.socal.rr.com>
+Date:   Sat Feb 28 14:54:31 2009 -0800
+
+    working plist parser, and lots else

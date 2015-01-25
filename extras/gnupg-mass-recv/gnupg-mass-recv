@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
-# uncomment to really download keys and modify the pub keyring
-# DRYRUN=1
+# comment to really download keys and modify the pub keyring
+DRYRUN=1
 
 zmodload zsh/pcre
 
