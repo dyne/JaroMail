@@ -17,35 +17,29 @@ target=all
 
 mkdir -p build/gnu
 
+debian_req() {
+    for p in "$@"; do
+        { dpkg --get-selections "$p" | grep -q "[[:space:]]install$" } || {
+            apt-get install "$p" } || {
+            print "Failed to install $p"
+            return 1
+        }
+    done
+    return 0
+}
+
+
 { test "$target" = "deps" } || {
     test "$target" = "all" } && {
-    deps=()
     case $distro in
-    debian)
+        debian)
+            deps=(fetchmail msmtp mutt pinentry-curses)
+            deps+=(wipe notmuch sqlite3 alot abook)
+            deps+=(gcc make libglib2.0-dev libgnome-keyring-dev)
+
         print "Building on Debian"
         print "Checking software to install"
-        which fetchmail >/dev/null || deps+=(fetchmail)
-        which msmtp     >/dev/null || deps+=(msmtp)
-        which mutt      >/dev/null || deps+=(mutt)
-        which pinentry  >/dev/null || deps+=(pinentry-curses)
-        which abook     >/dev/null || deps+=(abook)
-        which wipe      >/dev/null || deps+=(wipe)
-        which notmuch   >/dev/null || deps+=(notmuch)
-        which alot      >/dev/null || deps+=(alot)
-
-        print "Checking build dependencies"
-        which gcc      >/dev/null || deps+=(gcc)
-        which make     >/dev/null || deps+=(make)
-#       which gpgme-config || sudo apt-get install libgpgme11-dev
-
-        { test -r /usr/share/doc/libgnome-keyring-dev/copyright } || {
-        deps+=(libglib2.0-dev libgnome-keyring-dev) }
-
-
-        { test ${#deps} -gt 0 } && {
-        print "Installing missing components"
-        sudo apt-get install ${=deps} }
-
+        debian_req $deps
         ;;
 
     fedora)
