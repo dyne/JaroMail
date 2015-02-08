@@ -30,9 +30,9 @@ pubdb=""
 # on which emails inside the maildir are already published
 pubdb_create() {
     func "create PubDB"
-    { test -r "$1" } && {
-    error "PubDBalready exists: $1"
-    return 1
+    [[ -r "$1" ]] && {
+        error "PubDBalready exists: $1"
+        return 1
     }
     cat <<EOF | ${SQL} -batch "$1"
 CREATE TABLE published
@@ -43,9 +43,10 @@ CREATE TABLE published
   date  timestamp
 );
 EOF
-    { test $? != 0 } && {
-    error "Error creating PubDB in $1"
-    return 1 }
+    [[ $? != 0 ]] && {
+        error "Error creating PubDB in $1"
+        return 1
+    }
     # make sure is private
     chmod 600 "$1"
     chown $_uid:$_gid "$1"
@@ -128,15 +129,18 @@ pubdb_date() {
 pubdb_update() {
     func "pubdb_update() $@"
     md="$1"
-    { test "$md" = "" } && {
-    error "Pubdb_update: maildir not found: $md"
-    return 1 }
-    { maildircheck "${md}" } || {
-    error "Pubdb_update: not a maildir: $md"
-    return 1 }
-    pub="${md}/pub"; ${=mkdir} "$pub"
+    [[ "$md" = "" ]] && {
+        error "Pubdb_update: maildir not found: $md"
+        return 1
+    }
+    maildircheck "${md}" || {
+        error "Pubdb_update: not a maildir: $md"
+        return 1
+    }
+    pub="${md}/pub"
+    ${=mkdir} "$pub"
     pubdb="${md}/.pubdb"
-    { test -r "$pubdb" } || { pubdb_create "$pubdb" }
+    [[ -r "$pubdb" ]] || pubdb_create "$pubdb"
 
     # iterate through emails in maildir and check if new
     mails=`${=find} "${md}/new" "${md}/cur" "${md}/tmp" -type f`
@@ -186,11 +190,13 @@ BEGIN { body=0 }
         mu extract --overwrite --parts="$_text" "$_path"
         # here we tweak the origin to avoid headers in markdown
         # preferring to interpret # as inline preformat
-        cat "$_text".part | sed '
-s/^#/    /g
-' | iconv -c | maruku --html-frag 2>/dev/null | sed '
-s|http://[^ |<]*|<a href="&">&</a>|g
-s|https://[^ |<]*|<a href="&">&</a>|g'
+#         cat "$_text".part | sed '
+# s/^#/    /g
+# ' | iconv -c | maruku --html-frag 2>/dev/null | sed '
+# s|http://[^ |<]*|<a href="&">&</a>|g
+# s|https://[^ |<]*|<a href="&">&</a>|g
+# '
+cat "$_text".part | iconv -c | escape_html | maruku --html-frag 2>/dev/null
         # s|www\.[^ |<]*|<a href="http://&">&</a>|g'
 rm "$_text".part
 return 0
@@ -212,28 +218,31 @@ return 0
 pubdb_render_maildir() {
     func "publish_render_maildir() $@"
     md="$1"
-    { test "$md" = "" } && {
-    error "Publish_render_maildir: not found: $md"
-    return 1 }
-    { maildircheck "${md}" } || {
-    error "Publish_render_maildir: not a maildir: $md"
-    return 1 }
-    { test -r "${md}/pub" } || {
-    error "Publish_render_maildir: webnomad not found in ${md}"
-    error "Initialize Webnomad inside the maildir that you want published."
-    return 1 }
+    [[ "$md" = "" ]] && {
+        error "Publish_render_maildir: not found: $md"
+        return 1
+    }
+    maildircheck "${md}"  || {
+        error "Publish_render_maildir: not a maildir: $md"
+        return 1
+    }
+    [[ -r "${md}/pub" ]] || {
+        error "Publish_render_maildir: webnomad not found in ${md}"
+        error "Initialize Webnomad inside the maildir that you want published."
+        return 1
+    }
 
     pub="${md}/pub"
     pubdb="${md}/.pubdb"
-    { test -r "$pubdb" } || {
-    error "Publish_render_maildir: first run update_pubdb for $md"; return 1 }
-
-    ${=mkdir} $TMPDIR/pubdb
-
+    [[ -r "$pubdb" ]] || {
+        error "Publish_render_maildir: first run update_pubdb for $md"; return 1 }
+    
+    #    ${=mkdir} $TMPPREFIX/pubdb
+    
     mails=`pubdb_list $md | head -n ${FEED_LIMIT:=30}`
-
+    
     # source webnomad's configurations
-    { test -r "${md}/config.zsh" } && { source "${md}/config.zsh" }
+    [[ -r "${md}/config.zsh" ]] && { source "${md}/config.zsh" }
 
     cat <<EOF > $pub/atom.xml
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
@@ -241,7 +250,7 @@ pubdb_render_maildir() {
 
 <title type="text">${TITLE}</title>
 
-<link rel="self" href="${WEB_ROOT}atom.xml" />
+<link rel="self" href="${WEB_ROOT}/atom.xml" />
 <link href="${WEB_ROOT}" />
 <id>${WEB_ROOT}/atom.xml</id>
 
@@ -252,6 +261,7 @@ pubdb_render_maildir() {
 <logo>http://dyne.org/dyne.png</logo>
 
 EOF
+
 
     cat <<EOF > "${md}/views/index.html"
 <table class="table table-hover table-condensed">
@@ -265,98 +275,96 @@ EOF
     # main loop
     c=0
     for m in ${(f)mails}; do
+        
+        # fill in uid and upath
+        pubdb_getuid "$m"
+        
+        # but skip entries no more existing in maildir
+        [[ -r "$m" ]] || { continue }
+        # TODO: remove $m from database if not in maildir
 
-    # fill in uid and upath
-    pubdb_getuid "$m"
+	    _from=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
 
-    # but skip entries no more existing in maildir
-    { test -r "$m" } || { continue }
-    # TODO: remove $m from database if not in maildir
+	    _fname=`print ${(Q)_from[(ws:,:)2]}` # | iconv -c`
 
-
-
-	_from=`hdr "$m" | ${WORKDIR}/bin/fetchaddr -x From -a`
-
-	_fname=`print ${(Q)_from[(ws:,:)2]}` # | iconv -c`
-
-    func "From: ${_fname}"
-    _subject=`hdr "$m" | awk '
+        func "From: ${_fname}"
+        _subject=`hdr "$m" | awk '
 /^Subject:/ { for(i=2;i<=NF;i++) printf "%s ", $i; printf "\n" }
 ' | escape_html`
-
-    # fill in uid and upath
-    pubdb_getuid "$m"
-
-    # fill in the body
-    _body=`pubdb_extract_body $m`
-
-    { test "$_body" = "" } && { error "Error rendering $m" }
-
-    (( ++c ))
-    if (( $c < ${FEED_LIMIT:=30} )); then
-
-        # write out the atom entry
-        cat <<EOF >> "$pub"/atom.xml
+        
+        # fill in uid and upath
+        pubdb_getuid "$m"
+        
+        # fill in the body
+        _body=`pubdb_extract_body $m`
+        
+        [[ "$_body" = "" ]] && { error "Error rendering $m" }
+        
+        (( ++c ))
+        if (( $c < ${FEED_LIMIT:=30} )); then
+            
+            # write out the atom entry
+            cat <<EOF >> "$pub"/atom.xml
 
 <entry>
     <title type="html" xml:lang="en-US">$_subject</title>
-    <link href="${WEB_ROOT}${upath}" />
-    <id>${WEB_ROOT}${upath}</id>
+    <link href="${WEB_ROOT}/${upath}" />
+    <id>${WEB_ROOT}/${upath}</id>
     <updated>`pubdb_date "$m"`</updated>
 <content type="html" xml:lang="en-US">
 `print ${(f)_body} | escape_html`
 </content>
 <author>
     <name>${_fname}</name>
-    <uri>${WEB_ROOT}${upath}</uri>
+    <uri>${WEB_ROOT}/${upath}</uri>
 </author>
 <source>
     <title type="html">${_subject}</title>
     <subtitle type="html">From: ${_fname}</subtitle>
         <updated>${_daterss}</updated>
-    <link rel="self" href="${WEB_ROOT}${upath}" />
-    <id>${WEB_ROOT}${upath}</id>
+    <link rel="self" href="${WEB_ROOT}/${upath}" />
+    <id>${WEB_ROOT}/${upath}</id>
 </source>
 </entry>
 
 EOF
-
-    fi # FEED LIMIT not reached
-
-    #######
-    # now build an index and the sitemap
-
-
-    # if using webnomad write out also the message page
-    { test -d "${md}/views" } && {
-        _datestring=`hdr "$_path" | awk '/^Date/ { print $0 }'`
-        cat <<EOF > "${md}/views/${upath}"
+            
+        fi # FEED LIMIT not reached
+        
+        #######
+        # now build an index and the sitemap
+        
+        
+        # if using webnomad write out also the message page
+        [[ -d "${md}/views" ]] && {
+            _datestring=`hdr "$_path" | awk '/^Date/ { print $0 }'`
+            cat <<EOF > "${md}/views/${upath}"
 <h2>${_subject}</h2>
 <h4>From: ${_fname} - ${_datestring}</h4>
 
 ${_body}
 
 EOF
-        # add entry in index
-        cat <<EOF >> "${md}/views/index.html"
+            # add entry in index
+            cat <<EOF >> "${md}/views/index.html"
 
 <tr>
-<td style="vertical-align:middle;"><a href="${WEB_ROOT}${upath}">${_fname}</a></td>
+<td style="vertical-align:middle;"><a href="${WEB_ROOT}/${upath}">${_fname}</a></td>
 <td style="vertical-align:middle;word-wrap:break-word">
-<a href="${WEB_ROOT}${upath}">${_subject}</a>
+<a href="${WEB_ROOT}/${upath}">${_subject}</a>
 </td>
 </tr>
 
 EOF
-    }
+        }
     done # loop is over
-
+    
     cat <<EOF >> "${pub}/atom.xml"
 </feed>
 EOF
-
+    
     cat <<EOF >> "${md}/views/index.html"
 </table>
 EOF
-
+    
 }

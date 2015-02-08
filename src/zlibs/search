@@ -89,7 +89,6 @@ nm_index() {
     notice "Indexing all mail archive"
     act "please wait, this may take a while..."
     nm_setup
-    lock "$MAILDIRS"/cache/notmuch
     nm new
     nm tag +inbox +priv -unsorted folder:known
     nm tag +inbox +priv -unsorted folder:sent
@@ -97,7 +96,6 @@ nm_index() {
     nm tag -inbox -priv +unsorted folder:unsorted
     act "compressing database"
     nm compact
-    unlock "$MAILDIRS"/cache/notmuch
     notice "Indexing completed"
 }
 

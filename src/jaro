@@ -689,12 +689,9 @@ main() {
             ;;
 
     fetch)
-        if [[ "$account" = "" ]]; then
-            fetchall
-        else
+            account=${account:-default}
             fetch
-        fi
-        filter_maildir incoming
+            filter_maildir incoming
         ;;
 
     send)   send ${PARAM}
@@ -715,6 +712,8 @@ main() {
         update_filters
         update_mutt
         update_sieve
+        nm_setup
+        nm new 2>&1 | grep -v '^Note: Ignoring'
         ;;
 
     help) usage ;;
