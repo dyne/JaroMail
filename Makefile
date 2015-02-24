@@ -1,8 +1,8 @@
 all:
-	@cd build && ./build-gnu.sh && cd -
+	./build/auto build
 
 install:
-	@build/install-gnu.sh
+	./build/auto install
 
 clean:
 	rm -f src/*.o
