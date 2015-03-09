@@ -98,6 +98,7 @@ pubdb_getuid() {
         return 1 }
     uid=`hdr "$_path" | awk '/^Message-ID:/ { gsub(/<|>|,/ , "" , $2); print $2 }'`
     uid="${(Q)uid%\\n*}" # trim
+    uid="${uid/@/.}" # s/@/./
     { test "$uid" = "" } && { uid=`basename "$_path"` }
     upath=`print ${uid} | sed -e 's/\///g'`.html
 
@@ -159,7 +160,7 @@ pubdb_update() {
 
 
 pubdb_extract_body() {
-    func "pubdb_extract_body() $@"
+    func "pubdb_extract_body() $*"
     _path="$1"
     { test -r "$_path" } || { error "mail not found for body extraction: $_path"; return 1 }
 
@@ -188,19 +189,35 @@ BEGIN { body=0 }
     _text=`mu extract "$_path" | awk '/text\/plain/ {print $1; exit}'`
     { test "$_text" = "" } || {
         mu extract --overwrite --parts="$_text" "$_path"
+
+        
+        case $markdown_render in
+            redcarpet)
+                func "render using redcarpet"
+                cat "$_text".part | iconv -c | escape_html | redcarpet -
+                ;;
+            maruku|*)
+                func "render using maruku"
+                cat "$_text".part | iconv -c | escape_html | maruku --html-frag 2>/dev/null
+                ;;
+        esac
+        rm "$_text".part
+                
+        return 0
+    }
+
+    # to make http text a link: (breaks if there are <a refs already)
+        # s|www\.[^ |<]*|<a href="http://&">&</a>|g'
+
         # here we tweak the origin to avoid headers in markdown
         # preferring to interpret # as inline preformat
-#         cat "$_text".part | sed '
-# s/^#/    /g
-# ' | iconv -c | maruku --html-frag 2>/dev/null | sed '
-# s|http://[^ |<]*|<a href="&">&</a>|g
-# s|https://[^ |<]*|<a href="&">&</a>|g
-# '
-cat "$_text".part | iconv -c | escape_html | maruku --html-frag 2>/dev/null
-        # s|www\.[^ |<]*|<a href="http://&">&</a>|g'
-rm "$_text".part
-return 0
-}
+
+        #         cat "$_text".part | sed '
+        # s/^#/    /g
+        # ' | iconv -c | maruku --html-frag 2>/dev/null | sed '
+        # s|http://[^ |<]*|<a href="&">&</a>|g
+        # s|https://[^ |<]*|<a href="&">&</a>|g
+        # '
 
 # check if its an html only mail
 # _html=`mu extract "$_path" | awk '/text\/html/ {print $1; exit}'`
