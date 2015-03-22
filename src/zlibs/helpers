@@ -353,7 +353,7 @@ human_size() {
 
 
 # TODO: save fingeprints of servers and check connections
-fingerprint() {
+get-smtp-fingerprint() {
 # dyne.org one:
 # tls_fingerprint 6A:D4:DF:E4:20:32:F9:66:94:35:0C:33:9D:74:96:5C
 
@@ -370,7 +370,7 @@ fingerprint() {
         -connect $smtp:$smtp_port \
         -showcerts 2>/dev/null \
         | openssl x509 -fingerprint -md5 -noout \
-        | awk -F '=' '/^MD5 Fingerprint/ {print $2}'
+        | awk -F '=' '/Fingerprint/ {print $2}' | sysread fingerprint
 
 }
 

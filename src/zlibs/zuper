@@ -24,11 +24,15 @@
 ##########################
 typeset -aU vars
 typeset -aU arrs
-vars=(debug quiet ztmpfile)
-arrs=()
+vars=(DEBUG QUIET ztmpfile)
+arrs=(req freq)
 
-debug=${debug:-0}
-quiet=${quiet:-0}
+# reset list of destructors
+destruens=()
+
+# global execution flags
+DEBUG=${DEBUG:-0}
+QUIET=${QUIET:-0}
 
 vars+=(zuper_version)
 zuper_version=0.1
@@ -93,48 +97,39 @@ function _msg() {
 function _message say act() {
     local notice="message"
     [[ "$1" = "-n" ]] && shift && notice="inline"
-    [[ $quiet = 1 ]] || _msg "$notice" $@
+    [[ $QUIET = 1 ]] || _msg "$notice" $@
     return 0
 }
 
 function _verbose xxx func() {
-    [[ $debug = 1 ]] && _msg verbose $@
+    [[ $DEBUG = 1 ]] && _msg verbose $@
     return 0
 }
 
 function _success yes notice() {
-    [[ $quiet = 1 ]] || _msg success $@
+    [[ $QUIET = 1 ]] || _msg success $@
     return 0
 }
 
 function _warning no warn warning() {
-    [[ $quiet = 1 ]] || _msg warning $@
+    [[ $QUIET = 1 ]] || _msg warning $@
     return 0
 }
 
 function _failure fatal die error() {
     #    typeset -i exitcode=${exitv:-1}
-    [[ $quiet = 1 ]] || _msg failure $@
+    [[ $QUIET = 1 ]] || _msg failure $@
     return 1
 }
 
 function _print() {
-    [[ $quiet = 1 ]] || _msg print $@
+    [[ $QUIET = 1 ]] || _msg print $@
     return 0
 }
 
 
-
 fn() {
-    local msg="$1"
-    command -v gettext 1>/dev/null 2>/dev/null \
-        && msg="$(gettext -s "$1")"
-    for i in $(seq 2 ${#}); do
-        msg=${(S)msg//::$(($i - 1))*::/$*[$i]}
-    done
-    
-    fun="$msg"
-    func "$fun"
+    fun="$@"
     req=()
     freq=()
 }
@@ -181,7 +176,10 @@ zdump() {
     done
 }
 
-
+# handy wrappers for throw/catch execution of blocks where we need the
+# program to exit on any error (non-zero) returned by any function
+throw() { function TRAPZERR() { zerr; return 1 } }
+catch() { function TRAPZERR() { } }
 
 ##########################
 # Endgame handling
@@ -215,6 +213,9 @@ endgame() {
     return 0
 }
 
+# Register endgame() to be called at exit.
+# unlike TRAPEXIT, the zshexit() hook is not called when functions exit.
+zshexit() { endgame EXIT; return $? }
 
 ##########################
 # Temp file handling

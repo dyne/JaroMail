@@ -63,6 +63,7 @@ fi
 WORKDIR=${JAROWORKDIR:-$WORKDIR}
 
 # load our zuper extension
+zkv=1
 source $WORKDIR/zlibs/zuper
 
 
@@ -129,6 +130,9 @@ list=whitelist
 vars+=(name login imap imap_port smtp smtp_port protocol password auth accountopt)
 typeset -ah folders exclude
 vars+=(host port type)
+
+# global for server fingerprints
+vars+=(fingerprint)
 
 # global variables for addressbook
 vars+=(hostname addressbook addressbook_tmp)
@@ -826,5 +830,5 @@ main() {
 
 check_bin
 main $@
-endgame NOERRORS
-#return $exitcode
+# endgame NOERRORS
+# return $exitcode

@@ -263,6 +263,10 @@ fetch() {
 ################################################
 # read an email from stdin and send it via msmtp 
 smtp_send() {
+    fn smtp-send
+    req=(account)
+    ckreq
+
     read_account ${account}
     { test  $? != 0 } && {
         error "Invalid account: $account"
@@ -279,6 +283,42 @@ smtp_send() {
     host=$smtp
     port=$smtp_port
 
+    # load known fingerprints
+    typeset -A smtp_fingerprints
+    [[ -s $MAILDIRS/smtp_fingerprints.zkv ]] && {
+        zkv.load $MAILDIRS/smtp_fingerprints.zkv }
+    known_fingerprint=${smtp_fingerprints[$smtp:$port]}
+    # get the server's fingerprint
+    print QUIT \
+        | openssl s_client -starttls smtp \
+        -connect $smtp:$smtp_port \
+        -showcerts 2>/dev/null \
+        | openssl x509 -fingerprint -md5 -noout \
+        | awk -F '=' '/Fingerprint/ {print $2}' | sysread fingerprint
+    fingerprint=$(print $fingerprint | trim)
+    # force printing fingerprint to stderr
+    oldquiet=$QUIET
+    QUIET=0
+    act "known  fingerprint: $known_fingerprint"
+    act "server fingerprint: $fingerprint"
+    [[ "$known_fingerprint" = "$fingerprint" ]] || {
+        warning "fingerprint difference detected"
+        # not the same?
+        if [[ "$known_fingerprint" = "" ]]; then
+            # never knew before, save it
+            act "$smtp:$port new fingerprint acknowledged"
+            smtp_fingerprints[$smtp:$port]="$fingerprint"
+        else
+            error "Server fingerprint mismatch!"
+            warning "The known one was different, this may be a man in the middle!"
+            warning "To override and forget the old one, edit $MAILDIRS/smtp_fingerprints.zkv"
+            return 1
+        fi
+    }
+    QUIET=$oldquiet
+
+    zkv.save smtp_fingerprints $MAILDIRS/smtp_fingerprints.zkv
+    
     ask_password
     [[ $? = 0 ]] || {
         error "Error retrieving password for $login on $smtp"
