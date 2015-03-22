@@ -4,7 +4,9 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2015 Denis Roio <jaromil@dyne.org>
+# Copyright (C) 2010-2015 Dyne.org Foundation
+#
+# JaroMail is designed, written and maintained by Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
@@ -20,37 +22,90 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=3.2
-DATE=Jan/2015
+VERSION=3.3
+DATE=Mar/2015
 JAROMAILEXEC=$0
-typeset -a OLDARGS
-for arg in ${argv}; do OLDARGS+=($arg); done
-
-##########################
-# declare global variables
-
-QUIET=0
-DEBUG=0
-DRYRUN=0
-CALLMUTT=1
-
-# use gnome-keyring for passwords on GNU systems
-GNOMTEKEY=0
 
 # default permission on files
 umask 066
 
-# global variables for binaries called
-typeset -h rm mkdir mutt
+# honor quiet and debug flags as early as possible
+if [[ ${@} == *-q* ]]; then quiet=1; fi
+if [[ ${@} == *-D* ]]; then debug=1; fi
 
-# load zsh regex module
+
+# check if we are inside the directory
+if [ -r jaro/bin/jaro ]; then
+    MAILDIRS=`pwd`
+# check if we are on OSX
+elif [ -r /Applications/JaroMail.app ]; then
+    MAILDIRS="$HOME/Library/Application Support/JaroMail"
+# else use GNU/Linux default
+else
+    MAILDIRS=$HOME/Mail
+fi
+
+# end override
+MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
+
+
+# check if we are testing from source
+if [ -r ../src/jaro ]; then
+    WORKDIR="../src"
+# check if we are on OSX
+elif [ -r /Applications/JaroMail.app/Contents/Resources/jaro ]; then
+    WORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
+else # use GNU/Linux default
+    WORKDIR="/usr/local/share/jaromail"
+fi
+
+# env override
+WORKDIR=${JAROWORKDIR:-$WORKDIR}
+
+# load our zuper extension
+source $WORKDIR/zlibs/zuper
+
+
+# what operating system are we in? use os_detect()
+# simplifying modes of operation: GNU or MAC
+case $(uname -o) in
+    GNU/Linux) OS=GNU
+    notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
+
+    Darwin) OS=MAC
+    notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
+
+    Cygwin) OS=WIN
+        notice "Jaro Mail v$VERSION runing on MS/Win" ;;
+
+    *) OS=GNU # default
+    error "Running on an unknown operating system, assuming GNU" ;;
+esac
+
+
+
+# global variables
+vars+=(DEBUG QUIET DRYRUN CALLMUTT cur_fun)
+QUIET=${QUIET:-0}
+DEBUG=${DEBUG:-0}
+DRYRUN=${DRYRUN:-0}
+CALLMUTT=${CALLMUTT:-1}
+
+# use gnome-keyring for passwords on GNU systems
+vars+=(GNOMEKEY)
+GNOMEKEY=${GNOMEKEY:-0}
+
+
+# global variables for binaries called
+vars+=(rm mkdir mutt SQL)
+
+# load zsh modules
 zmodload zsh/regex
 zmodload zsh/mapfile
 zmodload zsh/system
 zmodload -F zsh/stat b:zstat
 zmodload zsh/sched
-# date stamp
-datestamp=`date '+%d%b%y'`
+
 ##########################
 
 # SQL command
@@ -65,32 +120,32 @@ typeset -h global_quit
 global_quit=0
 
 # global variable for account selection
-typeset -h account account_type
+vars+=(account account_type)
 # account=default
-typeset -h list
+vars+=(list)
 list=whitelist
 
 # global variables for accounts
-typeset -h name login imap imap_port smtp smtp_port protocol password auth accountopt
+vars+=(name login imap imap_port smtp smtp_port protocol password auth accountopt)
 typeset -ah folders exclude
-typeset -h host port type
+vars+=(host port type)
 
 # global variables for addressbook
-typeset -h hostname addressbook addressbook_tmp
+vars+=(hostname addressbook addressbook_tmp)
 
 # global variables for email parsers
 typeset -A e_addr
-typeset -h e_parsed
+vars+=(e_parsed)
 
 # global array for maildirs (filled by list_maildirs)
 typeset -al maildirs
 
 
 # global variable for mutt binary
-typeset -h mutt pgpewrap dotlock
+vars+=(mutt pgpewrap dotlock)
 
 # global variable for exit code
-typeset -h exitcode
+vars+=(exitcode)
 # exitcode=0
 
 # global variable for infos on imap folder
@@ -99,122 +154,9 @@ typeset -h exitcode
 typeset -alU imap_info
 
 # global variable for mutt options
-typeset -h muttflags
+vars+=(muttflags)
 
 autoload colors; colors
-
-# temporary directory
-typeset TMPPREFIX=${TMPPREFIX:-/tmp}
-typeset -H JAROTMP # Filename of secure temp just created (see _tmp_create())
-typeset -aH JAROTMPFILES      # Keep track of temporary files
-
-# Provide a random filename in shared memory
-_tmp_create() {
-    [[ -d "$TMPPREFIX" ]] || {
-        # we create the tempdir with the sticky bit on
-        mkdir -m 1777 "$TMPPREFIX"
-        [[ $? == 0 ]] || _failure "Fatal error creating the temporary directory: ::1 temp dir::" "$TMPPREFIX"
-    }
-    
-    # We're going to add one more $RANDOM for each time someone complain
-    # about this being too weak of a random.
-    tfile="${TMPPREFIX}/$RANDOM$RANDOM$RANDOM$RANDOM"   # Temporary file
-    umask 066
-    [[ $? == 0 ]] || {
-        error "Fatal error setting the permission umask for temporary files"
-        return 1
-    }
-    
-    [[ -r "$tfile" ]] && {
-        error "Someone is messing up with us trying to hijack temporary files."
-        return 1
-    }
-    
-    touch "$tfile"
-    [[ $? == 0 ]] || {
-        error "Fatal error creating a temporary file: ::1 temp file::" "$tfile"
-        return 1
-    }
-    
-    [[ $? == 0 ]] || {
-        error "Fatal error setting ownership on temporary file: ::1 temp file::" "$tfile"
-        return 1
-    }
-    
-    func "Created tempfile: $tfile"
-    JAROTMP="$tfile"
-    JAROTMPFILES+=("$tfile")
-    
-    return 0
-}
-
-# standard output message routines
-# it's always useful to wrap them, in case we change behaviour later
-notice() { if [[ $QUIET == 0 ]]; then print "$fg_bold[green][*]$fg_no_bold[default] $1" >&2; fi }
-error()  { if [[ $QUIET == 0 ]]; then print "$fg[red][!]$fg[default] $1" >&2; fi }
-func()   { if [[ $DEBUG == 1 ]]; then print "$fg[blue][D]$fg[default] $1" >&2; fi }
-act()    {
-    if [[ $QUIET == 0 ]]; then
-    if [ "$1" = "-n" ]; then
-        print -n "$fg_bold[white] . $fg_no_bold[default] $2" >&2;
-    else
-        print "$fg_bold[white] . $fg_no_bold[default] $1" >&2;
-    fi
-    fi
-}
-
-# honor quiet and debug flags as early as possible
-if [[ ${@} == *-q* ]]; then QUIET=1; fi
-if [[ ${@} == *-D* ]]; then DEBUG=1; fi
-
-
-# what operating system are we in? use os_detect()
-# simplifying modes of operation: GNU or MAC
-case $(uname -o) in
-    GNU/Linux) OS=GNU
-    notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
-
-    Darwin) OS=MAC
-    notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
-
-    Cygwin) OS=WIN
-	    notice "Jaro Mail v$VERSION runing on MS/Win" ;;
-	    
-    *) OS=GNU # default
-    error "Running on an unknown operating system, assuming GNU" ;;
-esac
-
-# check if we are inside the directory
-if [ -r jaro/bin/jaro ]; then
-    MAILDIRS=`pwd`
-
-# check if we are on OSX
-elif [ -r /Applications/JaroMail.app ]; then
-    MAILDIRS="$HOME/Library/Application Support/JaroMail"
-
-# else use GNU/Linux default
-else
-    MAILDIRS=$HOME/Mail
-fi
-
-# end override
-{ test "$JAROMAILDIR" = "" } || { MAILDIRS="$JAROMAILDIR" }
-
-# default working dir
-
-
-# check if we are testing from source
-if [ -r ../src/jaro ]; then
-    WORKDIR="../src"
-# check if we are on OSX
-elif [ -r /Applications/JaroMail.app/Contents/Resources/jaro ]; then
-    WORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
-else # use GNU/Linux default
-    WORKDIR="/usr/local/share/jaromail"
-fi
-
-# env override
-[[ "$JAROWORKDIR" = "" ]] || { WORKDIR="${JAROWORKDIR}" }
 
 # default addressbook
 ADDRESSBOOK="$MAILDIRS/whitelist.abook"
@@ -260,52 +202,29 @@ else
     exit 1
 fi
 
+
+
+##########
+# complete
+source $WORKDIR/zlibs/zuper.init
+
+
+
 ACCOUNTS="$MAILDIRS/Accounts"
 KEYRING="$MAILDIRS/Keyring"
 
-
-# Cleanup anything sensitive before exiting.
-endgame() {
-    func "endgame() $1"
-    [[ "$1" = "NOERRORS" ]] || {
-        error "$1 signal sent to processes, waiting to quit..."
-        global_quit=1
-        sleep 2
-    }
-    # Clear temporary files
-    for f in $JAROTMPFILES; do
-        func "endgame() cleaning tempfile $f"
-        rm -f "$f"
-    done
-    JAROTMPFILES=()
-
-    func "endgame() exit code: $exitcode"
-    return $exitcode
-}
-# Trap functions for the endgame event
-TRAPINT()  { endgame INT;   return $? }
-# TRAPEXIT() { endgame EXIT;  return $? }
-TRAPHUP()  { endgame HUP;   return $? }
-TRAPQUIT() { endgame QUIT;  return $? }
-TRAPABRT() { endgame ABORT; return $? }
-TRAPKILL() { endgame KILL;  return $? }
-# TRAPPIPE() { endgame PIPE;  return $? }
-TRAPTERM() { endgame TERM;  return $? }
-TRAPSTOP() { endgame STOP;  return $? }
-# TRAPZERR() { func "function returns non-zero." }
-
 case $OS in
-    GNU)        
+    GNU)
         # backward compatibility tests for old paths in JaroMail <1.3
         { test -d $WORKDIR/Accounts } && { test ! -d $ACCOUNTS } && {
             act "Updating accounts location: $ACCOUNTS"
             cp -ra $WORKDIR/Accounts $ACCOUNTS
         }
-        
+
         { test -r "$WORKDIR/keyring" } && { test ! -r "$KEYRING" } && {
             act "Updating keyring location: $KEYRING"
             cp $WORKDIR/keyring "$KEYRING"
-        }        
+        }
     ;;
     MAC)
     ;;
@@ -313,36 +232,35 @@ esac
 
 hostname=$(hostname) # gather the current hostname
 
-
 [[ "$1" = "source" ]] || { # skip checks if just sourcing
 
-# make sure we have a directory for account configurations
-{ test -d "$ACCOUNTS" } || { ${=mkdir} "$ACCOUNTS" }
+    # make sure we have a directory for account configurations
+    { test -d "$ACCOUNTS" } || { ${=mkdir} "$ACCOUNTS" }
 
-# make sure we have a local keyring in case system-wide not found
-{ test -r "$KEYRING" } || { create_keyring "$KEYRING" }
+    # make sure we have a local keyring in case system-wide not found
+    { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
 
-# make sure we have an addressbook
-[[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
+    # make sure we have an addressbook
+    [[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
 
-${=mkdir} "$MAILDIRS/logs"
-# ${=mkdir} "$MAILDIRS/certs"
+    ${=mkdir} "$MAILDIRS/logs"
+    # ${=mkdir} "$MAILDIRS/certs"
 
-MUTTDIR="$MAILDIRS/.mutt"
-{ test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
+    MUTTDIR="$MAILDIRS/.mutt"
+    { test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
 
-# make sure we have Filters.txt Applications.txt Mutt.txt
-{ test -r "$MAILDIRS/Filters.txt" } || {
-    cp "$WORKDIR/Filters.txt" "$MAILDIRS/Filters.txt"
-    notice "Default filters created" }
+    # make sure we have Filters.txt Applications.txt Mutt.txt
+    { test -r "$MAILDIRS/Filters.txt" } || {
+        cp "$WORKDIR/Filters.txt" "$MAILDIRS/Filters.txt"
+        notice "Default filters created" }
 
-{ test -r "$MAILDIRS/Applications.txt" } || {
-    cp "$WORKDIR/Applications.txt" "$MAILDIRS/Applications.txt"
-    notice "Default helper applications settings created" }
+    { test -r "$MAILDIRS/Applications.txt" } || {
+        cp "$WORKDIR/Applications.txt" "$MAILDIRS/Applications.txt"
+        notice "Default helper applications settings created" }
 
-{ test -r "$MAILDIRS/Mutt.txt" } || {
-    cp "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
-    notice "Default Mutt configuration template created" }
+    { test -r "$MAILDIRS/Mutt.txt" } || {
+        cp "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
+        notice "Default Mutt configuration template created" }
 
 } # if not sourcing
 
@@ -415,7 +333,7 @@ check_bin() {
         act "using gnome-keyring to store secrets"
         GNOMEKEY=1
     }
-    
+
     return 0
 }
 
@@ -494,7 +412,7 @@ a pipe | in front indicate they take an email body from stdin
 |smtp     read a mail from stdin and send it via [accounts]'s smtp
 
 
-== Storage commands 
+== Storage commands
 
  open     open a maildir folder (can use -R for read-only)
 
@@ -575,7 +493,6 @@ main() {
     subcommands_opts[passwd]=""
     subcommands_opts[cert]=""
 
-    subcommands_opts[ramdisk]=""
     subcommands_opts[source]=""
 
     subcommands_opts[isonline]=""
@@ -589,7 +506,7 @@ main() {
     subcommands_opts[extract]=""
 
     subcommands_opts[smtp]=""
-    
+
     subcommands_opts[crypt]=""
     subcommands_opts[cryptsign]=""
 
@@ -611,7 +528,7 @@ main() {
     if [[ -z $subcommand ]]; then
         subcommand="__default"
     fi
-    
+
     if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
         # unknown command, pass it to autostart
         func "unknown command, autostart: $@"
@@ -623,10 +540,10 @@ main() {
         }
         return $exitcode
     fi
-    
+
     argv=(${oldstar})
     unset oldstar
-    
+
     ### Parsing global + command-specific options
     # zsh magic: ${=string} will split to multiple arguments when spaces occur
     set -A cmd_opts ${main_opts} ${=subcommands_opts[$subcommand]}
@@ -666,7 +583,7 @@ main() {
     fi
     { option_is_set -a } && { account=`option_value -a` }
     { option_is_set -l } && {
-        if [[ "`option_value -l`" =~ "black" ]]; then 
+        if [[ "`option_value -l`" =~ "black" ]]; then
             list=blacklist
         elif [[ "`option_value -l`" =~ "white" ]]; then
             list=whitelist
@@ -725,7 +642,7 @@ main() {
         update_filters
         update_mutt
         update_sieve
-	command -v notmuch > /dev/null && {
+    command -v notmuch > /dev/null && {
         nm_setup
         nm new 2>&1 | grep -v '^Note: Ignoring'
 }
@@ -814,11 +731,9 @@ main() {
 
     cert)    cert ${PARAM} ;; # was checking is_online
 
-    ramdisk) ramdisk ${PARAM} ;;
-
     isonline) is_online ${=PARAM}; exitcode=$? ;;
 
-        
+
     publish)
         md="$1"
         { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
@@ -883,7 +798,7 @@ main() {
     isml)
         ismailinglist
         [[ $? = 0 ]] && \
-            notice "Email read from stdin is a mailinglist" 
+            notice "Email read from stdin is a mailinglist"
         exitcode=$?
         ;;
 
@@ -912,4 +827,4 @@ main() {
 check_bin
 main $@
 endgame NOERRORS
-return $exitcode
+#return $exitcode

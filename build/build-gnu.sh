@@ -6,8 +6,6 @@ builddir=`pwd`
 # cc="${builddir}/cc-static.zsh"
 cc="gcc -O3"
 
-pushd ..
-
 which apt-get > /dev/null && distro=debian
 which yum > /dev/null && distro=fedora
 
@@ -82,8 +80,8 @@ debian_req() {
     print -n "Compiling the address parser (RFC2047) ... "
     ${=cc} -c helpers.c
     ${=cc} -c rfc2047.c
-    ${=cc} -c rfc822.c;
-    ${=cc} -c -DHAVE_ICONV fetchaddr.c;
+    ${=cc} -c rfc822.c
+    ${=cc} -c -DHAVE_ICONV fetchaddr.c
     ${=cc} -o fetchaddr fetchaddr.o helpers.o rfc2047.o rfc822.o
     popd
     cp src/fetchaddr build/gnu/
@@ -155,4 +153,3 @@ print "Now run 'make install' as root to install jaromail in /usr/local"
 print "use PREFIX=/home/private/jaromail to avoid system-wide installation."
 print
 
-popd

@@ -3,6 +3,14 @@
   Contribute code or donate to complete this TODO
   https://www.dyne.org/donate
 
+## Save and check SSL/TLS server fingerprints
+
+use a k/v store to save and check the fingerprints of servers
+using fingerprint() inside helpers
+provide a command to save a new fingerprint overriding old one
+bail out in error when known fingeprint doesn't match
+
+
 ## Notmuch web
 
 Fire up the web interface for notmuch searches

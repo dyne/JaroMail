@@ -587,8 +587,8 @@ EOF
     print " \\" >> $MUTTDIR/mboxes
     print " +unsorted.ml +unsorted" >> $MUTTDIR/mboxes
     
-    _tmp_create
-    ttmp="$JAROTMP"
+    ztmp
+    ttmp=$ztmpfile
     uniq $MUTTDIR/mboxes > $ttmp
     mv $ttmp $MUTTDIR/mboxes
 
@@ -649,7 +649,7 @@ update_sieve() {
     #######
     # SIEVE
     act "generating sieve filter rules"
-    id=$datestamp.$RANDOM
+    id=`datestamp`.$RANDOM
     newlock "$MAILDIRS/Filters.sieve"
     rm -f "$MAILDIRS/Filters.sieve"
     touch "$MAILDIRS/Filters.sieve"

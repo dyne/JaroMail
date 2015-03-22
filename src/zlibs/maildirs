@@ -107,8 +107,8 @@ rmdupes() {
     tot=0
     typeset -al msgs
     
-    _tmp_create
-    formail_cache="$JAROTMP"
+    ztmp
+    formail_cache=$ztmpfile
     
     for folder in ${=@}; do
         { test -r "$folder" } || { folder="$MAILDIRS/$folder" }

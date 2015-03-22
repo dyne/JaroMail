@@ -33,7 +33,7 @@ cp -ra $srcdir/src/stats/* $JARO_SHARE/.stats/
 mkdir -p $JARO_LIBEXEC/{bin,zlibs}
 cp $srcdir/src/jaro $JARO_LIBEXEC/bin
 cp -ra $srcdir/build/gnu/* $JARO_LIBEXEC/bin
-cp -ra $srcdir/src/zlibs/* $JARO_LIBEXEC/zlibs/
+cp -r $srcdir/src/zlibs/* $JARO_LIBEXEC/zlibs/
 
 for l in `ls $JARO_LIBEXEC/zlibs/ | grep '.zwc$'`; do
     rm -f $l

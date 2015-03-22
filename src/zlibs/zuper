@@ -1,0 +1,410 @@
+#!/usr/bin/env zsh
+#
+# Zuper - Zsh Ultimate Programmer's Extensions Refurbished
+#
+# Copyright (C) 2015 Dyne.org Foundation
+#
+# Zuper is designed, written and maintained by Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+
+##########################
+typeset -aU vars
+typeset -aU arrs
+vars=(debug quiet ztmpfile)
+arrs=()
+
+debug=${debug:-0}
+quiet=${quiet:-0}
+
+vars+=(zuper_version)
+zuper_version=0.1
+
+# Messaging function with pretty coloring
+autoload colors
+colors
+
+
+vars+=(last_act last_func last_notice)
+
+function _msg() {
+    local msg="$2"
+    command -v gettext 1>/dev/null 2>/dev/null && msg="$(gettext -s "$2")"
+    for i in $(seq 3 ${#});
+    do
+        msg=${(S)msg//::$(($i - 2))*::/$*[$i]}
+    done
+
+    local command="print -P"
+    local progname="$fg[magenta]${TOMBEXEC##*/}$reset_color"
+    local message="$fg_bold[normal]$fg_no_bold[normal]$msg$reset_color"
+    local -i returncode
+
+    case "$1" in
+        inline)
+            command+=" -n"; pchars=" > "; pcolor="yellow"
+            ;;
+        message)
+            last_act="$msg"
+            pchars=" . "; pcolor="white"; message="$fg_no_bold[$pcolor]$msg$reset_color"
+            ;;
+        verbose)
+            last_func="$msg"
+            pchars="[D]"; pcolor="blue"
+            ;;
+        success)
+            last_notice="$msg"
+            pchars="(*)"; pcolor="green"; message="$fg_no_bold[$pcolor]$msg$reset_color"
+            ;;
+        warning)
+            pchars="[W]"; pcolor="yellow"; message="$fg_no_bold[$pcolor]$msg$reset_color"
+            ;;
+        failure)
+            pchars="[E]"; pcolor="red"; message="$fg_no_bold[$pcolor]$msg$reset_color"
+            returncode=1
+            ;;
+        print)
+            progname=""
+            ;;
+        *)
+            pchars="[F]"; pcolor="red"
+            message="Developer oops!  Usage: _msg MESSAGE_TYPE \"MESSAGE_CONTENT\""
+            returncode=127
+            zerr
+            ;;
+    esac
+    ${=command} "${progname} $fg_bold[$pcolor]$pchars$reset_color ${message}$color[reset_color]" >&2
+    return $returncode
+}
+
+function _message say act() {
+    local notice="message"
+    [[ "$1" = "-n" ]] && shift && notice="inline"
+    [[ $quiet = 1 ]] || _msg "$notice" $@
+    return 0
+}
+
+function _verbose xxx func() {
+    [[ $debug = 1 ]] && _msg verbose $@
+    return 0
+}
+
+function _success yes notice() {
+    [[ $quiet = 1 ]] || _msg success $@
+    return 0
+}
+
+function _warning no warn warning() {
+    [[ $quiet = 1 ]] || _msg warning $@
+    return 0
+}
+
+function _failure fatal die error() {
+    #    typeset -i exitcode=${exitv:-1}
+    [[ $quiet = 1 ]] || _msg failure $@
+    return 1
+}
+
+function _print() {
+    [[ $quiet = 1 ]] || _msg print $@
+    return 0
+}
+
+
+
+fn() {
+    local msg="$1"
+    command -v gettext 1>/dev/null 2>/dev/null \
+        && msg="$(gettext -s "$1")"
+    for i in $(seq 2 ${#}); do
+        msg=${(S)msg//::$(($i - 1))*::/$*[$i]}
+    done
+    
+    fun="$msg"
+    func "$fun"
+    req=()
+    freq=()
+}
+
+ckreq reqck() {
+    err=0
+    for v in $req; do
+        [[ "${(P)v}" = "" ]] && {
+            warn "required setting is blank: $v"
+            err=1
+        }
+    done
+
+    [[ $err = 1 ]] && return $err
+
+    for f in $freq; do
+        # exists and has size greater than zero
+        [[ -s $f ]] || {
+            warn "required file empty: $f"
+            err=1
+        }
+    done
+    return $err
+}
+
+zerr() { 
+    error "error in: ${fun:-$last_notice}"
+
+    [[ "$last_func" = "" ]] || warn "called in: $last_func"
+    [[ "$last_act" = "" ]] || warn "called in: $last_act"
+    [[ "$last_notice" = "" ]] || warn "called in: $last_notice"
+    [[ "$fun" = "" ]] || warn "called in: $fun"
+    error "error reported, operation aborted."
+    return 1
+}
+
+zdump() {
+    fn zdump
+    for v in $vars; do
+        print "$v \t ${(P)v}"
+    done
+    for a in $arrs; do
+        print "$a \t ${(P)a}"
+    done
+}
+
+
+
+##########################
+# Endgame handling
+
+arrs+=(destruens)
+
+# Trap functions for the endgame event
+TRAPINT()  { endgame INT;   return $? }
+# TRAPEXIT() { endgame EXIT;  return $? }
+TRAPHUP()  { endgame HUP;   return $? }
+TRAPQUIT() { endgame QUIT;  return $? }
+TRAPABRT() { endgame ABORT; return $? }
+TRAPKILL() { endgame KILL;  return $? }
+# TRAPPIPE() { endgame PIPE;  return $? }
+TRAPTERM() { endgame TERM;  return $? }
+TRAPSTOP() { endgame STOP;  return $? }
+# TRAPZERR() { func "function returns non-zero." }
+
+
+endgame() {
+    fn "endgame $*"
+
+    # execute all no matter what
+    TRAPZERR() { }
+
+    # process registered destructors
+    for d in $destruens; do
+        fn "destructor: $d"
+        $d
+    done
+    return 0
+}
+
+
+##########################
+# Temp file handling
+
+# ztmp() fills in $ztmpfile global. Caller must copy that variable as
+# it will be overwritten at every call.
+ztmp() {
+    fn ztmp
+
+    ztmpfile=`mktemp`
+    tmpfiles+=($ztmpfile)
+}
+
+# All tempfiles are freed in endgame()
+_ztmp_destructor() {
+    fn _ztmp_destructor
+
+    for f in $tmpfiles; do
+        rm -f "$f"
+    done
+    tmpfiles=()
+}
+
+arrs+=(tmpfiles)
+destruens+=(_ztmp_destructor)
+
+
+# optional: define zkv=1 on source
+
+[[ "$zkv" = "" ]] || {
+
+    ##########################
+    # Key/Value file storage using ZSh associative maps
+
+    zmodload zsh/system
+
+    # load a map from a file
+    # map must be already instantiated with typeset -A by called
+    # name of map is defined inside the file
+    zkv.load() {
+        fn "zkv-load $*"
+
+        file=$1
+        [[ "$file" = "" ]] && {
+            error "zkv-open() missing argument: file-path"
+            zerr
+            return 1    }
+        [[ -r "$file" ]] || {
+            error "zkv-open() file not found $file"
+            zerr
+            return 1    }
+        [[ -s "$file" ]] || {
+            error "zkv-open() file is empty"
+            zerr
+            return 1    }
+
+        source $file
+    }
+
+    # save a map in a file
+    # $1 = name of the map associative array
+    # $2 = full path to the file
+    zkv.save() {
+        fn "zkv.save $*"
+
+        _map=$1
+        _path=$2
+        [[ "$_path" = "" ]] && {
+            error "zkv.save() missing argument: map-name path-to-file"
+            zerr
+            return 1
+        }
+        [[ -r $_path ]] && {
+            func "zkv.close() overwriting $_path"
+            func "backup turd left behind: ${_path}~"
+            mv $_path $_path~
+        }
+        touch $_path
+
+        # wondering about http://www.zsh.org/mla/users/2015/msg00286.html
+        # meanwhile solved using a double array, wasting a full map memcpy
+        _karr=(${(Pk)_map})
+        _varr=(${(Pv)_map})
+        _num="${#_karr}"
+        for c in {1..$_num}; do        
+            # can also be cat here, however for speed we use builtins
+            # switch to cat if compatibility is an issue
+            sysread -o 1 <<EOF >> $_path
+$_map+=("${_karr[$c]}" "${(v)_varr[$c]}")
+EOF
+        done
+        func "$_num key/values stored in $_path"
+    }
+
+}
+
+# optional: define zconsul=1 on source
+
+[[ "$zconsul" = "" ]] || {
+
+    ########
+    # Consul
+    # there is a clear zsh optimization here in get/set kv
+    # using zsh/tcp instead of spawning curl
+    # and perhaps querying with one call using ?recursive
+
+    zmodload zsh/net/tcp
+
+    zconsul.set() {
+        fn "zconsul.set $*"
+        
+        # checks if consul running up to the caller
+
+        _host=$1 # ip address
+        _port=${host[(ws@:@)2]:-8500}
+        _k=$2 # key name
+        _v=$3 # value
+
+        req=(_host _port _k _v)
+        ckreq || return $?
+
+        ztcp $_host $_port || {
+            zerr
+            return 1
+        }
+
+        _fd=$REPLY
+        #    func "tcp open on fd $fd"
+        cat <<EOF >& $_fd
+PUT /v1/kv/$_k HTTP/1.1
+User-Agent: Zuper/$zuper_version
+Host: $_host:$_port
+Accept: */*
+Content-Length: ${#v}
+Content-Type: application/x-www-form-urlencoded
+
+EOF
+
+        print -n "$v" >& $_fd
+
+        sysread -i $_fd _res
+
+        # close connection
+        ztcp -c $_fd
+
+        [[ "$_res" =~ "true" ]] || {
+            warn "cannot set key/value in consul: $_k = $_v"
+            zerr
+            return 1
+        }
+
+        return 0
+
+    }    
+
+    zconsul.get() {
+        fn "zconsul.get $*"
+
+        _host=$1 # ip address
+        _port=${host[(ws@:@)2]:-8500}
+        _k=$2 # key name
+        _v=$3 # value
+        
+        req=(_host _port _k _v)
+        ckreq || return $?
+
+        _k=$1
+
+        ztcp $_host $_port || {
+            zerr
+            return 1
+        }
+
+        _fd=$REPLY
+
+        cat <<EOF >& $_fd
+GET /v1/kv/$k HTTP/1.1
+User-Agent: Zuper/$zuper_version
+Host: $_host:$_port
+Accept: */*
+
+EOF
+        sysread -i $_fd -o 1 | awk -F: '
+/"Value":/ { gsub(/"|}]/,"",$7) ; print $7 }' | base64 -d
+
+        # close connection
+        ztcp -c $_fd
+
+        return 0
+
+    }
+
+}

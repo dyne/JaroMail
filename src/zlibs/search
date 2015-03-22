@@ -236,7 +236,7 @@ search() {
 }
 
 backup() {
-    id=$datestamp.$RANDOM
+    id=`datestamp`.$RANDOM
     c=0
 
     dst=${PARAM[1]}

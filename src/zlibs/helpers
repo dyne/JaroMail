@@ -27,6 +27,7 @@
 # which mutt binary to use
 mutt="mutt"
 
+datestamp() { date '+%d%b%y' }
 
 # remote leading and trailing spaces in a string taken from stdin
 trim() {
@@ -329,52 +330,6 @@ is_online() {
 }
 
 
-# opens and closes a ramdisk for temporary files
-# users can do this explicitly between session to speed up operations
-ramdisk() {
-    case $OS in
-    GNU)
-        # TODO
-        # not so urgent, since usually /dev/shm is mounted and writable
-        ;;
-    MAC)
-        case ${PARAM[1]} in
-        open)
-            mount | grep 'JaroTmp' > /dev/null
-            { test $? = 0 } && {
-            error "A Jaro Mail ramdisk is already open"
-            return 1 }
-            { test -z ${PARAM[2]} } && { size=10 } || { size=${PARAM[2]} }
-            act "Creating ramdisk of ${size}MB"
-
-            # 2048 is a megabyte here
-            devsize=$((1024*2*$size))
-            devname=`hdid -nomount ram://${devsize}`
-            act "Mounting ramdisk on $devname"
-            diskutil eraseVolume HFS+ JaroTmp `basename $devname` > /dev/null
-            { test $? != 0 } && {
-            error "Error initializing ramdisk"
-            hdiutil detach `basename $devname`
-            return 1 }
-            notice "Operation successful, ramdisk ready on /Volume/JaroTmp"
-            TMPRAM=1
-            ;;
-        close)
-            devname=`mount | awk '/JaroTmp/ {print $1}'`
-            { test "$devname" = "" } && {
-            error "No ramdisk seems to be open"
-            return 1 }
-            act "Unmounting ramdisk: $devname"
-            diskutil unmount /Volumes/JaroTmp > /dev/null
-            hdiutil detach `basename $devname` > /dev/null
-            notice "Ramdisk succesfully detached"
-            TMPRAM=0
-            ;;
-        esac
-        ;;
-    esac
-}
-
 human_size() {
     { test $1 -gt 0 } || {
     error "human_size() called with zero argument"
@@ -467,3 +422,51 @@ cert() {
 }
 
 ######################
+# obsoleted
+
+
+# opens and closes a ramdisk for temporary files
+# users can do this explicitly between session to speed up operations
+ramdisk() {
+    case $OS in
+    GNU)
+        # TODO
+        # not so urgent, since usually /dev/shm is mounted and writable
+        ;;
+    MAC)
+        case ${PARAM[1]} in
+        open)
+            mount | grep 'JaroTmp' > /dev/null
+            { test $? = 0 } && {
+            error "A Jaro Mail ramdisk is already open"
+            return 1 }
+            { test -z ${PARAM[2]} } && { size=10 } || { size=${PARAM[2]} }
+            act "Creating ramdisk of ${size}MB"
+
+            # 2048 is a megabyte here
+            devsize=$((1024*2*$size))
+            devname=`hdid -nomount ram://${devsize}`
+            act "Mounting ramdisk on $devname"
+            diskutil eraseVolume HFS+ JaroTmp `basename $devname` > /dev/null
+            { test $? != 0 } && {
+            error "Error initializing ramdisk"
+            hdiutil detach `basename $devname`
+            return 1 }
+            notice "Operation successful, ramdisk ready on /Volume/JaroTmp"
+            TMPRAM=1
+            ;;
+        close)
+            devname=`mount | awk '/JaroTmp/ {print $1}'`
+            { test "$devname" = "" } && {
+            error "No ramdisk seems to be open"
+            return 1 }
+            act "Unmounting ramdisk: $devname"
+            diskutil unmount /Volumes/JaroTmp > /dev/null
+            hdiutil detach `basename $devname` > /dev/null
+            notice "Ramdisk succesfully detached"
+            TMPRAM=0
+            ;;
+        esac
+        ;;
+    esac
+}

@@ -38,8 +38,8 @@ queue() {
     # set it ready for saving in outbux
     queue_body="$base"
 
-    _tmp_create
-    tmpqueue="$JAROTMP"
+    ztmp
+    tmpqueue=$ztmpfile
 
     # pre-processing of the email headers
     awk '
@@ -285,8 +285,8 @@ smtp_send() {
         unset password
         return 1 }
 
-    _tmp_create
-    msmtpcfg="$JAROTMP"
+    ztmp
+    msmtpcfg=$ztmpfile
     sysread -o 1 <<EOF > $msmtpcfg
 account default
 from ${email}
@@ -336,8 +336,8 @@ send() {
         hdr "$qbody" | grep -i '^from: anon' > /dev/null
         if [[ $? = 0 ]]; then
 
-            _tmp_create
-            anoncfg="$JAROTMP"
+            ztmp
+            anoncfg=$ztmpfile
 
             sysread -o 1 <<EOF > "$anoncfg"
 REMAIL		n
@@ -462,8 +462,8 @@ peek() {
         unset password all; return 1
     }
 
-    _tmp_create
-    _pass_tmp="$JAROTMP"
+    ztmp
+    _pass_tmp=$ztmpfile
     sysread -o 1 <<EOF >> "$_pass_tmp"
 set imap_pass = "${password}"
 # set imap_peek = yes
