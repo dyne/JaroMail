@@ -468,13 +468,18 @@ main() {
 
     subcommands_opts[index]=""
     subcommands_opts[search]=""
+    subcommands_opts[nm_search]=""
     subcommands_opts[notmuch]=""
 
     subcommands_opts[learn]=""
     subcommands_opts[forget]=""
-    subcommands_opts[list]=""
+
     subcommands_opts[complete]=""
     subcommands_opts[isknown]=""
+
+    subcommands_opts[list]=""
+    subcommands_opts[extract]=""
+    subcommands_opts[parse]=""
 
     subcommands_opts[import]=""
     subcommands_opts[export]=""
@@ -506,8 +511,6 @@ main() {
     subcommands_opts[publish]=""
 
     subcommands_opts[imap]=""
-
-    subcommands_opts[extract]=""
 
     subcommands_opts[smtp]=""
 
@@ -658,6 +661,9 @@ main() {
            exitcode=$?
            ;;
 
+    # notmuch search with file output
+    nm_search) nm_search ${PARAM} ;;
+
     search) search ${PARAM} ;;
 
     notmuch)
@@ -784,8 +790,18 @@ main() {
         esac
         ;;
 
-    list|extract)
-        extract ${PARAM}
+    parse)
+        extract_stdin ${PARAM}
+        exitcode=$?
+        ;;
+
+    list)
+        list_abook ${PARAM}
+        exitcode=$?
+        ;;
+
+    extract)
+        extract_auto ${PARAM}
         exitcode=$?
         ;;
 

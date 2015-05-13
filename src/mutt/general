@@ -47,6 +47,9 @@ set delete = yes
 #set reply_regexp = "^(re|aw):[ \t]*"
 #set status_chars = "-*%A"
 #set to_chars = " +TCF"
+set pipe_decode = "yes"
+set pipe_split = "no"
+set pipe_sep = "#+++JAROMAIL_PIPE_SEPARATOR\n"
 
 ##########
 ## Sorting

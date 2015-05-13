@@ -168,7 +168,7 @@ e_parse() {
         # check if an email address was found
         isemail "$_e" || continue
         # avoid duplicates
-        [[ "${(v)e_addr[$_e]}" = "" ]] || continue
+#        [[ "${(v)e_addr[$_e]}" = "" ]] || continue
         
         # extract also the name using comma separator
         _n="${(Q)_p[(ws:,:)2]}"
@@ -331,17 +331,30 @@ is_online() {
 
 
 human_size() {
-    { test $1 -gt 0 } || {
-    error "human_size() called with zero argument"
-    return 1 }
+    [[ $1 -gt 0 ]] || {
+        error "human_size() called with invalid argument"
+        return 1
+    }
+
+    # we use the binary operation for speed
+    # shift right 10 is divide by 1024
+
+    # gigabytes
+    [[ $1 -gt 1073741824 ]] && {
+        print -n "$(( $1 >> 30 )) GB"
+        return 0
+    }
+
     # megabytes
-    { test $1 -gt 1048576 } && {
-    print -n "$(( $1 / 1024 / 1024 )) MB"
-    return 0}
+    [[ $1 -gt 1048576 ]] && {
+        print -n "$(( $1 >> 20 )) MB"
+        return 0
+    }
     # kilobytes
-    { test $1 -gt 1024 } && {
-    print -n "$(( $1 / 1024 )) KB"
-    return 0}
+    [[ $1 -gt 1024 ]] && {
+        print -n "$(( $1 >> 10 )) KB"
+        return 0
+    }
     # bytes
     print -n "$1 Bytes"
     return 0
@@ -352,27 +365,6 @@ human_size() {
 # downloads and/or installs certificates
 
 
-# TODO: save fingeprints of servers and check connections
-get-smtp-fingerprint() {
-# dyne.org one:
-# tls_fingerprint 6A:D4:DF:E4:20:32:F9:66:94:35:0C:33:9D:74:96:5C
-
-    read_account ${account}
-    { test  $? != 0 } && {
-        error "Invalid account: $account"
-        return 1
-    }
-    # defaults
-    [[ -z $smtp_port ]] && { smtp_port=25 }
-
-    print QUIT \
-        | openssl s_client -starttls smtp \
-        -connect $smtp:$smtp_port \
-        -showcerts 2>/dev/null \
-        | openssl x509 -fingerprint -md5 -noout \
-        | awk -F '=' '/Fingerprint/ {print $2}' | sysread fingerprint
-
-}
 
 cert() {
 
