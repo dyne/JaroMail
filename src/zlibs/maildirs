@@ -223,7 +223,8 @@ deliver() {
         #     || [[ "$dest" =~ "^zz." ]] \
         #     || [[ "$dest" = "incoming" ]] && {
         base="`hostname`_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"                
-        cat > "$MAILDIRS/$dest/new/$base"
+        last_deliver="$MAILDIRS/$dest/new/$base"
+        cat > "$last_deliver"
         [[ $? = 0 ]] || {
             error "Could not deliver email file into maildir $dest"
             func "Returning error to caller."

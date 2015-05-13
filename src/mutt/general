@@ -18,7 +18,8 @@ unset suspend
 unset wait_key
 
 set send_charset = utf-8
-set assumed_charset = us-ascii
+set assumed_charset = utf-8
+# assumed was us-ascii
 
 #set charset = iso-8859-1
 #set send_charset = us-ascii

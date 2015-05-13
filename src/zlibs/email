@@ -46,9 +46,14 @@ queue() {
 /User-Agent:/ { print "User-Agent: Jaro Mail <http://jaromail.dyne.org>"; next }
 { print $0 }
 ' > "$tmpqueue"
+    [[ $? = 0 ]] || { error "Error queing email from stdin into outbox"; return 1 }
+
+    # calculate the sha1sum of the body to check integrity of delivery
+    _sha1sum=`body $ztmpfile | sha1sum -t`
+    _sha1sum=${_sha1sum[(w)1]}
 
     maildirmake "$MAILDIRS/outbox"
-    ${=mkdir} "$MAILDIRS/outbox/send"
+    # ${=mkdir} "$MAILDIRS/outbox/send"
     lock "$MAILDIRS/outbox"
 
     # check if recipients are a Group
@@ -64,8 +69,8 @@ queue() {
             error "Group not found: $groupfile"
             return 1 }
         
-        grep -v '^#' $MAILDIRS/Groups/$groupfile | sysread recipients
-        groupnum=`print ${recipients} | wc -l`
+        recipients=`grep -v '^#' $MAILDIRS/Groups/$groupfile`
+        groupnum=`grep -v '^#' $MAILDIRS/Groups/$groupfile | wc -l`
         groupmode=`head -n1 "$MAILDIRS/Groups/$groupfile" | awk '/^#mode/ { print $2 } { next }'`
         [[ "$groupmode" = "" ]] && { groupmode="individual" }
         act "$groupnum recipients in total, sending mode $groupmode"
@@ -79,7 +84,7 @@ queue() {
                     ig=${base}-${RANDOM}
                     cat "$tmpqueue" | \
                         awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
-                        > "${MAILDIRS}/outbox/new/${ig}.mail"
+                        | deliver outbox # > "${MAILDIRS}/outbox/new/${ig}.mail"
                 done
                 ;;
             
@@ -95,18 +100,27 @@ queue() {
                 cat "$tmpqueue" | \
                     awk '/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
                 { print $0 }' \
-                    > "${MAILDIRS}/outbox/new/${ig}.mail"
+                    | deliver outbox # "${MAILDIRS}/outbox/new/${ig}.mail"
                 ;;
         esac
         
     else
         # recipients are set in the email envelope
-        printfile "$tmpqueue" | deliver "outbox"
+        printfile "$tmpqueue" | deliver outbox
     fi
-    
+
     unlock "$MAILDIRS/outbox"
 
-    return 0
+    _sha1sum_delivered=`body $last_deliver | sha1sum -t`
+    _sha1sum_delivered=${_sha1sum_delivered[(w)1]}
+    if [[ "$_sha1sum_delivered" = "$_sha1sum" ]]; then
+        func "correct delivery, SHA1 checksum on body match"
+        return 0
+    fi
+
+    error "Error on delivery, file checksum don't match"
+    return 1
+
 }
 
 ###########

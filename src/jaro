@@ -30,8 +30,8 @@ JAROMAILEXEC=$0
 umask 066
 
 # honor quiet and debug flags as early as possible
-if [[ ${@} == *-q* ]]; then quiet=1; fi
-if [[ ${@} == *-D* ]]; then debug=1; fi
+if [[ ${@} == *-q* ]]; then QUIET=1; fi
+if [[ ${@} == *-D* ]]; then DEBUG=1; fi
 
 
 # check if we are inside the directory
@@ -143,7 +143,7 @@ vars+=(e_parsed)
 
 # global array for maildirs (filled by list_maildirs)
 typeset -al maildirs
-
+vars+=(last_deliver)
 
 # global variable for mutt binary
 vars+=(mutt pgpewrap dotlock)
