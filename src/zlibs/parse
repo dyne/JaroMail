@@ -108,7 +108,7 @@ extract_stdin() {
         # is an email or stream of emails
 
         _headers=`print - $_in | awk '
-BEGIN { header=0 }
+BEGIN { header=1 }
 /JAROMAIL_PIPE_SEPARATOR/ { header=1; next }
 /^$/ { header=0; print "\n" }
 { if(header==1) { print $0 } }
@@ -120,14 +120,15 @@ BEGIN { header=0 }
 
         for h in ${(f)_headers}; do
 
-            [[ "${h[(w)1]}" = "Date:" ]] && _nextline=1
-            [[ $_nextline = 1 ]] && _gotit+="$h\n"
+            [[ "${h[(w)1]}" = "From:" ]] && _nextline=1
             [[ "${h[(w)1]}" = "Subject:" ]] && {
                 _nextline=0
                 print - ${_gotit} | e_parse
 
                 _gotit=""
             }
+            [[ $_nextline = 1 ]] && _gotit+="$h\n"
+
         done
 
         for i in ${(k)e_addr}; do
