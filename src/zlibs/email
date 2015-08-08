@@ -51,6 +51,7 @@ queue() {
     # calculate the sha1sum of the body to check integrity of delivery
     _sha1sum=`body $ztmpfile | sha1sum -t`
     _sha1sum=${_sha1sum[(w)1]}
+    func "Body SHA1 checksum: $_sha1sum"
 
     maildirmake "$MAILDIRS/outbox"
     # ${=mkdir} "$MAILDIRS/outbox/send"
@@ -106,19 +107,26 @@ queue() {
         
     else
         # recipients are set in the email envelope
-        printfile "$tmpqueue" | deliver outbox
+        cat "$tmpqueue" | deliver outbox
     fi
 
     unlock "$MAILDIRS/outbox"
 
     _sha1sum_delivered=`body $last_deliver | sha1sum -t`
     _sha1sum_delivered=${_sha1sum_delivered[(w)1]}
+    func "Delivered body SHA1 checksum: $_sha1sum_delivered"
     if [[ "$_sha1sum_delivered" = "$_sha1sum" ]]; then
         func "correct delivery, SHA1 checksum on body match"
         return 0
     fi
 
     error "Error on delivery, file checksum don't match"
+    [[ $DEBUG = 1 ]] && {
+        func "Differences:"
+        diff $tmpqueue $last_deliver
+        func "-----"
+    }
+    rm -f $last_deliver
     return 1
 
 }

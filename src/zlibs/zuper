@@ -24,23 +24,17 @@
 ##########################
 typeset -aU vars
 typeset -aU arrs
-vars=(DEBUG QUIET ztmpfile)
+typeset -aU maps
+
+vars=(DEBUG QUIET LOG)
 arrs=(req freq)
 
-# reset list of destructors
-destruens=()
-
-# global execution flags
-DEBUG=${DEBUG:-0}
-QUIET=${QUIET:-0}
-
 vars+=(zuper_version)
-zuper_version=0.1
+zuper_version=0.2
 
 # Messaging function with pretty coloring
 autoload colors
 colors
-
 
 vars+=(last_act last_func last_notice)
 
@@ -91,6 +85,13 @@ function _msg() {
             ;;
     esac
     ${=command} "${progname} $fg_bold[$pcolor]$pchars$reset_color ${message}$color[reset_color]" >&2
+
+    # write the log if its configured
+    [[ "$LOG" = "" ]] || {
+        touch $LOG || return $?
+        ${=command} "${progname} $fg_bold[$pcolor]$pchars$reset_color ${message}$color[reset_color]" >> $LOG
+    }
+
     return $returncode
 }
 
@@ -132,7 +133,21 @@ fn() {
     fun="$@"
     req=()
     freq=()
+    func "$fun"
 }
+
+zerr() {
+    error "error in: ${fun:-$last_notice}"
+    [[ "$last_func"   = "" ]] || warn "called in: $last_func"
+    [[ "$last_act"    = "" ]] || warn "called in: $last_act"
+    [[ "$last_notice" = "" ]] || warn "called in: $last_notice"
+    # [[ "$fun"         = "" ]] || warn "called in: $fun"
+    TRAPEXIT() {
+        error "error reported, operation aborted."
+    }
+    return 1
+}
+
 
 ckreq reqck() {
     err=0
@@ -152,28 +167,31 @@ ckreq reqck() {
             err=1
         }
     done
+    [[ $err == 1 ]] && zerr
     return $err
-}
-
-zerr() { 
-    error "error in: ${fun:-$last_notice}"
-
-    [[ "$last_func" = "" ]] || warn "called in: $last_func"
-    [[ "$last_act" = "" ]] || warn "called in: $last_act"
-    [[ "$last_notice" = "" ]] || warn "called in: $last_notice"
-    [[ "$fun" = "" ]] || warn "called in: $fun"
-    error "error reported, operation aborted."
-    return 1
 }
 
 zdump() {
     fn zdump
-    for v in $vars; do
-        print "$v \t ${(P)v}"
-    done
-    for a in $arrs; do
-        print "$a \t ${(P)a}"
-    done
+    [[ ${#vars} -gt 0 ]] && {
+        print "Global variables:"
+        for _v in $vars; do
+            print " $_v = \t ${(P)_v}"
+        done
+    }
+    [[ ${#arrs} -gt 0 ]] && {
+        print "Global arrays:"
+        for _a in $arrs; do
+        print " $_a \t ( ${(P)_a} )"
+        done
+    }
+    [[ ${#maps} -gt 0 ]] && {
+        print "Global maps:"
+        for _m in $maps; do
+            print " $_m [key] \t ( ${(Pk)_m} )"
+            print " $_m [val] \t ( ${(Pv)_m} )"
+        done
+    }
 }
 
 # handy wrappers for throw/catch execution of blocks where we need the
@@ -185,6 +203,7 @@ catch() { function TRAPZERR() { } }
 # Endgame handling
 
 arrs+=(destruens)
+destruens=()
 
 # Trap functions for the endgame event
 TRAPINT()  { endgame INT;   return $? }
@@ -220,6 +239,7 @@ zshexit() { endgame EXIT; return $? }
 ##########################
 # Temp file handling
 
+vars+=(ztmpfile)
 # ztmp() fills in $ztmpfile global. Caller must copy that variable as
 # it will be overwritten at every call.
 ztmp() {
@@ -242,6 +262,31 @@ _ztmp_destructor() {
 arrs+=(tmpfiles)
 destruens+=(_ztmp_destructor)
 
+# tokenizer, works only with one char length delimiters
+# saves everything in global array tok=()
+arrs+=(tok)
+strtok() {
+    fn "strtok $*"
+    _string="$1"
+    _delim="$2"
+    req=(_string _delim)
+    ckreq || return $?
+
+    tok=()
+    f=0
+    for c in {1..${#_string}}; do
+        if [[ "${_string[(e)$c]}" == "$_delim" ]]; then
+            # check if not empty
+            t=${_string[(e)$(($f + 1)),$(($c - 1))]}
+            [[ "$t" == "" ]] || tok+=($t)
+            # save last found
+            f=$c
+        fi
+    done
+    # add last token
+    t=${_string[(e)$(($f + 1)),$c]}
+    [[ "$t" == "" ]] || tok+=($t)
+}
 
 # optional: define zkv=1 on source
 
@@ -255,7 +300,7 @@ destruens+=(_ztmp_destructor)
     # load a map from a file
     # map must be already instantiated with typeset -A by called
     # name of map is defined inside the file
-    zkv.load() {
+    function zkv.load() {
         fn "zkv-load $*"
 
         file=$1
@@ -278,7 +323,7 @@ destruens+=(_ztmp_destructor)
     # save a map in a file
     # $1 = name of the map associative array
     # $2 = full path to the file
-    zkv.save() {
+    function zkv.save() {
         fn "zkv.save $*"
 
         _map=$1
@@ -300,7 +345,7 @@ destruens+=(_ztmp_destructor)
         _karr=(${(Pk)_map})
         _varr=(${(Pv)_map})
         _num="${#_karr}"
-        for c in {1..$_num}; do        
+        for c in {1..$_num}; do
             # can also be cat here, however for speed we use builtins
             # switch to cat if compatibility is an issue
             sysread -o 1 <<EOF >> $_path
@@ -312,74 +357,90 @@ EOF
 
 }
 
-# optional: define zconsul=1 on source
+# optional: define restful=1 on source
 
-[[ "$zconsul" = "" ]] || {
+[[ "$restful" = "" ]] || {
 
     ########
-    # Consul
+    # Restful API client
     # there is a clear zsh optimization here in get/set kv
     # using zsh/tcp instead of spawning curl
     # and perhaps querying with one call using ?recursive
 
     zmodload zsh/net/tcp
 
-    zconsul.set() {
-        fn "zconsul.set $*"
-        
-        # checks if consul running up to the caller
+    function restful.put() {
+        # $1 = hostname
+        # $2 = port
+        # $3 = path
+        # $4 = key
+        # $5 = value
 
-        _host=$1 # ip address
-        _port=${host[(ws@:@)2]:-8500}
-        _k=$2 # key name
-        _v=$3 # value
+        fn "restful.put $*"
 
-        req=(_host _port _k _v)
+        # to check if the http service is running is up to the caller
+
+        _host=${1} # ip address
+        _port=${2}
+        _path=${3}
+        _k="$4" # key name
+        _v="$5" # value
+
+        req=(_host _k _v)
         ckreq || return $?
 
-        ztcp $_host $_port || {
-            zerr
-            return 1
-        }
+        if ztcp $_host $_port; then
 
-        _fd=$REPLY
-        #    func "tcp open on fd $fd"
-        cat <<EOF >& $_fd
-PUT /v1/kv/$_k HTTP/1.1
+
+            # TODO: work out various parsers, this one works with consul.io
+
+            _fd=$REPLY
+            #    func "tcp open on fd $fd"
+            cat <<EOF >& $_fd
+PUT ${_path}${_k} HTTP/1.1
 User-Agent: Zuper/$zuper_version
-Host: $_host:$_port
+Host: ${_host}:${_port}
 Accept: */*
-Content-Length: ${#v}
+Content-Length: ${#_v}
 Content-Type: application/x-www-form-urlencoded
 
 EOF
 
-        print -n "$v" >& $_fd
+            print -n "$_v" >& $_fd
 
-        sysread -i $_fd _res
+            sysread -i $_fd _res
 
-        # close connection
-        ztcp -c $_fd
+            # close connection
+            ztcp -c $_fd
 
-        [[ "$_res" =~ "true" ]] || {
-            warn "cannot set key/value in consul: $_k = $_v"
+            [[ "$_res" =~ "true" ]] || {
+                warn "failed PUT on restful key/value"
+                warn "endpoint: ${_host}:${_port}${_path}"
+                warn "resource: $_k = $_v"
+                print - "$_res"
+                zerr
+                return 1
+            }
+
+        else
+            error "cannot connect to restful service: $_host:$_port"
             zerr
             return 1
-        }
+        fi
 
         return 0
 
-    }    
+    }
 
-    zconsul.get() {
-        fn "zconsul.get $*"
+    restful.get() {
+        fn "restful.get $*"
 
-        _host=$1 # ip address
-        _port=${host[(ws@:@)2]:-8500}
-        _k=$2 # key name
-        _v=$3 # value
-        
-        req=(_host _port _k _v)
+        _host=${1}
+        _port=${2}
+        _path=${3}
+        _k=$4 # key name
+
+        req=(_host _k)
         ckreq || return $?
 
         _k=$1
@@ -391,8 +452,10 @@ EOF
 
         _fd=$REPLY
 
+        # TODO: work out various parsers, this one works with consul.io
+
         cat <<EOF >& $_fd
-GET /v1/kv/$k HTTP/1.1
+GET ${_path}${_k} HTTP/1.1
 User-Agent: Zuper/$zuper_version
 Host: $_host:$_port
 Accept: */*
@@ -409,3 +472,157 @@ EOF
     }
 
 }
+
+# {{{ Helpers
+[[ "$helpers" = "" ]] || {
+
+    function helper.isfound isfound() {
+        command -v $1   1>/dev/null 2>/dev/null
+        return $?
+    }
+
+    # remote leading and trailing spaces in a string taken from stdin
+    function helper.trim trim() {
+        sed -e 's/^[[:space:]]*//g ; s/[[:space:]]*\$//g'
+    }
+
+    zmodload zsh/mapfile
+    # faster substitute for cat
+    function helper.printfile printfile() {
+        print ${mapfile[$1]}
+    }
+
+    # extract all emails found in a text from stdin
+    # outputs them one per line
+    function helper.extract-emails extract_emails() {
+        awk '{ for (i=1;i<=NF;i++)
+     if ( $i ~ /[[:alnum:]]@[[:alnum:]]/ ) {
+       gsub(/<|>|,/ , "" , $i); print $i } }'
+    }
+
+
+    zmodload zsh/regex
+    # takes a string as argument, returns success if is an email
+    function helper.isemail isemail() {
+        [[ "$1" -regex-match "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b" ]] && return 0
+
+        return 1
+    }
+
+    # takes a numeric argument and prints out a human readable size
+    function helper.human-size human_size() {
+        [[ $1 -gt 0 ]] || {
+            error "human_size() called with invalid argument"
+            return 1
+        }
+
+        # we use the binary operation for speed
+        # shift right 10 is divide by 1024
+
+        # gigabytes
+        [[ $1 -gt 1073741824 ]] && {
+            print -n "$(( $1 >> 30 )) GB"
+            return 0
+        }
+
+        # megabytes
+        [[ $1 -gt 1048576 ]] && {
+            print -n "$(( $1 >> 20 )) MB"
+            return 0
+        }
+        # kilobytes
+        [[ $1 -gt 1024 ]] && {
+            print -n "$(( $1 >> 10 )) KB"
+            return 0
+        }
+        # bytes
+        print -n "$1 Bytes"
+        return 0
+    }
+
+
+    # strips out all html/xml tags (everything between < >)
+    function helper.html-strip xml_strip html_strip() { sed 's/<[^>]\+>//g' }
+
+    # changes stdin string special chars to be shown in html
+    function helper.excape-html escape_html() {
+        sed -e '
+s/\&/\&amp;/g
+s/>/\&gt;/g
+s/</\&lt;/g
+s/"/\&quot;/g
+'
+    }
+
+}
+
+# }}} Helpers
+
+# {{{ Config
+
+# This is not a full config parser, but its a mechanism to read single
+# sections of configuration files that are separated using various
+# syntax methods. The only method supported is now org-mode whose
+# sections start with #+ . It fills in the global array
+# $config_section which can be read out to a file or interpreted in
+# memory, whatever syntax it may contain.
+
+vars+=(config_section_type)
+arrs+=(config_section)
+config_section_type=org-mode
+
+config.section.type() {
+    fn config.section.type
+    _type=$1
+    req=(_type)
+    ckreq || return $?
+
+    case $_type in
+        org-mode)
+            config_section_type=org-mode
+            ;;
+        *)
+            error "Unknown config type:$_type"
+            return 1
+            ;;
+    esac
+
+    act "$_type config section parser initialized"
+    return 0
+
+}
+
+# fills in contents of section in array config_section
+config.section.read() {
+    fn config.section.read
+    _file=$1
+    _section=$2
+    req=(_file _section)
+    freq=($_file)
+    ckreq || return $?
+
+    case $config_section_type in
+        org-mode)
+            _contents=`awk '
+BEGIN { found=0 }
+/^#\+ '"$_section"'/ { found=1; next }
+/^#\+/ { if(found==1) exit 0 }
+/^$/ { next }
+{ if(found==1) print $0 }
+' $_file`
+
+            ;;
+        *)
+            error "Unknown config type:$_type"
+            ;;
+    esac
+
+    config_section=()
+    for c in ${(f)_contents}; do
+        config_section+=("$c")
+    done
+    return 0
+
+}
+
+# }}}

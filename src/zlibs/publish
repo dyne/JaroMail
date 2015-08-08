@@ -249,7 +249,7 @@ pubdb_render_maildir() {
         return 1
     }
 
-    pub="${md}/pub"
+    views="${md}/views"
     pubdb="${md}/.pubdb"
     [[ -r "$pubdb" ]] || {
         error "Publish_render_maildir: first run update_pubdb for $md"; return 1 }
@@ -261,7 +261,7 @@ pubdb_render_maildir() {
     # source webnomad's configurations
     [[ -r "${md}/config.zsh" ]] && { source "${md}/config.zsh" }
 
-    cat <<EOF > $pub/atom.xml
+    cat <<EOF > ${md}/views/atom.xml
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
@@ -291,10 +291,11 @@ EOF
 
     # main loop
     c=0
+
     for m in ${(f)mails}; do
-        
+        [[ "$m[1]" = "." ]] && { _base=`pwd` }
         # fill in uid and upath
-        pubdb_getuid "$m"
+        pubdb_getuid "$_base/$m"
         
         # but skip entries no more existing in maildir
         [[ -r "$m" ]] || { continue }
@@ -313,7 +314,7 @@ EOF
         pubdb_getuid "$m"
         
         # fill in the body
-        _body=`pubdb_extract_body $m`
+        _body=`pubdb_extract_body $_base/$m`
         
         [[ "$_body" = "" ]] && { error "Error rendering $m" }
         
@@ -321,7 +322,7 @@ EOF
         if (( $c < ${FEED_LIMIT:=30} )); then
             
             # write out the atom entry
-            cat <<EOF >> "$pub"/atom.xml
+            cat <<EOF >> ${md}/views/atom.xml
 
 <entry>
     <title type="html" xml:lang="en-US">$_subject</title>
@@ -354,6 +355,7 @@ EOF
         
         # if using webnomad write out also the message page
         [[ -d "${md}/views" ]] && {
+            act "${_datestring} - ${_subject}"
             _datestring=`hdr "$_path" | awk '/^Date/ { print $0 }'`
             cat <<EOF > "${md}/views/${upath}"
 <h2>${_subject}</h2>
@@ -376,12 +378,13 @@ EOF
         }
     done # loop is over
     
-    cat <<EOF >> "${pub}/atom.xml"
+    cat <<EOF >> "${md}/views/atom.xml"
 </feed>
 EOF
     
     cat <<EOF >> "${md}/views/index.html"
 </table>
 EOF
-    
+
+    notice "Archive website rendering completed"
 }

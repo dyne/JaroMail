@@ -606,6 +606,7 @@ sieve_filter() {
     fileinto="$2"
 
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
+
 # $fileinto
 $condition [
 EOF
@@ -637,8 +638,8 @@ sieve_complex_filter() {
     func "Sieve complex filter entries: ${#sieve_filter_map}"
 
     for fil in ${(k)sieve_filter_map}; do
-    print "$condition \"${fil}\" { fileinto :create \"${sieve_filter_map[$fil]}\"; stop; }" \
-        >> "$MAILDIRS/Filters.sieve"
+        print "$condition \"${fil}\" { fileinto :create \"${sieve_filter_map[$fil]}\"; stop; }" \
+            >> "$MAILDIRS/Filters.sieve"
     done
 
     return 0
@@ -713,7 +714,6 @@ EOF
 ' "$MAILDIRS"/whitelist.abook`; do
             sieve_filter_array+=("$i")
         done
-
         sieve_filter \
             'if header :contains "From"' \
             INBOX
