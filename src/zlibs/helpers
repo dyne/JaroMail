@@ -109,7 +109,7 @@ autostart() {
     # no argument passed. open first folder with new mail
     [[ "$1" = "" ]] && {
         
-        [[ -r $MUTTDIR/rc ]] || {
+        [[ -r $MAILDIRS/.mutt/rc ]] || {
             error "Jaro Mail is not yet configured."
             error "To configure, edit the files in $MAILDIRS/Accounts"
             error "Then run 'jaro update' at least once."

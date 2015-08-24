@@ -553,8 +553,8 @@ EOF
     unset password
     # when peeking don't mark unread messages as Old
     # and sort date received with no threading (latest up)
-    rm -f "$MUTTDIR/muttpass"
-    sysread -o 1 <<EOF > "$MUTTDIR/muttpass"
+    rm -f "$MAILDIRS/.mutt/muttpass"
+    sysread -o 1 <<EOF > "$MAILDIRS/.mutt/muttpass"
 source '$_pass_tmp'
 unset mark_old
 set sort=reverse-date-received
@@ -562,8 +562,8 @@ EOF
 
     # schedule deletion of pass files after use
     sched +1 "
-rm -f $MUTTDIR/muttpass
-touch $MUTTDIR/muttpass
+rm -f $MAILDIRS/.mutt/muttpass
+touch $MAILDIRS/.mutt/muttpass
 ${=rm} -f $tmp" # zero the tmp passfile after a second
 
     _mutt -f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}

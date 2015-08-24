@@ -50,12 +50,16 @@ MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
 
 
 # check if we are testing from source
-if [ -r ../src/jaro ]; then
+if [[ -r ../src/jaro ]]; then
     WORKDIR="../src"
 # check if we are on OSX
-elif [ -r /Applications/JaroMail.app/Contents/Resources/jaro ]; then
+elif [[ -r /Applications/JaroMail.app/Contents/Resources/jaro ]]; then
     WORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
-else # use GNU/Linux default
+elif [[ -r /usr/share/jaromail/bin/jaro ]]; then
+    # use GNU/Linux default in usr
+    WORKDIR="/usr/share/jaromail"
+else
+    # use GNU/Linux default in local
     WORKDIR="/usr/local/share/jaromail"
 fi
 
@@ -64,6 +68,7 @@ WORKDIR=${JAROWORKDIR:-$WORKDIR}
 
 # load our zuper extension
 zkv=1
+helpers=1
 source $WORKDIR/zlibs/zuper
 
 
@@ -86,7 +91,7 @@ esac
 
 
 # global variables
-vars+=(DEBUG QUIET DRYRUN CALLMUTT cur_fun)
+vars+=(DEBUG QUIET DRYRUN CALLMUTT MAILDIRS)
 QUIET=${QUIET:-0}
 DEBUG=${DEBUG:-0}
 DRYRUN=${DRYRUN:-0}
@@ -282,11 +287,11 @@ check_bin() {
 
     # required programs
     for req in pinentry fetchmail gpg mutt msmtp; do
-    command -v $req >/dev/null
-    { test $? != 0 } && {
-        error "Cannot find $req. Please install it."
-        exit 1
-    }
+        isfound $req
+        { test $? != 0 } && {
+            error "Cannot find $req. Please install it."
+            exit 1
+        }
     done
 
     # make sure a gnupg dir exists
@@ -304,9 +309,9 @@ check_bin() {
     esac
 
     # which wipe command to use
-    if command -v wipe > /dev/null; then
+    if  isfound wipe; then
         rm="wipe -f -s -q -R /dev/urandom"
-    elif command -v srm > /dev/null; then
+    elif isfound srm; then
         rm="srm -m"
     else
         rm="rm -f"
@@ -314,12 +319,12 @@ check_bin() {
     func "Rm binary: $rm"
 
     # which mutt binary to use
-    if command -v mutt > /dev/null; then
+    if isfound mutt; then
         # system-wide
         # TODO: check if this is also the location on Fedora
         pgpewrap="${WORKDIR}/bin/gpgewrap"
         dotlock="${WORKDIR}/bin/dotlock"
-    elif command -v mutt-jaro > /dev/null; then
+    elif isfound mutt-jaro; then
         # in-house compiled
         mutt=mutt-jaro
         pgpewrap=pgpewrap
@@ -645,14 +650,22 @@ main() {
             ;;
 
     update|init)
-        init_inbox
-        update_filters
-        update_mutt
-        update_sieve
-    command -v notmuch > /dev/null && {
-        nm_setup
-        nm new 2>&1 | grep -v '^Note: Ignoring'
-}
+        [[ "$PARAM" = "" ]] || {
+            for p in $PARAM; do
+                [[ "$p" = "." ]] && p=$PWD
+                [[ -d $p ]] && MAILDIRS=$p
+            done
+        }
+        MAILDIRS=$MAILDIRS init_inbox
+        MAILDIRS=$MAILDIRS update_filters
+        MAILDIRS=$MAILDIRS update_mutt
+        MAILDIRS=$MAILDIRS update_sieve
+        isfound notmuch && {
+            MAILDIRS=$MAILDIRS nm_setup
+            MAILDIRS=$MAILDIRS nm new 2>&1 | grep -v '^Note: Ignoring'
+        }
+        notice "Initialization completed in $MAILDIRS"
+        act "configure accounts in $MAILDIRS/Accounts"
         ;;
 
     help) usage ;;

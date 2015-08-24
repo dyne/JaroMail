@@ -38,6 +38,10 @@
     source "$MAILDIRS/cache/filters" }
 
 init_inbox() {
+    fn init_inbox
+    req=(MAILDIRS)
+    ckreq
+
     # make sure maildirs where to put mails exist
     ${=mkdir} "$MAILDIRS"
     maildirmake "$MAILDIRS/incoming"
@@ -79,11 +83,11 @@ init_inbox() {
 # reads all configurations and creates a cache of what is read
 # the cache consists of array and maps declarations for zsh
 update_filters() {
-    [[ -r "$MAILDIRS/Filters.txt" ]] || {
-        error "Filters not found in $MAILDIRS/Filters.txt"
-        return 1
-    }
-    
+    fn update_filters
+    req=(MAILDIRS)
+    freq=($MAILDIRS/Filters.txt)
+    ckreq
+
     notice "Updating filters..."
 
     ff="$MAILDIRS/cache/filters"
@@ -170,6 +174,10 @@ EOF
 
 
 filter_maildir() {
+    fn filter_maildir
+    req=(MAILDIR)
+    ckreq
+
     # Makes glob matching case insensitive
     unsetopt CASE_MATCH
 
@@ -184,7 +192,7 @@ filter_maildir() {
         func "Returning error to caller."
         return 1
     }
-    
+
     # loads up the filter cache (zsh compiled arrays)
     [[ -r "$MAILDIRS/cache/filters" ]] && {
         source $MAILDIRS/cache/filters
@@ -207,7 +215,7 @@ filter_maildir() {
         error "Nothing to filter inside maildir $mdinput"
         return 1
     }
-    
+
     notice "Filtering maildir: $mdinput ($numm mails}"
     c=0
 
@@ -218,7 +226,7 @@ filter_maildir() {
             error "User break requested, interrupting operation"
             break
         }
-        
+
         match=0
         c=$(($c + 1))
 
@@ -251,7 +259,7 @@ filter_maildir() {
                 continue
             }
         }
-        
+
         hdr "$m" | awk '/Sender.*mailman-bounce/ { exit 1 }'
         [[ $? = 0 ]] || {
             [[ "$mdinput" = "zz.bounces" ]] && {
@@ -265,7 +273,7 @@ filter_maildir() {
                 continue
             }
         }
-        
+
         [[ "$ownfilters" = "1" ]] && {
 
             func "processing through own filters"
@@ -277,7 +285,7 @@ filter_maildir() {
             [[ $? = 0 ]] && {
                 femail="${(k)e_addr}" # e_parse From hit is always one
                 for exp in ${(k)filter_from}; do
-                    
+
                     # fuzzy match on a string (PCRE)
                     if [[ "$femail" =~ "$exp" ]]; then
 
@@ -288,9 +296,9 @@ filter_maildir() {
                         [[ "$_dest" = "$mdinput" ]] && {
                             act "$c\t/ $numm"
                             match=1
-                            break 
+                            break
                         }
-                        
+
                         act "$c\t/ $numm\t-> $_dest\t(from $femail)"
 
                         # tag mailinglists
@@ -328,13 +336,13 @@ filter_maildir() {
             [[ $? = 0 ]] && {
                 for ft in ${(k)e_addr}; do
                     for exp in ${(k)filter_to}; do
-                        
+
                         # fuzzy match on a string (PCRE)
                         if [[ "$ft" =~ "$exp" ]]; then
-                            
+
                             # retrieve the filter destination maildir
                             _dest="${filter_to[$exp]}"
-                            
+
                             # if destination maildir is same as input, skip
                             [[ "$_dest" = "$mdinput" ]] && {
                                 act "$c\t/ $numm"
@@ -351,7 +359,7 @@ filter_maildir() {
                                     printfile "$m" | deliver "$_dest" "+filtered"
                                 fi
                             }
-                            
+
                             if [[ $? = 0 ]]; then
                                 match=1
                                 rm "$m"
@@ -435,13 +443,13 @@ filter_maildir() {
             act "$c\t/ $numm\t-> unsorted.ml"
             [[ $DRYRUN = 1 ]] || {
                 printfile "$m" | deliver unsorted.ml "+unsorted +mailinglist"
-                [[ $? = 0 ]] && { 
+                [[ $? = 0 ]] && {
                     rm "$m"
                     continue
                 }
             }
         }
-        
+
         # if here then file to unsorted
         if [ "$mdinput" = "unsorted" ]; then
             act "$c\t/ $numm"
@@ -462,12 +470,16 @@ filter_maildir() {
 # MUTT
 
 update_mutt() {
-    act "updating mutt settings"
-    func "MUTTDIR:     $MUTTDIR"
+    fn update_mutt
+    req=(MAILDIRS)
+    ckreq
 
-    ${=mkdir} "$MUTTDIR"
-    ${=mkdir} "$MUTTDIR"/cache
-    rm -f "$MUTTDIR"/rc
+    act "updating Mutt settings"
+    func "Mutt directory: $MAILDIRS/.mutt"
+
+    ${=mkdir} "$MAILDIRS/.mutt"
+    ${=mkdir} "$MAILDIRS/.mutt"/cache
+    rm -f "$MAILDIRS/.mutt"/rc
 
     gpgkey=""
     # detect the default gpg key to always encrypt also to self
@@ -475,22 +487,22 @@ update_mutt() {
         gpgkey=`awk '/^default-key/ { print $2 }' $HOME/.gnupg/gpg.conf`
         act "default GPG key configured: $gpgkey"
     }
-    cat<<EOF > "$MUTTDIR"/rc
+    cat<<EOF > "$MAILDIRS/.mutt"/rc
 #### Mutt config automatically generated by Jaro Mail
 ### do not edit: this file is overwritten by jaro update
-### put your customizations in \$MAILDIRS/Identity.txt 
+### put your customizations in \$MAILDIRS/Identity.txt
 
 unset use_domain
 set folder = '$MAILDIRS'
 set spoolfile = '$MAILDIRS/known/'
 set record = '$MAILDIRS/sent/'
 set postponed= '$MAILDIRS/postponed/'
-set tmpdir = '$MUTTDIR/cache'
+set tmpdir = '$MAILDIRS/.mutt/cache'
 set sendmail = "$WORKDIR/bin/jaro -q queue"
-set header_cache= '$MUTTDIR/cache'
+set header_cache= '$MAILDIRS/.mutt/cache'
 set maildir_header_cache_verify=no
 set editor = "$WORKDIR/bin/jaro -q edit"
-set mailcap_path = "$MUTTDIR/mailcap:$MAILDIRS/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
+set mailcap_path = "$MAILDIRS/.mutt/mailcap:$MAILDIRS/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
 
 # Little Brother Database
 set query_command = "$WORKDIR/bin/jaro -q complete '%s'"
@@ -499,7 +511,7 @@ macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn all<e
 macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q learn sender<enter>" "add sender to blacklist"
 
 # mailboxes in order of priority
-source '$MUTTDIR/mboxes'
+source '$MAILDIRS/.mutt/mboxes'
 
 # specific configuration files
 source '$WORKDIR/.mutt/gpg'
@@ -509,14 +521,14 @@ source '$WORKDIR/.mutt/formats'
 source '$WORKDIR/.mutt/keybindings'
 source '$WORKDIR/.mutt/colors'
 source '$MAILDIRS/Identity.txt'
-source '$MUTTDIR/muttpass'
+source '$MAILDIRS/.mutt/muttpass'
 EOF
 
 
     [[ "$gpgkey" = "" ]] || {
         # gpg special settings
-        
-        sysread -o 1 <<EOF >> "$MUTTDIR"/rc
+
+        sysread -o 1 <<EOF >> "$MAILDIRS/.mutt"/rc
 ## GnuPG specific settings
 # create a pgp/mime encrypted attachment
 set pgp_encrypt_only_command="gpgewrap gpg --batch --quiet --no-verbose --output - --encrypt --textmode --armor --always-trust --encrypt-to $gpgkey -- -r %r -- '%f'"
@@ -528,9 +540,9 @@ set pgp_encrypt_sign_command="gpgewrap gpg %?p?--passphrase-fd 0? --batch --quie
 ####################################
 EOF
     }
-    
+
     # MUTT MAILCAP
-    sysread -o 1 <<EOF > $MUTTDIR/mailcap
+    sysread -o 1 <<EOF > $MAILDIRS/.mutt/mailcap
 text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
   && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
 text/plain; cat %s
@@ -538,15 +550,15 @@ EOF
 
     wwwtext=w3m
     if command -v elinks > /dev/null; then
-    cat <<EOF >> $MUTTDIR/mailcap
+    cat <<EOF >> $MAILDIRS/.mutt/mailcap
 text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput
 EOF
     elif command -v w3m > /dev/null; then
-    cat <<EOF >> $MUTTDIR/mailcap
+    cat <<EOF >> $MAILDIRS/.mutt/mailcap
 text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput
 EOF
     elif command -v lynx > /dev/null; then
-    cat <<EOF >> $MUTTDIR/mailcap
+    cat <<EOF >> $MAILDIRS/.mutt/mailcap
 text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
 EOF
     fi
@@ -560,41 +572,41 @@ EOF
     for t in ${(f)apptypes}; do
     eval `print $t | awk '
     { print "_type=" $1 "; _app=" $2 ";" }'`
-    cat <<EOF >> $MUTTDIR/mailcap
+    cat <<EOF >> $MAILDIRS/.mutt/mailcap
 ${_type}; a="${MAILDIRS}/tmp" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && ${_app} "\$a"/"\$f"
 EOF
     done
-    cat <<EOF >> $MUTTDIR/mailcap
+    cat <<EOF >> $MAILDIRS/.mutt/mailcap
 application/*; a="${MAILDIRS}/tmp" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
 EOF
     } # Applications.txt
 
     # this one is empty and sources files in temp when necessary
-    rm -f "$MUTTDIR/muttpass"
-    touch "$MUTTDIR/muttpass"
+    rm -f "$MAILDIRS/.mutt/muttpass"
+    touch "$MAILDIRS/.mutt/muttpass"
 
     # just the header, will be completed later
-    rm -f $MUTTDIR/mboxes
-    print -n "mailboxes +known +priv" > $MUTTDIR/mboxes
+    rm -f $MAILDIRS/.mutt/mboxes
+    print -n "mailboxes +known +priv" > $MAILDIRS/.mutt/mboxes
 
     for f in `cat "$MAILDIRS/Filters.txt" | awk '
     /^#/ {next}
     /^./ { print $4 }'`; do
         # MUTT (generate mailboxes priority this parser)
-        print  " \\" >> $MUTTDIR/mboxes
-        print -n " +${f} " >> $MUTTDIR/mboxes
+        print  " \\" >> $MAILDIRS/.mutt/mboxes
+        print -n " +${f} " >> $MAILDIRS/.mutt/mboxes
     done
-    print " \\" >> $MUTTDIR/mboxes
-    print " +unsorted.ml +unsorted" >> $MUTTDIR/mboxes
-    
+    print " \\" >> $MAILDIRS/.mutt/mboxes
+    print " +unsorted.ml +unsorted" >> $MAILDIRS/.mutt/mboxes
+
     ztmp
     ttmp=$ztmpfile
-    uniq $MUTTDIR/mboxes > $ttmp
-    mv $ttmp $MUTTDIR/mboxes
+    uniq $MAILDIRS/.mutt/mboxes > $ttmp
+    mv $ttmp $MAILDIRS/.mutt/mboxes
 
 }
 
-    
+
 # sieve_filter() gets an array of patterns to match and builds a long rule
 # for which if they match the conditional directive they all go in one folder
 # $1 = conditional directive
@@ -664,20 +676,20 @@ EOF
     # blacklist
     [[ -r "$MAILDIRS"/blacklist.abook ]] && {
         sieve_filter_array=()
-        
+
         for i in `awk -F'=' '
 /^email/ { print $2 }
 ' "$MAILDIRS"/blacklist.abook`; do
             sieve_filter_array+=("$i")
         done
-        
+
         { test "${#sieve_filter_array}" = "0" } || {
             sieve_filter \
                 'if header :contains "From"' \
                 zz.blacklist
         }
     }
-    
+
     # bounces
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # bounces
@@ -718,7 +730,7 @@ EOF
             'if header :contains "From"' \
             INBOX
     }
-        
+
         cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # spam
 if header :is "X-Spam-Flag" "YES" {
