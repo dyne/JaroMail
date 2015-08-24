@@ -61,6 +61,7 @@ read_account() {
     /^smtp_port/ { printf "smtp_port=\"%s\";", $2 }
     /^auth/ { printf "auth=\"%s\";", $2 }
     /^cert/ { printf "cert=\"%s\";", $2 }
+    /^password/ { printf "password=\"%s\";", $2 }
     /^options/ { printf "accountopt=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^folders/ { printf "folders=("; for(i=2;i<=NF;i++) printf "%s ", $i; printf ");" }
     /^exclude/ { printf "exclude=("; for(i=2;i<=NF;i++) printf "%s ", $i; printf ");" }
@@ -107,6 +108,7 @@ read_account() {
     func "trans: $transport"
     func "cert: $cert"
     func "auth: $auth"
+    [[ "$password" = "" ]] || func "password: manually set"
     func "options: $accountopt"
     func "folders: $folders"
     func "exclude: $exclude"

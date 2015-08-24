@@ -22,8 +22,26 @@
 
 # extract all emails found in stdin, one per line
 compose() {
-    # no args, open in compose mode
-    _mutt -H <(print "To: ${PARAM[@]}")
+
+    # among the args parse recipient emails and files to attach
+    _files=()
+    _addrs=()
+    for p in ${PARAM}; do
+        if [[ -r $p ]]; then
+            func "attach: $p"
+            _files+=(-a $p)
+        elif isemail $p; then
+            func "recipient: $p"
+            _addrs+=($p)
+        else
+            warning "skipping arg: $p"
+        fi
+    done
+
+    sysread -t 0 _stdin
+
+    print $_stdin | _mutt ${=_files} -- ${=_addrs}
+    # _mutt -H <(print "To: ${PARAM[@]}")
     return $?
 }
 
@@ -340,12 +358,14 @@ smtp_send() {
     QUIET=$oldquiet
 
     zkv.save smtp_fingerprints $MAILDIRS/smtp_fingerprints.zkv
-    
-    ask_password
-    [[ $? = 0 ]] || {
-        error "Error retrieving password for $login on $smtp"
-        unset password
-        return 1 }
+
+    [[ "$password" = "" ]] && {
+        ask_password
+        [[ $? = 0 ]] || {
+            error "Error retrieving password for $login on $smtp"
+            unset password
+            return 1 }
+    }
 
     ztmp
     msmtpcfg=$ztmpfile
