@@ -189,10 +189,12 @@ fetch() {
     type=imap
     host=$imap
     port=$imap_port
-    ask_password
-    [[ $? = 0 ]] || {
-        error "Impossible to fetch email for account ${account}";
-        return 1 }
+    [[ "$password" = "" ]] && {
+        ask_password
+        [[ $? = 0 ]] || {
+            error "Impossible to fetch email for account ${account}";
+            return 1 }
+    }
 
     # this puts total size in $imap_info
     # experimental only, commented out for now
@@ -362,7 +364,7 @@ smtp_send() {
     [[ "$password" = "" ]] && {
         ask_password
         [[ $? = 0 ]] || {
-            error "Error retrieving password for $login on $smtp"
+            error "Error retrieving smtp password for $login on $smtp"
             unset password
             return 1 }
     }
@@ -537,11 +539,12 @@ peek() {
     type=imap
     host=$imap
     port=$imap_port
-    ask_password
-
-    { test $? != 0 } && {
-        error "Error retrieving password for $login on $imap"
-        unset password all; return 1
+    [[ "$password" = "" ]] && {
+	ask_password
+    	[[ $? = 0 ]] || {
+        	error "Error retrieving imap password for $login on $imap"
+        	unset password all; return 1
+    	}
     }
 
     ztmp

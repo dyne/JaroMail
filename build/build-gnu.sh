@@ -18,7 +18,7 @@ mkdir -p build/gnu
 debian_req() {
     for p in "$@"; do
         { dpkg --get-selections "$p" | grep -q "[[:space:]]install$" } || {
-            apt-get install "$p" } || {
+            sudo apt-get install "$p" } || {
             print "Failed to install $p"
             return 1
         }
