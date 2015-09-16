@@ -21,7 +21,7 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 create_keyring() {
-    # make sure the local keyring exists 
+    # make sure the local keyring exists
     touch "$1"
     chmod 600 "$1"
     chown $_uid:$_gid "$1"
@@ -29,7 +29,7 @@ create_keyring() {
 CREATE TABLE secrets
 (
   hash		text unique,
-  password	text 
+  password	text
 );
 EOF
 }
@@ -39,7 +39,7 @@ EOF
 # comes from gpg project and is secure
 # it also conveniently uses the right toolkit
 pin_entry() {
-    	cat <<EOF | pinentry 2>/dev/null | awk '/^D / { sub(/^D /, ""); print }'
+    cat <<EOF | pinentry 2>/dev/null | awk '/^D / { sub(/^D /, ""); print }'
 OPTION ttyname=$TTY
 OPTION lc-ctype=$LANG
 SETTITLE Type your password
@@ -55,81 +55,86 @@ EOF
 # up to the caller to unset it after use
 ask_password() {
     case $OS in
-	MAC)
+        MAC)
             func "Looking for password in Mac/OSX keyring for $email ($account)"
-	    security find-internet-password \
-		-c JARO -a $email -s $host > /dev/null
-	    if [ $? != 0 ]; then # its a new password
-		new_password
-		{ test $? != 0 } && {
-		    error "Password input aborted."
-		    return 1 }
-	    else
-		password=`security find-internet-password -c JARO -a $email -s $host -g 2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
-	    fi
-	    return 0
-	    ;;
-	#####################################
-	GNU)
-	    ###################
-	    # USE GNOME KEYRING
-	    if [ "$GNOMEKEY" = "1" ]; then
+            security find-internet-password \
+                     -c JARO -a $email -s $host > /dev/null
+            if [ $? != 0 ]; then # its a new password
+                new_password
+                { test $? != 0 } && {
+                    error "Password input aborted."
+                    return 1 }
+            else
+                password=`security find-internet-password -c JARO -a $email -s $host -g 2>&1| awk '/^password:/ { print $2 }' | sed -e 's/"//g'`
+            fi
+            return 0
+            ;;
+        #####################################
+        GNU)
+            ###################
+            # USE GNOME KEYRING
+            if [ "$GNOMEKEY" = "1" ]; then
                 func "Looking for password in Gnome keyring for $email ($account)"
-		func "path: jaromail/${email}"
+                func "path: jaromail/${email}"
 
-		print "protocol=email\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" \
-		    | "$WORKDIR/bin/jaro-gnome-keyring" check
-		if [ $? != 0 ]; then # its a new password
-		    new_password
-		    { test $? != 0 } && {
-			error "Password input aborted."
-			return 1 }
-		else # password found into gnome keyring
-		    act "Using saved password for $login @ $host"
-		    password=`print "protocol=email\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" | "$WORKDIR/bin/jaro-gnome-keyring" get`
-		fi
-		return 0
-	    elif [ -r "$KEYRING" ]; then
+                print "protocol=email\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" \
+                    | "$WORKDIR/bin/jaro-gnome-keyring" check
+                if [ $? != 0 ]; then # its a new password
+                    new_password
+                    { test $? != 0 } && {
+                        error "Password input aborted."
+                        return 1 }
+                else # password found into gnome keyring
+                    act "Using saved password for $login @ $host"
+                    password=`print "protocol=email\npath=jaromail/${email}\nusername=${login}\nhost=${host}\n\n" | "$WORKDIR/bin/jaro-gnome-keyring" get`
+                fi
+                return 0
+            elif [ -r "$KEYRING" ]; then
                 func "looking for password in local keyring for $email ($account)"
-		func "new pass hash for: $login:$host"
-		_hash=`print "$login:$host" | shasum | awk '{print $1}'`
-		lookup="`lookup_secret ${_hash}`"
-		{ test "$lookup" = "" } || {
-		    act "saved password found for $email ($transport on $host)"
-		    notice "type the password to unlock this keyring entry:"
-		    password="`print - $lookup | base64 -d | gpg -d --cipher-algo aes256 --openpgp --no-options`"
-		    { test "$?" = 0 } || { error "incorrect password to unlock local keyring entry, operation aborted."; return 1 }
-		    return 0
-		}
-	    fi
-	    ####################
-	    # USE PINENTRY ALONE
-	    new_password
-	    { test $? != 0 } && {
-		error "Password input aborted."
-		return 1 }
-	    return 0
-	    ;;
-	*)
-                func "looking for password in local keyring for $email ($account)"
-		func "new pass hash for: $login:$host"
-		_hash=`print "$login:$host" | shasum | awk '{print $1}'`
-		lookup="`lookup_secret ${_hash}`"
-		{ test "$lookup" = "" } || {
-		    act "saved password found for $email ($transport on $host)"
-		    notice "type the password to unlock this keyring entry:"
-		    password="`print - $lookup | base64 -d | gpg -d --cipher-algo aes256 --openpgp --no-options`"
-		    { test "$?" = 0 } || { error "incorrect password to unlock local keyring entry, operation aborted."; return 1 }
-		    return 0
-		}
-	    ####################
-	    # USE PINENTRY ALONE
-	    new_password
-	    { test $? != 0 } && {
-		error "Password input aborted."
-		return 1 }
-	    return 0
-	    ;;
+                func "new pass hash for: $login:$host"
+                _hash=`print "$login:$host" | shasum | awk '{print $1}'`
+
+                typeset -A keyring
+                zkv.load $MAILDIRS/Keyring.zkv
+                lookup=${keyring[$_hash]}
+                unset keyring
+
+                { test "$lookup" = "" } || {
+                    act "saved password found for $email ($transport on $host)"
+                    notice "type the password to unlock this keyring entry:"
+                    password="`print - $lookup | base64 -d | gpg -d --cipher-algo aes256 --openpgp --no-options`"
+                    { test "$?" = 0 } || { error "incorrect password to unlock local keyring entry, operation aborted."; return 1 }
+                    return 0
+                }
+            fi
+            ####################
+            # USE PINENTRY ALONE
+            new_password
+            { test $? != 0 } && {
+                error "Password input aborted."
+                return 1 }
+            return 0
+            ;;
+        *)
+            func "looking for password in local keyring for $email ($account)"
+            func "new pass hash for: $login:$host"
+            _hash=`print "$login:$host" | shasum | awk '{print $1}'`
+            lookup="`lookup_secret ${_hash}`"
+            { test "$lookup" = "" } || {
+                act "saved password found for $email ($transport on $host)"
+                notice "type the password to unlock this keyring entry:"
+                password="`print - $lookup | base64 -d | gpg -d --cipher-algo aes256 --openpgp --no-options`"
+                { test "$?" = 0 } || { error "incorrect password to unlock local keyring entry, operation aborted."; return 1 }
+                return 0
+            }
+            ####################
+            # USE PINENTRY ALONE
+            new_password
+            { test $? != 0 } && {
+                error "Password input aborted."
+                return 1 }
+            return 0
+            ;;
 
     esac
 }
@@ -145,64 +150,64 @@ EOF
 }
 
 new_password() {
-    
+
     read_account ${account}
-    
+
     notice "Setting a new password for account $account"
     act "please enter password for username '$login'"
-    
+
     password=`pin_entry $login "on $account"`
     res=0
     case $OS in
-	    MAC)
+        MAC)
 
             [[ "$password" = "" ]] && {
-		        error "No password given, operation aborted"
-		        return 1
-            }
-            
-            [[ "$imap" = "" ]] || {
-                security delete-internet-password \
-                    -c JARO -a $email -s $imap > /dev/null
-                res=$(( $? + $res ))
-                security add-internet-password \
-                    -c JARO -a $email -s $imap -w "${password}"
-                res=$(( $? + $res ))
-                
-            }
-            
-            [[ "$smtp" = "" ]] || {
-                security delete-internet-password \
-                    -c JARO -a $email -s $smtp > /dev/null
-                res=$(( $? + $res ))
-                security add-internet-password \
-                    -c JARO -a $email -s $smtp -w "${password}"
-                res=$(( $? + $res ))
-            }
-            
-		    [[ $res = 0 ]] || {
-		        error "Error adding password to keyring."
+                error "No password given, operation aborted"
                 return 1
             }
-            
-		    act "New password saved in keyring"
-		    return 0
-            
-	        ;;
 
-	    GNU)
+            [[ "$imap" = "" ]] || {
+                security delete-internet-password \
+                         -c JARO -a $email -s $imap > /dev/null
+                res=$(( $? + $res ))
+                security add-internet-password \
+                         -c JARO -a $email -s $imap -w "${password}"
+                res=$(( $? + $res ))
+
+            }
+
+            [[ "$smtp" = "" ]] || {
+                security delete-internet-password \
+                         -c JARO -a $email -s $smtp > /dev/null
+                res=$(( $? + $res ))
+                security add-internet-password \
+                         -c JARO -a $email -s $smtp -w "${password}"
+                res=$(( $? + $res ))
+            }
+
+            [[ $res = 0 ]] || {
+                error "Error adding password to keyring."
+                return 1
+            }
+
+            act "New password saved in keyring"
+            return 0
+
+            ;;
+
+        GNU)
 
             [[ "$password" = "" ]] && {
-		        error "No password given, operation aborted"
-		        return 1
+                error "No password given, operation aborted"
+                return 1
             }
-            
-		    # USE GNOME KEYRING
-		    if [ "$GNOMEKEY" = "1" ]; then
-		        act "using gnome-keyring password storage"
-		        func "path: jaromail/${email}"
+
+            # USE GNOME KEYRING
+            if [ "$GNOMEKEY" = "1" ]; then
+                act "using gnome-keyring password storage"
+                func "path: jaromail/${email}"
                 for h in "$imap" "$smtp"; do
-		            cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" store
+                    cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" store
 protocol=email
 path=jaromail/${email}
 username=${login}
@@ -210,70 +215,66 @@ host=${h}
 password=${password}
 EOF
                 done
-		        { test $? != 0 } && { error "Error saving password in Gnome keyring" }
-                
-		    else # USE LOCAL KEYRING
-                
-		        { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
+                { test $? != 0 } && { error "Error saving password in Gnome keyring" }
 
-                for h in "$imap" "$smtp"; do                
-		            # calculate the hash for this entry
-		            _hash=`print "$login:$host" | shasum | awk '{print $1}'`
-		            # check if the entry is already present
-		            func "new pass hash for: $login:$host"
-		            lookup="`lookup_secret ${_hash} rowid`"
-		            notice "Select the password to lock this keyring entry:"
-		            _password="`print - $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
-                                        
-		            if [ "$lookup" = "" ]; then # new entry
-			            cat <<EOF | ${SQL} -batch "$KEYRING"
-INSERT INTO secrets (hash, password)
-VALUES ("${_hash}", "${_password}");
-EOF
-			            act "saved new password in local keyring"
-		            else # update entry
-			            cat <<EOF | ${SQL} -batch "$KEYRING"
-UPDATE secrets SET password="${_password}" WHERE hash LIKE "${_hash}";
-EOF
-			            act "updated local keyring with new password"
-		            fi
+            else # USE LOCAL KEYRING
+
+                { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
+
+                for h in "$imap" "$smtp"; do
+                    # calculate the hash for this entry
+                    _hash=`print "$login:$host" | shasum | awk '{print $1}'`
+                    typeset -A keyring
+
+                    [[ -r $MAILDIRS/Keyring.zkv ]] && {
+                        # check if the entry is already present
+                        zkv.load $MAILDIRS/Keyring.zkv
+                    }
+
+                    notice "Select the password to lock this keyring entry:"
+                    _password="`print - $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
+
+                    keyring[$_hash]="$_password"
+
+                    act "saved new password in local keyring"
+                    zkv.save keyring $MAILDIRS/Keyring.zkv
+
                 done
-            
+
             fi
-		    return 0
-            
-	        ;;
-	    *)
+            return 0
 
- 
-		        { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
+            ;;
+        *)
 
-                for h in "$imap" "$smtp"; do                
-		            # calculate the hash for this entry
-		            _hash=`print "$login:$host" | shasum | awk '{print $1}'`
-		            # check if the entry is already present
-		            func "new pass hash for: $login:$host"
-		            lookup="`lookup_secret ${_hash} rowid`"
-		            notice "Select the password to lock this keyring entry:"
-		            _password="`print - $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
-                                        
-		            if [ "$lookup" = "" ]; then # new entry
-			            cat <<EOF | ${SQL} -batch "$KEYRING"
+            { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
+
+            for h in "$imap" "$smtp"; do
+                # calculate the hash for this entry
+                _hash=`print "$login:$host" | shasum | awk '{print $1}'`
+                # check if the entry is already present
+                func "new pass hash for: $login:$host"
+                lookup="`lookup_secret ${_hash} rowid`"
+                notice "Select the password to lock this keyring entry:"
+                _password="`print - $password | gpg -c --cipher-algo AES256 --openpgp --no-options | base64`"
+
+                if [ "$lookup" = "" ]; then # new entry
+                    cat <<EOF | ${SQL} -batch "$KEYRING"
 INSERT INTO secrets (hash, password)
 VALUES ("${_hash}", "${_password}");
 EOF
-			            act "saved new password in local keyring"
-		            else # update entry
-			            cat <<EOF | ${SQL} -batch "$KEYRING"
+                    act "saved new password in local keyring"
+                else # update entry
+                    cat <<EOF | ${SQL} -batch "$KEYRING"
 UPDATE secrets SET password="${_password}" WHERE hash LIKE "${_hash}";
 EOF
-			            act "updated local keyring with new password"
-		            fi
-                done
+                    act "updated local keyring with new password"
+                fi
+            done
 
 
 
-		   
-		    ;;
+
+            ;;
     esac
 }
