@@ -77,25 +77,25 @@ queue() {
 
     # check if recipients are a Group
     if [[ "${=queue_to}" =~ '@jaromail.group' ]]; then
-        
+
         groupfile="`print ${=queue_to}|cut -d@ -f1`"
         act "email recipients are in group ${groupfile}"
-        
+
         [[ -r "$MAILDIRS/Groups/$groupfile" ]] || {
             maildirmake "$MAILDIRS/postponed"
             mv "$tmpqueue" "$MAILDIRS/postponed/new"
             unlock "$MAILDIRS/outbox"
             error "Group not found: $groupfile"
             return 1 }
-        
+
         recipients=`grep -v '^#' $MAILDIRS/Groups/$groupfile`
         groupnum=`grep -v '^#' $MAILDIRS/Groups/$groupfile | wc -l`
         groupmode=`head -n1 "$MAILDIRS/Groups/$groupfile" | awk '/^#mode/ { print $2 } { next }'`
         [[ "$groupmode" = "" ]] && { groupmode="individual" }
         act "$groupnum recipients in total, sending mode $groupmode"
-        
+
         case $groupmode in
-            
+
             # individual group mode hides other recipients and send
             # multiple mail envelopes with each single recipient in To:
             individual)
@@ -106,7 +106,7 @@ queue() {
                         | deliver outbox # > "${MAILDIRS}/outbox/new/${ig}.mail"
                 done
                 ;;
-            
+
             # carboncopy group mode sends a single envelope where all
             # recipients can see and reply to each other
             carboncopy|cc)
@@ -122,7 +122,7 @@ queue() {
                     | deliver outbox # "${MAILDIRS}/outbox/new/${ig}.mail"
                 ;;
         esac
-        
+
     else
         # recipients are set in the email envelope
         cat "$tmpqueue" | deliver outbox
@@ -213,38 +213,42 @@ fetch() {
         fmconf+=(" ${accountopt} ") }
 
     # check if folders on commandline
-    if [[ "$PARAM[@]" = "" ]]; then
+    if [[ "$1" != "" ]]; then
+
+        unset password
+
+        act "commanded to fetch folders: $1"
+        folders=($1)
+
+
+    else
 
         # if no folders specified, use all
         [[ "$folders" == "" ]] && {
             folders=(`imap_list_folders`) }
         act "${#folders} folders found"
 
-    else
+        # unset here because listing folders still needed a pass
+        unset password
 
-        act "commanded to fetch folders: ${PARAM[@]}"
-        folders=(${PARAM[@]})
+        # nothing to download, bail out with error
+        [[ ${#folders} == "0" ]] && return 1
+
+        # remove excludes
+        [[ ${#exclude} == "0" ]] || {
+            func "exclude folders: $exclude"
+            for e in ${exclude}; do
+                # fuzzy match
+                for f in ${folders}; do
+                    [[ "$f" =~ "$e" ]] && {
+                        folders=(${folders:#$f})
+                    }
+                done
+            done
+        }
 
     fi
 
-    # unset here because listing folders still needed a pass
-    unset password
-
-    # nothing to download, bail out with error
-    [[ ${#folders} == "0" ]] && return 1
-
-    # remove excludes
-    [[ ${#exclude} == "0" ]] || {
-        func "exclude folders: $exclude"
-        for e in ${exclude}; do
-            # fuzzy match
-            for f in ${folders}; do
-                [[ "$f" =~ "$e" ]] && {
-                    folders=(${folders:#$f})
-                }
-            done
-        done
-    }
     func "fetch folders: $folders"
 
     # add folder configuration
@@ -303,7 +307,7 @@ fetch() {
 }
 
 ################################################
-# read an email from stdin and send it via msmtp 
+# read an email from stdin and send it via msmtp
 smtp_send() {
     fn smtp-send
     req=(account)
@@ -540,11 +544,11 @@ peek() {
     host=$imap
     port=$imap_port
     [[ "$password" = "" ]] && {
-	ask_password
-    	[[ $? = 0 ]] || {
-        	error "Error retrieving imap password for $login on $imap"
-        	unset password all; return 1
-    	}
+    ask_password
+        [[ $? = 0 ]] || {
+            error "Error retrieving imap password for $login on $imap"
+            unset password all; return 1
+        }
     }
 
     ztmp
@@ -574,4 +578,3 @@ ${=rm} -f $tmp" # zero the tmp passfile after a second
     } # DRYRUN
     return $?
 }
-

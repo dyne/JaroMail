@@ -133,7 +133,7 @@ list=whitelist
 
 # global variables for accounts
 vars+=(name login imap imap_port smtp smtp_port protocol password auth accountopt)
-typeset -ah folders exclude
+arrs+=(folders exclude)
 vars+=(host port type)
 
 # global for server fingerprints
@@ -147,7 +147,7 @@ typeset -A e_addr
 vars+=(e_parsed)
 
 # global array for maildirs (filled by list_maildirs)
-typeset -al maildirs
+arrs+=(maildirs)
 vars+=(last_deliver)
 
 # global variable for mutt binary
@@ -632,7 +632,7 @@ main() {
 
     fetch)
             account=${account:-default}
-            fetch
+            fetch ${PARAM}
             filter_maildir incoming
         ;;
 
