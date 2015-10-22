@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+# Copyleft (C) 2010-2015 Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
@@ -22,21 +22,32 @@
 
 
 lock() {
-    func "$dotlock: $1"
-    ${WORKDIR}/bin/dotlock "$1"
+    fn "lock $@"
+    _file=$1
+    req=(_file)
+    freq=($_file)
+    ckreq || return 1
+
+    if helper.isfound dotlock; then
+        dotlock=`command -v dotlock`
+    else
+        dotlock="${WORKDIR}/bin/dotlock"
+    fi
+
+    ${dotlock} "$_file"
     res=$?
     case $res in
-	1) error "Cannot lock non existing file: $1"
+	1) error "Cannot lock non existing file: $_file"
 	    return 1 ;;
-	3) error "Locked file in use: $1"
+	3) error "Locked file in use: $_file"
 
 	    pidcheck "$1"
 	    return 3 ;;
 
-	5) error "Lock is impossible on: $1"
+	5) error "Lock is impossible on: $_file"
 	    return 5 ;;
 	# success
-	0) print "$$" > "$1.pid"
+	0) print "$$" > "$_file.pid"
 	    return 0 ;;
 
 	*) error "Unknown error locking: $res"
@@ -45,67 +56,85 @@ lock() {
 }
 
 newlock() { # lock file, create if not existing
-    func "creating locked file: $1"
-    touch "$1"
-    chmod 600 "$1"
-    lock "$1"
+    fn "newlock $@"
+    _file="$1"
+    req=(_file)
+    ckreq || return 1
+
+    touch "$_file"
+    chmod 600 "$_file"
+    lock "$_file"
 }
 
 pidcheck() { # check if lock belongs to us
-    if [ -r "${1}.pid" ]; then
+    fn "pidcheck $@"
+    _pid="$1"
+    req=(_pid)
+    ckreq || return 1
+
+    if [ -r "${_pid}.pid" ]; then
         
-	    lockpid="`cat ${1}.pid`"
-	    func "pidcheck: $lockpid"
-	    if [[ "$$" = "$lockpid" ]]; then
-	        func "${1} lock belongs to us"
-	    else
+	lockpid="`cat ${_pid}.pid`"
+	func "pidcheck: $lockpid"
+	if [[ "$$" = "$lockpid" ]]; then
+	    func "${_pid} lock belongs to us"
+	else
             
-	        error "Unlock attempt by multiple processes on `basename $1`"
-	        [[ "$FORCE" = "1" ]] || { _prun=1
-		        while [ "$_prun" = "1" ]; do
+	    error "Unlock attempt by multiple processes on `basename $_pid`"
+	    [[ "$FORCE" = "1" ]] || {
+                _prun=1
+		while [ "$_prun" = "1" ]; do
                     [[ $global_quit = 1 ]] && { break }
-		            for p in `ps ax | awk '{ print $1 }'`; do
-			            { test "$p" = "$lockpid" } && { break }
-		            done
-		            if [ "$p" = "$lockpid" ]; then
-			            act "Owner (${lockpid}) still running, waiting release..."
-			            sleep 1; 
+		    for p in `ps ax | awk '{ print $_pid }'`; do
+			{ test "$p" = "$lockpid" } && { break }
+		    done
+		    if [ "$p" = "$lockpid" ]; then
+			act "Owner (${lockpid}) still running, waiting release..."
+			sleep 1; 
                         continue
-		            else
-			            act "Owner (${lockpid}) not running, taking over the lock"
-			            rm -f "${1}.pid"; print "$$" > "${1}.pid"
-			            _prun=0
-		            fi
-		        done
-	        }
-	        act "left behind by $lockpid - we ($$) will take over"
+		    else
+			act "Owner (${lockpid}) not running, taking over the lock"
+			rm -f "${_pid}.pid"; print "$$" > "${_pid}.pid"
+			_prun=0
+		    fi
+		done
+	    }
+	    act "left behind by $lockpid - we ($$) will take over"
             
-	    fi
+	fi
         
     else # pid file doesn't exists
-	    func "no pid file found for: $1"
-	    func "we will take it over"
-	    print "$$" > "${1}.pid"
+	func "no pid file found for: $_pid"
+	func "we will take it over"
+	print "$$" > "${_pid}.pid"
     fi
     return 0
 }
 
 unlock() {
-    func "unlock: $1"
+    fn "unlock $@"
+    _file="$1"
+    req=(_file)
+    ckreq || return 1
     
-    pidcheck "$1"
+    pidcheck "$_file"
     [[ $? = 0 ]] || { return 1 }
     
-    ${WORKDIR}/bin/dotlock -u "$1"
+    ${WORKDIR}/bin/dotlock -u "$_file"
     [[ $? = 0 ]] || {
-	    rm -f "$1.lock"
-	    [[ $? = 0 ]] || { error "Unable to unlock: $1"; return 1 }
+	    rm -f "${_file}.lock"
+	    [[ $? = 0 ]] || { error "Unable to unlock: $_file"; return 1 }
     }
-    [[ -r "${1}.pid" ]] && { rm -f "${1}.pid" }
+    [[ -r "${_file}.pid" ]] && { rm -f "${_file}.pid" }
     return 0
 }
+
 unlink() { # delete a file that we are locking
-    unlock "$1"
-    ${=rm} "$1"
-    func "$1 removed"
+    fn "unlink $@"
+    _file="$1"
+    ckreq || return 1
+
+    unlock "$_file"
+    ${=rm} "$_file"
+    func "$_file removed"
 }

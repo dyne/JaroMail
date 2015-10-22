@@ -38,17 +38,13 @@ extract_mails() {
     # learn from senders, recipients or all
     _action="$1"
 
-
-    # # -U eliminates duplicates
-    # typeset -aU _res
-
     _found=0
     for m in ${(f)_mails}; do
 
         # e_parse fills in e_addr(map) and e_parsed(newline term str)
         hdr $m | e_parse $_action
         for _e in ${(k)e_addr}; do
-            # _res+=("${(v)e_addr[$_e]} <$_e>")
+
             print - "${(v)e_addr[$_e]} <$_e>"
             _found=$(( $_found + 1 ))
         done
@@ -62,11 +58,8 @@ extract_mails() {
             }
         }
     done
-    # print out results
-    # for r in $_res; do
-    #     print - $r
-    # done
-    notice "${_found} unique addresses extracted"
+
+    notice "${_found} addresses extracted (including duplicates)"
 }
 
 # extract all addresses found into a maildir
