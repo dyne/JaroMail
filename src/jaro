@@ -150,6 +150,10 @@ vars+=(e_parsed)
 arrs+=(maildirs)
 vars+=(last_deliver)
 
+# global arrays for search
+arrs+=(search_results)
+search_results=()
+
 # global variable for mutt binary
 vars+=(mutt pgpewrap dotlock)
 
@@ -473,9 +477,10 @@ main() {
 
     subcommands_opts[index]=""
     subcommands_opts[search]=""
-    subcommands_opts[nm_search]=""
+    subcommands_opts[alot]=""
     subcommands_opts[notmuch]=""
 
+    subcommands_opts[addr]=""
     subcommands_opts[learn]=""
     subcommands_opts[forget]=""
 
@@ -675,9 +680,15 @@ main() {
            ;;
 
     # notmuch search with file output
-    nm_search) nm_search ${PARAM} ;;
+    search) search ${PARAM}
+            [[ $DRYRUN = 1 ]] || {
+                for i in ${search_results=}; do
+                    print - "$i"
+                done
+            }
+            ;;
 
-    search) search ${PARAM} ;;
+    alot) alot_search ${PARAM} ;;
 
     notmuch)
             notice "Command: notmuch ${PARAM}"
@@ -687,6 +698,8 @@ main() {
 
 #    stat) stats ${PARAM} ;;
 
+
+    addr) search_addressbook ${PARAM} ;;
 
     complete) complete ${PARAM}
               exitcode=$?
@@ -729,8 +742,8 @@ main() {
     preview)    preview_file ${PARAM} ;;
 
     backup)  backup ${PARAM}
-            exitcode=$?
-            ;;
+             exitcode=$?
+             ;;
 
     rmdupes) rmdupes ${PARAM} ;;
     merge)   merge ${PARAM}   ;;

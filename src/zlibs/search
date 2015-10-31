@@ -27,10 +27,11 @@
 
 # internal use
 nm() {
-    func "notmuch $@"
+    fn "notmuch $*"
+
     [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || nm_setup
     lock "$MAILDIRS"/cache/notmuch
-    notmuch --config="$MAILDIRS"/cache/notmuch/rc ${@}
+    notmuch --config="$MAILDIRS"/cache/notmuch/rc $*
     _res=$?
     unlock "$MAILDIRS"/cache/notmuch
     [[ $_res = 0 ]] || {
@@ -100,18 +101,23 @@ nm_index() {
 }
 
 
-nm_search() {
-
+search() {
+    fn search ${=PARAM}
+    func "searching for ${#PARAM} terms"
     # launch the search with notmuch
-    search_results=`nm search --output=files ${=PARAM}`
+    _results=""
+
+    ztmp
+    # hard limit for list of file results is 100MB here
+    nm search --output=files ${=PARAM} >> $ztmpfile
+    search_results=(`cat $ztmpfile`)
+    
     [[ $? = 0 ]] || {
         error "notmuch search failed with an error"
         return 1
     }
-    act "`print ${search_results} | wc -l` emails found"
-    for i in ${(f)search_results}; do
-        print - "$i"
-    done
+
+    act "${#search_results} emails found"
 }
 
 
@@ -120,7 +126,7 @@ alot_search() {
     read_account
     nm_setup
     
-    notice "Searching emails for: $=PARAM"
+    notice "Searching emails for: ${=PARAM}"
 
     # read if there are other email aliases configured
     [[ -r "$MAILDIRS"/Aliases.txt ]] && {
@@ -201,75 +207,41 @@ EOF
     return $?
 }
 
-search() {
-    
-    [[ "$PARAM" = "" ]] && {
-	    error "No search terms specified."
-	    return 1
-    }
-    
-    typeset -al term
-	typeset -alU results
-    
-    for p in ${PARAM}; do
-        func "param ${p} is a search term"
-        term+=(${p})
-    done
-    
-    [[ "$PARAM" =~ "addr" ]] && {
-        # if addr specified search into the addressbook
-	    notice "Searching addressbook for: ${PARAM//addr/}"
-	    res=""
-	    for t in ${term}; do
-            [[ "$t" =~ "addr" ]] && continue
-            # res+=`search_addressbook ${t}`
-	        search_addressbook ${t} | awk '
-/^$/ { next }
-{ for(c=2;c<=NF;c++) printf "%s ", $c
-  print "<" $1 ">" }'
-	    done
-        return 0
-    }
-    
-    # run search across emails
-    alot_search ${=PARAM}
-}
-
 backup() {
-    id=`datestamp`.$RANDOM
-    c=0
-
+    fn backup $*
     dst=${PARAM[1]}
     shift 1 PARAM
-    expr=${PARAM}
+    expr=${=PARAM}
+    req=(dst expr)
+    ckreq
+
+    maildircheck "$dst"
+    [[ $? = 0 ]] || {
+        error "First argument of backup must be a destination maildir"
+        return 1
+    }
+    
+    [[ "$expr" = "" ]] && {
+        error "No expression set for backup, please indicate what you want to backup"
+        act "For example: date:10y..2y (all mails older than 1 year up to 10 years ago)"
+        act "Or a simple search string, all expressions can be verified using search."
+        return 1
+    }
+    
+    id=`datestamp`.$RANDOM
+    c=0
 
     notice "Backup of mails matched by search expression"
     act "expression: $expr"
     act "destination folder: $dst"
-    [[ $DRYRUN = 1 ]] && act "Dryrun mode enabled"
-
-    [[ $DRYRUN = 0 ]] && {
-        maildircheck "$dst"
-        [[ $? = 0 ]] || {
-            error "First argument of backup command must be an existing maildir"
-            return 1
-        }
-    }
-
-    [[ "$expr" = "" ]] && {
-	    error "No expression set for backup, please indicate what you want to backup"
-	    act "For example: d:10y-2y (all mails older than 1 year up to 10 years ago)"
-	    act "Or a simple search string, all expressions can be verified using search."
-	    return 1
-    }
 
     read_account
     nm_setup
 
-    _res=`nm_search ${=expr}`
+    search ${=expr}
 
     [[ $DRYRUN = 0 ]] && {
-        for i in ${(f)_res}; do
+        for i in ${search_results}; do
             refile $i $dst
             [[ $? = 0 ]] || {
                 # bail out on every single error
@@ -279,6 +251,5 @@ backup() {
             }
         done
     }
-    
-
+    return 0
 }

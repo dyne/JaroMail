@@ -70,8 +70,13 @@ insert_address() {
 }
 
 search_addressbook() {
-    func "search \"$@\" in $list"
-    abook --datafile "$ADDRESSBOOK" --mutt-query "${@:l}"
+    fn search_addressbook $*
+    
+    abook --datafile "$ADDRESSBOOK" --mutt-query "${*:l}" | awk '
+/^$/ { next }
+{ for(c=2;c<=NF;c++) printf "%s ", $c
+  print "<" $1 ">" }'
+
 }
 
 

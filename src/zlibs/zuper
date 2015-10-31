@@ -254,6 +254,7 @@ _ztmp_destructor() {
     fn _ztmp_destructor
 
     for f in $tmpfiles; do
+        func "removed $f"
         rm -f "$f"
     done
     tmpfiles=()
