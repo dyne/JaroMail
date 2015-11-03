@@ -22,7 +22,7 @@ Serve maildirs to all kinds of imap clients (MUA) locally
 ## DIME specification
 
 Jaro Mail will support DIME
-https://darkmail.info/downloads/dark-internet-mail-environment-december-2014.pdf
+https://darkmail.info/downloads/dark-internet-mail-environment-december-201.4pdf
 
 ## Vacation trigger
 sieve script example

@@ -38,9 +38,7 @@ compose() {
         fi
     done
 
-    sysread -t 0 _stdin
-
-    print $_stdin | _mutt ${=_files} -- ${=_addrs}
+    cat | _mutt ${=_files} -- ${=_addrs}
     # _mutt -H <(print "To: ${PARAM[@]}")
     return $?
 }

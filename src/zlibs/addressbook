@@ -296,115 +296,43 @@ import() {
     _arg=${PARAM[1]}
 
     func "import() arg: $_arg (param: $PARAM)"
-    # a map to eliminate duplicates
-    typeset -AU result
 
-    [[ "$_arg" = "" ]] && {
-        notice "Import address list from stdin into addressbook $list"
-        _stdin=`cat` # reads into var _stdin
-        _new=0
-        act "imported new entries will be printed on stdout"
-        e_addr=()
-        for i in ${(f)_stdin}; do
-            [[ $global_quit = 1 ]] && break
+    notice "Import address list from stdin into addressbook $list"
 
-            # skip comments starting with #
-            [[ "$i[1]" = "#" ]] && continue
-            
-            print - "From: $i" | e_parse From
-            [[ $? = 0 ]] || continue
+    _new=0
+    act "imported new entries will be printed on stdout"
 
-            _e="${e_parsed[(ws:,:)1]:l}"
-            
-            # check if the email is not already known
-            lookup_email "$_e"
-            [[ $? = 0 ]] && {
-                func "email already known: $_e"
-                continue
-            }
+    e_addr=()
+    
+    # read_stdin
+    # _stdin=`cat` # reads into var _stdin
+    for i in "${(f)$(cat)}"; do
+        [[ $global_quit = 1 ]] && break
 
-            _n="${e_parsed[(ws:,:)2]}"
+        # skip comments starting with #
+        [[ "$i[1]" = "#" ]] && continue
 
-            print - "$_n <$_e>"            
-            [[ $DRYRUN = 0 ]] && insert_address "$_e" "$_n"
+        print - "From: $i" | e_parse From
+        [[ $? = 0 ]] || continue
 
-            _new=$(( $_new + 1 ))
-        done
-        notice "Valid unique entries parsed: ${#e_addr}"
-        act "new addresses found: ${_new}"
-        return $?
-    }
+        _e="${e_parsed[(ws:,:)1]:l}"
 
-    [[ -r "$_arg" ]] && {
-        notice "Import address list from stdin into group file $arg"
-        act "parsing entries in group file"
-        _group=`cat $arg`
-        for i in ${(f)_group}; do
-            [[ $global_quit = 1 ]] && break
+        # check if the email is not already known
+        lookup_email "$_e"
+        [[ $? = 0 ]] && {
+            func "email already known: $_e"
+            continue
+        }
 
-            # skip comments starting with #
-            [[ "$i[1]" = "#" ]] && continue
-            
-            _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
-            _e="${_parsed[(ws:,:)1]:l}"
-            
-            # check if is really an email
-            isemail "$_e"
-            [[ $? = 0 ]] || {
-                func "not an email: $_e"
-                continue
-            }
+        _n="${e_parsed[(ws:,:)2]}"
 
-            # check if the email is a duplicate
-            [[ "${result[$_e]}" = "" ]] || {
-                func "duplicate email: $_e"
-                continue
-            }
-            
-            _n="${_parsed[(ws:,:)2]}"
-            result+=("$_e" "$_n")            
-        done
+        print - "$_n <$_e>"
+        [[ $DRYRUN = 0 ]] && insert_address "$_e" "$_n"
 
-        # imported all group file contents in results
-        notice "${#result} entries parsed in $arg"
-        act "reading entries from stdin, printing out new entries"
-        
-        _stdin=`cat`
-        _new=0
-        for i in ${(f)_stdin}; do
-            [[ $global_quit = 1 ]] && break
-
-            # skip comments starting with #
-            [[ "$i[1]" = "#" ]] && continue
-            
-            _parsed=`print - "From: $i" | ${WORKDIR}/bin/fetchaddr -a -x from`
-            _e="${_parsed[(ws:,:)1]:l}"
-            
-            # check if is really an email
-            isemail "$_e"
-            [[ $? = 0 ]] || {
-                func "not an email: $_e"
-                continue
-            }
-
-            # check if the email is a duplicate
-            [[ "${result[$_e]}" = "" ]] || {
-                func "duplicate email: $_e"
-                continue
-            }
-
-            _n="${_parsed[(ws:,:)2]}"
-            result+=("$_e" "$_n")
-
-            print - "$_n <$_e>"            
-            _new=$(( $_new + 1 ))
-        done
-        # TODO: overwrite group file with all entries
-        notice "Valid unique entries parsed: ${#result}"
-        act "new addresses found: ${_new}"
-
-    }
-
+        _new=$(( $_new + 1 ))
+    done
+    notice "Valid unique entries parsed: ${#e_addr}"
+    act "new addresses found: ${_new}"
     return 0
 }
 
@@ -465,12 +393,27 @@ EOF
 
 # export addressbook to vcard
 export_vcard() {
-    _out=${1:-"$MAILDIRS"/$list.vcf}
-    abook --convert --informat abook \
-        --infile "$ADDRESSBOOK" \
-        --outformat gcrd --outfile $_out
+    fn export_vcard $*
+
+    _format=${1:-vcard}
+
+    notice "Reading from stdin addresses to export to format $_format"
+    c=0
+    ztmp
+    for i in "${(f)$(cat)}"; do
+        print "alias $i" >> $ztmpfile
+        c=$(( $c + 1 ))
+    done
+
+
+    abook --convert --informat mutt \
+        --infile "$ztmpfile" \
+        --outformat $_format
+
     _res=$?
-    [[ $_res = 0 ]] && notice "$list addressbook exported to VCard file $_out"
+
+    [[ $_res = 0 ]] && {
+        notice "$c addresses converted to $_format" }
     return $_res
 }
 

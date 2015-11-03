@@ -42,6 +42,8 @@ nm() {
 }
 
 nm_setup() {
+    fn nm_setup
+
     nm_dir="$MAILDIRS"/cache/notmuch
     mkdir -p $nm_dir
 
@@ -85,6 +87,8 @@ EOF
 }
 
 nm_index() {
+    fn nm_index
+
     # init the environment
     read_account
     notice "Indexing all mail archive"
@@ -123,6 +127,8 @@ search() {
 
 # run a search with notmuch and show results with alot
 alot_search() {
+    fn alot_search $*
+
     read_account
     nm_setup
     

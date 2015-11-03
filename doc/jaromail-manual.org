@@ -1,6 +1,6 @@
-#+TITLE: Jaro Mail 3.2
+#+TITLE: Jaro Mail 3.3
 #+AUTHOR: by Jaromil @ dyne.org
-#+DATE: Jan 2015
+#+DATE: November 2015
 
 #+OPTIONS: H:3 num:t toc:t \n:nil @:t ::t |:t ^:nil f:t TeX:t
 #+EXCLUDE_TAGS: noexport
@@ -354,67 +354,61 @@ If you have configured the *keep* option, which is the default, Jaro Mail will o
 
 : jaro
 
-This will open the first folder containing unread emails, starting from
-the *known* folder, then *priv*, then all the destinations specified by *Filters.txt* exactly in the ascending order they are listed in that configuration file..
+This will launch mutt on the first folder containing unread emails, starting from the *known* folder, then *priv*, then all the destinations specified by *Filters.txt* exactly in the ascending order they are listed in that configuration file..
 
 From there on, pressing *=* or *c* you can change to other folders and your *unsorted* and *unsorted.ml* mails.
 
 ** Write a new mail
 
-If you like to write a mail to someone, just write his/her own address
-as an argument to Jaro Mail
+If you like to write a mail to someone, hit *m* and write the recipient address, you will be then asked about any additional Cc: recipients.
 
-: jaro compose friend@home.net
+If you don't remember the emails of the recipients, you can just type their name or parts of the email you remember, then press the [ *Tab* ]
+key for completion. A list of addresses may popup with matches found in your whitelist addressbook to help remind who are you looking for.
 
-But if you don't remember the email of your friend, then you can just
-start *jaro compose* without options, then start typing the
-name or whatever you remember of it: pressing the *Tab* key a
-completion will help to remind what you are looking for, offering a
-list of options to choose from, taken from your whitelist addressbook.
+The email is composed using a special [[http://www.vim.org/][Vim]] configuration that facilitates justifying text to 72 columns using [ *ctrl-j* ]. After composing the email you will be able to review it and change:
 
-If you are writing an email with attachments (and you are sure their
-size is reasonably small to be circulated via email) you can launch
-Jaro Mail with files as arguments, or even wildcards, and they will be
-automatically set as attachments, you can then specify its recipients
+ - the From: field using [ *ESC f* ]
+ - the recipient in the To: field using [ *t* ]
+ - the recipients in the Cc: field using [ *c* ]
+ - the subject string using [ *s* ]
 
-: jaro picture01.jpg jingle02.mp3 ~/myicons/*
+You'll also be able to add more attachments by pressing *a* and use the arrow keys to move over the existing ones and delete them using [ *D* ] (please note that is a uppercase D, because lowercase d will just add a description for the attachment).
 
-Will send a mail with various separate attachments (using MIME
-encapsulation): a picture, an hopefully small audio file and a list of
-icons which are all the files contained into the myicons/ directory.
-
-The email is composed using a special [[http://www.vim.org/][Vim]] configuration that facilitates justifying text to 72 columns using *ctrl-j*. After composing the email you will be able to review it, change the From: field (*ESC f*), the recipient on To: (*t*), add recipients in Cc: (*c*), change the subject string (*s*), add more attachments (*a*) or move over the existing ones and delete them (*D*).
 
 At last, when ready, pressing *y* will queue the email into the outbox, ready for sending.
 
-One can review at any time the sending queue (*outbox*), which is just another maildir from which emails can also be deleted to abort sending them:
+One can review at any time the sending queue, which is just another maildir named *outbox*
 
 : jaro outbox
 
-Once sure the outbox contains emails that need to be sent, make sure the computer is connected to the Internet and issue the *send* command:
+Mails can be deleted from this view using [ *d* ] or edited using [ *e* ] which will allow tweaking of both the header and body of the email.
+
+Once sure the outbox contains all what needs to be sent, make sure the computer is connected to the Internet and issue the *send* command:
 
 : jaro send
 
-Jaro Mail will send all emails in outbox, one by one, listing their recipients and size while doing so. If successful, mails will be removed from the outbox and put into the *sent* folder.
+Jaro Mail will send all emails in outbox, one by one, listing their recipients and size while doing so. If successful, mails will be removed from the outbox and put into the *sent* folder, which can be accessed from inside mutt or with the command *jaro open sent*.
+
+** Write a new email from the commandline
+
+Jaro Mail supports a lot of commandline operations based on stdin/stdout pipes, which makes it pretty easy to use in scripts that send emails and attachments.
+
+If you have written a plain-text email using your favorite editor, you can send it quickly using the commandline: save the email into a txt file and then pipe it into *jaro compose* followed by a list of recipients and, optionally a list of filenames to attach. For example:
+
+: cat Greetings.txt | jaro compose friends@dyne.org picture01.jpg jingle02.mp3 ~/myicons/*
+
+The command above may send an email with various separate attachments (using MIME encapsulation): a picture, an hopefully small audio file and a list of icons which are all the files contained into the myicons/ directory. In this case the recipient will be friends@dyne.org, but may be any other email address found on the commandline in any position.
+
+Once executed you will find this email in *jaro outbox*, ready to be reviewed and sent with *jaro send*.
 
 ** Reply messages
 
-While browsing through the index of emails in various folders, one can
-reply any of them just by pressing the [ *r* ] key, which will ask if
-the original message should be quoted and then open your favorite
-editor to compose your text.
+While browsing through the index of emails in various folders, one can reply any of them just by pressing the [ *r* ] key, which will ask if
+the original message should be quoted and then open your favorite editor to compose your text.
 
-If the email you are replying has been sent to multiple recipients
-(for instance using multiple addresses in the Cc: or From: fields)
-they will all be included, but you will have the possibility to
-exclude them by hand editing those fields before queuing to outbox, as explained in the previous paragraph.
+If the email you are replying has been sent to multiple recipients (for instance using multiple addresses in the Cc: or From: fields) they will all be included, but you will have the possibility to exclude them by hand, editing the Cc: field. To remove them all at once use [ *ctrl-k* ] just like deliting a line on the terminal.
 
-It is also possible to forward a message to someone else than the
-sender, for instance to submit it to his or her attention, or that of
-a mailinglist. To do that, you can use the [ *f* ] key which will
-present you with the full message and the possibility to write
-something on top of it, to describe its contents to its new
-recipients. Forwards include all attachments and are sent as attachments themselves, but this behavious can be changed as a confirmation to "send forward as attach" is asked.
+It is also possible to forward a message to someone else than the sender, for instance to submit it to his or her attention, or that of a mailinglist. To do that, you can use the [ *f* ] key which will present you with the full message and the possibility to write something on top of it, to describe its contents to its new recipients. Forwards include all attachments and are sent as attachments themselves, but this behavious can be changed as a confirmation to "send forward as attach" is asked.
 
 ** Peek without downloading anything
 
@@ -423,40 +417,27 @@ them, then you can use the *peek* function:
 
 : jaro peek
 
-This will open the default configured IMAP account and folder over SSL
-protocol (securing the data transfer) and show your emails.
+This will open the default configured IMAP account and folder over SSL protocol (securing the data transfer) and allow you to browse, read and reply  your emails without downloading them.
 
-From peek you can reply and even delete emails, but be careful since
-what you delete here will be removed from the server and won't be
+Using peek you can reply and even delete emails, but be careful since what you delete here will be removed from the server and won't be
 there when you download it from home.
 
-This functionality can be also very useful if you are from a slow
-connection and need to delete some email that is clogging it and that
-you are not able to download because of its size.
+This functionality can be also very useful if you are from a slow connection and need to delete some email that is clogging it and that you are not able to download because of its size.
 
-The peek command will automatically open the INBOX, but also other remote imap folders can be specified, like for instance *priv* or *unsorted*, in case the sieve filters generated by Jaro Mail are uploaded on the server. To have a list of imap folders on the server a command is also available:
+The peek command will automatically open the INBOX, but also other remote imap folders can be specified, like for instance *priv* or *unsorted* if whitelisting is also setup server-side (the sieve filters generated by Jaro Mail need to be uploaded on the server). To have a list of imap folders on the server a command is also available:
 
 : jaro imap listfolders
 
+Will list on the terminal all folders found on the imap account, one per line.
 
 ** Save important emails for later
 
-Sometimes one can be on the rush while reading emails (local or via
-imap) and flagging them as important can be useful to keep focus on
-priorities. In some cases it is very useful to save such important
-messages locally for later reference, for instance in a folder keeping
-messages that need to be remembered and that will constitute a kind of
-TODO list (a'la GTD).
+Sometimes one can be on the rush while reading emails (local or via imap) and flagging them as important can be useful to keep focus on
+priorities. In some cases it is very useful to save such important messages locally for later reference, for instance in a folder keeping messages that need to be remembered and that will constitute a kind of TODO list (a'la GTD).
 
-Jaro Mail implements such functionalities: by pressing the [ *F* ] key
-(shift-f) one can flag an email, which will turn bright-green in the
-index. In addition to that there is a folder called *remember/* where
-one can copy emails on the fly using the [ *R* ] key (shift-r) any
-time. Messages will be duplicated into the remember folder (which of
-course can be opened with the command *jaro remember*) so they can
-also be edited with annotations on the task they refer to, for
-instance using the [ *e* ] key, without affecting the original
-message.
+Jaro Mail implements such functionalities: by pressing the [ *F* ] key (uppercase) one can flag an email, which will turn bright-green in the
+index. In addition to that there is a folder called *remember/* where one can copy emails on the fly using the [ *R* ] key (uppercase) any time. Messages will be duplicated into the remember folder (which of course can be opened with the command *jaro remember*) so they can
+also be edited with annotations on the task they refer to, for instance using the [ *e* ] key, without affecting the original message.
 
 ** Workflow in brief
 
@@ -467,6 +448,7 @@ Below a recapitulation of keys commonly used in our workflow
 | *m*   | Compose a new message                |
 | *Tab* | Complete addresses and folders input |
 | *r*   | Reply to the sender of a message     |
+| *d*   | Delete a message                     |
 | *y*   | Send a message (queue in outbox)     |
 | *f*   | Forward a message to new recipients  |
 | *=*   | List all filtered maildir folders    |
@@ -483,102 +465,121 @@ Addressbooks are the files storing the whitelist, the blacklist and optionally o
 
 Addressbooks can be edited using a interactive console interface, for instance to add or delete entries by hand: use the *abook* command and optionally the *-l* option.
 
-: jaro abook -l whitelist
+: jaro abook
 
-This will open the current whitelist for edit. To edit the blacklist use *-l blacklist* instead.
+This will open the current whitelist for edit. To edit the blacklist add *-l blacklist* instead.
 
-To quickly dump to the console all names and addresses in the Jaro
-Mail addressbook, one can use the *extract* command
+To quickly dump to the console all names and addresses in the Jaro Mail addressbook, one can use the *list* command
 
-: jaro extract -l whitelist
+: jaro list
 
-To match a string across the addressbook, simply use the composite
-command *search addr* followed by strings, for instance:
+To match a string across the addressbook, simply use the composite command *addr* followed by strings, for instance:
 
-: jaro search addr dyne -l whitelist
+: jaro addr dyne
 
 will list all addresses containing 'dyne' in your whitelist.
 
 ** Address lists
 
-Jaro Mail makes it easy to handle lists of addresses as plain text *address lists* composed by a '/Name <email>/' entries on each new line.
+Jaro Mail handles lists of addresses as plain text files or streams with entries formatted as '/Name <email>/' and newline terminated. This simple format conforms (or is normalized to) the RFC822 standard and UTF-8 charset encoding, both produced on /stdout/ and read from /stdin/ by various useful commands to take advantage of console piping.
 
-Entries inside address lists are newline separated strings conforming to the RFC822 standard and their charset encoding must be UTF-8.   We use this simple interchange format of address lists as input or output of various commands, taking advantage of console piping from stdin to stdout.
+Such lists of addresses are the output of the *extract* command, which is able to read the output of other commands and extract a list of email addresses found.
 
-Address lists are the output of the previously mentioned *search addr* command, as well of the *extract* command:
+: jaro search open source date:2w..  | jaro extract
 
-: jaro extract -l whitelist
+Will print to stdout the list of addresses found among the results of a search for /open source/ through all the emails archived in the past 2 weeks
 
-Will print to stdout the address list of all entries in the whitelist addressbook, one on each new line.
+: jaro search date:1y.. and folder:known | jaro extract
 
-: jaro extract date:1y.. and folder:known
+Will print a sorted list of unique addresses found in the emails matching the search expression '/date:1y.. and folder:known/', meaning all messages stored in the '/known/' folder and not older than 1 year from now.
 
-Will print the address list of all unique addresses in the headers of emails found by the search expression '/date:1y.. and folder:known/', matching all messages stored in the '/known/' folder and not older than 1 year.
+The *import* command is complementary to extraction: it reads an address list from stdin and imports it inside an addressbook specified using '-l' or a /group/ list file provided as argument.
 
-: jaro extract priv
-
-Will print the address list of all unique addresses contained in the headers of emails stored in the maildir '/priv/', which is found in $JAROMAILDIR. A full path to a maildir outside of $JAROMAILDIR can also be used.
-
-The *import* command is complementary to extraction: it reads an address list from stdin and imports it inside an addressbook specified using '-l' or an address list file provided as argument, removing duplicates.
-
-: jaro extract unsorted | jaro import -l blacklist
+: jaro search folder:unsorted | jaro extract | jaro import -l blacklist
 
 Will extract all addresses found in unsorted (the maildir collecting all non-mailinglist emails in which we are not an explicit recipient) and put them into our blacklist.
 
-** VCards
+** Export to VCard and other formats
 
-VCard is an exchange format useful to interface with other addressbook software and mobile phones. Jaro Mail supports is via the *extract* command followed by a vcard file argument:
+VCard is an exchange format useful to interface with other addressbook software and mobile phones, as well with spyware as Google and Apple mail. Jaro Mail supports converting address lists to a variety of formats thanks to /abook/:
 
-: jaro extract 0001.vcard
+: jaro addr | jaro export vcard
 
-Will print out the address list of all entries found in the file '/0001.vcard/'.
+Will take the list of addresses in whitelist and convert it to the *vcard* format on stdout, ready to be redirected to a file.
 
-The special command *vcard* can be used to convert an address list from stdin to a VCard file, exporting entries used inside Jaro Mail to a format supported by the majority of addressbook programs:
+Here below a list of output formats supported as argument to export:
 
-: jaro extract -l whitelist | jaro vcard > whitelist.vcard
+| Format  | Description                         |
+|---------+-------------------------------------|
+| abook   | abook native format                 |
+| ldif    | ldif / Netscape addressbook (.4ld)  |
+| vcard   | vCard 2 file                        |
+| mutt    | mutt alias                          |
+| muttq   | mutt query format (internal use)    |
+| html    | html document                       |
+| pine    | pine addressbook                    |
+| csv     | comma separated values              |
+| allcsv  | comma separated values (all fields) |
+| palmcsv | Palm comma separated values         |
+| elm     | elm alias                           |
+| text    | plain text                          |
+| wl      | Wanderlust address book             |
+| spruce  | Spruce address book                 |
+| bsdcal  | BSD calendar                        |
+| custom  | Custom format                       |
 
-Will save in the file '/whitelist.vcard'/ all addresses stored inside the whitelist addressbook. This is done concatenating multiple commands: the address list extracted from the whitelist is piped as stdin to the vcard command, whose output is redirected to a file.
+Of course *export* works with any list of addresses from stdin, for instance the result of *extract* operations on search queries, so that multiple commands can be concatenated.
+
 
 ** Addressbook in brief
 
 Here a roundup on the addressbook commands that are available from the /jaro/ commandline script. Arguments '-l abook' take the string to identify
 
-| Command       | Arguments   | Function (print on stdout, import from stdin)    |
-|---------------+-------------+--------------------------------------------------|
-| *abook*       | -l listname | edit the addressbook (default whitelist)         |
-| *extract*     | -l listname | print address list of all entries in addressbook |
-| *extract*     | search expr | print address list of messages found by search   |
-| *extract*     | maildir     | print address list of all mails in maildir       |
-| *extract*     | gpg keyring | print address list of gpg public keyring         |
-| *extract*     | gpg pubkey  | print address list of gpg key signatures         |
-| *extract*     | vcard file  | print address list of entries in VCard file      |
-| *vcard*       | vcard file  | export the addressbook into a VCard file         |
-| *import*      | -l listname | import address list from stdin to addressbook    |
-| *import*      | filename    | import address list into an address list file    |
-| *search addr* | (-l) string | print address list of matches in addressbook     |
+| Command   | Arguments   | Function (print on stdout, import from stdin)    |
+|-----------+-------------+--------------------------------------------------|
+| *abook*   | -l listname | edit the addressbook (default whitelist)         |
+| *addr*    | search expr | print list of addresses matching expression      |
+| *extract* | maildir     | print address list of all mails in maildir       |
+| *extract* | gpg keyring | print address list of gpg public keyring         |
+| *extract* | gpg pubkey  | print address list of gpg key signatures         |
+| *extract* | vcard file  | print address list of entries in VCard file      |
+| *import*  | -l listname | import address list from stdin to addressbook    |
+| *export*  | format      | convert address list to a format (default vcard) |
 
 
 
 * Searching
 
-Searching across all your emails it is as important as demanding of a task. Jaro Mail implements it using Notmuch which is relying on the Xapian search engine. To index and tag all your downloaded emails use:
+Searching across all your emails it is as important as demanding of a task. Jaro Mail implements it using [[https://notmuchmail.org/][Notmuch]] which is relying on the [[http://xapian.org][Xapian]] search engine, completely relying on local computations made on your machine, there is no data at all being communicated on-line.
+
+To index and tag all your emails that are locally archived in Jaro Mail use:
 
 : jaro index
 
-This will take a while and increase the size of the storage, but will definitely come useful when in need of searching rapidly across all available emails.
+This will take a while and increase the size of the storage of about one sixth of its total occupation, but will definitely come useful when in need of searching rapidly across all available emails. To run a search for emails containing the '/open source/' string, do
+
+: jaro search open source
+
+To search for all emails containing this string and dated between now and the last two weeks, do
+
+: jaro search open source date:2w..
+
+The search command prints out a list of found filenames which may be useful to a script, but less useful to a human. In order to read a quick summary of the emails found it is possible to pipe the results into the *headers* command which will print out date, sender and subject of each file
+
+: jaro search open source date:2w.. | jaro headers
 
 Searching has also an interactive interface called *alot* which pops up to show search results and browse through them, refine the terms and in general operate on emails with the usual keys. One can also reply to emails directly from alot:
 
-: jaro search
+: jaro alot search expression strings folder:known
 
-To restrict the search to a single folder, one can use the *folder:* prefix to search terms. Tags can be used also with *tag:* as well dates can be specified with ranges using *date:*. Consecutive string expressions are aloud to refine the search match, connected with logical and/or, plus also the header to search can be indicated, as for instance *from:* or *to:*. Read more about this below in the /Search term/ and /Date and time search/ sections (extracts from the *notmuch-search-terms* manpage).
+To restrict the search to a single folder, one can use the *folder:* prefix to search terms. Tags can be used also with *tag:* as well dates can be specified with ranges using *date:*. Consecutive string expressions are aloud to refine the search match, connected with logical and/or, plus also the header to search can be indicated, as for instance *from:* or *to:*. Read more about this below in the /Search term/ and /Date and time search/ sections (extracts from the *notmuch-search-terms* manpage) and on the notmuch webpage at http://notmuchmail.org
 
+With the *addr* command the search will be run on the whitelist addressbook entries instead of actual email contents. 
 
-If the first argument following the search command is *addr* then the search will be run on the whitelist addressbook entries instead. Also the blacklist can be searched this way using *-l blacklist*:
+: jaro addr joe
 
-: jaro search addr -l blacklist spammer-joe
+Will list all addresses matching the string 'joe' inside the /whitelist/ addressbook. Also the blacklist can be searched this way adding the switch *-l blacklist*:
 
-Will list all addresses matching the string 'spammer-joe' inside the /blacklist/ addressbook.
 
 ** Combining terms
 

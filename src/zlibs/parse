@@ -22,24 +22,26 @@
 
 
 
+
 # extract all addresses found in a list of email files from stdin
 extract_mails() {
-    _mails=`cat`
+    mailpaths=( ${=stdin} )
+    _tot=${#mailpaths}
 
-    _tot=`print $_mails | wc -l`
     act "$_tot emails to parse"
 
-    [[ $_tot -gt 100 ]] && {
+
+    [[ ${_tot} -gt 100 ]] && {
         act "operation will take a while, showing progress"
         _prog=0
         c=0
     }
 
     # learn from senders, recipients or all
-    _action="$1"
+    _action=${1:-all}
 
     _found=0
-    for m in ${(f)_mails}; do
+    for m in ${mailpaths}; do
 
         # e_parse fills in e_addr(map) and e_parsed(newline term str)
         hdr $m | e_parse $_action
@@ -83,68 +85,62 @@ extract_maildir() {
     # search symlinks
     _mails+=`find $md -type l`
 
-    print - ${_mails} | extract_mails "$_action"
+    stdin="$_mails"; extract_mails "$_action"
+
     return 0
 }
 
-# Extract all entries found in stdin. Supports two formats (autodetected)
-# 1) list of complete paths to filenames as returned by search
-# 2) mbox format big file with special jaromail separator as produced by mutt tagging
-extract_stdin() {
-    func "extract_stdin()"
+read_stdin() { # fills global stdin
+    fn read_stdin
 
-    _in=`cat`
-    # take first line
-    for i in ${(f)_in}; do _first="$i"; break; done
+    stdin=""
+    stdin=`cat`
+    bytesread=${#stdin}
+    _res=$?
 
-    if [[ "${_first[(w)1]}" = "Date:" ]]; then
-        # is an email or stream of emails
+    func "read ${bytesread} bytes from stdin"
 
-        _headers=`print - $_in | awk '
-BEGIN { header=1 }
-/JAROMAIL_PIPE_SEPARATOR/ { header=1; next }
-/^$/ { header=0; print "\n" }
-{ if(header==1) { print $0 } }
-'`
 
-        e_addr=()
-        _nextline=0
-        _gotit=""
+    # hard limit: read in max 10MB
+    #    sysread -t 10 -c bytesread -s 10000000 stdin
+    # case $_res in
+    #     1) warning "read_stdin: there was an error in the parameters to the command." ;;
+    #     2) warning "read_stdin: there was an error on the read, or on polling the input file descriptor for a timeout." ;;
+    #     4) warning "read_stdin: the attempt to read timed out." ;;
+    #     5) warning "read_stdin: no system error occurred, but zero bytes were read." ;;
+    #     0) return 0 ;;
+    # esac
+           
+}
 
-        for h in ${(f)_headers}; do
+stdin_is_muttpipe() {
+    fn stdin_is_muttpipe
+    req=(stdin)
+    ckreq || return 1
 
-            [[ "${h[(w)1]}" = "From:" ]] && _nextline=1
-            [[ "${h[(w)1]}" = "Subject:" ]] && {
-                _nextline=0
-                print - ${_gotit} | e_parse
-
-                _gotit=""
-            }
-            [[ $_nextline = 1 ]] && _gotit+="$h\n"
-
-        done
-
-        for i in ${(k)e_addr}; do
-            print - "${e_addr[$i]} <$i>"
-        done
-            
-        
-    elif [[ -r "$_first" ]]; then
-        notice "Parsing ${PARAM} emails addresses from stdin list of files"
-        # is a list of files
-        extract_mails ${PARAM}
-        _res=$?
+    if [[ "${stdin[(w)1]}" = "Date:" ]]; then
+        return 0
     else
-        error "Cannot process stream from stdin, unknown format"
         return 1
     fi
-    return $_res
+}
+
+stdin_is_pathlist() {
+    fn stdin_is_pathlist
+    req=(stdin)
+    ckreq || return 1
+
+    if [[ -r "${stdin[(w)1]}" ]]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # extract all entries in addressbook or all addresses in a pgp keyring
 # or all signatures on a pgp key (even without importing it)
-extract_auto() {
-    func "extract() $PARAM"
+extract_addresses() {
+    func "extract_addresses() $PARAM"
 
     # without arguments just list all entries in the active list
     # default is whitelist
@@ -154,7 +150,58 @@ extract_auto() {
     func "extract() arg: $arg (param: $PARAM)"
 
     # no arg means parse from stdin
-    [[ "$arg" = "" ]] && { extract_stdin; return $? }
+    [[ "$arg" = "" ]] && { 
+        read_stdin
+
+        # Extract all entries found in stdin. Supports two formats (autodetected)
+        # 1) list of complete paths to filenames as returned by search
+        # 2) mbox format big file with special jaromail separator as produced by mutt tagging
+
+        # take first word
+        if stdin_is_muttpipe; then
+
+            act "stdin seems an email or stream of emails"
+
+            _headers=`print - $stdin | awk '
+BEGIN { header=1 }
+/JAROMAIL_PIPE_SEPARATOR/ { header=1; next }
+/^$/ { header=0; print "\n" }
+{ if(header==1) { print $0 } }
+'`
+
+            e_addr=()
+            _nextline=0
+            _gotit=""
+
+            for h in ${(f)_headers}; do
+
+                [[ "${h[(w)1]}" = "From:" ]] && _nextline=1
+                [[ "${h[(w)1]}" = "Subject:" ]] && {
+                    _nextline=0
+                    print - ${_gotit} | e_parse
+
+                    _gotit=""
+                }
+                [[ $_nextline = 1 ]] && _gotit+="$h\n"
+
+            done
+
+            for i in ${(k)e_addr}; do
+                print - "${e_addr[$i]} <$i>"
+            done
+
+
+        elif stdin_is_pathlist; then
+            act "stdin seems a stream of full paths to single email files inside maildirs"
+            # is a list of files
+            extract_mails ${=PARAM}
+            _res=$?
+        else
+            error "Cannot process stream from stdin, unknown format"
+            return 1
+        fi
+        return $_res
+    }
 
     [[ -r "$arg" ]] && {
         # if first arg is a file, could be a maildir, a gpg keyring,
@@ -169,13 +216,14 @@ extract_auto() {
 
         func "testing argument with file magic"
         _magic=`file "$arg"`
+        _recognized=0
 
         # a map to eliminate duplicates
-        typeset -AU result
+        typeset -A result
 
         ######### GPG
         # first arg is a GnuPG key ring
-        [[ "$_magic" =~ "GPG key public ring" ]] && {
+        [[ "$_magic" =~ "GPG key public ring" ]] && { _recognized=1
             notice "Extracting addresses found in GPG keyring: $arg"
             _addrs=`gpg --list-keys --with-colons | awk -F: '{print $10}'`
             for i in ${(f)_addrs}; do
@@ -191,24 +239,10 @@ extract_auto() {
                     print - "$_n <$_e>"
                 }
             done
-
-            notice "Unique addresses found: ${#result}"
-            act "calculating known and new addresses..."
-            # counts which addresses are known to us
-            _known=0
-            for i in ${(k)result}; do
-                [[ $global_quit = 1 ]] && break
-
-                lookup_email ${i}
-                [[ $? = 0 ]] || {
-                    _known=$(( $_known + 1 )) }
-            done
-            act "new addresses: $_known"
-            return 0
         }
 
         # first arg is a GnuPG public key
-        [[ "$_magic" =~ "PGP public key" ]] && {
+        [[ "$_magic" =~ "PGP public key" ]] && { _recognized=1
             notice "Extracting addresses from sigs on GPG key $arg"
             _gpg="gpg --no-default-keyring --keyring $MAILDIRS/cache/pubkey.gpg --batch --with-colons"
             ${=rm} $MAILDIRS/cache/pubkey.gpg
@@ -239,23 +273,9 @@ extract_auto() {
                     print - "$_n <$_e>"
                 }
             done
-            
-            notice "Unique addresses found: ${#result}"
-            act "calculating known and new addresses..."
-            # counts which addresses are known to us
-            _known=0
-            for i in ${(k)result}; do
-                [[ $global_quit = 1 ]] && break
-
-                lookup_email ${i}
-                [[ $? = 0 ]] || {
-                    _known=$(( $_known + 1 )) }
-            done
-            act "new addresses: $_known"
-            return 0
         }
 
-        [[ "$_magic" =~ "vCard" ]] && {
+        [[ "$_magic" =~ "vCard" ]] && { _recognized=1
             # parse the vcard and print a simple name and email list
             # each value on a single line, entry tuples followed by a #
             # we skip entries that don't have an email
@@ -309,29 +329,48 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
                 fi
 
             done
-
-            notice "Unique addresses found: ${#result}"
-            act "calculating known and new addresses..."
-            # counts which addresses are known to us
-            _known=0
-            for i in ${(k)result}; do
-                [[ $global_quit = 1 ]] && break
-
-                lookup_email ${i}
-                [[ $? = 0 ]] || {
-                    _known=$(( $_known + 1 )) }
-            done
-            act "new addresses: $_known"
-            return 0
             
-        }
+         }
+
+         [[ $_recognized = 1 ]] && {
+             notice "Unique addresses found: ${#result}"
+             # act "calculating known and new addresses..."
+             # # counts which addresses are known to us
+             # _known=0
+             # for i in ${(k)result}; do
+             #     [[ $global_quit = 1 ]] && break
+
+             #     lookup_email ${i}
+             #     [[ $? = 0 ]] || {
+             #         _known=$(( $_known + 1 )) }
+             # done
+             # act "new addresses: $_known"
+             return 0
+         }
 
     } # closes condition in which arg is a file
 
+    # final fallback
     # if no file is recognized, use string as search query
-    notice "Extracting addresses from search query: $PARAM"
-    
-    # run a search and list email files
-    nm_search ${=PARAM} | extract_mails
+    error "cannot extract any address from $PARAM"
+    [[ "$_magic" = "" ]] || {
+        error "file format not supported: ${_magic[(ws@:@)2]}" }
+    return 1
 }
 
+
+extract_headers() {
+    fn extract_headers
+    # use cat directly, faster than read_stdin
+    for i in `cat`; do
+        [[ -r "$i" ]] || {
+            warning "cannot extract headers, not a file: $i" }
+        _folder=${i[(ws:/:)-3]}
+        hdr $i | awk -v folder=$_folder '
+BEGIN { date=""; from=""; subj="" }
+/^From:/ { from=$NF }
+/^Date:/ { date=sprintf("%02d %s %s", $3, $4, $5)}
+/^Subject:/ { subj=$0}
+END { printf("%s :%s: %s\t%s\n", date, folder, from, subj) }'
+    done
+}

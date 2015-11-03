@@ -122,7 +122,7 @@ PARAM=()
 typeset -A global_opts
 typeset -A opts
 
-typeset -h global_quit
+vars+=(global_quit)
 global_quit=0
 
 # global variable for account selection
@@ -150,8 +150,14 @@ vars+=(e_parsed)
 arrs+=(maildirs)
 vars+=(last_deliver)
 
-# global arrays for search
-arrs+=(search_results)
+# stdin when read becomes globally accessible
+vars+=(stdin bytesread)
+stdin=""
+bytesread=0
+
+# global arrays for search results and mailpaths
+# are all arrays of absolute paths
+arrs+=(search_results mailpaths)
 search_results=()
 
 # global variable for mutt binary
@@ -278,6 +284,14 @@ hostname=$(hostname) # gather the current hostname
 } # if not sourcing
 
 _mutt() {
+
+    [[ -r $MAILDIRS/.mutt/rc ]] || {
+        error "Jaro Mail is not yet configured."
+        error "To configure, edit the files in $MAILDIRS/Accounts"
+        error "Then run 'jaro update' at least once."
+        return 1
+    }
+
     for i; do _fa+=" $i "; done
     func "exec: mutt -F $MUTTDIR/rc ${=muttflags} ${_fa}"
     [[ "$subcommand" = "peek" ]] || rm -f $MUTTDIR/muttpass
@@ -490,6 +504,8 @@ main() {
     subcommands_opts[list]=""
     subcommands_opts[extract]=""
     subcommands_opts[parse]=""
+    subcommands_opts[header]=""
+    subcommands_opts[headers]=""
 
     subcommands_opts[import]=""
     subcommands_opts[export]=""
@@ -546,17 +562,9 @@ main() {
         subcommand="__default"
     fi
 
-    if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
-        # unknown command, pass it to autostart
-        func "unknown command, autostart: $@"
-        autostart ${=@}
-        exitcode=$?
-        [[ $exitcode = 0 ]] || {
-            error "command \"$subcommand\" not recognized"
-            act "try -h for help"
-        }
-        return $exitcode
-    fi
+    # if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
+    #     # unknown command, pass it to autostart
+    # fi
 
     argv=(${oldstar})
     unset oldstar
@@ -696,10 +704,7 @@ main() {
             exitcode=$?
             ;;
 
-#    stat) stats ${PARAM} ;;
-
-
-    addr) search_addressbook ${PARAM} ;;
+    addr|list) search_addressbook ${PARAM} ;;
 
     complete) complete ${PARAM}
               exitcode=$?
@@ -717,20 +722,8 @@ main() {
             exitcode=$?
             ;;
 
-    vcard)
-            export_vcard ${PARAM}
-            ;;
-
     "export")
-            case "$PARAM" in
-                abook)
-                    notice "Exporting old addressbook to new format"
-                    list=whitelist; export_abook
-                    list=blacklist; export_abook
-                    ;;
-                vcard) export_vcard ;;
-                *) export_vcard ;;
-            esac
+            export_vcard ${PARAM}
             ;;
 
     abook)  edit_abook ${PARAM}
@@ -778,10 +771,6 @@ main() {
         exitcode=$? ;;
 
     'source')   return 0 ;;
-    __default)  func "no command provided"
-        autostart ${PARAM}
-        exitcode=$?
-        ;;
 
     imap)
         imapcmd="$1"
@@ -816,18 +805,18 @@ main() {
         esac
         ;;
 
-    parse)
-        extract_stdin ${PARAM}
+    # list)
+    #     list_abook ${PARAM}
+    #     exitcode=$?
+    #     ;;
+
+    extract|parse)
+        extract_addresses ${PARAM} | sort | uniq
         exitcode=$?
         ;;
 
-    list)
-        list_abook ${PARAM}
-        exitcode=$?
-        ;;
-
-    extract)
-        extract_auto ${PARAM}
+    header|headers)
+        extract_headers ${PARAM}
         exitcode=$?
         ;;
 
@@ -855,14 +844,46 @@ main() {
         exitcode=$?
         ;;
 
+    # __default)  func "no command provided"
+    #     autostart ${PARAM}
+    #     exitcode=$?
+    #     ;;
     *) # unknown command, pass it to autostart
-        func "unknown command, remote check"
-        autostart ${PARAM}
-        exitcode=$?
-        [[ $exitcode = 0 ]] || {
-            error "command \"$subcommand\" not recognized"
-            act "try -h for help"
-        }
+        func "no command, autostart"
+
+        # argument passed: determine if an email
+        if isemail "$subcommand"; then
+            notice "Composing message to: ${@}"
+            # its an email, TODO see if we have it in our addressbook
+            _mutt ${=@}
+            exitcode=0
+        # or a directory of file
+        elif [[ -r "$subcommand" ]]; then
+            # is it a maildir? then open
+            maildircheck ${subcommand}
+            [[ $? = 0 ]] && {
+                _mutt -f ${subcommand}
+                exitcode=0
+            }
+            # is it a regular file? then attach it
+            [[ -f "$subcommand" ]] && {
+                _mutt -a ${=@}
+                exitcode=0
+            }
+        # or the name of a folder in Jaro Mail
+        elif [[ -r "$MAILDIRS/$subcommand" ]]; then
+            maildircheck "$MAILDIRS/$subcommand" && {
+                notice "Opening folder ${subcommand=}"
+                _mutt -f "$MAILDIRS/${subcommand}"
+                exitcode=0
+            }
+        else
+
+            # just open mutt on first unread folder
+            _mutt -Z
+            exitcode=$?
+
+        fi
         ;;
     esac
 
