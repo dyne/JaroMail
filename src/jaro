@@ -730,6 +730,10 @@ main() {
             exitcode=$?
             ;;
 
+    stats)  stats ${PARAM} | sort -n
+            exitcode=$?
+            ;;
+
     edit|vim)   jarovim ${PARAM}    ;;
     open)       open_folder ${PARAM}  ;;
     preview)    preview_file ${PARAM} ;;
@@ -817,11 +821,6 @@ main() {
 
     header|headers)
         extract_headers ${PARAM}
-        exitcode=$?
-        ;;
-
-    crypt)
-        crypt_queue ${PARAM}
         exitcode=$?
         ;;
 

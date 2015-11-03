@@ -112,7 +112,6 @@ search() {
     _results=""
 
     ztmp
-    # hard limit for list of file results is 100MB here
     nm search --output=files ${=PARAM} >> $ztmpfile
     search_results=(`cat $ztmpfile`)
     
@@ -121,7 +120,7 @@ search() {
         return 1
     }
 
-    act "${#search_results} emails found"
+    notice "${#search_results} matches found"
 }
 
 

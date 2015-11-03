@@ -22,57 +22,73 @@
 
 
 
-
 stats() {
+    fn stats $*
+
     # make index of all maildirs
-    notice "Maildirs statistics"
-    case ${PARAM[1]} in
+    notice "Computing statistics on stdin"
+    typeset -A count
+    num=0
+
+    case $1 in
 
 	timecloud) timecloud ;;
 
 	weeks) weeks ;;
 
-	*) # simple stats
-	    typeset -al tot
-	    typeset -alU fold
-	    list_maildirs
-	    oldpfx=""
-	    grandtot=0
-	    for i in ${maildirs}; do
+        email*)
+            _email=""
+	    for i in "${(f)$(cat)}"; do
+                _email=${i[(ws:@:)-1]/>/}
+                num=${count[$_email]:-0}
+                count[$_email]=$(( $num + 1 ))
+	    done
+
+            ;;            
+	folder*) # simple stats
+	    #list_maildirs
+            #for i in ${maildirs}; do
+
+            _folder=""
+            
+	    for i in `cat`; do
+                _folder=${i[(ws:/:)-3]}
+                
 		# find maildir prefixes
-		pfx="${i[(ws:.:)1]}"
+		# pfx="${_folder[(ws:.:)1]}"
 		# is it a new prefix?
-		{ test "$pfx" = "$oldpfx" } && { continue }
-		oldpfx=$pfx
-
-		fold+=($pfx)
-		# how big?
-		tot+=("`${=find} $MAILDIRS/$pfx* -type f | wc -l`")
-		grandtot="$(( $grandtot + ${tot[${#tot}]} ))"
-	    done
-	    # calculate screen size and bigger tot
-	    maxtot=0
-	    for x in $tot; do # find max
-		if [ $x -gt $maxtot ]; then
-		    maxtot=$x; fi
+                num=${count[$_folder]:-0}
+                count[$_folder]=$(( $num + 1 ))
 	    done
 
-	    c=0
-	    for f in ${fold}; do
-		c=$(( $c + 1 ))
-		sbar=""
-	    # Euclides: cols : x = maxtot : tot
-		cols=$(( $COLUMNS - 20 ))
-		bar=$(( $cols * ${tot[$c]} ))
-		bar=$(( $bar / $maxtot ))
-		for b in {0..$bar}; do sbar="${sbar}#"; done
-		print " ${tot[$c]}\t$sbar ${fold[$c]}"
-	    done
-	    notice "Total maildirs: ${#fold}"
-	    act "Total e-mails stored: ${grandtot}"
-	    act "Storage occupation: `du -hs $MAILDIRS | awk '{print $1}'`"
 	    ;;
+
+        *)
+            error "Stats type not specified"
+            return 1
+            ;;
     esac
+
+    # calculate screen size and bigger tot
+    maxtot=0
+    for x in ${(v)count}; do # find max
+	if [ $x -gt $maxtot ]; then
+	    maxtot=$x; fi
+    done
+
+    for k in ${(k)count}; do
+        v=${count[$k]}
+	sbar=""
+	# Euclides: cols : x = maxtot : tot
+	cols=$(( $COLUMNS - 20 ))
+	bar=$(( $cols * $v ))
+	bar=$(( $bar / $maxtot ))
+	for b in {0..$bar}; do sbar="${sbar}#"; done
+	print " $v\t$sbar $k"
+    done
+    notice "Total: ${#count}"
+    
+
     return 0
 }
 
