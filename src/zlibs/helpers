@@ -119,7 +119,7 @@ e_parse() {
         # check if an email address was found
         isemail "$_e" || continue
         # avoid duplicates
-#        [[ "${(v)e_addr[$_e]}" = "" ]] || continue
+        [[ "${(v)e_addr[$_e]}" = "" ]] || continue
         
         # extract also the name using comma separator
         _n="${(Q)_p[(ws:,:)2]}"
@@ -158,6 +158,50 @@ BEGIN { head=1 }
     next }' "$1"
 }
 
+save_replay() {
+    fn save_replay
+    _cmd="$1"
+    req=(_cmd)
+    ckreq || return 1
+
+    tee $MAILDIRS/cache/replay.$_cmd
+    [[ $? = 0 ]] && \
+        ln -sf $MAILDIRS/cache/replay.$_cmd $MAILDIRS/cache/replay.last
+    return 0
+}
+
+replay() {
+    fn "replay $*"
+
+    arg=$1
+
+    if [[ "$arg" = "" ]]; then
+
+        if [[ -r $MAILDIRS/cache/replay.last ]]; then
+            notice "Replay last stdout from `stat -c %z $MAILDIRS/cache/replay.last`"
+            cat $MAILDIRS/cache/replay.last
+            return $?
+        else
+            # never run a command?
+            error "There is nothing to replay"
+            return 1
+        fi
+
+    elif [[ -r $MAILDIRS/cache/replay.$arg ]]; then
+        notice "Replay stdout of command '$arg' from `stat -c %z $MAILDIRS/cache/replay.last`"
+        cat $MAILDIRS/cache/replay.$arg
+        return $?
+
+    elif [[ "$arg" = "list" ]]; then
+        notice "Listing available replays:"
+        ls -l $MAILDIRS/cache/replay.*
+        return $?
+    else
+        error "Nothing to replay for command: $arg"
+        return 1
+    fi
+    return 1
+}
 
 #########
 ## Editor
@@ -226,12 +270,12 @@ open_folder() {
 ## Open a File
 preview_file() {
     case $OS in
-    GNU)
-        xdg-open "${PARAM}" &
-        ;;
-    MAC)
-        open -g "${PARAM}"
-        ;;
+        GNU)
+            xdg-open $*
+            ;;
+        MAC)
+            open -g $*
+            ;;
     esac
 }
 

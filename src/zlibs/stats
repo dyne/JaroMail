@@ -32,22 +32,39 @@ stats() {
 
     case $1 in
 
-	timecloud) timecloud ;;
+	# timecloud) timecloud ;;
 
-	weeks) weeks ;;
+	# weeks) weeks ;;
+
+        domain*)
+            _domain=""
+	    for i in "${(f)$(cat)}"; do
+                _domain=${i[(ws:@:)-1]/>/}
+                num=${count[$_domain]:-0}
+                count[$_domain]=$(( $num + 1 ))
+	    done
+
+            ;;
 
         email*)
             _email=""
 	    for i in "${(f)$(cat)}"; do
-                _email=${i[(ws:@:)-1]/>/}
+                _email=${i[(ws:<:)2]/>/}
                 num=${count[$_email]:-0}
                 count[$_email]=$(( $num + 1 ))
 	    done
+            ;;
 
-            ;;            
-	folder*) # simple stats
-	    #list_maildirs
-            #for i in ${maildirs}; do
+        name*)
+            _name=""
+	    for i in "${(f)$(cat)}"; do
+                _name=${i[(ws:<:)1]//}
+                num=${count[$_name]:-0}
+                count[$_name]=$(( $num + 1 ))
+	    done
+            ;;
+
+	folder*)
 
             _folder=""
             

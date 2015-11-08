@@ -565,18 +565,18 @@ EOF
 
     { test -r "${MAILDIRS}/Applications.txt" } && {
 
-    # here is the tweak to open attachments
-    # with Mutt without blocking it (fork)
+        # here is the tweak to open attachments
+        # with Mutt without blocking it (fork)
 
-    apptypes=`cat "${MAILDIRS}/Applications.txt"`
-    for t in ${(f)apptypes}; do
-    eval `print $t | awk '
+        apptypes=`cat "${MAILDIRS}/Applications.txt"`
+        for t in ${(f)apptypes}; do
+            eval `print $t | awk '
     { print "_type=" $1 "; _app=" $2 ";" }'`
-    cat <<EOF >> $MAILDIRS/.mutt/mailcap
+            cat <<EOF >> $MAILDIRS/.mutt/mailcap
 ${_type}; a="${MAILDIRS}/tmp" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && ${_app} "\$a"/"\$f"
 EOF
-    done
-    cat <<EOF >> $MAILDIRS/.mutt/mailcap
+        done
+        cat <<EOF >> $MAILDIRS/.mutt/mailcap
 application/*; a="${MAILDIRS}/tmp" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
 EOF
     } # Applications.txt

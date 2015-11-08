@@ -22,8 +22,8 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=3.3
-DATE=Mar/2015
+VERSION=4.0
+DATE=Nov/2015
 JAROMAILEXEC=$0
 
 # default permission on files
@@ -103,7 +103,7 @@ GNOMEKEY=${GNOMEKEY:-0}
 
 
 # global variables for binaries called
-vars+=(rm mkdir mutt SQL)
+vars+=(rm mkdir mutt SQL OS)
 
 # load zsh modules
 zmodload zsh/regex
@@ -516,7 +516,8 @@ main() {
     subcommands_opts[edit]=""
     subcommands_opts[preview]=""
 
-    subcommands_opts[later]=""
+    subcommands_opts[replay]=""
+
     subcommands_opts[remember]=""
 
     subcommands_opts[backup]=""
@@ -657,10 +658,15 @@ main() {
             exitcode=$?
             ;;
 
-    later|remember)
-            cat | deliver remember
-            exitcode=$?
-            ;;
+    remember)
+        cat | deliver remember
+        exitcode=$?
+        ;;
+
+    replay)
+        replay ${PARAM}
+        exitcode=$?
+        ;;
 
     update|init)
         [[ "$PARAM" = "" ]] || {
@@ -693,18 +699,19 @@ main() {
                 for i in ${search_results=}; do
                     print - "$i"
                 done
-            }
+            } | save_replay $subcommand
             ;;
 
     alot) alot_search ${PARAM} ;;
 
     notmuch)
             notice "Command: notmuch ${PARAM}"
-            nm ${PARAM}
+            nm ${PARAM} | save_replay $subcommand
             exitcode=$?
             ;;
 
-    addr|list) search_addressbook ${PARAM} ;;
+    addr|list) search_addressbook ${PARAM}
+               ;;
 
     complete) complete ${PARAM}
               exitcode=$?
@@ -730,7 +737,7 @@ main() {
             exitcode=$?
             ;;
 
-    stats)  stats ${PARAM} | sort -n
+    stat*)  stats ${PARAM} | sort -n
             exitcode=$?
             ;;
 
@@ -751,7 +758,7 @@ main() {
             error "error updating filters, operation aborted."
             break
         }
-        filter_maildir ${PARAM}
+        filter_maildir ${PARAM} | save_replay $subcommand
         exitcode=$?
         ;;
 
@@ -795,7 +802,9 @@ main() {
             folders=(`imap_list_folders`)
             exitcode=$?
             notice "List of folders for $login on $imap"
-            for f in $folders; do print "$f"; done
+            for f in $folders; do print - "$f"; done \
+                | save_replay $subcommand | column
+
             ;;
         # interactive)
         #     read_account
@@ -815,7 +824,8 @@ main() {
     #     ;;
 
     extract|parse)
-        extract_addresses ${PARAM} | sort | uniq
+        extract_addresses ${PARAM} \
+            | save_replay $subcommand
         exitcode=$?
         ;;
 

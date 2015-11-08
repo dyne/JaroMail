@@ -1,4 +1,4 @@
-#+TITLE: Jaro Mail 3.3
+#+TITLE: Jaro Mail 4
 #+AUTHOR: by Jaromil @ dyne.org
 #+DATE: November 2015
 
@@ -159,8 +159,8 @@ and actions involved in managing one's email communication:
     Some dependencies are needed in order to build this software. The Makefile for GNU/Linux configures the build environment automatically on Debian and Fedora systems, using their packaging to install all needed packages.
 
     The dependencies to be installed on the system for JaroMail are
-    - to *build*: bison flex make autoconf automake sqlite3 libgnome-keyring-dev
-    - to *run*: procmail fetchmail msmtp mutt mairix pinentry abook wipe
+    - to *build*: gcc bison flex make autoconf automake sqlite3  libglib2.0-dev libgnome-keyring-dev
+    - to *run*: fetchmail msmtp mutt pinentry abook wipe notmuch alot
 
       To install all needed components (done automatically, requires root):
 
@@ -459,94 +459,6 @@ Below a recapitulation of keys commonly used in our workflow
 | *C*   | Copy a message to another folder     |
 
 
-* Addressbook
-
-Addressbooks are the files storing the whitelist, the blacklist and optionally other custom lists of addresses. The format we use is native *abook* database files, by convention in /$JAROMAILDIR/whitelist.abook/ and /$JAROMAILDIR/blacklist.abook/. More custom addressbooks can be used by specifying them using *-l* on the commandline, for instance *-l family* will query the /$JAROMAILDIR/family.abook/ addressbook; when not used, *whitelist* is the default.
-
-Addressbooks can be edited using a interactive console interface, for instance to add or delete entries by hand: use the *abook* command and optionally the *-l* option.
-
-: jaro abook
-
-This will open the current whitelist for edit. To edit the blacklist add *-l blacklist* instead.
-
-To quickly dump to the console all names and addresses in the Jaro Mail addressbook, one can use the *list* command
-
-: jaro list
-
-To match a string across the addressbook, simply use the composite command *addr* followed by strings, for instance:
-
-: jaro addr dyne
-
-will list all addresses containing 'dyne' in your whitelist.
-
-** Address lists
-
-Jaro Mail handles lists of addresses as plain text files or streams with entries formatted as '/Name <email>/' and newline terminated. This simple format conforms (or is normalized to) the RFC822 standard and UTF-8 charset encoding, both produced on /stdout/ and read from /stdin/ by various useful commands to take advantage of console piping.
-
-Such lists of addresses are the output of the *extract* command, which is able to read the output of other commands and extract a list of email addresses found.
-
-: jaro search open source date:2w..  | jaro extract
-
-Will print to stdout the list of addresses found among the results of a search for /open source/ through all the emails archived in the past 2 weeks
-
-: jaro search date:1y.. and folder:known | jaro extract
-
-Will print a sorted list of unique addresses found in the emails matching the search expression '/date:1y.. and folder:known/', meaning all messages stored in the '/known/' folder and not older than 1 year from now.
-
-The *import* command is complementary to extraction: it reads an address list from stdin and imports it inside an addressbook specified using '-l' or a /group/ list file provided as argument.
-
-: jaro search folder:unsorted | jaro extract | jaro import -l blacklist
-
-Will extract all addresses found in unsorted (the maildir collecting all non-mailinglist emails in which we are not an explicit recipient) and put them into our blacklist.
-
-** Export to VCard and other formats
-
-VCard is an exchange format useful to interface with other addressbook software and mobile phones, as well with spyware as Google and Apple mail. Jaro Mail supports converting address lists to a variety of formats thanks to /abook/:
-
-: jaro addr | jaro export vcard
-
-Will take the list of addresses in whitelist and convert it to the *vcard* format on stdout, ready to be redirected to a file.
-
-Here below a list of output formats supported as argument to export:
-
-| Format  | Description                         |
-|---------+-------------------------------------|
-| abook   | abook native format                 |
-| ldif    | ldif / Netscape addressbook (.4ld)  |
-| vcard   | vCard 2 file                        |
-| mutt    | mutt alias                          |
-| muttq   | mutt query format (internal use)    |
-| html    | html document                       |
-| pine    | pine addressbook                    |
-| csv     | comma separated values              |
-| allcsv  | comma separated values (all fields) |
-| palmcsv | Palm comma separated values         |
-| elm     | elm alias                           |
-| text    | plain text                          |
-| wl      | Wanderlust address book             |
-| spruce  | Spruce address book                 |
-| bsdcal  | BSD calendar                        |
-| custom  | Custom format                       |
-
-Of course *export* works with any list of addresses from stdin, for instance the result of *extract* operations on search queries, so that multiple commands can be concatenated.
-
-
-** Addressbook in brief
-
-Here a roundup on the addressbook commands that are available from the /jaro/ commandline script. Arguments '-l abook' take the string to identify
-
-| Command   | Arguments   | Function (print on stdout, import from stdin)    |
-|-----------+-------------+--------------------------------------------------|
-| *abook*   | -l listname | edit the addressbook (default whitelist)         |
-| *addr*    | search expr | print list of addresses matching expression      |
-| *extract* | maildir     | print address list of all mails in maildir       |
-| *extract* | gpg keyring | print address list of gpg public keyring         |
-| *extract* | gpg pubkey  | print address list of gpg key signatures         |
-| *extract* | vcard file  | print address list of entries in VCard file      |
-| *import*  | -l listname | import address list from stdin to addressbook    |
-| *export*  | format      | convert address list to a format (default vcard) |
-
-
 
 * Searching
 
@@ -578,7 +490,33 @@ With the *addr* command the search will be run on the whitelist addressbook entr
 
 : jaro addr joe
 
-Will list all addresses matching the string 'joe' inside the /whitelist/ addressbook. Also the blacklist can be searched this way adding the switch *-l blacklist*:
+Will list all addresses matching the string 'joe' inside the /whitelist/ addressbook. Also the blacklist can be searched this way adding the switch *-l blacklist*.
+
+** Compute and visualize statistics
+
+The *stats* command is useful to quickly visualize statistics regarding folder usage as well the frequency of emails found in a stream from stdin. Such streams can be produced by the *search* and *extract* commands for instance and passed to stats in order to have a more graphical (yet ASCII based) visualization of results.
+
+For example lets visualize the frequency of email domain hosts in our whitelist:
+
+: jaro addr | jaro stat emails
+
+Will print out bars and domains in descending order, highlighting the most frequent email domain in our contacts, which turns out to be very often gmail.com, unfortunately for our own privacy.
+
+To visualize the frequency of traffic across our filtered folders in the past month:
+
+: jaro search date:1M.. | jaro stat folders
+
+Will show quantities of mails filed to folders during the past month, quickly highlighting the mailinglists that have seen more recent activity.
+
+To see who is most active in a folder:
+
+: jaro search folder:org.dyne.dng | jaro extract stdin from | jaro stat names
+
+Will give an overview on who is the most prolific writer in the dng mailinglist, filed into the folder by a rule in *Filters.txt* like:
+
+: to    dng@lists.dyne       save         org.dyne.dng
+
+Please note the *extract* command is there to extract email addresses and names found in the /From:/ field of all search hits, the command is explained better in the next chapter: /Addressbook/.
 
 
 ** Combining terms
@@ -722,6 +660,94 @@ Examples:
 
 : UTC
 : EET
+
+
+* Addressbook
+
+Addressbooks are the files storing the whitelist, the blacklist and optionally other custom lists of addresses. The format we use is native *abook* database files, by convention in /$JAROMAILDIR/whitelist.abook/ and /$JAROMAILDIR/blacklist.abook/. More custom addressbooks can be used by specifying them using *-l* on the commandline, for instance *-l family* will query the /$JAROMAILDIR/family.abook/ addressbook; when not used, *whitelist* is the default.
+
+Addressbooks can be edited using a interactive console interface, for instance to add or delete entries by hand: use the *abook* command and optionally the *-l* option.
+
+: jaro abook
+
+This will open the current whitelist for edit. To edit the blacklist add *-l blacklist* instead.
+
+To quickly dump to the console all names and addresses in the Jaro Mail addressbook, one can use the *list* command
+
+: jaro list
+
+To match a string across the addressbook, simply use the composite command *addr* followed by strings, for instance:
+
+: jaro addr dyne
+
+will list all addresses containing 'dyne' in your whitelist.
+
+** Address lists
+
+Jaro Mail handles lists of addresses as plain text files or streams with entries formatted as '/Name <email>/' and newline terminated. This simple format conforms (or is normalized to) the RFC822 standard and UTF-8 charset encoding, both produced on /stdout/ and read from /stdin/ by various useful commands to take advantage of console piping.
+
+Such lists of addresses are the output of the *extract* command, which is able to read the output of other commands and extract a list of email addresses found.
+
+: jaro search open source date:2w..  | jaro extract stdin
+
+Will print to stdout the list of addresses found among the results of a search for /open source/ through all the emails archived in the past 2 weeks.
+
+: jaro search date:1y.. and folder:known | jaro extract
+
+Will print a sorted list of unique addresses found in the emails matching the search expression '/date:1y.. and folder:known/', meaning all messages stored in the '/known/' folder and not older than 1 year from now.
+
+The *import* command is complementary to extraction: it reads an address list from stdin and imports it inside an addressbook specified using '-l' or a /group/ list file provided as argument.
+
+: jaro search folder:unsorted | jaro extract | jaro import -l blacklist
+
+Will extract all addresses found in unsorted (the maildir collecting all non-mailinglist emails in which we are not an explicit recipient) and put them into our blacklist.
+
+** Export to VCard and other formats
+
+VCard is an exchange format useful to interface with other addressbook software and mobile phones, as well with spyware as Google and Apple mail. Jaro Mail supports converting address lists to a variety of formats thanks to /abook/:
+
+: jaro addr | jaro export vcard
+
+Will take the list of addresses in whitelist and convert it to the *vcard* format on stdout, ready to be redirected to a file.
+
+Here below a list of output formats supported as argument to export:
+
+| Format  | Description                         |
+|---------+-------------------------------------|
+| abook   | abook native format                 |
+| ldif    | ldif / Netscape addressbook (.4ld)  |
+| vcard   | vCard 2 file                        |
+| mutt    | mutt alias                          |
+| muttq   | mutt query format (internal use)    |
+| html    | html document                       |
+| pine    | pine addressbook                    |
+| csv     | comma separated values              |
+| allcsv  | comma separated values (all fields) |
+| palmcsv | Palm comma separated values         |
+| elm     | elm alias                           |
+| text    | plain text                          |
+| wl      | Wanderlust address book             |
+| spruce  | Spruce address book                 |
+| bsdcal  | BSD calendar                        |
+| custom  | Custom format                       |
+
+Of course *export* works with any list of addresses from stdin, for instance the result of *extract* operations on search queries, so that multiple commands can be concatenated.
+
+
+** Addressbook in brief
+
+Here a roundup on the addressbook commands that are available from the /jaro/ commandline script. Arguments '-l abook' take the string to identify
+
+| Command   | Arguments   | Function (print on stdout, import from stdin)    |
+|-----------+-------------+--------------------------------------------------|
+| *abook*   | -l listname | edit the addressbook (default whitelist)         |
+| *addr*    | search expr | print list of addresses matching expression      |
+| *extract* | maildir     | print address list of all mails in maildir       |
+| *extract* | gpg keyring | print address list of gpg public keyring         |
+| *extract* | gpg pubkey  | print address list of gpg key signatures         |
+| *extract* | vcard file  | print address list of entries in VCard file      |
+| *import*  | -l listname | import address list from stdin to addressbook    |
+| *export*  | format      | convert address list to a format (default vcard) |
 
 
 * Storage and backup
@@ -888,6 +914,27 @@ For more information about Tomb please refer to its own documentation: environme
   
 
 * Advanced usage
+** Replay: avoid repeating long operations
+
+   Working on the commandline can have some disadvantages. One of them is that if one runs a long operation to see its result and forgets to save it also on a file (i.e. using tee) the operation needs to be re-run and saved.
+
+   Jaro Mail helps the user to *replay* the last output print by saving it everytime in its own cache. Replay can also save per-command outputs so that long pipe chains can be repeated selectively by naming the command. Only some commands have the replay capability, to have a list of available replays on your system do, based on your last run commands:
+
+: jaro replay list
+
+To replay the last search command and pipe it into headers to have a better view of it:
+
+: jaro replay search | jaro headers
+
+For instance imagine giving the command that searches for all mails sent to /nettime-l/ and extracts all addresses in the /From:/ including duplicates, then sorts them and eliminates duplicates
+
+: jaro search to:nettime-l | jaro extract stdin from | sort | uniq
+
+Depending from the size of your nettime archives, this operation may take some time and one may not want to repeat it in order to compute some stats on the extract result. So one can go on and send the old output to a new command:
+
+: jaro replay extract | jaro stat names
+
+This will print out statistics about the most prolific write to the nettime list according to your archives.
 
 ** Send anonymous emails
 

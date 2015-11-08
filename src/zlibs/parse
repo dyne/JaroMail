@@ -31,6 +31,8 @@ extract_mails() {
     act "$_tot emails to parse"
 
 
+    typeset -a _match
+
     [[ ${_tot} -gt 100 ]] && {
         act "operation will take a while, showing progress"
         _prog=0
@@ -39,18 +41,27 @@ extract_mails() {
 
     # learn from senders, recipients or all
     _action=${1:-all}
+    # optional second argument limits parsing to header fields
+    [[ "$_action" = "all" ]] || _arg="-x $_action"
 
-    _found=0
+    act "parsing $_action fields"
+    _match=()
+
     for m in ${mailpaths}; do
+        # use RFC822 parser in fetchaddr
+        _parsed=`hdr $m | ${WORKDIR}/bin/fetchaddr ${=_arg} -a`
+        for _p in ${(f)_parsed}; do
 
-        # e_parse fills in e_addr(map) and e_parsed(newline term str)
-        hdr $m | e_parse $_action
-        for _e in ${(k)e_addr}; do
-
-            print - "${(v)e_addr[$_e]} <$_e>"
-            _found=$(( $_found + 1 ))
+            _e="${(Q)_p[(ws:,:)1]:l}"
+            # check if an email address was found
+            isemail "$_e" || continue
+            # extract also the name using comma separator
+            _n="${(Q)_p[(ws:,:)2]}"
+            
+            func "match: ${_n} <$_e>"
+            _match+=("${_n} <$_e>")
         done
-        
+
         [[ $_tot -gt 100 ]] && {
             c=$(( $c + 1 ))
             [[ $c -gt 99 ]] && {
@@ -61,7 +72,13 @@ extract_mails() {
         }
     done
 
-    notice "${_found} addresses extracted (including duplicates)"
+    _found=0
+    for _l in ${_match}; do
+        print - "$_l"
+        _found=$(( $_found + 1 ))
+    done
+
+    notice "${#_match} addresses extracted (including duplicates)"
 }
 
 # extract all addresses found into a maildir
@@ -145,12 +162,18 @@ extract_addresses() {
     # without arguments just list all entries in the active list
     # default is whitelist
 
-    arg=${PARAM[1]}
+    arg=${1}
 
     func "extract() arg: $arg (param: $PARAM)"
 
     # no arg means parse from stdin
-    [[ "$arg" = "" ]] && { 
+    stdin=0
+    [[ "$arg" = "" ]]      && stdin=1
+    [[ "$arg" = "stdin" ]] && stdin=1
+    [[ "$arg" = "in" ]]    && stdin=1
+    
+    
+    [[ $stdin = 1 ]] && { 
         read_stdin
 
         # Extract all entries found in stdin. Supports two formats (autodetected)
@@ -194,7 +217,7 @@ BEGIN { header=1 }
         elif stdin_is_pathlist; then
             act "stdin seems a stream of full paths to single email files inside maildirs"
             # is a list of files
-            extract_mails ${=PARAM}
+            extract_mails "$2"
             _res=$?
         else
             error "Cannot process stream from stdin, unknown format"
@@ -254,7 +277,7 @@ BEGIN { header=1 }
 
                 [[ "$i" =~ "[User ID not found]" ]] && {
                     act "looking up: $i"
-                    ${=_gpg} --recv-key ${i[(w)1]}
+o                    ${=_gpg} --recv-key ${i[(w)1]}
                 }
             done
             
@@ -371,6 +394,6 @@ BEGIN { date=""; from=""; subj="" }
 /^From:/ { from=$NF }
 /^Date:/ { date=sprintf("%02d %s %s", $3, $4, $5)}
 /^Subject:/ { subj=$0}
-END { printf("%s :%s: %s\t%s\n", date, folder, from, subj) }'
+END { printf("%s :%s:\t%s\t%s\n", date, folder, from, subj) }'
     done
 }
