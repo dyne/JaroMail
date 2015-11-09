@@ -296,7 +296,11 @@ fetch() {
 
         act "please wait while downloading mails to incoming..."
 
-        print " $fmconf " | fetchmail -f -
+        print " $fmconf " | fetchmail -f - | awk '
+/^fetchmail: No mail/ { next }
+/^reading message/ { printf(".") }
+{ if ($7 == "(folder") printf("\n%s\n",$0) }
+END { printf("\n") }'
 
     else
         act "dryrun: nothing will be fetched really."
@@ -527,7 +531,7 @@ peek() {
     fi
 
     case $transport in
-    ssl|tls) act "using secure connection (SSL)"
+    SSL*|TLS*) act "using secure connection (SSL)"
         iproto="imaps" ;;
     plain) act "using clear text connection"
         iproto="imap"  ;;
