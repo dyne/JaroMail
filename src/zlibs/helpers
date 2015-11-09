@@ -76,36 +76,6 @@ s/"/\&quot;/g
 '
 }
 
-# move an email file from a maildir to another
-# keeping cur/new/tmp positioning
-refile() {
-    fn refile $*
-    src="$1"
-    dst="$2"
-    req=(src dst)
-    ckreq || {
-        error "refile() needs 2 args: source file and destination maildir"
-        return 1
-    }
-
-    [[ -r "$src" ]] || {
-        error "refile origin file not existing: $src"
-        return 1
-    }
-
-    # weak destination check, called should use maildircheck anyway
-    [[ -d "$dst"/new ]] || {
-        error "refile destination not a maildir: $dst"
-        return 1
-    }
-
-    srcarr=(  ${=src//\// } )
-    srcnum=${#srcarr}
-    pos=${srcarr[$(( $srcnum - 1 ))]}
-    func "mv $src ${dst}/${pos}/"
-    [[ $DRYRUN = 0 ]] && mv $src ${dst}/${pos}/
-}
-
 e_parse() {
     _arg=""
     # optional second argument limits parsing to header fields

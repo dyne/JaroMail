@@ -744,9 +744,25 @@ main() {
     open)       open_folder ${PARAM}  ;;
     preview)    preview_file ${PARAM} ;;
 
-    backup)  backup ${PARAM}
-             exitcode=$?
-             ;;
+    mkdir)
+        DEBUG=1 maildirmake ${PARAM}
+        exitcode=$?
+        ;;
+
+    copy)
+        maildir_shift ${PARAM} cp
+        exitcode=$?
+        ;;
+
+    move)
+        maildir_shift ${PARAM} mv
+        exitcode=$?
+        ;;
+
+    link)
+        maildir_shift ${PARAM} ln
+        exitcode=$?
+        ;;
 
     rmdupes) rmdupes ${PARAM} ;;
     merge)   merge ${PARAM}   ;;

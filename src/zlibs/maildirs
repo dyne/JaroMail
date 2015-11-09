@@ -191,6 +191,100 @@ merge() {
     act "Done. All mails merged into ${_dst}"
 }
 
+maildir_shift() {
+    fn maildir_shift $*
+    dst=${1}
+    cmd=${2:-cp}
+    req=(dst)
+    freq=($dst)
+    ckreq || return 1
+
+    maildircheck "$dst"
+    [[ $? = 0 ]] || {
+        error "Destination is not a maildir: $dst"
+        return 1
+    }
+
+    [[ "$cmd" = "" ]] || {
+        case $cmd in
+            mv|cp) ;;
+            ln)
+                cmd="ln -s"
+                ;;
+            *)
+                error "refile command not supported: $cmd"
+                return 1
+                ;;
+        esac
+    }
+
+    notice "Moving paths on stdin to maildir: $dst"
+
+    for f in "${(f)$(cat)}"; do
+        [[ -r $f ]] || {
+            error "file not found: $f"
+            error "move operation aborted."
+            return 1
+        }
+
+        srcarr=(  ${=f//\// } )
+        srcnum=${#srcarr}
+        pos=${srcarr[$(( $srcnum - 1 ))]}
+
+        func "$cmd $f ${dst}/${pos}/"
+        [[ $DRYRUN = 0 ]] && ${=cmd} $f ${dst}/${pos}/
+    done
+    return 0
+}
+    
+
+# move an email file from a maildir to another
+# keeping cur/new/tmp positioning
+refile() {
+    fn refile $*
+    src="$1"
+    dst="$2"
+    cmd=${3:-mv}
+    req=(src dst)
+    ckreq || {
+        error "refile() needs 2 args: source file and destination maildir"
+        return 1
+    }
+
+    [[ -r "$src" ]] || {
+        error "refile origin file not existing: $src"
+        return 1
+    }
+
+    # weak destination check, called should use maildircheck anyway
+    [[ -d "$dst"/new ]] || {
+        error "refile destination not a maildir: $dst"
+        return 1
+    }
+
+    [[ "$cmd" = "" ]] || {
+        case $cmd in
+            mv|cp) ;;
+            ln)
+                cmd="ln -s"
+                ;;
+            *)
+                error "refile command not supported: $cmd"
+                return 1
+                ;;
+        esac
+    }
+
+    func "refile command: $cmd"
+
+    srcarr=(  ${=src//\// } )
+    srcnum=${#srcarr}
+    pos=${srcarr[$(( $srcnum - 1 ))]}
+    func "$cmd $src ${dst}/${pos}/"
+    [[ $DRYRUN = 0 ]] && ${=cmd} $src ${dst}/${pos}/
+    return $?
+}
+
 
 # LDA delivery to a maildir
 # important to return 1 on all errors

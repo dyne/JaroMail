@@ -492,32 +492,6 @@ With the *addr* command the search will be run on the whitelist addressbook entr
 
 Will list all addresses matching the string 'joe' inside the /whitelist/ addressbook. Also the blacklist can be searched this way adding the switch *-l blacklist*.
 
-** Compute and visualize statistics
-
-The *stats* command is useful to quickly visualize statistics regarding folder usage as well the frequency of emails found in a stream from stdin. Such streams can be produced by the *search* and *extract* commands for instance and passed to stats in order to have a more graphical (yet ASCII based) visualization of results.
-
-For example lets visualize the frequency of email domain hosts in our whitelist:
-
-: jaro addr | jaro stat emails
-
-Will print out bars and domains in descending order, highlighting the most frequent email domain in our contacts, which turns out to be very often gmail.com, unfortunately for our own privacy.
-
-To visualize the frequency of traffic across our filtered folders in the past month:
-
-: jaro search date:1M.. | jaro stat folders
-
-Will show quantities of mails filed to folders during the past month, quickly highlighting the mailinglists that have seen more recent activity.
-
-To see who is most active in a folder:
-
-: jaro search folder:org.dyne.dng | jaro extract stdin from | jaro stat names
-
-Will give an overview on who is the most prolific writer in the dng mailinglist, filed into the folder by a rule in *Filters.txt* like:
-
-: to    dng@lists.dyne       save         org.dyne.dng
-
-Please note the *extract* command is there to extract email addresses and names found in the /From:/ field of all search hits, the command is explained better in the next chapter: /Addressbook/.
-
 
 ** Combining terms
 
@@ -662,6 +636,44 @@ Examples:
 : EET
 
 
+* Compute and visualize statistics
+
+The *stats* command is useful to quickly visualize statistics regarding folder usage as well the frequency of emails found in a stream from stdin. Such streams can be produced by the *search* and *extract* commands for instance and passed to stats in order to have a more graphical (yet ASCII based) visualization of results.
+
+For example lets visualize the frequency of email domain hosts in our whitelist:
+
+: jaro addr | jaro stat emails
+
+Will print out bars and domains in descending order, highlighting the most frequent email domain in our contacts, which turns out to be very often gmail.com, unfortunately for our own privacy.
+
+To visualize the frequency of traffic across our filtered folders in the past month:
+
+: jaro search date:1w.. | jaro stat folders
+
+Will show quantities of mails filed to folders during the past week, quickly highlighting the mailinglists that have seen more recent activity.
+
+To see who is most active in a mailinglist which is filtered to a folder:
+
+: jaro search folder:org.dyne.dng | jaro extract stdin from | jaro stat names
+
+Will give an overview on who is the most prolific writer in the /org.dyne.dng/ mailinglist, filed into the folder by a rule in *Filters.txt* like:
+
+: to    dng@lists.dyne       save         org.dyne.dng
+
+Please note the *extract* command is there to extract email addresses and names found in the /From:/ field of all search hits, the command is explained better in the next chapter: /Addressbook/.
+
+** Statistics in brief
+
+All *stats* commands takes lists of addresses or email messages from stdin.
+
+| command       | effect                                                                       |
+|---------------+------------------------------------------------------------------------------|
+| stats email   | reads addresses from stdin, prints out stats on frequency of emails found    |
+| stats names   | reads addresses from stdin, prints out stats on frequency of names found     |
+| stats folders | reads paths to messages from stdin, prints out stats on frequency of folders |
+
+So in case of *stats email* or *stats names* any result of search must be first filtered by *extract* in order to provide addresses to stats, else errors will occur. To limit the stats to the /From:/ field use the *extract stdin from* also shown in examples, any other refinement can be done also in the domain of the search commands.
+  
 * Addressbook
 
 Addressbooks are the files storing the whitelist, the blacklist and optionally other custom lists of addresses. The format we use is native *abook* database files, by convention in /$JAROMAILDIR/whitelist.abook/ and /$JAROMAILDIR/blacklist.abook/. More custom addressbooks can be used by specifying them using *-l* on the commandline, for instance *-l family* will query the /$JAROMAILDIR/family.abook/ addressbook; when not used, *whitelist* is the default.
@@ -792,20 +804,13 @@ will have a look at some very interesting features that Jaro Mail can
 offer to its users and to the even larger audience of Maildir format
 users.
 
-** Merge maildir
+** Merge maildirs
 
-Jaro Mail can safely merge two different maildirs basically gathering
-all e-mails stored in them into a unique place. This is done using two
-arguments, both maildir folders: the first is the source and the
-second is the destination e-mails from both will be gathered:
+Jaro Mail can safely merge two different maildirs basically gathering all e-mails stored in them into a unique place. This is done using two arguments, both maildir folders: the first is the source and the second is the destination e-mails from both will be gathered:
 
 : jaro merge ml.saved-mails ml.global-archive
 
-The above command will move all emails stored inside the maildir
-folder "ml.saved-mails" to the other maildir folder
-"ml.global-archive". Upon success the first argument "ml.saved-mails"
-will be deleted and all its contents will be found in
-"ml.global-archive".
+The above command will move all emails stored inside the maildir folder "ml.saved-mails" to the other maildir folder "ml.global-archive". Upon success the first argument "ml.saved-mails" will be deleted and all its contents will be found in "ml.global-archive".
 
 ** Remove duplicates from maildir         :noexport:
 
@@ -824,20 +829,21 @@ are present more than once.
 
 [fn:formail] The standard utility 'formail -D' is used for this operation
 
-** Backup mails older than
+** Backup mails
 
-To facilitate the separation of stored email files across maildirs, for instance to move from a maildir to another all those mails that are older than a certain period, Jaro Mail implements the *backup* command. Backup will move all messages matched by a search expression (see previous section) into another maildir folder and delete them from the original.
+To facilitate the separation of stored email files across maildirs, for instance to move from a maildir to another all those mails that are older than a certain period, Jaro Mail implements the *copy* and *move* commands, reading a list of paths from stdin (as result of a search, for instance) and moving them to a destination maildir while preserving their reading state (new or cur).
 
-: jaro backup old.backup date:..3y
+For instance to move all archived mails older than 3 years into a separate folder:
 
-The above command will move out all indexed emails that are older than
-3 years into the maildir 'old.backup', which must exist already: it
-could be present on an external usb hard-disk or any other backup
-device, helping us to save space on the desktop in use.
+: jaro search date:3y.. | jaro move /media/backup/old.mails
 
-: jaro backup /media/backup.tomb/old.unsorted folder:unsorted and date:..1y
+This will move all the emails found by the search expression /date:3y../ (all mails older than 3 years) into '/media/backup/old.mails/' which must be a maildir.
 
-Will move all emails found in the 'unsorted' folder that are older than one year inside the old.unsorted folder in our mounted backup tomb.
+The same way one could use *jaro copy* to not delete originals or even *jaro link* to create symlinks to results into a new maildir, without increasing occupation and allowing to review results with the help of an external program supporting maildirs, for instance using directly
+
+: mutt -f /media/backup/old.mails
+
+This functionality is studied explicitly to be flexibly adopted in various situations and scripts, so the backups should really be customized ad-hoc for the particular setup.
 
 ** Filter a maildir
 
@@ -865,11 +871,13 @@ directory.
 
 Here a recap of the commands dealing with maildir storage in Jaro Mail. Please note the syntax is subject to change in future:
 
-| Command | Syntax                                      |
-|---------+---------------------------------------------|
-| backup  | destination-maildir search-expression(s)... |
-| merge   | origin-maildir destination-maildir          |
-| filter  | maildir                                     |
+| Command | Syntax                             |
+|---------+------------------------------------|
+| move    | (reads stdin) destination-maildir  |
+| copy    | (reads stdin) destination-maildir  |
+| link    | (reads stdin) destination-maildir  |
+| merge   | origin-maildir destination-maildir |
+| filter  | maildir                            |
 
 * Security
 

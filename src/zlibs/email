@@ -298,8 +298,8 @@ fetch() {
 
         print " $fmconf " | fetchmail -f - | awk '
 /^fetchmail: No mail/ { next }
-/^reading message/ { printf(".") }
-{ if ($7 == "(folder") printf("\n%s\n",$0) }
+/^reading message/ { printf("."); next }
+{ printf("\n%s\n",$0) }
 END { printf("\n") }'
 
     else
@@ -531,7 +531,7 @@ peek() {
     fi
 
     case $transport in
-    SSL*|TLS*) act "using secure connection (SSL)"
+    SSL*|TLS*) act "using secure connection ($transport)"
         iproto="imaps" ;;
     plain) act "using clear text connection"
         iproto="imap"  ;;
