@@ -91,7 +91,7 @@ esac
 
 
 # global variables
-vars+=(DEBUG QUIET DRYRUN CALLMUTT MAILDIRS)
+vars+=(DEBUG QUIET DRYRUN CALLMUTT MAILDIRS WORKDIR)
 QUIET=${QUIET:-0}
 DEBUG=${DEBUG:-0}
 DRYRUN=${DRYRUN:-0}
@@ -646,8 +646,10 @@ main() {
 
     fetch)
             account=${account:-default}
-            fetch ${PARAM}
-            filter_maildir incoming
+            fetch ${PARAM} && \
+                update_filters && \
+                filter_maildir incoming && \
+                update_notmuch
         ;;
 
     send)   send ${PARAM}
@@ -675,14 +677,11 @@ main() {
                 [[ -d $p ]] && MAILDIRS=$p
             done
         }
-        MAILDIRS=$MAILDIRS init_inbox
-        MAILDIRS=$MAILDIRS update_filters
-        MAILDIRS=$MAILDIRS update_mutt
-        MAILDIRS=$MAILDIRS update_sieve
-        isfound notmuch && {
-            MAILDIRS=$MAILDIRS nm_setup
-            MAILDIRS=$MAILDIRS nm new 2>&1 | grep -v '^Note: Ignoring'
-        }
+        init_inbox
+        update_filters
+        update_mutt
+        update_sieve
+        update_notmuch
         notice "Initialization completed in $MAILDIRS"
         act "configure accounts in $MAILDIRS/Accounts"
         ;;

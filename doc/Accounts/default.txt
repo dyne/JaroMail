@@ -33,9 +33,13 @@ auth plain # or kerberos, etc
 # Server certificate: check or ignore
 cert ignore
 
-# Transport protocol: ssl, tls or plain
-transport tls
+# Possible values are '', 'SSL2' (not supported on all systems),
+# 'SSL23', (use of these two values is discouraged and should only
+# be used as a last resort) 'SSL3', and 'TLS1' (default).
+# transport TLS1
 
+# Add a specific certificate file, checked before installed defaults
+# certfile /path/to/my/private/cert
 
 # Options when fetching
 # to empty your mailbox you can use: fetchall flush

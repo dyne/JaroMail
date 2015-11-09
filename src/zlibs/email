@@ -247,26 +247,27 @@ fetch() {
 
     fi
 
-    func "fetch folders: $folders"
-
-    # add folder configuration
-    fmconf+=(" folder ${=folders} ");
-
-    fmconf+=(" ${transport} warnings 3600 and wants mda \"jaro -q deliver\" ")
-
     if [ "$cert" = "check" ]; then
         # we now use system-wide certs
         fmconf+=(" sslcertck ") # sslcertpath '$WORKDIR/certs'
     fi
 
+    fmconf+=(" sslproto ${transport} warnings 3600 and wants mda \"jaro -q deliver\" ")
+
 
     fmconf+=(" antispam 571 550 501 554 ")
 
     [[ $accountopt =~ 'keep' ]] || {
-        error "planning to delete mails from server, account option: $accountopt" }
+        warning "planning to delete mails from server, account option: $accountopt" }
+
+    func "fetch folders: $folders"
+
+    # add folder configuration
+    fmconf+=(" folder ${=folders} ");
 
     # try login without doing anything
-    print "$fmconf" | fetchmail -c -f -
+    flog=("${(f)$(print "$fmconf" | fetchmail -v -c -f -)}")
+
     res=$?
     # examine result
     case $res in
@@ -285,8 +286,10 @@ fetch() {
             unset $fmconf
             return 1
             ;;
+        7)  warning "Mailbox selection failed (${flog[${#flog}]#*\(}"
+            ;;
         *)
-            func "fetchmail returns $ret" ;;
+            func "fetchmail returns $res" ;;
     esac
 
     if [[ $DRYRUN = 0 ]]; then

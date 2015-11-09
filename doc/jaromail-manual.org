@@ -845,6 +845,10 @@ If filters are updated or one desires to import a maildir into Jaro
 Mail processing it through its filters, the *filter* command is
 provided to (re)filter a maildir. First edit *Filters.txt* with matches for the to: (which includes cc:) and from: header fields, then run:
 
+: jaro update
+
+To tell Jaro Mail to update its internal filters according to the modifications, and then:
+
 : jaro filter my-old-maildir
 
 Beware that filtering is a lengthy operation, especially on big

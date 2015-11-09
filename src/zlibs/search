@@ -104,6 +104,15 @@ nm_index() {
     notice "Indexing completed"
 }
 
+update_notmuch() {
+    fn update_notmuch
+
+    isfound notmuch && [[ -r $MAILDIRS/.notmuch/xapian ]] && {
+        notice "Updating notmuch indexes"
+        nm_setup
+        nm new 2>&1 | grep -v '^Note: Ignoring'
+    }
+}
 
 search() {
     fn search ${=PARAM}

@@ -22,11 +22,12 @@
 
 
 lock() {
-    fn "lock $@"
+    fn "lock $*"
     _file=$1
-    req=(_file)
-    freq=($_file)
-    ckreq || return 1
+    # can't use ckreq as that returns error on file empty
+    [[ -r "$_file" ]] || {
+        error "cannot unlock, file not existing: $_file"
+        return 1 }
 
     if helper.isfound dotlock; then
         dotlock=`command -v dotlock`
@@ -56,10 +57,8 @@ lock() {
 }
 
 newlock() { # lock file, create if not existing
-    fn "newlock $@"
+    fn "newlock $*"
     _file="$1"
-    req=(_file)
-    ckreq || return 1
 
     touch "$_file"
     chmod 600 "$_file"
@@ -112,11 +111,13 @@ pidcheck() { # check if lock belongs to us
 }
 
 unlock() {
-    fn "unlock $@"
+    fn "unlock $*"
     _file="$1"
-    req=(_file)
-    ckreq || return 1
-    
+    # can't use ckreq as that returns error on file empty
+    [[ -r "$_file" ]] || {
+        error "cannot unlock, file not existing: $_file"
+        return 1 }
+
     pidcheck "$_file"
     [[ $? = 0 ]] || { return 1 }
     
@@ -130,9 +131,12 @@ unlock() {
 }
 
 unlink() { # delete a file that we are locking
-    fn "unlink $@"
+    fn "unlink $*"
     _file="$1"
-    ckreq || return 1
+    # can't use ckreq as that returns error on file empty
+    [[ -r "$_file" ]] || {
+        error "cannot unlock, file not existing: $_file"
+        return 1 }
 
     unlock "$_file"
     ${=rm} "$_file"

@@ -57,6 +57,7 @@ read_account() {
     /^port / { printf "port=\"%s\";", $2 }
     /^login/ { printf "login=\"%s\";", $2 }
     /^transport/ { printf "transport=\"%s\";", $2 }
+    /^certfile/ { printf "certfile=\"%s\";", $2 }
     /^imap_port/ { printf "imap_port=\"%s\";", $2 }
     /^smtp_port/ { printf "smtp_port=\"%s\";", $2 }
     /^auth/ { printf "auth=\"%s\";", $2 }
@@ -84,7 +85,8 @@ read_account() {
     { test -z $name }       && { name="$type" }
     { test -z $login }      && { login="$email" } # usually email and login are the same
     { test -z $email }      && { email="$login" } # so if one is specified, deduce the other
-    { test -z $transport }  && { transport=plain }
+    { test -z $transport }  && { transport=TLS1 }
+    { test -z $certfile }   && { certfile="" }
     { test -z $imap_port }  && { imap_port=143 }
     { test -z $smtp_port }  && { smtp_port=25 }
 
@@ -106,6 +108,7 @@ read_account() {
     func "smtp port: $smtp_port"
 
     func "trans: $transport"
+    func "certfile: $certfile"
     func "cert: $cert"
     func "auth: $auth"
     [[ "$password" = "" ]] || func "password: manually set"
