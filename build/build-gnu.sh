@@ -70,6 +70,7 @@ debian_req() {
     arch)
         print "All dependencies installed via pacman/AUR"
         print "Building on Arch..."
+        ;;
 
     *)
         print "Error: no distro recognized, build by hand."
