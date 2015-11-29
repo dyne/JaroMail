@@ -8,6 +8,7 @@ cc="gcc -O3"
 
 which apt-get > /dev/null && distro=debian
 which yum > /dev/null && distro=fedora
+which pacman > /dev/null && distro=arch
 
 target=all
 { test -z $1 } || { target="$1" }
@@ -64,6 +65,11 @@ debian_req() {
         rpm -q bzip2-devel || sudo yum install bzip2-devel
         rpm -q zlib-devel || sudo yum install zlib-devel
 
+        ;;
+
+    arch)
+        print "All dependencies installed via pacman/AUR"
+        print "Building on Arch..."
         ;;
 
     *)
