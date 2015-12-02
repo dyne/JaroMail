@@ -10,7 +10,7 @@
 
 *A commandline tool to easily and privately handle your e-mail*
 
-Version: **3.2**
+Version: **4.0**
 
 Updates on: http://dyne.org/software/jaro-mail
 
@@ -136,7 +136,7 @@ by Denis Roio aka [Jaromil](http://jaromil.dyne.org).
 
 Jaro Mail would have never been possible without the incredible amount of Love shared by the free and open source community, a more complete list of contributors is included in the [user manual](https://files.dyne.org/jaromail/jaromail-manual.pdf) in the `Acknowledgments` section.
 
-Jaro Mail is Copyright (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+Jaro Mail is Copyright (C) 2010-2015 Denis Roio <jaromil@dyne.org>
 
 This source code is free software; you can redistribute it and/or
 modify it under the terms of the GNU Public License as published by
