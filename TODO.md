@@ -1,5 +1,8 @@
 # TODO notes for Jaro Mail
 
+mostly moved to github issues
+
+
   Contribute code or donate to complete this TODO
   https://www.dyne.org/donate
 

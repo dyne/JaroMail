@@ -36,7 +36,7 @@
 
 #+LATEX: \fancyhf{}
 #+LATEX: \fancyhead[L]{\rule[-2ex]{0pt}{2ex}\small JaroMail manual}
-#+LATEX: \fancyhead[R]{\rule[-2ex]{0pt}{2ex}\small version 3.0}
+#+LATEX: \fancyhead[R]{\rule[-2ex]{0pt}{2ex}\small version 4}
 #+LATEX: \fancyfoot[C]{-- \thepage\ --}
 #+LATEX: \fancyfoot[R]{\small Dyne.org Foundation}
 #+LATEX: \fancyfoot[L]{\small Free Software Manual}
