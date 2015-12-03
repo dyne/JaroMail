@@ -172,6 +172,7 @@ merge() {
 
     c=0
     for i in ${(f)fr}; do
+        
         refile "$i" "$_dst"
         [[ $? = 0 ]] || {
             # bail out on every single error
@@ -232,7 +233,10 @@ maildir_shift() {
         pos=${srcarr[$(( $srcnum - 1 ))]}
 
         func "$cmd $f ${dst}/${pos}/"
-        [[ $DRYRUN = 0 ]] && ${=cmd} $f ${dst}/${pos}/
+        [[ $DRYRUN = 0 ]] && {
+            ${=cmd} $f ${dst}/${pos}/
+            print -n .
+        }
     done
     return 0
 }

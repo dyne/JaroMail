@@ -527,7 +527,7 @@ main() {
     subcommands_opts[deliver]=""
 
     subcommands_opts[passwd]=""
-    subcommands_opts[cert]=""
+    # subcommands_opts[cert]=""
 
     subcommands_opts[source]=""
 
@@ -784,7 +784,7 @@ main() {
 
     passwd) new_password ;;
 
-    cert)    cert ${PARAM} ;; # was checking is_online
+    # cert)    cert ${PARAM} ;; # was checking is_online
 
     isonline) is_online ${=PARAM}; exitcode=$? ;;
 

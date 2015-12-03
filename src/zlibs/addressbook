@@ -36,8 +36,8 @@ create_addressbook() {
     [[ -r "$MAILDIRS"/Addressbook ]] && {
         notice "Updating the old addressbook to a new format"
         _list=$list
-        list=blacklist; export_abook
-        list=whitelist; export_abook
+        list=blacklist; export_old_to_abook
+        list=whitelist; export_old_to_abook
         list=$_list
         mv "$MAILDIRS"/Addressbook "$MAILDIRS"/Addressbook.old 
     }
@@ -339,7 +339,7 @@ import() {
 
 
 # export old addressbook format to abook
-export_abook() {
+export_old_to_abook() {
 
     [[ -r $MAILDIRS/Addressbook ]] || {
         notice "Old addressbook format not found"
@@ -392,12 +392,11 @@ EOF
 }
 
 # export addressbook to vcard
-export_vcard() {
-    fn export_vcard $*
-
+convert_addresses() {
+    fn convert_addresses $*
     _format=${1:-vcard}
 
-    notice "Reading from stdin addresses to export to format $_format"
+    notice "Converting stdin addresses to format $_format"
     c=0
     ztmp
     for i in "${(f)$(cat)}"; do
@@ -412,14 +411,18 @@ export_vcard() {
 
     _res=$?
 
-    [[ $_res = 0 ]] && {
-        notice "$c addresses converted to $_format" }
+    if [[ $_res = 0 ]]; then
+        notice "$c addresses converted to $_format"
+    else
+        error "Abook fails to convert addresses to format: $_format"
+    fi
+            
     return $_res
 }
 
 edit_abook() {
 
-    abook --config <(sysread <<EOF
+    abook --config <(cat <<EOF
 set autosave=true
 set mutt_command=jaro compose
 set sort_field=name

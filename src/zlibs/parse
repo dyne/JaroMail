@@ -48,6 +48,7 @@ extract_mails() {
     _match=()
 
     for m in ${mailpaths}; do
+        [[ $global_quit = 1 ]] && break
         # use RFC822 parser in fetchaddr
         _parsed=`hdr $m | ${WORKDIR}/bin/fetchaddr ${=_arg} -a`
         for _p in ${(f)_parsed}; do

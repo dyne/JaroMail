@@ -1,7 +1,20 @@
 # JaroMail ChangeLog
 
-## 3.2
-## 25 Jan 2015
+## 4.0
+## 10 Nov 2015
+
+This release brings a refactoring of all commands for shell pipe
+interoperability, which also reduced the overall size of code. The
+user manual reflect changes and shows several examples on how to
+combine "search", "extract" and other commands to manage statistics,
+groups and addressbooks. New fetures include: revamped terminal
+statistics, improved abook conversion, improved secure protocol checks
+and locking mechanisms.
+
+
+
+
+## 3.2 25 Jan 2015
 
 New ZSh completion extension, now capable of tab-completion for
 addresses, maildirs and even remote imap folders. Included
