@@ -184,14 +184,7 @@ ADDRESSBOOK="$MAILDIRS/whitelist.abook"
 mkdir="`command -v mkdir` -m 700 -p"
 
 
-act "Maildirs in $MAILDIRS"
 act "System in $WORKDIR"
-${=mkdir} "$MAILDIRS"
-#${=mkdir} $WORKDIR
-
-# make sure the permissions are private
-#chmod 700 $WORKDIR
-chmod 700 "$MAILDIRS"
 
 PATH=$WORKDIR/bin:/bin:/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin::/opt/local/bin
 
@@ -261,6 +254,11 @@ hostname=$(hostname) # gather the current hostname
 
     # make sure we have an addressbook
     [[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
+
+    ${=mkdir} "$MAILDIRS"
+
+    # make sure the permissions are private
+    chmod 700 "$MAILDIRS"
 
     ${=mkdir} "$MAILDIRS/logs"
     # ${=mkdir} "$MAILDIRS/certs"

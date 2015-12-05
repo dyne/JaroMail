@@ -373,7 +373,7 @@ smtp_send() {
     [[ "$password" = "" ]] && {
         ask_password
         [[ $? = 0 ]] || {
-            error "Error retrieving smtp password for $login on $smtp"
+            error "Error retrieving smtp password for $login on $host"
             unset password
             return 1 }
     }
@@ -477,7 +477,7 @@ BEGIN { body=0 }
 
         else # normal send with msmtp
 
-            act "Sending out email via ${account:-default}"
+            act "Sending out email via ${account:-default} account"
             hdr "$qbody" | awk '
 /^From:/ { print " .  " $0 }
 /^To:/   { print " .  " $0 }
