@@ -20,20 +20,6 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-create_keyring() {
-    # make sure the local keyring exists
-    touch "$1"
-    chmod 600 "$1"
-    chown $_uid:$_gid "$1"
-    cat <<EOF | ${SQL} -batch "$1"
-CREATE TABLE secrets
-(
-  hash		text unique,
-  password	text
-);
-EOF
-}
-
 
 # we use pinentry
 # comes from gpg project and is secure
@@ -76,9 +62,14 @@ ask_password() {
             ;;
         #####################################
         GNU)
-            ###################
-            # USE GNOME KEYRING
-            if [ "$GNOMEKEY" = "1" ]; then
+
+            if [[ $SECRET_TOOL = 1 ]]; then
+
+                act "looking for password in secret-tool"
+                password=`secret-tool lookup protocol email username "$login" host "$host"`
+                [[ $? = 0 ]] && act "saved password found in keyring"
+
+            elif [ "$GNOMEKEY" = "1" ]; then
                 act "looking for password in Gnome keyring"
                 func "path: jaromail/${login}/${host}"
 
@@ -106,21 +97,11 @@ ask_password() {
 
 }
 
-lookup_secret() {
-    _hash=$1
-    if [ "$2" = "" ]; then key=password
-    else key="$2"; fi
-    cat <<EOF | ${SQL} -column -batch $KEYRING
-SELECT ${key} FROM secrets
-WHERE hash IS "${_hash}";
-EOF
-}
-
 new_password() {
     fn new_password
     req=(login host email account)
     ckreq || return 1
-        
+
     notice "Setting a new password for account $account"
     act "Enter password for login '$login' on host '$host'"
 
@@ -150,7 +131,20 @@ new_password() {
 
         GNU)
             # USE GNOME KEYRING
-            if [ "$GNOMEKEY" = "1" ]; then
+            if [[ $SECRET_TOOL = 1 ]]; then
+                act "using secret-tool password storage"
+                print -n - $password \
+                    | secret-tool store --label "jaromail stored password" \
+                                  protocol email \
+                                  username "$login" \
+                                  host "$host"
+                if [[ $? = 0 ]]; then
+                    notice "New password saved in secret-tool"
+                else
+                    error "Error saving password in secret-tool"
+                fi
+
+            elif [ "$GNOMEKEY" = "1" ]; then
                 act "using gnome-keyring password storage"
                 func "path: jaromail/${login}/${host}"
                 cat <<EOF | "$WORKDIR/bin/jaro-gnome-keyring" store

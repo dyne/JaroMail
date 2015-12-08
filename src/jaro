@@ -98,9 +98,9 @@ DRYRUN=${DRYRUN:-0}
 CALLMUTT=${CALLMUTT:-1}
 
 # use gnome-keyring for passwords on GNU systems
-vars+=(GNOMEKEY)
+vars+=(GNOMEKEY SECRET_TOOL)
 GNOMEKEY=${GNOMEKEY:-0}
-
+SECRET_TOOL=${SECRET_TOOL:-0}
 
 # global variables for binaries called
 vars+=(rm mkdir mutt SQL OS)
@@ -353,11 +353,16 @@ check_bin() {
     func "Notmuch binary: `command -v notmuch`"
     func "Alot binary: `command -v alot`"
 
-    ps ax | grep '[g]nome-keyring-daemon' > /dev/null
-    [[ $? = 0 ]] && {
-        act "using gnome-keyring to store secrets"
-        GNOMEKEY=1
-    }
+    # check if secret-tool is present else fallback to gnome-keyring
+    if isfound secret-tool; then
+        SECRET_TOOL=1
+    else
+        ps ax | grep '[g]nome-keyring-daemon' > /dev/null
+        [[ $? = 0 ]] && {
+            act "using gnome-keyring to store secrets"
+            GNOMEKEY=1
+        }
+    fi
 
     return 0
 }
@@ -780,7 +785,9 @@ main() {
             exitcode=$?
             ;;
 
-    passwd) new_password ;;
+    passwd) read_account $account
+            host=${PARAM:-$imap}
+            new_password ;;
 
     # cert)    cert ${PARAM} ;; # was checking is_online
 
