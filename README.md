@@ -1,4 +1,3 @@
-
      oo                                                oo dP
                                                           88
      dP .d8888b. 88d888b. .d8888b. 88d8b.d8b. .d8888b. dP 88
@@ -6,7 +5,7 @@
      88 88.  .88 88       88.  .88 88  88  88 88.  .88 88 88
      88 `88888P8 dP       `88888P' dP  dP  dP `88888P8 dP dP
      88~ooooooooooooooooooooooooooooooooooooooooooooooooooooo
-    odP    your humble and faithful electronic postman 
+    odP    your humble and faithful electronic postman
 
 *A commandline tool to easily and privately handle your e-mail*
 
@@ -32,6 +31,7 @@ their configurations and setting up integrations automatically.
   Fetchmail | Mail Transport (fetch)
   Vim       | Mail editor
   GnuPG     | Content encryption
+  Mixmaster | Anonymous emails
   MSmtp     | Mail Transport (send)
   Notmuch   | Search engine
   ABook     | Addressbook
@@ -54,6 +54,8 @@ A round-up on Jaro Mail features follows:
 * Defers connections for off-line operations
 * Checks SSL/TLS certificates when fetching and sending mails
 * Supports strong encryption messaging (GnuPG)
+* Can send anonymous emails (Mixmaster)
+* Many languages! so exotic! such UTF-8!
 * Multi platform: GNU/Linux/BSD, Apple/OSX
 * Old school, used by its author for the past 10 years
 
@@ -61,7 +63,7 @@ A round-up on Jaro Mail features follows:
 
 **GNU/Linux** users can run `make` to install all needed components
   (done automatically, requires root) and compile auxiliary
-  tools. Once compiled then `make install` will put Jaro Mail in
+  tools. Once compiled then `sudo make install` will put Jaro Mail in
   `/usr/local`. Or To install it as user into a self-contained place:
 
 ```
@@ -86,7 +88,7 @@ via Terminal, configured in plain text and overall made by geeks for
 geeks.
 
 
-**Apple/OSX** Jaro Mail 3.0 has not yet been updated to Apple/OSX. With
+**Apple/OSX** Jaro Mail 3q.0 has not yet been updated to Apple/OSX. With
   2.0 users can simply drag Jaro Mail into /Applications When started
   Jaro Mail opens a Terminal window preconfigured with its environment,
   to activate it for any terminal add this to `~/.profile`:
@@ -106,6 +108,8 @@ Download the PDF: https://files.dyne.org/jaromail/jaromail-manual.pdf
 
 Or browse online the latest version:
 https://github.com/dyne/JaroMail/blob/master/doc/jaromail-manual.org
+
+It is recommended that you read the user manual: you won’t get far unless you know what you are doing. Even for experienced Mutt users: keys will be familiar, but there are things to learn in the manual on how Jaro Mail redesigns the e-mail workflow for instance with whitelisting and remote sieve folders.
 
 # DEVELOPERS
 
