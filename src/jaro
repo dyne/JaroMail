@@ -250,7 +250,7 @@ hostname=$(hostname) # gather the current hostname
     { test -d "$ACCOUNTS" } || { ${=mkdir} "$ACCOUNTS" }
 
     # make sure we have a local keyring in case system-wide not found
-    { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
+    # { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
 
     # make sure we have an addressbook
     [[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
