@@ -98,9 +98,9 @@ DRYRUN=${DRYRUN:-0}
 CALLMUTT=${CALLMUTT:-1}
 
 # use gnome-keyring for passwords on GNU systems
-vars+=(GNOMEKEY)
+vars+=(GNOMEKEY SECRET_TOOL)
 GNOMEKEY=${GNOMEKEY:-0}
-
+SECRET_TOOL=${SECRET_TOOL:-0}
 
 # global variables for binaries called
 vars+=(rm mkdir mutt SQL OS)
@@ -184,14 +184,7 @@ ADDRESSBOOK="$MAILDIRS/whitelist.abook"
 mkdir="`command -v mkdir` -m 700 -p"
 
 
-act "Maildirs in $MAILDIRS"
 act "System in $WORKDIR"
-${=mkdir} "$MAILDIRS"
-#${=mkdir} $WORKDIR
-
-# make sure the permissions are private
-#chmod 700 $WORKDIR
-chmod 700 "$MAILDIRS"
 
 PATH=$WORKDIR/bin:/bin:/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin::/opt/local/bin
 
@@ -261,6 +254,11 @@ hostname=$(hostname) # gather the current hostname
 
     # make sure we have an addressbook
     [[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
+
+    ${=mkdir} "$MAILDIRS"
+
+    # make sure the permissions are private
+    chmod 700 "$MAILDIRS"
 
     ${=mkdir} "$MAILDIRS/logs"
     # ${=mkdir} "$MAILDIRS/certs"
@@ -355,11 +353,16 @@ check_bin() {
     func "Notmuch binary: `command -v notmuch`"
     func "Alot binary: `command -v alot`"
 
-    ps ax | grep '[g]nome-keyring-daemon' > /dev/null
-    [[ $? = 0 ]] && {
-        act "using gnome-keyring to store secrets"
-        GNOMEKEY=1
-    }
+    # check if secret-tool is present else fallback to gnome-keyring
+    if isfound secret-tool; then
+        SECRET_TOOL=1
+    else
+        ps ax | grep '[g]nome-keyring-daemon' > /dev/null
+        [[ $? = 0 ]] && {
+            act "using gnome-keyring to store secrets"
+            GNOMEKEY=1
+        }
+    fi
 
     return 0
 }
@@ -782,7 +785,9 @@ main() {
             exitcode=$?
             ;;
 
-    passwd) new_password ;;
+    passwd) read_account $account
+            host=${PARAM:-$imap}
+            new_password ;;
 
     # cert)    cert ${PARAM} ;; # was checking is_online
 

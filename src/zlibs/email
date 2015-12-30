@@ -22,6 +22,7 @@
 
 # extract all emails found in stdin, one per line
 compose() {
+    fn compose
 
     # among the args parse recipient emails and files to attach
     _files=()
@@ -45,6 +46,8 @@ compose() {
 
 
 queue() {
+    fn queue
+
     local base;
 
     notice "Adding mail to the outbox queue"
@@ -150,6 +153,8 @@ queue() {
 ###########
 # FETCHMAIL
 fetchall() {
+    fn fetchall
+
     notice "Fetching all accounts in $MAILDIRS"
     res=0
     accts=`${=find} $MAILDIRS/Accounts -type f | grep -v README`
@@ -164,6 +169,8 @@ fetchall() {
 }
 
 fetch() {
+    fn fetch
+
     [[ "$account" = "" ]] && {
         fetchall; return $? }
 
@@ -316,10 +323,10 @@ END { printf("\n") }'
 smtp_send() {
     fn smtp-send
     req=(account)
-    ckreq
+    ckreq || return 1
 
     read_account ${account}
-    { test  $? != 0 } && {
+    [[ $? = 0 ]] || {
         error "Invalid account: $account"
         return 1
     }
@@ -373,7 +380,7 @@ smtp_send() {
     [[ "$password" = "" ]] && {
         ask_password
         [[ $? = 0 ]] || {
-            error "Error retrieving smtp password for $login on $smtp"
+            error "Error retrieving smtp password for $login on $host"
             unset password
             return 1 }
     }
@@ -405,6 +412,8 @@ EOF
 # SEND
 # this function should send all mails in outbox
 send() {
+    fn send
+
     # list mails to send
     queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
     queue_outbox_num=`print $queue_outbox | wc -l`
@@ -477,7 +486,7 @@ BEGIN { body=0 }
 
         else # normal send with msmtp
 
-            act "Sending out email via ${account:-default}"
+            act "Sending out email via ${account:-default} account"
             hdr "$qbody" | awk '
 /^From:/ { print " .  " $0 }
 /^To:/   { print " .  " $0 }
@@ -513,10 +522,12 @@ BEGIN { body=0 }
 # PEEK
 # this function will open the MTA to the imap server without fetching mails locally
 peek() {
+    fn peek
+
     read_account ${account}
-    { test  $? != 0 } && {
-    error "Invalid account: $account"
-    return 1
+    [[ $? = 0 ]] || {
+        error "Invalid account: $account"
+        return 1
     }
 
     is_online ${imap} ${imap_port}

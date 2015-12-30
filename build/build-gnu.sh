@@ -33,7 +33,7 @@ debian_req() {
     case $distro in
         debian)
             deps=(fetchmail msmtp mutt pinentry-curses)
-            deps+=(wipe notmuch sqlite3 alot abook)
+            deps+=(wipe notmuch sqlite3 alot abook elinks)
             deps+=(gcc make libglib2.0-dev libgnome-keyring-dev)
 
         print "Building on Debian"
@@ -158,4 +158,3 @@ print "Done building JaroMail!"
 print "Now run 'make install' as root to install jaromail in /usr/local"
 print "use PREFIX=/home/private/jaromail to avoid system-wide installation."
 print
-
