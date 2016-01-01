@@ -62,7 +62,7 @@ queue() {
 
     # pre-processing of the email headers
     awk '
-/User-Agent:/ { print "User-Agent: Jaro Mail <http://jaromail.dyne.org>"; next }
+/User-Agent:/ { print "User-Agent: Jaro Mail <https://www.dyne.org/software/jaromail>"; next }
 { print $0 }
 ' > "$tmpqueue"
     [[ $? = 0 ]] || { error "Error queing email from stdin into outbox"; return 1 }
