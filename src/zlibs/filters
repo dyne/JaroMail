@@ -223,7 +223,7 @@ filter_maildir() {
         return 1
     }
 
-    notice "Filtering maildir: $mdinput ($numm mails}"
+    notice "Filtering maildir: $mdinput ($numm mails)"
     c=0
 
     for m in ${(f)mails}; do
