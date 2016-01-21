@@ -34,7 +34,7 @@ debian_req() {
         debian)
             deps=(fetchmail msmtp mutt pinentry-curses)
             deps+=(wipe notmuch sqlite3 alot abook elinks)
-            deps+=(gcc make libglib2.0-dev libgnome-keyring-dev)
+            deps+=(gcc make libglib2.0-dev)
 
         print "Building on Debian"
         print "Checking software to install"
@@ -126,17 +126,6 @@ debian_req() {
     print OK
 }
 
-
-{ test "$target" = "gnome-keyring" } || {
-    test "$target" = "all" } && {
-    print -n "Compiling gnome-keyring... "
-    pushd src/gnome-keyring
-    ${=cc} jaro-gnome-keyring.c -o jaro-gnome-keyring \
-    `pkg-config --cflags --libs glib-2.0 gnome-keyring-1`
-    popd
-    cp src/gnome-keyring/jaro-gnome-keyring build/gnu/
-    print OK
-}
 
 # build mixmaster only if specified
 { test "$target" = "mixmaster" } && {
