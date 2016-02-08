@@ -743,7 +743,7 @@ main() {
             exitcode=$?
             ;;
 
-    edit|vim)   jarovim ${PARAM}    ;;
+    edit|vim)   edit_file ${PARAM}    ;;
     open)       open_folder ${PARAM}  ;;
     preview)    preview_file ${PARAM} ;;
 
