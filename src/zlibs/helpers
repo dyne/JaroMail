@@ -38,7 +38,7 @@ trim() {
 printfile() {
     print ${mapfile[$1]}
 }
-    
+
 # extract all emails found in a text from stdin
 # outputs them one per line
 extract_emails() {
@@ -50,7 +50,6 @@ awk '{ for (i=1;i<=NF;i++)
 # zmodload zsh/regex
 isemail() {
     [[ "$1" -regex-match "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b" ]] && return 0
-    
     return 1
 }
 
@@ -65,7 +64,7 @@ ismailinglist() {
         && return 0
     return 1
 }
-        
+
 # parses stdin and converts some characters to html
 escape_html() {
     sed -e '
@@ -90,7 +89,7 @@ e_parse() {
         isemail "$_e" || continue
         # avoid duplicates
         [[ "${(v)e_addr[$_e]}" = "" ]] || continue
-        
+
         # extract also the name using comma separator
         _n="${(Q)_p[(ws:,:)2]}"
 
@@ -179,38 +178,44 @@ replay() {
 # of course we have a preference for AutOrg, the editor from our suite
 # however the default is nano if nothing else is choosen.
 jarovim() {
+    fn jarovim
     vim -c 'set fo=tcrq' -c 'set tw=72' \
-    -c 'map <C-j> {gq}' -c 'imap <C-j> <esc>{gq}i' \
+        -c 'map <C-j> {gq}' -c 'imap <C-j> <esc>{gq}i' \
         "${@}"
     return $?
 }
 
 edit_file() {
-    { test ${EDITOR} } && { _editor="${EDITOR}" }
-    { test ${JARO_EDITOR} } && { _editor="$JARO_EDITOR" }
-    { test "$_editor" = "" } && { _editor=vim }
+    fn edit_file
+    [[ "${EDITOR}" = "" ]]      || { _editor="${EDITOR}" }
+    [[ "${JARO_EDITOR}" = "" ]] || { _editor="$JARO_EDITOR" }
+    [[ "$_editor" = "" ]]       && { _editor=vim }
+    req=(_editor)
+    ckreq || return 1
+
+    func "selected editor: $_editor"
     case $_editor in
-    # refine settings for email
-    vi|vim) jarovim "${PARAM}"; return $? ;;
-    emacs) emacsclient -a emacs "${PARAM}"; return $? ;;
-    *) ${=_editor} "${PARAM}"; return $? ;;
+        # refine settings for email
+        vi|vim) jarovim "${PARAM}"; return $? ;;
+        emacs) emacsclient -n "${PARAM}"; return $? ;;
+        *) ${=_editor} "${PARAM}"; return $? ;;
     esac
 
     # if we are here we need to guess
     case $OS in
-    MAC) open -t ${=PARAM} ;;
-    GNU)
-        ps ax|grep '[e]macs' > /dev/null
-        if [ $? = 0 ]; then
-        emacsclient -a ${=PARAM}
-        elif command -v vim > /dev/null; then
-        jarovim ${=PARAM}
-        elif command -v nano > /dev/null; then
-        nano -m -S -Q ">" -I -E -D -T 4 -U -W -c -i -k -r 72 ${=PARAM}
-        else
-        error "No editor found, please configure the JARO_EDITOR environment variable."
-        fi
-        ;;
+        MAC) open -t ${=PARAM} ;;
+        GNU)
+            ps ax|grep '[e]macs' > /dev/null
+            if [ $? = 0 ]; then
+                emacsclient -a ${=PARAM}
+            elif command -v vim > /dev/null; then
+                jarovim ${=PARAM}
+            elif command -v nano > /dev/null; then
+                nano -m -S -Q ">" -I -E -D -T 4 -U -W -c -i -k -r 72 ${=PARAM}
+            else
+                error "No editor found, please configure the JARO_EDITOR environment variable."
+            fi
+            ;;
     esac
     return $?
 }
@@ -223,7 +228,7 @@ open_folder() {
     if maildircheck "${MAILDIRS}/${PARAM[1]}"; then
         _mutt -f "$MAILDIRS/${PARAM[1]}"
         exitcode=$?
-    
+
     elif maildircheck "${PARAM[1]}"; then
         _mutt -f "${PARAM[1]}"
         exitcode=$?
