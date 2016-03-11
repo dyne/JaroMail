@@ -133,7 +133,7 @@ new_password() {
             # USE PASS
             if [[ $PASS = 1 ]]; then
                 act "using pass for password-store"
-                print "$password\n" | pass insert ${login}
+                print "$password\n" | pass insert -e ${login}
                 if [[ $? = 0 ]]; then
                     notice "New password saved in password-store"
                 else
