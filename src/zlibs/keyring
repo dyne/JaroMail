@@ -62,17 +62,17 @@ ask_password() {
             ;;
         #####################################
         GNU)
-
-            if [[ $SECRET_TOOL = 1 ]]; then
-
+            if [[ $PASS = 1 ]]; then
+                act "looking for password in password-store"
+                password=`pass show ${login}`
+                [[ $? = 0 ]] && act "password found in password-store"
+            elif [[ $SECRET_TOOL = 1 ]]; then
                 act "looking for password in secret-tool"
                 password=`secret-tool lookup protocol email username "$login" host "$host"`
                 [[ $? = 0 ]] && act "saved password found in keyring"
-
             elif [ "$GNOMEKEY" = "1" ]; then
                 act "looking for password in Gnome keyring"
                 func "path: jaromail/${login}/${host}"
-
                 print "protocol=email\npath=jaromail/${login}/${host}\nusername=${login}\nhost=${host}\n\n" \
                     | "$WORKDIR/bin/jaro-gnome-keyring" check
                 [[ $? = 0 ]] && {
@@ -130,8 +130,18 @@ new_password() {
             ;;
 
         GNU)
+            # USE PASS
+            if [[ $PASS = 1 ]]; then
+                act "using pass for password-store"
+                pass insert ${login}
+                if [[ $? = 0 ]]; then
+                    notice "New password saved in password-store"
+                else
+                    error "Error saving password in password-store"
+                fi
+
             # USE GNOME KEYRING
-            if [[ $SECRET_TOOL = 1 ]]; then
+            elif [[ $SECRET_TOOL = 1 ]]; then
                 act "using secret-tool password storage"
                 print -n - $password \
                     | secret-tool store --label "jaromail stored password" \
