@@ -23,7 +23,6 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 VERSION=4.1
-VBRANCH=ptk
 DATE=Mar/2016
 JAROMAILEXEC=$0
 
@@ -77,13 +76,13 @@ source $WORKDIR/zlibs/zuper
 # simplifying modes of operation: GNU or MAC
 case $(uname -o) in
     GNU/Linux) OS=GNU
-    notice "Jaro Mail v${VERSION}-${VBRANCH} running on GNU/Linux"	;;
+    notice "Jaro Mail v${VERSION} running on GNU/Linux"	;;
 
     Darwin) OS=MAC
-    notice "Jaro Mail v${VERSION}-${VBRANCH} running on Mac/OSX"	;;
+    notice "Jaro Mail v${VERSION} running on Mac/OSX"	;;
 
     Cygwin) OS=WIN
-        notice "Jaro Mail v${VERSION}-${VBRANCH} runing on MS/Win" ;;
+        notice "Jaro Mail v${VERSION} runing on MS/Win" ;;
 
     *) OS=GNU # default
     error "Running on an unknown operating system, assuming GNU" ;;
@@ -398,7 +397,7 @@ option_value() {
 
 usage() {
     cat <<EOF | more
-Jaro Mail $VERSION-$VBRANCH - your humble and faithful electronic postman
+Jaro Mail $VERSION - your humble and faithful electronic postman
 
 Synopsis: jaro [options] [command] [command-options]
 
