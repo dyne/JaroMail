@@ -6,7 +6,7 @@
 dotlock
 fetchaddr
 fetchdate
-pgpewrap
+gpgewrap
 src/mairix/Makefile
 src/mairix/config.log
 src/mairix/mairix

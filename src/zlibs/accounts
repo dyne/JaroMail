@@ -87,8 +87,8 @@ read_account() {
     { test -z $email }      && { email="$login" } # so if one is specified, deduce the other
     { test -z $transport }  && { transport=TLS1 }
     { test -z $certfile }   && { certfile="" }
-    { test -z $imap_port }  && { imap_port=143 }
-    { test -z $smtp_port }  && { smtp_port=25 }
+    { test -z $imap_port }  && { imap_port=993 }
+    { test -z $smtp_port }  && { smtp_port=587 }
 
     { test -z $auth }       && { auth=plain }
     { test -z $cert }       && { cert=ignore }

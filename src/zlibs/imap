@@ -32,7 +32,7 @@ run_imap_query() {
 	    nc ${imap} ${imap_port} -q 10 2>&1
     elif [ "$_trans" = "tls" ]; then
         func "running tls imap query via openssl, encrypted"
-	    openssl s_client -quiet -connect ${imap}:${imap_port} 2>&1 
+	    openssl s_client -crlf -quiet -connect ${imap}:${imap_port} 2>&1 
     elif [ "$_trans" = "ssl" ]; then
 	    func "running ssl imap query via openssl, encrypted"
 	    openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1 

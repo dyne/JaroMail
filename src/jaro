@@ -22,8 +22,8 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=4.0
-DATE=Nov/2015
+VERSION=4.1
+DATE=Mar/2016
 JAROMAILEXEC=$0
 
 # default permission on files
@@ -76,13 +76,13 @@ source $WORKDIR/zlibs/zuper
 # simplifying modes of operation: GNU or MAC
 case $(uname -o) in
     GNU/Linux) OS=GNU
-    notice "Jaro Mail v$VERSION running on GNU/Linux"	;;
+    notice "Jaro Mail v${VERSION} running on GNU/Linux"	;;
 
     Darwin) OS=MAC
-    notice "Jaro Mail v$VERSION running on Mac/OSX"	;;
+    notice "Jaro Mail v${VERSION} running on Mac/OSX"	;;
 
     Cygwin) OS=WIN
-        notice "Jaro Mail v$VERSION runing on MS/Win" ;;
+        notice "Jaro Mail v${VERSION} runing on MS/Win" ;;
 
     *) OS=GNU # default
     error "Running on an unknown operating system, assuming GNU" ;;
@@ -98,7 +98,8 @@ DRYRUN=${DRYRUN:-0}
 CALLMUTT=${CALLMUTT:-1}
 
 # use gnome-keyring for passwords on GNU systems
-vars+=(GNOMEKEY SECRET_TOOL)
+vars+=(PASS GNOMEKEY SECRET_TOOL)
+PASS=${PASS:-0}
 GNOMEKEY=${GNOMEKEY:-0}
 SECRET_TOOL=${SECRET_TOOL:-0}
 
@@ -250,7 +251,7 @@ hostname=$(hostname) # gather the current hostname
     { test -d "$ACCOUNTS" } || { ${=mkdir} "$ACCOUNTS" }
 
     # make sure we have a local keyring in case system-wide not found
-    { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
+    # { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
 
     # make sure we have an addressbook
     [[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
@@ -353,8 +354,12 @@ check_bin() {
     func "Notmuch binary: `command -v notmuch`"
     func "Alot binary: `command -v alot`"
 
+    # check for pass, else fallback
+    if isfound pass; then
+        export PASSWORD_STORE_DIR=$JAROMAILDIR/.pass
+        PASS=1
     # check if secret-tool is present else fallback to gnome-keyring
-    if isfound secret-tool; then
+    elif isfound secret-tool; then
         SECRET_TOOL=1
     else
         ps ax | grep '[g]nome-keyring-daemon' > /dev/null
@@ -467,14 +472,14 @@ typeset -A subcommands_opts
 
 main() {
     ### Options configuration
-    #Hi, dear developer! Are you trying to add a new subcommand, or to add some options?
-    #Well, keep in mind that:
+    # Hi, dear developer! Are you trying to add a new subcommand, or to add some options?
+    # Well, keep in mind that:
     # 1. An option CAN'T have differente meanings/behaviour in different subcommands.
     #    For example, "-s" means "size" and accept an argument. If you are tempted to add
     #    an option "-s" (that means, for example "silent", and doesn't accept an argument)
-#              DON'T DO IT!
-        #     There are two reasons for that:
-        #       I. usability; user expect that "-s" is "size
+    #              DON'T DO IT!
+    #     There are two reasons for that:
+    #       I. usability; user expect that "-s" is "size
     #       II. Option parsing WILL EXPLODE if you do this kind of bad things
     #               (it will say "option defined more than once, and he's right)
     main_opts=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n f -force=f)

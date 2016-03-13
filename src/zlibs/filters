@@ -54,6 +54,10 @@ init_inbox() {
     maildirmake "$MAILDIRS/remember"
     maildirmake "$MAILDIRS/outbox"
 
+    if [[ $PASS = 1 ]]; then
+        GPGID=${$(awk '/default-key/ { print $2 }' $HOME/.gnupg/gpg.conf)}
+        pass init ${GPGID}
+    fi
     ${=mkdir} "$MAILDIRS/cache"
     ${=mkdir} "$MAILDIRS/logs"
     ${=mkdir} "$MAILDIRS/tmp"
@@ -223,7 +227,7 @@ filter_maildir() {
         return 1
     }
 
-    notice "Filtering maildir: $mdinput ($numm mails}"
+    notice "Filtering maildir: $mdinput ($numm mails)"
     c=0
 
     for m in ${(f)mails}; do
