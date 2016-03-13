@@ -1,6 +1,6 @@
 #+TITLE: Jaro Mail 4
 #+AUTHOR: by Jaromil @ dyne.org
-#+DATE: November 2015
+#+DATE: March 2016
 
 #+OPTIONS: H:3 num:t toc:t \n:nil @:t ::t |:t ^:nil f:t TeX:t
 #+EXCLUDE_TAGS: noexport
@@ -267,14 +267,14 @@ content, even when intercepting the communication.
   by realizing an integrated approach consisting of flexible
   whitelisting and the distinction between mails from known people and
   the rest.
-  
+
 ** Folders
 
    First lets start with a categorization of the standard maildirs and a
    brief description for each. This information is *very important* to
    understand how Jaro Mail works: these maildirs are standard in Jaro
    Mail, here they are listed in order of priority
-   
+
 | Folder         | What goes in there                               |
 |----------------+--------------------------------------------------|
 | *known*        | Mails whose sender is known (Whitelist)          |
@@ -284,7 +284,7 @@ content, even when intercepting the communication.
 | *zz.blacklist* | Mails whose sender is not desired (Blacklist)    |
 | *zz.spam*      | Mails that are tagged as spam (server-side)      |
 | *zz.bounces*   | Mail bounces like mailman and similar            |
-  
+
 The advantage using such a folder organization is that every time we open up the mail reader we will be presented with something we are likely to be most interested in (known people replying our mails) and progressively, as we will have the time to scroll through, mails from "new people" or mass mailings of sort.
 
 This setup is handy especially considering it produces *sieve* filters that can be uploaded to mail servers and processed server-side. Imagine having your email on a fixed computer, but occasionally checking it from a mobile phone: server-side filtering will save you time by presenting a clean INBOX of whitelisted contacts for the mobile phone use.
@@ -490,7 +490,7 @@ Searching has also an interactive interface called *alot* which pops up to show 
 
 To restrict the search to a single folder, one can use the *folder:* prefix to search terms. Tags can be used also with *tag:* as well dates can be specified with ranges using *date:*. Consecutive string expressions are aloud to refine the search match, connected with logical and/or, plus also the header to search can be indicated, as for instance *from:* or *to:*. Read more about this below in the /Search term/ and /Date and time search/ sections (extracts from the *notmuch-search-terms* manpage) and on the notmuch webpage at http://notmuchmail.org
 
-With the *addr* command the search will be run on the whitelist addressbook entries instead of actual email contents. 
+With the *addr* command the search will be run on the whitelist addressbook entries instead of actual email contents.
 
 : jaro addr joe
 
@@ -677,7 +677,7 @@ All *stats* commands takes lists of addresses or email messages from stdin.
 | stats folders | reads paths to messages from stdin, prints out stats on frequency of folders |
 
 So in case of *stats email* or *stats names* any result of search must be first filtered by *extract* in order to provide addresses to stats, else errors will occur. To limit the stats to the /From:/ field use the *extract stdin from* also shown in examples, any other refinement can be done also in the domain of the search commands.
-  
+
 * Addressbook
 
 Addressbooks are the files storing the whitelist, the blacklist and optionally other custom lists of addresses. The format we use is native *abook* database files, by convention in /$JAROMAILDIR/whitelist.abook/ and /$JAROMAILDIR/blacklist.abook/. More custom addressbooks can be used by specifying them using *-l* on the commandline, for instance *-l family* will query the /$JAROMAILDIR/family.abook/ addressbook; when not used, *whitelist* is the default.
@@ -927,7 +927,7 @@ installed:
 For more information about Tomb please refer to its own documentation: environmental variables can also be set via hooks and file paths can be automatically overlayed into $HOME when the Tomb is open.
 
 [fn:tomb] http://tomb.dyne.org
-  
+
 
 * Advanced usage
 ** Replay: avoid repeating long operations
@@ -1078,8 +1078,9 @@ started from the intention to share his own 10 years old e-mail setup,
 encouraged by the geek tradition of exchanging configuration files
 between friends.
 
-Special thanks go to Alvise Gottieri, Anatole Shaw, Francesco Politi
-and Fabio Pietrosanti for early testing and debugging.
+Special thanks to Parazyd for useful code contributions and to Alvise
+Gottieri, Anatole Shaw, Francesco Politi and Fabio Pietrosanti for
+early testing and debugging.
 
 The email envelop NyanCat graphics is kindly contributed by the
 Société ECOGEX.
@@ -1231,7 +1232,7 @@ options keep
 # Remote IMAP folders to be retreived
 # fill to provide a list of folders to be fetched
 # default is to detect and fetch all remote folders
-## folders INBOX priv unsorted filters 
+## folders INBOX priv unsorted filters
 
 # list of folders to exclude from fetch
 # comment or change to avoid leaving them on server

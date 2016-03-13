@@ -1,14 +1,14 @@
 # JaroMail ChangeLog
 
 ## 4.1
-## 29 Dec 2015
-
+## 13 Mar 2016
 
 Password storage refactoring: updating to this release requires users
 to re-enter their passwords saved in the system's keyring.  The old
-local keyring code was removed and support for secret-tool is
-activated when present in newer GNU/Linux distros: it is a better
-alternative to our own gnome-keyring client. Minor cleanups.
+local keyring code was removed and support for the minimalist pass
+keyring was contributed by Parazyd. Secret-tool is now used in place
+of our own gnome-keyring tool when present in newer GNU/Linux distros.
+Minor cleanups.
 
 ## 4.0
 ## 10 Nov 2015
