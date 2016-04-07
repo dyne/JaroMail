@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyleft (C) 2010-2014 Denis Roio <jaromil@dyne.org>
+# Copyleft (C) 2010-2016 Denis Roio <jaromil@dyne.org>
 #
 # This source  code is free  software; you can redistribute  it and/or
 # modify it under the terms of  the GNU Public License as published by
@@ -32,10 +32,10 @@ run_imap_query() {
 	    nc ${imap} ${imap_port} -q 10 2>&1
     elif [ "$_trans" = "tls" ]; then
         func "running tls imap query via openssl, encrypted"
-	    openssl s_client -crlf -quiet -connect ${imap}:${imap_port} 2>&1 
+	    openssl s_client -crlf -quiet -connect ${imap}:${imap_port} 2>&1
     elif [ "$_trans" = "ssl" ]; then
 	    func "running ssl imap query via openssl, encrypted"
-	    openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1 
+	    openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1
     else
         error "unknown transport \"$_trans\" for a imap query"
     fi

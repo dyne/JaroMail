@@ -41,6 +41,7 @@ EOF
 # up to the caller to unset it after use
 ask_password() {
     fn ask_password
+
     req=(login host email account)
     ckreq || return 1
 

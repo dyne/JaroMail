@@ -75,11 +75,14 @@ read_account() {
     # check required fields
 
     # falling back to old host/port conf directives
+    imap=${imap:-$host}
+    host=${host:-$imap}
 
-    { test -z $imap }  && { imap=$host }
-    { test -z $smtp }  && { smtp=$imap }
-    { test -z $imap_port }  && { imap_port=$port }
-    { test -z $smtp_port }  && { smtp_port=$imap_port }
+    smtp=${smtp:-$host}
+    smtp=${smtp:-$imap}
+
+    imap_port=${imap_port:-$port}
+    smtp_port=${smtp_port:-$imap_port}
 
     # fill in defaults
     { test -z $name }       && { name="$type" }
