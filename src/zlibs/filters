@@ -521,8 +521,6 @@ macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn sende
 macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn all<enter>" "add all addresses in whitelist"
 macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q learn sender<enter>" "add sender to blacklist"
 
-# mailboxes in order of priority
-source '$MAILDIRS/.mutt/mboxes'
 
 # specific configuration files
 source '$WORKDIR/.mutt/gpg'
@@ -532,7 +530,13 @@ source '$WORKDIR/.mutt/formats'
 source '$WORKDIR/.mutt/keybindings'
 source '$WORKDIR/.mutt/colors'
 source '$MAILDIRS/Identity.txt'
+
+# pointer to password tempfile and dynamic settings
+# must be before mboxes to set folder on imap peek
 source '$MAILDIRS/.mutt/muttpass'
+
+# mailboxes in order of priority
+source '$MAILDIRS/.mutt/mboxes'
 EOF
 
 
