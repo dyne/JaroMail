@@ -22,8 +22,10 @@ bind index      \e>          last-entry
 # we want to be able to scroll also over e-mails to be deleted
 bind index   <down>  next-entry
 bind index   j	     next-entry
+bind index   n       next-entry
 bind index   <up>    previous-entry
 bind index   k 	     previous-entry
+bind index   p       previous-entry
 
 # group reply by default
 bind index,pager	r	group-reply
@@ -31,7 +33,11 @@ bind index,pager	r	group-reply
 bind pager w search
 bind pager \n noop	# PINE prints "No default action for this menu."
 bind pager <up> previous-line
+bind pager p    previous-line
+bind pager u    previous-page
+bind pager n    next-line
 bind pager <down> next-line
+# space is default next-line already
 bind pager <left> previous-entry
 
 # Little Brother Database settings
