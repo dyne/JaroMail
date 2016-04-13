@@ -197,7 +197,7 @@ edit_file() {
     case $_editor in
         # refine settings for email
         vi|vim) jarovim "${PARAM}"; return $? ;;
-        emacs) emacsclient -n "${PARAM}"; return $? ;;
+        emacs) emacsclient "${PARAM}"; return $? ;;
         *) ${=_editor} "${PARAM}"; return $? ;;
     esac
 
