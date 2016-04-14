@@ -1,5 +1,11 @@
 # JaroMail ChangeLog
 
+## 4.2
+## 14 Apr 2016
+
+Fixes to imap folder detection, also fixing use for GMail. Keyring
+fixes and cleanups, more complementary keys to accomodate Emacs users.
+
 ## 4.1
 ## 13 Mar 2016
 
