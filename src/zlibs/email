@@ -576,12 +576,14 @@ EOF
     unset password
     # when peeking don't mark unread messages as Old
     # and sort date received with no threading (latest up)
+    # also set the spoolfile name to INBOX (imap's default)
     rm -f "$MAILDIRS/.mutt/muttpass"
     sysread -o 1 <<EOF > "$MAILDIRS/.mutt/muttpass"
 source '$_pass_tmp'
 unset mark_old
 set sort=reverse-date-received
 set folder=${iproto}://${ilogin}@${imap}:${imap_port}
+set spoolfile=${iproto}://${ilogin}@${imap}:${imap_port}/INBOX
 EOF
 
     # schedule deletion of pass files after use
