@@ -220,25 +220,64 @@ edit_file() {
     return $?
 }
 
+is_mutt_kz() {
+    rm -f "$MAILDIRS/.mutt/notmuch"
+    touch "$MAILDIRS/.mutt/notmuch"
+    kz=`mutt -v | awk '/Configure options.*enable-notmuch/ { print $0 }'`
+    if [[ "$kz" = "" ]]; then
+         return 1
+    else
+        act "Notmuch powered mutt-kz detected, enabling extra features"
+        return 0
+    fi
+}
+
 #####################
 ## Open a mail folder
 open_folder() {
-    notice "Opening folder ${PARAM[1]}"
+    notice "Opening folder: $*"
+    # parse if mutt-kz
 
-    if maildircheck "${MAILDIRS}/${PARAM[1]}"; then
-        _mutt -f "$MAILDIRS/${PARAM[1]}"
-        exitcode=$?
+    is_mutt_kz && {
+        # enable mutt-kz extra functions for notmuch integration
 
-    elif maildircheck "${PARAM[1]}"; then
-        _mutt -f "${PARAM[1]}"
-        exitcode=$?
+        cat <<EOF > "$MAILDIRS/.mutt/notmuch"
+set sidebar_width	 = 25
+set sidebar_visible	 = yes
 
+color sidebar_new white default
+color progress default magenta
+
+bind index p sidebar-prev
+bind index n sidebar-next
+bind index <space> sidebar-open
+bind index S sidebar-toggle
+
+bind index / vfolder-from-query
+bind pager / vfolder-from-query
+
+set index_format="%2C %Z %?GI?%GI& ? %[%d/%b]  %-16.16F (%4c) %?M?(%3M)& ? %s %>"
+# for tags at end of index add %?g?%g?
+set virtual_spoolfile = yes
+virtual-mailboxes \
+"INBOX" "notmuch://?query=tag:inbox" \
+"  Today" "notmuch://?query=     date:1d.. and tag:inbox" \
+"  Last week" "notmuch://?query= date:1w.. and tag:inbox" \
+"  Last month" "notmuch://?query=date:1M.. and tag:inbox" \
+\
+"ATTACHMENTS" "notmuch://?query=attachment:* and tag:inbox" \
+"  Today" "notmuch://?query=attachment:* and date:1d.. and tag:inbox" \
+"  Last week" "notmuch://?query=attachment:* and date:1w.. and tag:inbox" \
+"  Last month" "notmuch://?query=attachment:* and date:1M.. and tag:inbox"
+EOF
+    }
+
+    if [[ "$1" = "" ]]; then
+        _mutt -Z
     else
-        error "No maildir found: ${PARAM[1]}"
-        exitcode=1
-
+        _mutt -f "$1"
     fi
-    return $exitcode
+    return $?
 }
 
 ##############

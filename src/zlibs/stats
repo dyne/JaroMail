@@ -67,10 +67,10 @@ stats() {
 	folder*)
 
             _folder=""
-            
+
 	    for i in `cat`; do
                 _folder=${i[(ws:/:)-3]}
-                
+
 		# find maildir prefixes
 		# pfx="${_folder[(ws:.:)1]}"
 		# is it a new prefix?
@@ -81,7 +81,8 @@ stats() {
 	    ;;
 
         *)
-            error "Stats type not specified"
+            error "Stats type not specified, available:"
+            error "domain, email, name, folder"
             return 1
             ;;
     esac
@@ -104,7 +105,7 @@ stats() {
 	print " $v\t$sbar $k"
     done
     notice "Total: ${#count}"
-    
+
 
     return 0
 }
@@ -206,7 +207,7 @@ EOF
 
     cat <<EOF >> $table
 	</tbody>
-</table>	
+</table>
 EOF
     cp $WORKDIR/.stats/visualize/header.html \
 	$WORKDIR/.stats/index.html
@@ -230,7 +231,7 @@ EOF
     { test $? != 0 } && {
 	error "Error creating temporary timecloud database."
 	return 1 }
-    
+
     for m in ${maildirs}; do
 	for f in `${=find} $MAILDIRS/${m} -type f`; do
 	    timestamp=`fetchdate ${f} "%Y-%m-%d"`

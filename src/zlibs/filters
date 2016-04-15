@@ -537,6 +537,9 @@ source '$MAILDIRS/.mutt/muttpass'
 
 # mailboxes in order of priority
 source '$MAILDIRS/.mutt/mboxes'
+
+# extra settings for mutt-kz (notmuch enabled)
+source '$MAILDIRS/.mutt/notmuch'
 EOF
 
 
@@ -599,6 +602,9 @@ EOF
     # this one is empty and sources files in temp when necessary
     rm -f "$MAILDIRS/.mutt/muttpass"
     touch "$MAILDIRS/.mutt/muttpass"
+    rm -f "$MAILDIRS/.mutt/notmuch"
+    touch "$MAILDIRS/.mutt/notmuch"
+
 
     # just the header, will be completed later
     rm -f $MAILDIRS/.mutt/mboxes

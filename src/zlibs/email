@@ -574,6 +574,23 @@ set imap_pass = "${password}"
 # set imap_peek = yes
 EOF
     unset password
+
+    # when peeking and using mutt-kz use the sidebar
+    is_mutt_kz && {
+        cat <<EOF > "$MAILDIRS/.mutt/notmuch"
+set sidebar_width	 = 25
+set sidebar_visible	 = yes
+
+color sidebar_new white default
+color progress default magenta
+
+bind index p sidebar-prev
+bind index n sidebar-next
+bind index <space> sidebar-open
+bind index S sidebar-toggle
+EOF
+    }
+
     # when peeking don't mark unread messages as Old
     # and sort date received with no threading (latest up)
     # also set the spoolfile name to INBOX (imap's default)
@@ -590,7 +607,7 @@ EOF
     sched +3 "
 rm -f $MAILDIRS/.mutt/muttpass
 touch $MAILDIRS/.mutt/muttpass
-${=rm} -f $tmp" # zero the tmp passfile after a second
+${=rm} -f $_pass_tmp" # zero the tmp passfile after a second
 
     _mutt -f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}
 

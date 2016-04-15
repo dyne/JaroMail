@@ -22,7 +22,7 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-VERSION=4.2
+VERSION=4.3-dev
 DATE=Apr/2016
 JAROMAILEXEC=$0
 
@@ -896,37 +896,31 @@ EOF
     #     ;;
     *) # unknown command, pass it to autostart
         func "no command, autostart"
-
+        func "subcommand: $subcommand"
+        if [[ "$subcommand" = "__default" ]]; then
+            open_folder
+            exitcode=$?
         # argument passed: determine if an email
-        if isemail "$subcommand"; then
+        elif isemail "$subcommand"; then
             notice "Composing message to: ${@}"
             # its an email, TODO see if we have it in our addressbook
             _mutt ${=@}
             exitcode=0
         # or a directory of file
-        elif [[ -r "$subcommand" ]]; then
+        elif maildircheck "$subcommand"; then
             # is it a maildir? then open
-            maildircheck ${subcommand}
-            [[ $? = 0 ]] && {
-                _mutt -f ${subcommand}
-                exitcode=0
-            }
-            # is it a regular file? then attach it
-            [[ -f "$subcommand" ]] && {
+               open_folder "$subcommand"
+               exitcode=$?
+        elif maildircheck "$MAILDIRS/$subcommand"; then
+            open_folder "$MAILDIRS/$subcommand"
+            exitcode=$?
+        elif [[ -f "$subcommand" ]]; then
+            # is it a regular file? then ;attach it
                 _mutt -a ${=@}
                 exitcode=0
-            }
-        # or the name of a folder in Jaro Mail
-        elif [[ -r "$MAILDIRS/$subcommand" ]]; then
-            maildircheck "$MAILDIRS/$subcommand" && {
-                notice "Opening folder ${subcommand=}"
-                _mutt -f "$MAILDIRS/${subcommand}"
-                exitcode=0
-            }
         else
-
-            # just open mutt on first unread folder
-            _mutt -Z
+            # just open; mutt on first unread folder
+            open_folder
             exitcode=$?
 
         fi

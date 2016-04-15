@@ -33,7 +33,7 @@ debian_req() {
     case $distro in
         debian)
             deps=(fetchmail msmtp mutt pinentry-curses)
-            deps+=(wipe notmuch sqlite3 alot abook elinks)
+            deps+=(wipe notmuch sqlite3 abook elinks)
             deps+=(gcc make libglib2.0-dev)
 
         print "Building on Debian"
@@ -54,7 +54,6 @@ debian_req() {
         which wipe || sudo yum install wipe
         which abook || sudo yum install abook
         which notmuch || sudo yum install notmuch
-        which alot || sudo yum install alot
 
         print "Checking build dependencies"
         which gcc || sudo yum install gcc
@@ -78,6 +77,16 @@ debian_req() {
     esac
 
     print "All dependencies installed"
+}
+
+[[ "$target" = "mutt-kz" ]] && {
+    pushd src/mutt-kz
+    print "Compiling Mutt patched for notmuch ... "
+    print
+    ./configure --enable-notmuch --enable-sidebar --enable-hcache --enable-gpgme --enable-imap --enable-pop &&
+        make
+    popd
+    print OK
 }
 
 { test "$target" = "fetchaddr" } || {

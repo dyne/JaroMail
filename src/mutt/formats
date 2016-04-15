@@ -12,7 +12,8 @@ set folder_format="%N %3C %d %2l (%5s) %f"
 
 set message_format="From: <%a>, Sub: %s"
 
-set index_format="%?M?_%M_ ?%Z %2C %.13d (%-$FCOL.${FCOL}F) %-$SCOL.${SCOL}s %?M?_%M_&(%c/%l?"
+# set index_format="%?M?_%M_ ?%Z %2C %.13d (%-$FCOL.${FCOL}F) %-$SCOL.${SCOL}s %?M?_%M_&(%c/%l?"
+set index_format="%2C %Z %?GI?%GI& ? %[%d/%b]  %-16.16F (%4c) %?M?(%3M)& ? %s %>"
 
 set pager_format="%Z %C/%m %d (%F) %s (%c/%l) %|-"
 
