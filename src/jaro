@@ -808,6 +808,22 @@ main() {
 
     'source')   return 0 ;;
 
+    askpass)
+        read_account $account
+        ask_password
+        # shell escape special chars
+        print - "$password" | sed '
+s/\&/\\&/g
+s/\$/\\$/g
+s/ /\\ /g
+s/;/\\;/g
+s/\?/\\?/g
+s/\*/\\*/g
+' 
+        # TODO: verify if this works with all passwords
+        exitcode=$?
+        ;;
+
     imap)
         imapcmd="$1"
         case $1 in

@@ -559,21 +559,6 @@ peek() {
     type=imap
     host=$imap
     port=$imap_port
-    [[ "$password" = "" ]] && {
-    ask_password
-        [[ $? = 0 ]] || {
-            error "Error retrieving imap password for $login on $imap"
-            unset password all; return 1
-        }
-    }
-
-    ztmp
-    _pass_tmp=$ztmpfile
-    sysread -o 1 <<EOF >> "$_pass_tmp"
-set imap_pass = "${password}"
-# set imap_peek = yes
-EOF
-    unset password
 
     # when peeking and using mutt-kz use the sidebar
     is_mutt_kz && {
@@ -596,18 +581,17 @@ EOF
     # also set the spoolfile name to INBOX (imap's default)
     rm -f "$MAILDIRS/.mutt/muttpass"
     sysread -o 1 <<EOF > "$MAILDIRS/.mutt/muttpass"
-source '$_pass_tmp'
+set imap_pass = \`$WORKDIR/bin/jaro -a ${account} askpass\`
 unset mark_old
 set sort=reverse-date-received
 set folder=${iproto}://${ilogin}@${imap}:${imap_port}
 set spoolfile=${iproto}://${ilogin}@${imap}:${imap_port}/INBOX
 EOF
 
-    # schedule deletion of pass files after use
+    # schedule deletion of muttpass file after use
     sched +3 "
 rm -f $MAILDIRS/.mutt/muttpass
-touch $MAILDIRS/.mutt/muttpass
-${=rm} -f $_pass_tmp" # zero the tmp passfile after a second
+touch $MAILDIRS/.mutt/muttpass"
 
     _mutt -f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}
 
