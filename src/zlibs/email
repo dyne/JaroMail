@@ -572,7 +572,10 @@ color progress default magenta
 bind index p sidebar-prev
 bind index n sidebar-next
 bind index <space> sidebar-open
-bind index S sidebar-toggle
+
+macro pager S "<enter-command>toggle sidebar_visible<enter>"
+macro index S "<enter-command>toggle sidebar_visible<enter>"
+
 EOF
     }
 

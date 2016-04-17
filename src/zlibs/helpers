@@ -243,7 +243,7 @@ open_folder() {
 
         cat <<EOF > "$MAILDIRS/.mutt/notmuch"
 set sidebar_width	 = 25
-set sidebar_visible	 = yes
+set sidebar_visible	 = no
 
 color sidebar_new white default
 color progress default magenta
@@ -251,16 +251,17 @@ color progress default magenta
 bind index p sidebar-prev
 bind index n sidebar-next
 bind index <space> sidebar-open
-bind index S sidebar-toggle
 
 bind index / vfolder-from-query
 bind pager / vfolder-from-query
+
+macro pager S "<enter-command>toggle sidebar_visible<enter>"
+macro index S "<enter-command>toggle sidebar_visible<enter>"
 
 set index_format="%2C %Z %?GI?%GI& ? %[%d/%b]  %-16.16F (%4c) %?M?(%3M)& ? %s %>"
 # for tags at end of index add %?g?%g?
 set virtual_spoolfile = yes
 virtual-mailboxes \
-"INBOX" "notmuch://?query=tag:inbox" \
 "  Today" "notmuch://?query=     date:1d.. and tag:inbox" \
 "  Last week" "notmuch://?query= date:1w.. and tag:inbox" \
 "  Last month" "notmuch://?query=date:1M.. and tag:inbox" \
