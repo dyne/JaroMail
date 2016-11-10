@@ -569,20 +569,18 @@ text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
 text/plain; cat %s
 EOF
 
-    wwwtext=w3m
-    if command -v elinks > /dev/null; then
-    cat <<EOF >> $MAILDIRS/.mutt/mailcap
-text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput
-EOF
-    elif command -v w3m > /dev/null; then
-    cat <<EOF >> $MAILDIRS/.mutt/mailcap
-text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput
-EOF
-    elif command -v lynx > /dev/null; then
-    cat <<EOF >> $MAILDIRS/.mutt/mailcap
-text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
-EOF
-    fi
+    for i in elinks links lynx w3m; do
+        command -v "$i" >/dev/null && htmldump="$i"
+        [[ -n $htmldump ]] && break
+    done
+
+    case $htmldump in
+        elinks) print "text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput" >> ${MAILDIRS}/.mutt/mailcap ;;
+        links)  print "text/html; links -dump %s; nametemplate=%s.html; copiousoutput" >> ${MAILDIRS}/.mutt/mailcap ;;
+        lynx)   print "text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput" >> ${MAILDIRS}/.mutt/mailcap ;;
+        w3m)    print "text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput" >> ${MAILDIRS}/.mutt/mailcap ;;
+        *)      ;;
+    esac
 
     { test -r "${MAILDIRS}/Applications.txt" } && {
 
