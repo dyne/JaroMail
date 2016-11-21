@@ -356,8 +356,14 @@ check_bin() {
 
     # check for pass, else fallback
     if isfound pass; then
-        export PASSWORD_STORE_DIR=$JAROMAILDIR/.pass
-        PASS=1
+        export PASSWORD_STORE_DIR=$MAILDIRS/.pass
+		[[ -d $PASSWORD_STORE_DIR ]] || {
+			error "the 'pass' keyring is found but not initialised"
+			error "run 'pass init your-gpg-id' or uninstall it to use other keyrings"
+			return 1 }
+		PASS=1
+		}
+
     # check if secret-tool is present else fallback to gnome-keyring
     elif isfound secret-tool; then
         SECRET_TOOL=1
