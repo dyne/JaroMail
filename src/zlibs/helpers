@@ -265,11 +265,17 @@ virtual-mailboxes \
 "  Today" "notmuch://?query=     date:1d.. and tag:inbox" \
 "  Last week" "notmuch://?query= date:1w.. and tag:inbox" \
 "  Last month" "notmuch://?query=date:1M.. and tag:inbox" \
+"  Last year" "notmuch://?query=date:1y.. and tag:inbox" \
+"  Last 3yrs" "notmuch://?query=date:3y.. and tag:inbox" \
 \
 "ATTACHMENTS" "notmuch://?query=attachment:* and tag:inbox" \
 "  Today" "notmuch://?query=attachment:* and date:1d.. and tag:inbox" \
 "  Last week" "notmuch://?query=attachment:* and date:1w.. and tag:inbox" \
-"  Last month" "notmuch://?query=attachment:* and date:1M.. and tag:inbox"
+"  Last month" "notmuch://?query=attachment:* and date:1M.. and tag:inbox" \
+"  Last year" "notmuch://?query=attachment:* and date:1y.. and tag:inbox" \
+"  Last 3yrs" "notmuch://?query=attachment:* and date:3y.. and tag:inbox"
+
+
 EOF
     }
 
