@@ -1,0 +1,6 @@
+Plugin for using jaromail in zaw
+
+see: https://github.com/zsh-users/zaw
+
+to use, load zaw then `source zaw-jaromail.plugin.zsh`
+
