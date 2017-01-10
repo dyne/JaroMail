@@ -675,7 +675,7 @@ main() {
             ;;
 
     remember)
-        cat | deliver remember
+        deliver remember
         exitcode=$?
         ;;
 

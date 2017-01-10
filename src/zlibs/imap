@@ -21,37 +21,45 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 run_imap_query() {
-    fn run_imap_query
+    fn run_imap_query $*
+
     _trans=${transport:-plain}
     case $_trans in
         SSL*) _trans=ssl ;;
         TLS*) _trans=tls ;;
     esac
+
     if [ "$_trans" = "plain" ]; then
 	    func "running plain imap query via netcat, no encryption"
 	    nc ${imap} ${imap_port} -q 10 2>&1
+
     elif [ "$_trans" = "tls" ]; then
         func "running tls imap query via openssl, encrypted"
 	    openssl s_client -crlf -quiet -connect ${imap}:${imap_port} 2>&1
+
     elif [ "$_trans" = "ssl" ]; then
 	    func "running ssl imap query via openssl, encrypted"
 	    openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1
+
     else
         error "unknown transport \"$_trans\" for a imap query"
     fi
 }
 
 check_imap() {
+	fn check_imap $*
+
     [[ $name == "" ]] &&  {
 	    error "get_imap_info() called with no account loaded"
 	    return 1 }
+
     [[ "$imap" == "" ]] && {
 	    error "get_imap_info() called on a non-imap account: $name on $imap"
 	return 1 }
 }
 
 imap_list_folders() {
-    func "imap_list_folders()"
+	fn imap_list_folders $*
     check_imap && return 1
 
     query="B00000 CAPABILITY
@@ -65,6 +73,8 @@ B00003 LOGOUT"
 }
 
 imap_get_size() {
+	fn imap_get_size $*
+
     check_imap && return 1
 
     # skip getting size if Gmail

@@ -320,7 +320,7 @@ deliver() {
         # [[ "$dest" = "outbox" ]] \
         #     || [[ "$dest" =~ "^zz." ]] \
         #     || [[ "$dest" = "incoming" ]] && {
-        base="`hostname`_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"                
+        base="${HOST}_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"                
         last_deliver="$MAILDIRS/$dest/new/$base"
         cat > "$last_deliver"
         [[ $? = 0 ]] || {

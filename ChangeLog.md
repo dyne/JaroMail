@@ -27,9 +27,6 @@ groups and addressbooks. New fetures include: revamped terminal
 statistics, improved abook conversion, improved secure protocol checks
 and locking mechanisms.
 
-
-
-
 ## 3.2 25 Jan 2015
 
 New ZSh completion extension, now capable of tab-completion for
