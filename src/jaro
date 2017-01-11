@@ -361,8 +361,7 @@ check_bin() {
 			error "the 'pass' keyring is found but not initialised"
 			error "run 'pass init your-gpg-id' or uninstall it to use other keyrings"
 			return 1 }
-		PASS=1
-		}
+		PASS==1
 
     # check if secret-tool is present else fallback to gnome-keyring
     elif isfound secret-tool; then

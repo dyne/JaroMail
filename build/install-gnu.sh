@@ -51,7 +51,7 @@ cat <<EOF > $PREFIX/bin/jaro
 export JAROWORKDIR=${JARO_SHARE}
 EOF
 
-zmodload zsh/pcre
+# zmodload zsh/pcre
 # if not installed system-wide then place the Mail into prefix
 [[ "$PREFIX" =~ "^/usr" ]] || {
     cat <<EOF >> $PREFIX/bin/jaro
