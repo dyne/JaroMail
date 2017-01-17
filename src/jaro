@@ -194,11 +194,13 @@ if [ -d $WORKDIR/zlibs ]; then
     # if testing from source load uncompiled libs
     if [ "$WORKDIR" = "../src" ]; then
     for z in `find $WORKDIR/zlibs -type f`; do
+		[[ "$z" =~ "zuper" ]] && continue
         func "Loading zlib: ${z}"
         source ${z}
     done
     else
     for z in `find $WORKDIR/zlibs -type f | grep -v '.zwc$'`; do
+		[[ "$z" =~ "zuper" ]] && continue
         func "Loading zlib: ${z}"
         source ${z}
     done

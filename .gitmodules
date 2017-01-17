@@ -1,0 +1,3 @@
+[submodule "src/zuper"]
+	path = src/zuper
+	url = https://github.com/dyne/zuper
