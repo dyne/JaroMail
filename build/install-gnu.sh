@@ -63,14 +63,12 @@ ${JARO_SHARE}/bin/jaro \${=@}
 EOF
 chmod +x $PREFIX/bin/jaro
 
-source ${JARO_SHARE}/bin/jaro source
-
 [[ "$PREFIX" =~ "^/usr" ]] || $PREFIX/bin/jaro init
-notice "Jaro Mail succesfully installed in: $PREFIX"
-act "Executable path: $PREFIX/bin/jaro"
+print "Jaro Mail succesfully installed in: $PREFIX"
+print "Executable path: $PREFIX/bin/jaro"
 [[ "$PREFIX" =~ "^/usr" ]] && {
-    notice "To initialize your Mail dir use: jaro init"
-    act "Default is $HOME/Mail"
-    act "Change it via environment variable JAROMAILDIR"
+    print "To initialize your Mail dir use: jaro init"
+    print "Default is $HOME/Mail"
+    print "Change it via environment variable JAROMAILDIR"
 }
 return 0
