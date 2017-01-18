@@ -563,12 +563,15 @@ EOF
     }
 
     # MUTT MAILCAP
+
+	# charset conversion
     cat <<EOF > $MAILDIRS/.mutt/mailcap
 text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
   && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
 text/plain; cat %s
 EOF
 
+	# HTML conversion
     wwwtext=w3m
     if command -v elinks > /dev/null; then
     cat <<EOF >> $MAILDIRS/.mutt/mailcap
@@ -583,6 +586,13 @@ EOF
 text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
 EOF
     fi
+
+	command -v vcal > /dev/null && {
+		# VCAL conversion
+	cat <<EOF >> $MAILDIRS/.mutt/mailcap
+text/calendar; vcal --all %s; nametemplate=%s.vcal; copiousoutput
+EOF
+	}
 
     { test -r "${MAILDIRS}/Applications.txt" } && {
 
