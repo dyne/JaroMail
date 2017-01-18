@@ -187,7 +187,7 @@ mkdir="`command -v mkdir` -m 700 -p"
 
 act "System in $WORKDIR"
 
-PATH=$WORKDIR/bin:/bin:/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin::/opt/local/bin
+PATH="$WORKDIR/bin:$PATH"
 
 # load our ZLibs
 if [ -d $WORKDIR/zlibs ]; then
