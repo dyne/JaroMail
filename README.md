@@ -115,6 +115,8 @@ It is recommended that you read the user manual: you won’t get far unless you 
 
 All revisioned in Git, see: https://github.com/dyne/JaroMail
 
+Remember to do `git submodules update --init` after a fresh clone.
+
 Pull requests and patches welcome, for an overview of current plans
 see [TODO](TODO.md)
 
