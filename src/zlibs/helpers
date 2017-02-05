@@ -220,18 +220,6 @@ edit_file() {
     return $?
 }
 
-is_mutt_kz() {
-    rm -f "$MAILDIRS/.mutt/notmuch"
-    touch "$MAILDIRS/.mutt/notmuch"
-    kz=`mutt -v | awk '/Configure options.*enable-notmuch/ { print $0 }'`
-    if [[ "$kz" = "" ]]; then
-         return 1
-    else
-        act "Notmuch powered mutt-kz detected, enabling extra features"
-        return 0
-    fi
-}
-
 #####################
 ## Open a mail folder
 open_folder() {
@@ -280,9 +268,9 @@ EOF
     }
 
     if [[ "$1" = "" ]]; then
-        _mutt -Z
+        x_mutt -Z
     else
-        _mutt -f "$1"
+        x_mutt -f "$1"
     fi
     return $?
 }

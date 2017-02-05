@@ -39,7 +39,7 @@ compose() {
         fi
     done
 
-    cat | _mutt ${=_files} -- ${=_addrs}
+    cat | x_mutt ${=_files} -- ${=_addrs}
     # _mutt -H <(print "To: ${PARAM[@]}")
     return $?
 }
@@ -537,66 +537,30 @@ peek() {
 
     folder=""
     if ! [ -z ${1} ]; then
-    folder="${1}"
-    act "opening folder ${folder}"
+		folder="${1}"
+		act "opening folder ${folder}"
     fi
 
     case $transport in
-    SSL*|TLS*) act "using secure connection ($transport)"
-        iproto="imaps" ;;
-    plain) act "using clear text connection"
-        iproto="imap"  ;;
-    *)
-        error "Unknown transport: $transport"
-        error "Configuration error in imap account ${account}"
-        return 1 ;;
+		SSL*|TLS*) act "using secure connection ($transport)"
+				   iproto="imaps" ;;
+		plain) act "using clear text connection"
+			   iproto="imap"  ;;
+		*)
+			error "Unknown transport: $transport"
+			error "Configuration error in imap account ${account}"
+			return 1 ;;
     esac
     # escape at sign in login
     ilogin=`print $login | sed 's/@/\\@/'`
 
     { test $DRYRUN != 1 } && {
 
-    type=imap
-    host=$imap
-    port=$imap_port
+		type=imap
+		host=$imap
+		port=$imap_port
 
-    # when peeking and using mutt-kz use the sidebar
-    is_mutt_kz && {
-        cat <<EOF > "$MAILDIRS/.mutt/notmuch"
-set sidebar_width	 = 25
-set sidebar_visible	 = yes
-
-color sidebar_new white default
-color progress default magenta
-
-bind index p sidebar-prev
-bind index n sidebar-next
-bind index <space> sidebar-open
-
-macro pager S "<enter-command>toggle sidebar_visible<enter>"
-macro index S "<enter-command>toggle sidebar_visible<enter>"
-
-EOF
-    }
-
-    # when peeking don't mark unread messages as Old
-    # and sort date received with no threading (latest up)
-    # also set the spoolfile name to INBOX (imap's default)
-    rm -f "$MAILDIRS/.mutt/muttpass"
-    sysread -o 1 <<EOF > "$MAILDIRS/.mutt/muttpass"
-set imap_pass = \`$WORKDIR/bin/jaro -a ${account} askpass\`
-unset mark_old
-set sort=reverse-date-received
-set folder=${iproto}://${ilogin}@${imap}:${imap_port}
-set spoolfile=${iproto}://${ilogin}@${imap}:${imap_port}/INBOX
-EOF
-
-    # schedule deletion of muttpass file after use
-    sched +3 "
-rm -f $MAILDIRS/.mutt/muttpass
-touch $MAILDIRS/.mutt/muttpass"
-
-    _mutt -f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}
+		x_mutt -f ${iproto}://${ilogin}@${imap}:${imap_port}/${folder}
 
     } # DRYRUN
     return $?

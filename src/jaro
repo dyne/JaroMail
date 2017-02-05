@@ -292,23 +292,6 @@ hostname=$(hostname) # gather the current hostname
 
 } # if not sourcing
 
-_mutt() {
-
-    [[ -r $MAILDIRS/.mutt/rc ]] || {
-        error "Jaro Mail is not yet configured."
-        error "To configure, edit the files in $MAILDIRS/Accounts"
-        error "Then run 'jaro update' at least once."
-        return 1
-    }
-
-    for i; do _fa+=" $i "; done
-    func "exec: mutt -F $MUTTDIR/rc ${=muttflags} ${_fa}"
-    [[ "$subcommand" = "peek" ]] || rm -f $MUTTDIR/muttpass
-    touch $MUTTDIR/muttpass
-    mutt -F $MUTTDIR/rc ${=muttflags} ${=_fa}
-    return $?
-}
-
 # binary programs recognition
 check_bin() {
 
@@ -961,7 +944,7 @@ EOF
         elif isemail "$subcommand"; then
             notice "Composing message to: ${@}"
             # its an email, TODO see if we have it in our addressbook
-            _mutt ${=@}
+            x_mutt ${=@}
             exitcode=0
         # or a directory of file
         elif maildircheck "$subcommand"; then
@@ -973,7 +956,7 @@ EOF
             exitcode=$?
         elif [[ -f "$subcommand" ]]; then
             # is it a regular file? then ;attach it
-                _mutt -a ${=@}
+                x_mutt -a ${=@}
                 exitcode=0
         else
             # just open; mutt on first unread folder

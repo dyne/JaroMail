@@ -619,24 +619,6 @@ EOF
     touch "$MAILDIRS/.mutt/notmuch"
 
 
-    # just the header, will be completed later
-    rm -f $MAILDIRS/.mutt/mboxes
-    print -n "mailboxes +known +priv" > $MAILDIRS/.mutt/mboxes
-
-    for f in `cat "$MAILDIRS/Filters.txt" | awk '
-    /^#/ {next}
-    /^./ { print $4 }'`; do
-        # MUTT (generate mailboxes priority this parser)
-        print  " \\" >> $MAILDIRS/.mutt/mboxes
-        print -n " +${f} " >> $MAILDIRS/.mutt/mboxes
-    done
-    print " \\" >> $MAILDIRS/.mutt/mboxes
-    print " +unsorted.ml +unsorted" >> $MAILDIRS/.mutt/mboxes
-
-    ztmp
-    ttmp=$ztmpfile
-    uniq $MAILDIRS/.mutt/mboxes > $ttmp
-    mv $ttmp $MAILDIRS/.mutt/mboxes
 
 }
 

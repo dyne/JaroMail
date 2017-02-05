@@ -1,0 +1,118 @@
+#!/usr/bin/env zsh
+#
+# Jaro Mail, your humble and faithful electronic postman
+#
+# a tool to easily and privately handle your e-mail communication
+#
+# Copyright (C) 2017 Dyne.org Foundation
+#
+# JaroMail is designed, written and maintained by Denis Roio <jaromil@dyne.org>
+#
+# This source  code is free  software; you can redistribute  it and/or
+# modify it under the terms of  the GNU Public License as published by
+# the Free  Software Foundation; either  version 3 of the  License, or
+# (at your option) any later version.
+#
+# This source code is distributed in  the hope that it will be useful,
+# but  WITHOUT ANY  WARRANTY;  without even  the  implied warranty  of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# Please refer to the GNU Public License for more details.
+#
+# You should have received a copy of the GNU Public License along with
+# this source code; if not, write to:
+# Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+
+is_mutt_kz() {
+    rm -f "$MAILDIRS/.mutt/notmuch"
+    touch "$MAILDIRS/.mutt/notmuch"
+    kz=`mutt -v | awk '/Configure options.*enable-notmuch/ { print $0 }'`
+    if [[ "$kz" = "" ]]; then
+         return 1
+    else
+        act "Notmuch powered mutt-kz detected, enabling extra features"
+        return 0
+    fi
+}
+
+
+x_mutt() {
+
+    [[ -r $MAILDIRS/.mutt/rc ]] || {
+        error "Jaro Mail is not yet configured."
+        error "To configure, edit the files in $MAILDIRS/Accounts"
+        error "Then run 'jaro update' at least once."
+        return 1
+    }
+
+
+    # when peeking and using mutt-kz use the sidebar
+    is_mutt_kz && {
+        cat <<EOF > "$MAILDIRS/.mutt/notmuch"
+set sidebar_width	 = 25
+set sidebar_visible	 = yes
+
+color sidebar_new white default
+color progress default magenta
+
+bind index p sidebar-prev
+bind index n sidebar-next
+bind index <space> sidebar-open
+
+macro pager S "<enter-command>toggle sidebar_visible<enter>"
+macro index S "<enter-command>toggle sidebar_visible<enter>"
+
+EOF
+    }
+
+    rm -f $MAILDIRS/.mutt/mboxes
+
+    for i; do _fa+=" $i "; done
+    func "exec: mutt -F $MUTTDIR/rc ${=muttflags} ${_fa}"
+
+	ztmp
+	_mboxes=$ztmpfile
+
+    if [[ "$subcommand" = "peek" ]]; then
+		# when peeking don't mark unread messages as Old
+		# and sort date received with no threading (latest up)
+		# also set the spoolfile name to INBOX (imap's default)
+		rm -f "$MAILDIRS/.mutt/muttpass"
+		sysread -o 1 <<EOF > "$MAILDIRS/.mutt/muttpass"
+set imap_pass = \`$WORKDIR/bin/jaro -a ${account} askpass\`
+unset mark_old
+set sort=reverse-date-received
+set folder=${iproto}://${ilogin}@${imap}:${imap_port}
+set spoolfile=${iproto}://${ilogin}@${imap}:${imap_port}/INBOX
+EOF
+
+		print -n "mailboxes +INBOX +priv" > $_mboxes
+	else
+		print -n "mailboxes +known +priv" > $_mboxes
+		rm -f $MUTTDIR/muttpass
+	fi
+
+    touch $MUTTDIR/muttpass
+
+    # make the mailboxes according to filters and such
+
+    for f in `cat "$MAILDIRS/Filters.txt" | awk '
+    /^#/ {next}
+    /^./ { print $4 }'`; do
+        # MUTT (generate mailboxes priority this parser)
+        print  " \\" >> $_mboxes
+        print -n " +${f} " >> $_mboxes
+    done
+    print " \\" >> $_mboxes
+    print " +unsorted.ml +unsorted" >> $_mboxes
+
+    uniq $_mboxes > $MAILDIRS/.mutt/mboxes
+
+    # schedule deletion of muttpass file after use
+    sched +3 "
+rm -f $MAILDIRS/.mutt/muttpass
+touch $MAILDIRS/.mutt/muttpass"
+
+    mutt -F $MUTTDIR/rc ${=muttflags} ${=_fa}
+    return $?
+}
