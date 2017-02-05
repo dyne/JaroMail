@@ -67,9 +67,12 @@ fi
 WORKDIR=${JAROWORKDIR:-$WORKDIR}
 
 # load our zuper extension
-zkv=1
-helpers=1
-source $WORKDIR/zlibs/zuper
+# different load paths from inside source or installed
+if [ "$WORKDIR" = "../src" ]; then
+	source $WORKDIR/zuper/zuper
+else
+	source $WORKDIR/zlibs/zuper
+fi
 
 
 # what operating system are we in? use os_detect()
@@ -193,17 +196,19 @@ PATH="$WORKDIR/bin:$PATH"
 if [ -d $WORKDIR/zlibs ]; then
     # if testing from source load uncompiled libs
     if [ "$WORKDIR" = "../src" ]; then
-    for z in `find $WORKDIR/zlibs -type f`; do
-		[[ "$z" =~ "zuper" ]] && continue
-        func "Loading zlib: ${z}"
-        source ${z}
-    done
+		for z in `find $WORKDIR/zlibs -type f`; do
+			[[ "$z" =~ "zuper" ]] && continue
+			func "Loading zlib: ${z}"
+			source ${z}
+		done
     else
-    for z in `find $WORKDIR/zlibs -type f | grep -v '.zwc$'`; do
-		[[ "$z" =~ "zuper" ]] && continue
-        func "Loading zlib: ${z}"
-        source ${z}
-    done
+		fpath+=($WORKDIR/zlibs)
+        for z in `ls $WORKDIR/zlibs`; do
+            [[ "$z" =~ "zuper" ]] && continue
+			[[ "$z" =~ ".zwc"  ]] && continue
+            func "Loading zlib: ${z}"
+            source $WORKDIR/zlibs/${z}
+        done
     fi
 
     act "full set of auxiliary functions loaded"
@@ -221,8 +226,11 @@ fi
 
 ##########
 # complete
-source $WORKDIR/zlibs/zuper.init
-
+if [ "$WORKDIR" = "../src" ]; then
+	source $WORKDIR/zuper/zuper.init
+else
+	source $WORKDIR/zlibs/zuper.init
+fi
 
 
 ACCOUNTS="$MAILDIRS/Accounts"
