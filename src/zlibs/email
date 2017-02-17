@@ -25,8 +25,8 @@ compose() {
     fn compose
 
     # among the args parse recipient emails and files to attach
-    _files=()
-    _addrs=()
+    local _files=()
+    local _addrs=()
     for p in ${PARAM}; do
         if [[ -r $p ]]; then
             func "attach: $p"
@@ -39,7 +39,17 @@ compose() {
         fi
     done
 
-    cat | x_mutt ${=_files} -- ${=_addrs}
+	# take as subject the first line of body
+	ztmp
+	cat > $ztmpfile
+	local subject=`head -n1 $ztmpfile`
+	local nbsp=$'\255'
+	notice "Sending mail from commandline"
+	act "recipients: ${_addrs}"
+	[[ "$_files" = "" ]] || act "attachments: ${_files}"
+	act "subject: $subject"
+	cat <<EOF | x_mutt -s "${subject// /_}" -i $ztmpfile ${=_files} -- ${=_addrs}
+EOF
     # _mutt -H <(print "To: ${PARAM[@]}")
     return $?
 }
