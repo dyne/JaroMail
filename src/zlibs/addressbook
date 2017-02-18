@@ -317,6 +317,9 @@ import() {
 
         _e="${e_parsed[(ws:,:)1]:l}"
 
+		# this error of parsed '@' occurs sometimes
+		[[ "$_e" = "@" ]] && continue
+
         # check if the email is not already known
         lookup_email "$_e"
         [[ $? = 0 ]] && {
