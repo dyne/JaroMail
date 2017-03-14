@@ -58,6 +58,38 @@ check_imap() {
 	return 1 }
 }
 
+imap_console() {
+	fn imap_console $*
+	check_imap && return 1
+	rlwrap -I -z /usr/share/rlwrap/filters/count_in_prompt openssl s_client -crlf -quiet -connect ${imap}:${imap_port}
+}
+imap_run_command() {
+	fn imap_run_command $*
+	check_imap && return 1
+	local rawcmd
+	local cmd
+	rawcmd=`cat`
+	c=2
+	for i in ${(f)rawcmd}; do
+		[[ "$i" = "" ]] && continue
+		cmd+="CMD_$c $i\r\n"
+		(( c = $c + 1 ))
+	done
+	[[ "$cmd" = "" ]] && {
+		error "No command specified, aborting operation."
+		return 1 }
+	func "imap commands:
+$cmd
+CMD_$c LOGOUT"
+	cat <<EOF | run_imap_query
+CMD_0 CAPABILITY
+CMD_1 LOGIN "${login}" "${password}"
+${cmd}CMD_$c LOGOUT
+EOF
+
+}
+
+
 imap_list_folders() {
 	fn imap_list_folders $*
     check_imap && return 1

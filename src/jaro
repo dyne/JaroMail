@@ -850,17 +850,32 @@ s/\*/\\*/g
 
     imap)
         imapcmd="$1"
+        read_account $account
+        host=${imap:-$host}
+        ask_password
+
         case $1 in
-            console)
-                read_account $account
-                host=${imap:-$host}
-                ask_password
-                func "$login $password"
-                cat <<EOF | run_imap_query
-B00000 CAPABILITY
-B00001 LOGIN "${login}" "${password}"
+            -) imap_console ;;
+
+			headlines)
+				local folder=${2:-"INBOX"}
+				rawheads=""
+				cat <<EOF | imap_run_command
+SELECT "$folder"
+FETCH 1:* (body[header.fields (from subject date)])
 EOF
-                ;;
+
+#  | awk '
+# BEGIN { out=0 }
+# /^CMD_/ { next }
+# /^*/  { out=1; next }
+# /^)/  { out=0; next }
+# { if(out==1) print $0 }'
+
+				for i in ${(f)rawheads}; do
+					act $i
+				done
+				;;
             getsize)
                 read_account $account
                 host=${imap:-$host}
@@ -890,7 +905,7 @@ EOF
             #     exitcode=$?
             #     ;;
             *)
-                error "imap needs a subcommand: getsize or listfolders"
+                error "imap needs a subcommand: getsize, listfolders or command"
                 ;;
         esac
         ;;
