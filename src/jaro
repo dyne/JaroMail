@@ -938,8 +938,14 @@ EOF
         func "no command, autostart"
         func "subcommand: $subcommand"
         if [[ "$subcommand" = "__default" ]]; then
-            open_folder
+			# open folder
+			if [[ "$PARAM" = "" ]]; then
+		        x_mutt -Z
+		    else
+		        x_mutt -f "$PARAM"
+		    fi
             exitcode=$?
+
         # argument passed: determine if an email
         elif isemail "$subcommand"; then
             notice "Composing message to: ${@}"

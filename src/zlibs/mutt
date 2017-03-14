@@ -24,6 +24,10 @@
 
 
 is_mutt_kz() {
+	fn is_mutt_kz
+	req=(MAILDIRS)
+	ckreq || return 1
+
     rm -f "$MAILDIRS/.mutt/notmuch"
     touch "$MAILDIRS/.mutt/notmuch"
     kz=`mutt -v | awk '/Configure options.*enable-notmuch/ { print $0 }'`
@@ -35,8 +39,18 @@ is_mutt_kz() {
     fi
 }
 
+use_notmuch() {
+	fn is_notmuch
+	req=(MAILDIRS subcommand)
+	ckreq || return 1
+	[[ -r "$MAILDIRS"/cache/notmuch/rc ]] &&
+		[[ "$subcommand" != "peek" ]]
+}
 
 x_mutt() {
+	fn x_mutt $*
+	req=(MAILDIRS WORKDIR)
+	ckreq || return 1
 
     [[ -r $MAILDIRS/.mutt/rc ]] || {
         error "Jaro Mail is not yet configured."
@@ -46,11 +60,13 @@ x_mutt() {
     }
 
 
+	rm -f "$MAILDIRS/.mutt/notmuch"
+	touch "$MAILDIRS/.mutt/notmuch"
     # when peeking and using mutt-kz use the sidebar
     is_mutt_kz && {
-        cat <<EOF > "$MAILDIRS/.mutt/notmuch"
+        cat <<EOF >> "$MAILDIRS/.mutt/notmuch"
 set sidebar_width	 = 25
-set sidebar_visible	 = yes
+set sidebar_visible	 = no
 
 color sidebar_new white default
 color progress default magenta
@@ -63,8 +79,34 @@ macro pager S "<enter-command>toggle sidebar_visible<enter>"
 macro index S "<enter-command>toggle sidebar_visible<enter>"
 
 EOF
-    }
 
+		use_notmuch && {
+			# enable mutt-kz extra functions for notmuch integration
+			cat <<EOF >> "$MAILDIRS/.mutt/notmuch"
+
+bind index / vfolder-from-query
+bind pager / vfolder-from-query
+
+set index_format="%2C %Z %?GI?%GI& ? %[%d/%b]  %-16.16F (%4c) %?M?(%3M)& ? %s %>"
+# for tags at end of index add %?g?%g?
+set virtual_spoolfile = yes
+virtual-mailboxes \
+"  Today" "notmuch://?query=     date:1d.. and tag:inbox" \
+"  Last week" "notmuch://?query= date:1w.. and tag:inbox" \
+"  Last month" "notmuch://?query=date:1M.. and tag:inbox" \
+"  Last year" "notmuch://?query=date:1y.. and tag:inbox" \
+"  Last 3yrs" "notmuch://?query=date:3y.. and tag:inbox" \
+\
+"ATTACHMENTS" "notmuch://?query=attachment:* and tag:inbox" \
+"  Today" "notmuch://?query=attachment:* and date:1d.. and tag:inbox" \
+"  Last week" "notmuch://?query=attachment:* and date:1w.. and tag:inbox" \
+"  Last month" "notmuch://?query=attachment:* and date:1M.. and tag:inbox" \
+"  Last year" "notmuch://?query=attachment:* and date:1y.. and tag:inbox" \
+"  Last 3yrs" "notmuch://?query=attachment:* and date:3y.. and tag:inbox"
+
+EOF
+		}
+	}
     rm -f $MAILDIRS/.mutt/mboxes
 
     for i; do _fa+=" $i "; done

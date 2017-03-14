@@ -220,61 +220,6 @@ edit_file() {
     return $?
 }
 
-#####################
-## Open a mail folder
-open_folder() {
-    notice "Opening folder: $*"
-    # parse if mutt-kz
-
-    is_mutt_kz && {
-        # enable mutt-kz extra functions for notmuch integration
-
-        cat <<EOF > "$MAILDIRS/.mutt/notmuch"
-set sidebar_width	 = 25
-set sidebar_visible	 = no
-
-color sidebar_new white default
-color progress default magenta
-
-bind index p sidebar-prev
-bind index n sidebar-next
-bind index <space> sidebar-open
-
-bind index / vfolder-from-query
-bind pager / vfolder-from-query
-
-macro pager S "<enter-command>toggle sidebar_visible<enter>"
-macro index S "<enter-command>toggle sidebar_visible<enter>"
-
-set index_format="%2C %Z %?GI?%GI& ? %[%d/%b]  %-16.16F (%4c) %?M?(%3M)& ? %s %>"
-# for tags at end of index add %?g?%g?
-set virtual_spoolfile = yes
-virtual-mailboxes \
-"  Today" "notmuch://?query=     date:1d.. and tag:inbox" \
-"  Last week" "notmuch://?query= date:1w.. and tag:inbox" \
-"  Last month" "notmuch://?query=date:1M.. and tag:inbox" \
-"  Last year" "notmuch://?query=date:1y.. and tag:inbox" \
-"  Last 3yrs" "notmuch://?query=date:3y.. and tag:inbox" \
-\
-"ATTACHMENTS" "notmuch://?query=attachment:* and tag:inbox" \
-"  Today" "notmuch://?query=attachment:* and date:1d.. and tag:inbox" \
-"  Last week" "notmuch://?query=attachment:* and date:1w.. and tag:inbox" \
-"  Last month" "notmuch://?query=attachment:* and date:1M.. and tag:inbox" \
-"  Last year" "notmuch://?query=attachment:* and date:1y.. and tag:inbox" \
-"  Last 3yrs" "notmuch://?query=attachment:* and date:3y.. and tag:inbox"
-
-
-EOF
-    }
-
-    if [[ "$1" = "" ]]; then
-        x_mutt -Z
-    else
-        x_mutt -f "$1"
-    fi
-    return $?
-}
-
 ##############
 ## Open a File
 preview_file() {
