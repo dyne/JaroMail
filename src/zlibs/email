@@ -39,16 +39,23 @@ compose() {
         fi
     done
 
-	# take as subject the first line of body
-	ztmp
-	cat > $ztmpfile
-	local subject=`head -n1 $ztmpfile`
-	local nbsp=$'\255'
-	notice "Sending mail from commandline"
-	act "recipients: ${_addrs}"
-	[[ "$_files" = "" ]] || act "attachments: ${_files}"
-	act "subject: $subject"
-	cat <<EOF | x_mutt -s "${subject// /_}" -i $ztmpfile ${=_files} -- ${=_addrs}
+    # take as subject the first line of body
+    ztmp; body=$ztmpfile
+    if command -v rlwrap >/dev/null; then
+		rlwrap -c --multi-line -D2 -b '<>' -I -e '' cat > $body
+    else
+        cat > $body
+    fi
+    local subject=`head -n1 $body`
+
+    [[ "$subject" = "" ]] && {
+        error "Nothing read from input, not even the subject"
+        return 1 }
+    notice "Sending mail from commandline"
+    act "recipients: ${_addrs}"
+    [[ "$_files" = "" ]] || act "attachments: ${_files}"
+    act "subject: $subject"
+    cat <<EOF | x_mutt -s "${subject// /_}" -i $ztmpfile ${=_files} -- ${=_addrs}
 EOF
     # _mutt -H <(print "To: ${PARAM[@]}")
     return $?
