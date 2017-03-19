@@ -1,5 +1,15 @@
 # JaroMail ChangeLog
 
+## 4.3
+## 19 Mar 2017
+
+Switch notmuch support to use mutt-kz instead of alot, detected at
+runtime. Fixes to password security and support for pass as password
+store. Better cli operation without mutt and new zaw based completion
+facility, initial support for vcal files, consolidated addressbook
+operations.
+
+
 ## 4.2
 ## 14 Apr 2016
 

@@ -773,7 +773,7 @@ main() {
             ;;
 
     edit|vim)   edit_file ${PARAM}    ;;
-    open)       open_folder ${PARAM}  ;;
+    open)       x_mutt -f ${PARAM}  ;;
     preview)    preview_file ${PARAM} ;;
 
     mkdir)
@@ -955,10 +955,10 @@ EOF
         # or a directory of file
         elif maildircheck "$subcommand"; then
             # is it a maildir? then open
-               open_folder "$subcommand"
+               x_mutt -f "$subcommand"
                exitcode=$?
         elif maildircheck "$MAILDIRS/$subcommand"; then
-            open_folder "$MAILDIRS/$subcommand"
+            x_mutt -f "$MAILDIRS/$subcommand"
             exitcode=$?
         elif [[ -f "$subcommand" ]]; then
             # is it a regular file? then ;attach it
@@ -966,7 +966,7 @@ EOF
                 exitcode=0
         else
             # just open; mutt on first unread folder
-            open_folder
+            x_mutt
             exitcode=$?
 
         fi

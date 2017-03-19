@@ -79,7 +79,7 @@ will be stored, by default it is `$HOME/Mail`.
 
 The dependencies to be installed on the system for Jaro Mail are
 * build: `make gcc libglib2.0-dev libgnome-keyring-dev libxapian-dev libgmime-2.6-dev libtalloc-dev zlib1g-dev libgpgme11-dev`
-* run: `fetchmail msmtp mutt notmuch pinentry-curses abook wipe alot`
+* run: `fetchmail msmtp mutt-kz notmuch pinentry-curses abook wipe`
 
 Keep in mind **you need to read the Manual**: this software is not
 graphical, it is not meant to be intuitive, does not contains

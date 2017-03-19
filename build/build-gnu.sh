@@ -32,7 +32,7 @@ debian_req() {
     test "$target" = "all" } && {
     case $distro in
         debian)
-            deps=(fetchmail msmtp mutt pinentry-curses)
+            deps=(fetchmail msmtp mutt-kz pinentry-curses)
             deps+=(wipe notmuch sqlite3 abook elinks)
             deps+=(gcc make libglib2.0-dev)
 
