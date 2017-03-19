@@ -62,8 +62,8 @@ EOF
 }
 
 
-queue() {
-    fn queue
+stdin_queue() {
+    fn stdin_queue $*
 
     local base;
 

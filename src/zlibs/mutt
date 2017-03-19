@@ -116,6 +116,7 @@ EOF
 	_mboxes=$ztmpfile
 
     if [[ "$subcommand" = "peek" ]]; then
+		func "x_mutt peek"
 		# when peeking don't mark unread messages as Old
 		# and sort date received with no threading (latest up)
 		# also set the spoolfile name to INBOX (imap's default)

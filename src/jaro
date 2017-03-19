@@ -590,7 +590,7 @@ main() {
             exitcode=$?
             ;;
 
-    queue)  queue ${PARAM}
+    queue)  stdin_queue ${PARAM}
             exitcode=$?
             ;;
 

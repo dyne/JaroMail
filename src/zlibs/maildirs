@@ -28,7 +28,7 @@ typeset -h formail_cache
 # returns 0 (success) if yes
 # no in all other cases
 maildircheck() {
-	maildircheck $*
+	fn maildircheck $*
 
     { test -r "$1" } || {
         func "Maildir not existing: $1"
@@ -300,7 +300,7 @@ refile() {
 # important to return 1 on all errors
 # so that fetchmail does not deletes mail from server
 deliver() {
-
+	fn deliver $*
     # default destination is incoming
     dest=${1:-incoming}
     
