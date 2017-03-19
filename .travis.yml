@@ -20,4 +20,4 @@ before_install:
 script:
   - make
   - sudo make install
-
+  - ./extras/test/inittest.sh
