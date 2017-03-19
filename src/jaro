@@ -586,7 +586,7 @@ main() {
             exitcode=$?
             ;;
 
-    queue)  stdin_queue ${PARAM}
+    queue)  stdin_queue ${option_params}
             exitcode=$?
             ;;
 
@@ -617,7 +617,7 @@ main() {
         ;;
 
     update|init)
-        [[ "$PARAM" = "" ]] || {
+        [[ "$option_params" = "" ]] || {
             for p in $option_params; do
                 [[ "$p" = "." ]] && p=$PWD
                 [[ -d $p ]] && MAILDIRS=$p
@@ -650,8 +650,8 @@ main() {
     alot) alot_search ${option_params} ;;
 
     notmuch)
-            notice "Command: notmuch ${PARAM}"
-            nm ${PARAM} | save_replay $subcommand
+            notice "Command: notmuch ${option_params}"
+            nm ${option_params} | save_replay $subcommand
             exitcode=$?
             ;;
 
@@ -729,12 +729,12 @@ main() {
             ;;
 
     passwd) read_account $account
-            host=${PARAM:-$imap}
+            host=${option_params:-$imap}
             new_password ;;
 
     # cert)    cert ${option_params} ;; # was checking is_online
 
-    isonline) is_online ${=PARAM}; exitcode=$? ;;
+    isonline) is_online ${option_params}; exitcode=$? ;;
 
 
     publish)
@@ -849,10 +849,10 @@ EOF
         func "subcommand: $subcommand"
         if [[ "$subcommand" = "__empty" ]]; then
 			# open folder
-			if [[ "$PARAM" = "" ]]; then
+			if [[ "$option_params" = "" ]]; then
 		        x_mutt -Z
 		    else
-		        x_mutt -f "$PARAM"
+		        x_mutt -f "$option_params"
 		    fi
 		fi
         exitcode=$?

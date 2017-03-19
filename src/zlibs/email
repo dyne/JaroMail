@@ -57,7 +57,7 @@ stdin_compose() {
     act "subject: $subject"
     cat <<EOF | x_mutt -s "${subject// /_}" -i $ztmpfile ${=_files} -- ${=_addrs}
 EOF
-    # _mutt -H <(print "To: ${PARAM[@]}")
+    # _mutt -H <(print "To: ${option_params}")
     return $?
 }
 

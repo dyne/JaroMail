@@ -25,6 +25,8 @@
 
 # extract all addresses found in a list of email files from stdin
 extract_mails() {
+	fn extract_mails $*
+
     mailpaths=( ${=stdin} )
     _tot=${#mailpaths}
 
@@ -84,6 +86,11 @@ extract_mails() {
 
 # extract all addresses found into a maildir
 extract_maildir() {
+	fn extract_maildir $*
+    md="$1"
+	req=(md)
+	ckreq || return 1
+
     ## first arg is a directory
     md="$1"
     func "extract maildir: $md"
@@ -109,7 +116,7 @@ extract_maildir() {
 }
 
 read_stdin() { # fills global stdin
-    fn read_stdin
+    fn read_stdin $*
 
     stdin=""
     stdin=`cat`
@@ -132,7 +139,7 @@ read_stdin() { # fills global stdin
 }
 
 stdin_is_muttpipe() {
-    fn stdin_is_muttpipe
+    fn stdin_is_muttpipe $*
     req=(stdin)
     ckreq || return 1
 
@@ -144,7 +151,7 @@ stdin_is_muttpipe() {
 }
 
 stdin_is_pathlist() {
-    fn stdin_is_pathlist
+    fn stdin_is_pathlist $*
     req=(stdin)
     ckreq || return 1
 
@@ -158,14 +165,12 @@ stdin_is_pathlist() {
 # extract all entries in addressbook or all addresses in a pgp keyring
 # or all signatures on a pgp key (even without importing it)
 extract_addresses() {
-    func "extract_addresses() $PARAM"
+    fn extract_addresses $*
 
     # without arguments just list all entries in the active list
     # default is whitelist
 
     arg=${1}
-
-    func "extract() arg: $arg (param: $PARAM)"
 
     # no arg means parse from stdin
     stdin=0
@@ -376,7 +381,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 
     # final fallback
     # if no file is recognized, use string as search query
-    error "cannot extract any address from $PARAM"
+    error "cannot extract any address from $option_params"
     [[ "$_magic" = "" ]] || {
         error "file format not supported: ${_magic[(ws@:@)2]}" }
     return 1
@@ -384,7 +389,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 
 
 extract_headers() {
-    fn extract_headers
+    fn extract_headers $*
     # use cat directly, faster than read_stdin
     for i in `cat`; do
         [[ -r "$i" ]] || {
