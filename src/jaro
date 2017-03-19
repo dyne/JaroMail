@@ -22,6 +22,7 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+PROGRAM=jaro-mail
 VERSION=4.3-dev
 DATE=Mar/2017
 JAROMAILEXEC=$0
@@ -121,12 +122,7 @@ zmodload zsh/sched
 # SQL command
 SQL=sqlite3
 
-
-PARAM=()
-typeset -A global_opts
-typeset -A opts
-
-vars+=(global_quit)
+vars+=(PROGRAM global_quit)
 global_quit=0
 
 # global variable for account selection
@@ -867,9 +863,9 @@ EOF
 		subcommand=${subcommand[(ws@:@)2]}
 		func "subcommand: $subcommand"
         if isemail "$subcommand"; then
-            notice "Composing message to: ${@}"
+            notice "Composing message to: $*"
             # its an email, TODO see if we have it in our addressbook
-            x_mutt ${=@}
+            x_mutt $*
             exitcode=0
             # or a directory of file
         elif maildircheck "$subcommand"; then
@@ -881,7 +877,7 @@ EOF
             exitcode=$?
         elif [[ -f "$subcommand" ]]; then
             # is it a regular file? then ;attach it
-            x_mutt -a ${=@}
+            x_mutt -a $*
             exitcode=0
         else
             # just open; mutt on first unread folder
