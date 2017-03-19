@@ -11,6 +11,9 @@
 
 [![software by Dyne.org](https://www.dyne.org/wp-content/uploads/2015/12/software_by_dyne.png)](http://www.dyne.org)
 
+[![Build Status](https://travis-ci.org/dyne/JaroMail.svg?branch=master)](https://travis-ci.org/dyne/JaroMail)
+
+
 Updates on: http://dyne.org/software/jaro-mail
 
 # INTRODUCTION
