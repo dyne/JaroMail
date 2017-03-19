@@ -25,9 +25,10 @@ stdin_compose() {
     fn stdin_compose $*
 
     # among the args parse recipient emails and files to attach
-    local _files=()
-    local _addrs=()
+    _files=()
+    _addrs=()
     for p in $*; do
+		func "$p"
         if [[ -r $p ]]; then
             func "attach: $p"
             _files+=(-a $p)
@@ -46,7 +47,7 @@ stdin_compose() {
     else
         cat > $body
     fi
-    local subject=`head -n1 $body`
+    subject=`head -n1 $body`
 
     [[ "$subject" = "" ]] && {
         error "Nothing read from input, not even the subject"
