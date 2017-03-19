@@ -689,7 +689,7 @@ main() {
             exitcode=$?
             ;;
 
-    edit|vim)   edit_file ${PARAM}    ;;
+    edit|vim)   edit_file ${option_params}    ;;
     open)       x_mutt -f ${PARAM}  ;;
     preview)    preview_file ${PARAM} ;;
 
