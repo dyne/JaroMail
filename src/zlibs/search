@@ -115,13 +115,13 @@ update_notmuch() {
 }
 
 search() {
-    fn search ${=PARAM}
-    func "searching for ${#PARAM} terms"
+    fn search $*
+    func "searching for ${#option_params} terms"
     # launch the search with notmuch
     _results=""
 
     ztmp
-    nm search --output=files ${=PARAM} >> $ztmpfile
+    nm search --output=files $* >> $ztmpfile
     search_results=(`cat $ztmpfile`)
     
     [[ $? = 0 ]] || {
@@ -140,7 +140,7 @@ alot_search() {
     read_account
     nm_setup
     
-    notice "Searching emails for: ${=PARAM}"
+    notice "Searching emails for: ${=option_params}"
 
     # read if there are other email aliases configured
     [[ -r "$MAILDIRS"/Aliases.txt ]] && {
@@ -216,16 +216,16 @@ user_agent = Jaro Mail <http://jaromail.dyne.org>
 EOF
 
     alot -c "$MAILDIRS"/cache/alot/rc -n "$MAILDIRS"/cache/notmuch/rc \
-        search ${=PARAM}
+        search $*
 
     return $?
 }
 
 backup() {
     fn backup $*
-    dst=${PARAM[1]}
-    shift 1 PARAM
-    expr=${=PARAM}
+    dst=${option_params[1]}
+    shift 1 option_params
+    expr=${option_params}
     req=(dst expr)
     ckreq
 

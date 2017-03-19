@@ -38,7 +38,7 @@ lorem | j compose Ieshuem3@riseup.net
 
 lorem | j compose fengi2Ee@autistici.org
 lorem | j compose Juiv0air@autistici.org
-lorem | j compose Ieshuem3@autistici.org
+lorem | j -D compose Ieshuem3@autistici.org
 
 exported_recipients_ok="fengi2Ee <fengi2ee@autistici.org>
 fengi2Ee <fengi2ee@dyne.org>
