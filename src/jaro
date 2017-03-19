@@ -586,7 +586,7 @@ main() {
 
     case "$subcommand" in
 
-    compose) compose ${option_params}
+    compose) stdin_compose ${option_params}
             exitcode=$?
             ;;
 
