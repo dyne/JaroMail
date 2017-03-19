@@ -23,7 +23,7 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 VERSION=4.3-dev
-DATE=Apr/2016
+DATE=Mar/2017
 JAROMAILEXEC=$0
 
 # default permission on files
@@ -397,28 +397,6 @@ check_bin() {
 }
 
 
-option_is_set() {
-    #First argument, the option (something like "-s")
-    #Second (optional) argument: if it's "out", command will print it out 'set'/'unset'
-    #                       This is useful for if conditions
-    #Return 0 if is set, 1 otherwise
-    [[ -n ${(k)opts[$1]} ]];
-    r=$?
-    if [[ $2 == out ]]; then
-    if [[ $r == 0 ]]; then
-        echo 'set'
-    else
-        echo 'unset'
-    fi
-    fi
-    return $r;
-}
-option_value() {
-    #First argument, the option (something like "-s")
-    <<< ${opts[$1]}
-}
-
-
 usage() {
     cat <<EOF | more
 Jaro Mail $VERSION - your humble and faithful electronic postman
@@ -495,173 +473,112 @@ EOF
 typeset -A subcommands_opts
 
 main() {
-    ### Options configuration
-    # Hi, dear developer! Are you trying to add a new subcommand, or to add some options?
-    # Well, keep in mind that:
-    # 1. An option CAN'T have differente meanings/behaviour in different subcommands.
-    #    For example, "-s" means "size" and accept an argument. If you are tempted to add
-    #    an option "-s" (that means, for example "silent", and doesn't accept an argument)
-    #              DON'T DO IT!
-    #     There are two reasons for that:
-    #       I. usability; user expect that "-s" is "size
-    #       II. Option parsing WILL EXPLODE if you do this kind of bad things
-    #               (it will say "option defined more than once, and he's right)
-    main_opts=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n f -force=f)
-    subcommands_opts[__default]="R -readonly=R"
-    subcommands_opts[compose]=""
-    subcommands_opts[queue]=""
-    subcommands_opts[fetch]=""
-    subcommands_opts[send]=""
-    subcommands_opts[peek]="R -readonly=R"
-    subcommands_opts[open]="R -readonly=R"
+	# zuper option parser
 
-    subcommands_opts[help]=""
+    option_main=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n f -force=f)
 
-    subcommands_opts[update]=""
+    option_subcommands[__empty]="R -readonly=R"
+    option_subcommands[compose]=""
+    option_subcommands[queue]=""
+    option_subcommands[fetch]=""
+    option_subcommands[send]=""
+    option_subcommands[peek]="R -readonly=R"
+    option_subcommands[open]="R -readonly=R"
 
-    subcommands_opts[stat]=""
+    option_subcommands[help]=""
 
-    subcommands_opts[index]=""
-    subcommands_opts[search]=""
-    subcommands_opts[alot]=""
-    subcommands_opts[notmuch]=""
+    option_subcommands[update]=""
 
-    subcommands_opts[addr]=""
-    subcommands_opts[learn]=""
-    subcommands_opts[forget]=""
+    option_subcommands[stat]=""
 
-    subcommands_opts[complete]=""
-    subcommands_opts[isknown]=""
+    option_subcommands[index]=""
+    option_subcommands[search]=""
+    option_subcommands[alot]=""
+    option_subcommands[notmuch]=""
 
-    subcommands_opts[list]=""
-    subcommands_opts[extract]=""
-    subcommands_opts[parse]=""
-    subcommands_opts[header]=""
-    subcommands_opts[headers]=""
+    option_subcommands[addr]=""
+    option_subcommands[learn]=""
+    option_subcommands[forget]=""
 
-    subcommands_opts[import]=""
-    subcommands_opts[export]=""
-    subcommands_opts[vcard]=""
-    subcommands_opts[abook]=""
+    option_subcommands[complete]=""
+    option_subcommands[isknown]=""
 
-    subcommands_opts[vim]=""
-    subcommands_opts[edit]=""
-    subcommands_opts[preview]=""
+    option_subcommands[list]=""
+    option_subcommands[extract]=""
+    option_subcommands[parse]=""
+    option_subcommands[header]=""
+    option_subcommands[headers]=""
 
-    subcommands_opts[replay]=""
+    option_subcommands[import]=""
+    option_subcommands[export]=""
+    option_subcommands[vcard]=""
+    option_subcommands[abook]=""
 
-    subcommands_opts[remember]=""
+    option_subcommands[vim]=""
+    option_subcommands[edit]=""
+    option_subcommands[preview]=""
 
-    subcommands_opts[backup]=""
-    subcommands_opts[rmdupes]=""
-    subcommands_opts[merge]=""
-    subcommands_opts[filter]=""
-    subcommands_opts[deliver]=""
+    option_subcommands[replay]=""
 
-    subcommands_opts[passwd]=""
-    # subcommands_opts[cert]=""
+    option_subcommands[remember]=""
 
-    subcommands_opts[source]=""
+    option_subcommands[backup]=""
+    option_subcommands[rmdupes]=""
+    option_subcommands[merge]=""
+    option_subcommands[filter]=""
+    option_subcommands[deliver]=""
 
-    subcommands_opts[isonline]=""
+    option_subcommands[passwd]=""
+    option_subcommands[askpass]=""
 
-    subcommands_opts[init]=""
+    option_subcommands[source]=""
 
-    subcommands_opts[publish]=""
+    option_subcommands[isonline]=""
 
-    subcommands_opts[imap]=""
+    option_subcommands[init]=""
 
-    subcommands_opts[smtp]=""
+    option_subcommands[publish]=""
 
-    subcommands_opts[crypt]=""
-    subcommands_opts[cryptsign]=""
+    option_subcommands[imap]=""
 
-    subcommands_opts[isml]=""
-    subcommands_opts[ismd]=""
+    option_subcommands[smtp]=""
 
-    ### Detect subcommand
-    local -aU every_opts #every_opts behave like a set; that is, an array with unique elements
-    for optspec in $subcommands_opts$main_opts; do
-        for opt in ${=optspec}; do
-            every_opts+=${opt}
-        done
-    done
-    local -a oldstar
-    oldstar=($argv)
-    zparseopts -M -E -D -Adiscardme ${every_opts}
-    unset discardme
-    subcommand=$1
-    if [[ -z $subcommand ]]; then
-        subcommand="__default"
-    fi
+    option_subcommands[crypt]=""
+    option_subcommands[cryptsign]=""
 
-    # if [[ -z ${(k)subcommands_opts[$subcommand]} ]]; then
-    #     # unknown command, pass it to autostart
-    # fi
+    option_subcommands[isml]=""
+    option_subcommands[ismd]=""
 
-    argv=(${oldstar})
-    unset oldstar
+	option.parse $* || return 1
+	func "subcommand: $subcommand"
 
-    ### Parsing global + command-specific options
-    # zsh magic: ${=string} will split to multiple arguments when spaces occur
-    set -A cmd_opts ${main_opts} ${=subcommands_opts[$subcommand]}
-    if [[ -n $cmd_opts ]]; then #if there is no option, we don't need parsing
-    zparseopts -M -E -D -Aopts ${cmd_opts}
-    if [[ $? != 0 ]]; then
-        error "Some error occurred during option processing."
-        exitcode=1
-        return 1
-    fi
-    fi
-  #build PARAM (array of arguments) and check if there are unrecognized options
-    local ok=0
-    for arg in $*; do
-    if [[ $arg == '--' || $arg == '-' ]]; then
-        ok=1
-        continue #it shouldnt be appended to PARAM
-    elif [[ $arg[1] == '-'  ]]; then
-        if [[ $ok == 0 ]]; then
-        error "unrecognized option $arg"
-        exitcode=1
-        return 1
-        fi
-    fi
-    PARAM+=$arg
-    done
-  #first parameter actually is the subcommand: delete it and shift
-    if [[ $subcommand != '__default' ]]; then
-    PARAM[1]=()
-    shift
-    fi
-  ### End parsing command-specific options
-
-    if option_is_set -v; then
+    if option.is_set -v; then
     cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
     echo
     fi
-    { option_is_set -a } && { account=`option_value -a` }
-    { option_is_set -l } && {
-        if [[ "`option_value -l`" =~ "black" ]]; then
+    { option.is_set -a } && { account=`option.value -a` }
+    { option.is_set -l } && {
+        if [[ "`option.value -l`" =~ "black" ]]; then
             list=blacklist
-        elif [[ "`option_value -l`" =~ "white" ]]; then
+        elif [[ "`option.value -l`" =~ "white" ]]; then
             list=whitelist
         else
-            list=`option_value -l`
+            list=`option.value -l`
         fi
         ADDRESSBOOK="$MAILDIRS"/$list.abook
     }
-    { option_is_set -h } && { usage; return 0 }
-    { option_is_set -v } && {
+    { option.is_set -h } && { usage; return 0 }
+    { option.is_set -v } && {
         cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'
         return 0
     }
-    { option_is_set -q } && { QUIET=1 }
-    { option_is_set -D } && { DEBUG=1; QUIET=0
+    { option.is_set -q } && { QUIET=1 }
+    { option.is_set -D } && { DEBUG=1; QUIET=0
     func "All debug messages ON" }
-    { option_is_set -n } && { DRYRUN=1
+    { option.is_set -n } && { DRYRUN=1
     act "Dry run, show operations without executing them." }
-    { option_is_set -R } && { muttflags+=" -R " }
-    { option_is_set -f } && { FORCE=1 }
+    { option.is_set -R } && { muttflags+=" -R " }
+    { option.is_set -f } && { FORCE=1 }
 
     # clean up options from param
     PARAM=(${PARAM// -? /})
@@ -930,14 +847,10 @@ EOF
         exitcode=$?
         ;;
 
-    # __default)  func "no command provided"
-    #     autostart ${PARAM}
-    #     exitcode=$?
-    #     ;;
-    *) # unknown command, pass it to autostart
+    __unknown:*) # unknown command, pass it to autostart
         func "no command, autostart"
         func "subcommand: $subcommand"
-        if [[ "$subcommand" = "__default" ]]; then
+        if [[ "$subcommand" = "__empty" ]]; then
 			# open folder
 			if [[ "$PARAM" = "" ]]; then
 		        x_mutt -Z
@@ -947,29 +860,31 @@ EOF
             exitcode=$?
 
         # argument passed: determine if an email
-        elif isemail "$subcommand"; then
-            notice "Composing message to: ${@}"
-            # its an email, TODO see if we have it in our addressbook
-            x_mutt ${=@}
-            exitcode=0
-        # or a directory of file
-        elif maildircheck "$subcommand"; then
-            # is it a maildir? then open
-               x_mutt -f "$subcommand"
-               exitcode=$?
-        elif maildircheck "$MAILDIRS/$subcommand"; then
-            x_mutt -f "$MAILDIRS/$subcommand"
-            exitcode=$?
-        elif [[ -f "$subcommand" ]]; then
-            # is it a regular file? then ;attach it
+        elif [[ "$subcommand" = "__unknown" ]]; then
+            if isemail "$subcommand"; then
+                notice "Composing message to: ${@}"
+				# its an email, TODO see if we have it in our addressbook
+				x_mutt ${=@}
+				exitcode=0
+				# or a directory of file
+			elif maildircheck "$subcommand"; then
+				# is it a maildir? then open
+				x_mutt -f "$subcommand"
+				exitcode=$?
+			elif maildircheck "$MAILDIRS/$subcommand"; then
+				x_mutt -f "$MAILDIRS/$subcommand"
+				exitcode=$?
+			elif [[ -f "$subcommand" ]]; then
+				# is it a regular file? then ;attach it
                 x_mutt -a ${=@}
                 exitcode=0
-        else
-            # just open; mutt on first unread folder
-            x_mutt
-            exitcode=$?
+			else
+				# just open; mutt on first unread folder
+				x_mutt
+				exitcode=$?
 
-        fi
+			fi
+		fi
         ;;
     esac
 
