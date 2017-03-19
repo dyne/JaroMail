@@ -28,6 +28,8 @@ typeset -h formail_cache
 # returns 0 (success) if yes
 # no in all other cases
 maildircheck() {
+	maildircheck $*
+
     { test -r "$1" } || {
         func "Maildir not existing: $1"
         return 1 }
@@ -44,6 +46,7 @@ maildircheck() {
 }
 
 maildirmake() {
+	fn maildirmake $*
 
     { test -z "$1" } && {
     error "internal error: missing argument for maildirmake"
@@ -73,6 +76,8 @@ maildirmake() {
 
 # fills up all maildirs array
 list_maildirs() {
+	fn list_maildirs $*
+
     maildirs=`${=find} "$MAILDIRS" -maxdepth 1 -type d`
     for m in ${(f)maildirs}; do
     func "$m"
@@ -89,6 +94,7 @@ list_maildirs() {
 
 
 rmdupes() {
+	fn rmdupes $*
 
     ## special argument lastlog
     { test "$1" = "lastlog" } && {

@@ -22,12 +22,12 @@
 
 # extract all emails found in stdin, one per line
 compose() {
-    fn compose
+    fn compose $*
 
     # among the args parse recipient emails and files to attach
     local _files=()
     local _addrs=()
-    for p in ${PARAM}; do
+    for p in $*; do
         if [[ -r $p ]]; then
             func "attach: $p"
             _files+=(-a $p)
@@ -70,7 +70,7 @@ queue() {
     notice "Adding mail to the outbox queue"
     base="`hostname`-queue-`date +%Y-%m-%d-%H.%M.%S`"
 
-    queue_to=($@)
+    queue_to=($*)
     # set it ready for saving in outbux
     queue_body="$base"
 
@@ -186,7 +186,7 @@ fetchall() {
 }
 
 fetch() {
-    fn fetch
+    fn fetch $*
 
     [[ "$account" = "" ]] && {
         fetchall; return $? }
@@ -429,7 +429,7 @@ EOF
 # SEND
 # this function should send all mails in outbox
 send() {
-    fn send
+    fn send *
 
     # list mails to send
     queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
@@ -539,7 +539,7 @@ BEGIN { body=0 }
 # PEEK
 # this function will open the MTA to the imap server without fetching mails locally
 peek() {
-    fn peek
+    fn peek $*
 
     read_account ${account}
     [[ $? = 0 ]] || {

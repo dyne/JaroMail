@@ -89,7 +89,9 @@ lookup_email() {
 }
 
 complete() {
-    func "complete: $1 (list $list)"
+	fn complete $*
+	req=(list)
+	ckreq || return 1
 
     # completion on configured groups
     { test -r "$MAILDIRS/Groups" } && {
@@ -120,6 +122,7 @@ complete() {
 }
 
 sender_isknown() {
+	fn sender_isknown $*
     # extract only headers from stdin
     head="`awk '
 { print $0 }
@@ -135,11 +138,10 @@ sender_isknown() {
 }
 
 learn() {
-    func "learning ${PARAM[1]} in stdin piped mails"
+	fn learn $*
     [[ $DRYRUN == 1 ]] && func "running in dryrun mode, no entries added to addressbook"
 
-    what=sender
-    [[ "$1" = "" ]] || { what="$1" }
+    what=${1:-sender}
     func "learning from $what"
 
     # zero e_addr map before using e_parse
@@ -207,14 +209,12 @@ learn() {
 # import emails from VCard into abook
 # checks if the emails are already known
 import_vcard() {
-    act "import VCard from file: $1"
-
-    [[ -r "$1" ]] || {
-        error "File not found: $1"
-        return 1
-    }
-
+	fn import_vcard $*
     vcard="$1"
+	req=(vcard ADDRESSBOOK)
+	freq=($vcard)
+	ckreq || return 1
+
     head -n1 $vcard | grep '^BEGIN:VCARD' > /dev/null
 
     [[ $? = 0 ]] || {
@@ -289,13 +289,10 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 
 # import address lists from stdin
 import() {
+	fn import $*
 
     # case insensitive match
     unsetopt CASE_MATCH
-
-    _arg=${PARAM[1]}
-
-    func "import() arg: $_arg (param: $PARAM)"
 
     notice "Import address list from stdin into addressbook $list"
 
@@ -343,6 +340,7 @@ import() {
 
 # export old addressbook format to abook
 export_old_to_abook() {
+	fn export_old_to_abook $*
 
     [[ -r $MAILDIRS/Addressbook ]] || {
         notice "Old addressbook format not found"
@@ -424,6 +422,9 @@ convert_addresses() {
 }
 
 edit_abook() {
+	fn edit_abook $*
+	req=(ADDRESSBOOK)
+	ckreq || return 1
 
     abook --config <(cat <<EOF
 set autosave=true
@@ -435,6 +436,10 @@ EOF
 
 # print out all addresses into the selected addressbook
 list_abook() {
+	fn list_abook $*
+	req=(list ADDRESSBOOK)
+	ckreq || return 1
+
     notice "Extracting all addresses in $list"
     awk -F'=' '
 /^name/  { printf("%s ",$2)    }

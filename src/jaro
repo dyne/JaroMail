@@ -345,7 +345,6 @@ check_bin() {
     fi
     func "Mutt binary: `command -v mutt`"
     func "Notmuch binary: `command -v notmuch`"
-    func "Alot binary: `command -v alot`"
 	func "Keyring set: $JARO_KEYRING"
 	if [[ "$JARO_KEYRING" == "" ]]; then
 		# check for pass, else fallback
@@ -552,10 +551,12 @@ main() {
 	option.parse $* || return 1
 	func "subcommand: $subcommand"
 
+	# print out version
     if option.is_set -v; then
-    cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
-    echo
+		cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
+		echo
     fi
+
     { option.is_set -a } && { account=`option.value -a` }
     { option.is_set -l } && {
         if [[ "`option.value -l`" =~ "black" ]]; then
@@ -581,11 +582,11 @@ main() {
     { option.is_set -f } && { FORCE=1 }
 
     # clean up options from param
-    PARAM=(${PARAM// -? /})
+    # PARAM=(${PARAM// -? /})
 
     case "$subcommand" in
 
-    compose) compose ${PARAM}
+    compose) compose ${option_params}
             exitcode=$?
             ;;
 
@@ -595,17 +596,17 @@ main() {
 
     fetch)
             account=${account:-default}
-            fetch ${PARAM} && \
+            fetch ${option_params} && \
                 update_filters && \
                 filter_maildir incoming && \
                 update_notmuch
         ;;
 
-    send)   send ${PARAM}
+    send)   send ${option_params}
             exitcode=$?
             ;;
 
-    peek)   peek ${PARAM}
+    peek)   peek ${option_params}
             exitcode=$?
             ;;
 
@@ -615,13 +616,13 @@ main() {
         ;;
 
     replay)
-        replay ${PARAM}
+        replay ${option_params}
         exitcode=$?
         ;;
 
     update|init)
         [[ "$PARAM" = "" ]] || {
-            for p in $PARAM; do
+            for p in $option_params; do
                 [[ "$p" = "." ]] && p=$PWD
                 [[ -d $p ]] && MAILDIRS=$p
             done
@@ -642,7 +643,7 @@ main() {
            ;;
 
     # notmuch search with file output
-    search) search ${PARAM}
+    search) search ${option_params}
             [[ $DRYRUN = 1 ]] || {
                 for i in ${search_results=}; do
                     print - "$i"
@@ -650,7 +651,7 @@ main() {
             } | save_replay $subcommand
             ;;
 
-    alot) alot_search ${PARAM} ;;
+    alot) alot_search ${option_params} ;;
 
     notmuch)
             notice "Command: notmuch ${PARAM}"
@@ -658,76 +659,76 @@ main() {
             exitcode=$?
             ;;
 
-    addr|list) search_addressbook ${PARAM}
+    addr|list) search_addressbook ${option_params}
                ;;
 
-    complete) complete ${PARAM}
+    complete) complete ${option_params}
               exitcode=$?
               ;;
 
-    isknown) sender_isknown ${PARAM}
+    isknown) sender_isknown ${option_params}
              exitcode=$?
              ;;
 
-    learn)  learn ${PARAM}
+    learn)  learn ${option_params}
             exitcode=$?
             ;;
 
-    import) import ${PARAM}
+    import) import ${option_params}
             exitcode=$?
             ;;
 
     "export")
-            export_vcard ${PARAM}
+            export_vcard ${option_params}
             ;;
 
-    abook)  edit_abook ${PARAM}
+    abook)  edit_abook ${option_params}
             exitcode=$?
             ;;
 
-    stat*)  stats ${PARAM} | sort -n
+    stat*)  stats ${option_params} | sort -n
             exitcode=$?
             ;;
 
     edit|vim)   edit_file ${option_params}    ;;
-    open)       x_mutt -f ${PARAM}  ;;
-    preview)    preview_file ${PARAM} ;;
+    open)       x_mutt -f ${option_params}  ;;
+    preview)    preview_file ${option_params} ;;
 
     mkdir)
-        DEBUG=1 maildirmake ${PARAM}
+        DEBUG=1 maildirmake ${option_params}
         exitcode=$?
         ;;
 
     copy)
-        maildir_shift ${PARAM} cp
+        maildir_shift ${option_params} cp
         exitcode=$?
         ;;
 
     move)
-        maildir_shift ${PARAM} mv
+        maildir_shift ${option_params} mv
         exitcode=$?
         ;;
 
     link)
-        maildir_shift ${PARAM} ln
+        maildir_shift ${option_params} ln
         exitcode=$?
         ;;
 
-    rmdupes) rmdupes ${PARAM} ;;
-    merge)   merge ${PARAM}   ;;
+    rmdupes) rmdupes ${option_params} ;;
+    merge)   merge ${option_params}   ;;
 
     filter)
-        update_filters ${PARAM}
+        update_filters ${option_params}
         [[ $? = 0 ]] || {
             error "error updating filters, operation aborted."
             break
         }
-        filter_maildir ${PARAM} | save_replay $subcommand
+        filter_maildir ${option_params} | save_replay $subcommand
         exitcode=$?
         ;;
 
     deliver)
-            deliver ${PARAM}
+            deliver ${option_params}
             exitcode=$?
             ;;
 
@@ -735,7 +736,7 @@ main() {
             host=${PARAM:-$imap}
             new_password ;;
 
-    # cert)    cert ${PARAM} ;; # was checking is_online
+    # cert)    cert ${option_params} ;; # was checking is_online
 
     isonline) is_online ${=PARAM}; exitcode=$? ;;
 
@@ -813,23 +814,23 @@ EOF
         ;;
 
     # list)
-    #     list_abook ${PARAM}
+    #     list_abook ${option_params}
     #     exitcode=$?
     #     ;;
 
     extract|parse)
-        extract_addresses ${PARAM} \
+        extract_addresses ${option_params} \
             | save_replay $subcommand
         exitcode=$?
         ;;
 
     header|headers)
-        extract_headers ${PARAM}
+        extract_headers ${option_params}
         exitcode=$?
         ;;
 
     smtp)
-        smtp_send ${PARAM}
+        smtp_send ${option_params}
         exitcode=$?
         ;;
 
@@ -841,13 +842,13 @@ EOF
         ;;
 
     ismd)
-        maildircheck ${PARAM}
+        maildircheck ${option_params}
         [[ $? = 0 ]] && \
-            notice "Directory is a maildir: ${PARAM}"
+            notice "Directory is a maildir: ${option_params}"
         exitcode=$?
         ;;
 
-    __unknown:*) # unknown command, pass it to autostart
+    __empty) # unknown command, pass it to autostart
         func "no command, autostart"
         func "subcommand: $subcommand"
         if [[ "$subcommand" = "__empty" ]]; then
@@ -857,34 +858,37 @@ EOF
 		    else
 		        x_mutt -f "$PARAM"
 		    fi
+		fi
+        exitcode=$?
+		;;
+
+	__unknown:*)
+        # argument passed: determine if an email
+		subcommand=${subcommand[(ws@:@)2]}
+		func "subcommand: $subcommand"
+        if isemail "$subcommand"; then
+            notice "Composing message to: ${@}"
+            # its an email, TODO see if we have it in our addressbook
+            x_mutt ${=@}
+            exitcode=0
+            # or a directory of file
+        elif maildircheck "$subcommand"; then
+            # is it a maildir? then open
+            x_mutt -f "$subcommand"
+            exitcode=$?
+        elif maildircheck "$MAILDIRS/$subcommand"; then
+            x_mutt -f "$MAILDIRS/$subcommand"
+            exitcode=$?
+        elif [[ -f "$subcommand" ]]; then
+            # is it a regular file? then ;attach it
+            x_mutt -a ${=@}
+            exitcode=0
+        else
+            # just open; mutt on first unread folder
+            x_mutt
             exitcode=$?
 
-        # argument passed: determine if an email
-        elif [[ "$subcommand" = "__unknown" ]]; then
-            if isemail "$subcommand"; then
-                notice "Composing message to: ${@}"
-				# its an email, TODO see if we have it in our addressbook
-				x_mutt ${=@}
-				exitcode=0
-				# or a directory of file
-			elif maildircheck "$subcommand"; then
-				# is it a maildir? then open
-				x_mutt -f "$subcommand"
-				exitcode=$?
-			elif maildircheck "$MAILDIRS/$subcommand"; then
-				x_mutt -f "$MAILDIRS/$subcommand"
-				exitcode=$?
-			elif [[ -f "$subcommand" ]]; then
-				# is it a regular file? then ;attach it
-                x_mutt -a ${=@}
-                exitcode=0
-			else
-				# just open; mutt on first unread folder
-				x_mutt
-				exitcode=$?
-
-			fi
-		fi
+        fi
         ;;
     esac
 
