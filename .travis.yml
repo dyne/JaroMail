@@ -14,7 +14,7 @@ env:
 before_install:
   - sudo apt-get -qq -y update
   - sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" install --no-install-recommends -y zsh make gcc libglib2.0-dev libgnome-keyring-dev libxapian-dev libgmime-2.6-dev libtalloc-dev zlib1g-dev libgpgme11-dev
-  - sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" install --no-install-recommends -y fetchmail msmtp mutt-kz notmuch pinentry-curses abook wipe
+  - sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" install --no-install-recommends -y fetchmail msmtp mutt notmuch pinentry-curses abook wipe
   - git submodule update --init
 
 script:
