@@ -625,7 +625,6 @@ main() {
         }
         init_inbox
         update_filters
-        update_mutt
         update_sieve
         update_notmuch
         notice "Initialization completed in $MAILDIRS"
