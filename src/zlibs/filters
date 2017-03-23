@@ -543,6 +543,9 @@ source '$MAILDIRS/.mutt/mboxes'
 
 # extra settings for mutt-kz (notmuch enabled)
 source '$MAILDIRS/.mutt/notmuch'
+
+# opmsg support
+source '$MAILDIRS/.mutt/opmsg'
 EOF
 
 
