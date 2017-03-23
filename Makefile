@@ -6,7 +6,7 @@ install:
 
 clean:
 	rm -f src/*.o
-	rm -f src/pgpewrap
+	rm -f src/gpgewrap
 	rm -f src/fetchaddr
 	rm -f src/parsedate
 	rm -f src/dotlock

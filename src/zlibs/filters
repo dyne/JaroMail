@@ -56,7 +56,7 @@ init_inbox() {
 
     if [[ $PASS = 1 ]]; then
         GPGID=${$(awk '/default-key/ { print $2 }' $HOME/.gnupg/gpg.conf)}
-        pass init ${GPGID}
+		[[ -f "$PASSWORD_STORE_DIR/.gpg-id" ]] || pass init ${GPGID}
     fi
     ${=mkdir} "$MAILDIRS/cache"
     ${=mkdir} "$MAILDIRS/logs"

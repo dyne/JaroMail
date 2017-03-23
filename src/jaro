@@ -346,7 +346,7 @@ check_bin() {
 		# check for pass, else fallback
 		if isfound pass; then
 			act "keyring in use: pass (auto-detected)"
-			export PASSWORD_STORE_DIR=$HOME/.password-store
+			export PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
 			[[ -d $PASSWORD_STORE_DIR ]] || {
 				error "the 'pass' keyring is found but not initialised"
 				error "run 'pass init your-gpg-id' or uninstall it to use other keyrings"
@@ -371,7 +371,7 @@ check_bin() {
 		case $JARO_KEYRING in
 			pass)
 				act "keyring in use: pass (set in JARO_KEYRING)"
-				export PASSWORD_STORE_DIR=$HOME/.password-store
+				export PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
 				[[ -d $PASSWORD_STORE_DIR ]] || {
 					error "the 'pass' keyring is found but not initialised"
 					error "run 'pass init your-gpg-id'"

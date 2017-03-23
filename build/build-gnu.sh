@@ -5,6 +5,7 @@ distro=unknown
 builddir=`pwd`
 # cc="${builddir}/cc-static.zsh"
 cc="gcc -O3"
+[[ "$OSTYPE" = linux-musl ]] && cc="gcc -Os -static"
 
 which apt-get > /dev/null && distro=debian
 which yum > /dev/null && distro=fedora
