@@ -263,7 +263,8 @@ is_online() {
         ;;
     host)
         func "trying to connect ${_host} port ${_port}"
-        busybox nc -w 16 -z ${_host} ${_port} > /dev/null
+        #busybox nc -w 16 -z ${_host} ${_port} > /dev/null
+        nc -w 16 -z ${_host} ${_port} > /dev/null
         { test $? = 0 } || {
         error "Host unreachable: $_host"
         act "Network connection is checked with 16s timeout"
