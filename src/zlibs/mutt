@@ -214,6 +214,11 @@ EOF
 	touch "$MAILDIRS/.mutt/notmuch"
     # when peeking and using mutt-kz use the sidebar
     is_mutt_kz && {
+
+		# avoid hangs at boot for files not found
+		mkdir -p $MAILDIRS/.notmuch
+		touch $MAILDIRS/.notmuch/xapian
+
         cat <<EOF >> "$MAILDIRS/.mutt/notmuch"
 set sidebar_width	 = 25
 set sidebar_visible	 = no
