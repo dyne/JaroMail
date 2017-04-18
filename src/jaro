@@ -506,6 +506,7 @@ main() {
     option_subcommands[export]=""
     option_subcommands[vcard]=""
     option_subcommands[abook]=""
+	option_subcommands[new]=""
 
     option_subcommands[vim]=""
     option_subcommands[edit]=""
@@ -678,6 +679,11 @@ main() {
     abook)  edit_abook ${option_params}
             exitcode=$?
             ;;
+
+	new)
+		new_account ${option_params}
+		exitcode=$?
+		;;
 
     stat*)  stats ${option_params} | sort -n
             exitcode=$?
