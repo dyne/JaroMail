@@ -97,7 +97,10 @@ source '$WORKDIR/.mutt/general'
 source '$WORKDIR/.mutt/formats'
 source '$WORKDIR/.mutt/keybindings'
 source '$WORKDIR/.mutt/colors'
+
+# identity built parsing accounts and global file
 source '$MAILDIRS/Identity.txt'
+source '$MAILDIRS/.mutt/identity'
 
 # pointer to password tempfile and dynamic settings
 # must be before mboxes to set folder on imap peek
@@ -112,6 +115,21 @@ source '$MAILDIRS/.mutt/notmuch'
 # crypto support
 source '$MAILDIRS/.mutt/crypto'
 EOF
+
+	# identity
+	rm -f "$MAILDIRS/.mutt/identity"
+	touch "$MAILDIRS/.mutt/identity"
+	cat <<EOF > $MAILDIRS/.mutt/identity
+set realname = '$name'
+set from = '${name} <${email}>'
+EOF
+	[[ "$gpgkey" = "" ]] ||
+		print "set pgp_sign_as = '${gpgkey}'" >> $MAILDIRS/.mutt/identity
+	[[ -r ~/.signature ]] &&
+		print "set signature = '~/.signature'" >> $MAILDIRS/.mutt/identity
+	[[ "$my_hdr" = "" ]] ||
+		print "$my_hdr" >> $MAILDIRS/.mutt/identity
+
 
 	rm -f "$MAILDIRS/.mutt/crypto"
 	touch "$MAILDIRS/.mutt/crypto"

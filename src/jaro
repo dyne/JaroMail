@@ -136,6 +136,7 @@ list=whitelist
 vars+=(name login imap imap_port smtp smtp_port protocol password auth accountopt)
 arrs+=(folders exclude)
 vars+=(host port type)
+vars+=(my_hdr)
 
 # global for server fingerprints
 vars+=(fingerprint)
@@ -850,6 +851,7 @@ EOF
     __empty) # unknown command, pass it to autostart
         func "no command, autostart"
         func "subcommand: $subcommand"
+		read_account "$account"
         if [[ "$subcommand" = "__empty" ]]; then
 			# open folder
 			if [[ "$option_params" = "" ]]; then
@@ -865,6 +867,7 @@ EOF
         # argument passed: determine if an email
 		subcommand=${subcommand[(ws@:@)2]}
 		func "subcommand: $subcommand"
+		read_account "$account"
         if isemail "$subcommand"; then
             notice "Composing message to: $*"
             # its an email, TODO see if we have it in our addressbook

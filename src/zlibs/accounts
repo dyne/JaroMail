@@ -97,6 +97,7 @@ read_account() {
     }
 
     ttmp=`awk '
+	/^my_hdr/ { next }
     /^#/ { next }
     /^name/ { printf "name=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^email/ { printf "email=\"%s\";", $2 }
@@ -167,6 +168,9 @@ read_account() {
     func "options: $accountopt"
     func "folders: $folders"
     func "exclude: $exclude"
+	my_hdr=`cat "$acct" | grep '^my_hdr'`
+	[[ "$my_hdr" = "" ]] ||
+		func "my_hdr:\n$my_hdr"
 
     return 0
 }
