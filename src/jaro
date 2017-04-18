@@ -102,10 +102,11 @@ DRYRUN=${DRYRUN:-0}
 CALLMUTT=${CALLMUTT:-1}
 
 # use gnome-keyring for passwords on GNU systems
-vars+=(PASS GNOMEKEY SECRET_TOOL)
+vars+=(PASS GNOMEKEY SECRET_TOOL PASSWORD_STORE_DIR)
 PASS=${PASS:-0}
 GNOMEKEY=${GNOMEKEY:-0}
 SECRET_TOOL=${SECRET_TOOL:-0}
+PASSWORD_STORE_DIR=${JARO_PASSWORD_STORE_DIR:-$MAILDIRS/.password-store}
 
 # global variables for binaries called
 vars+=(rm mkdir mutt SQL OS)
@@ -346,11 +347,8 @@ check_bin() {
 		# check for pass, else fallback
 		if isfound pass; then
 			act "keyring in use: pass (auto-detected)"
-			export PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
-			[[ -d $PASSWORD_STORE_DIR ]] || {
-				error "the 'pass' keyring is found but not initialised"
-				error "run 'pass init your-gpg-id' or uninstall it to use other keyrings"
-			}
+			[[ -d $PASSWORD_STORE_DIR ]] ||
+				warning "the 'pass' keyring is found but not initialised"
 
 			PASS=1
 

@@ -31,7 +31,7 @@ read_account() {
         host login transport auth cert options folders exclude
     # parse arguments
 
-    { test "$account" = "" } && { account="default" }
+    [[ "$account" = "" ]] && account="default"
 
     # find the account
     func "read_account looking for $account"

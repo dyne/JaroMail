@@ -21,6 +21,12 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
+# pass wrapper to set all env
+_pass() {
+	fn pass $*
+	PASSWORD_STORE_DIR=$PASSWORD_STORE_DIR pass $*
+}
+
 # we use pinentry
 # comes from gpg project and is secure
 # it also conveniently uses the right toolkit
@@ -65,7 +71,7 @@ ask_password() {
         GNU)
             if [[ $PASS = 1 ]]; then
                 act "looking for password in password-store"
-                password=`pass show ${login}`
+                password=`_pass show ${login}`
                 [[ $? = 0 ]] && act "password found in password-store"
             elif [[ $SECRET_TOOL = 1 ]]; then
                 act "looking for password in secret-tool"
@@ -134,7 +140,7 @@ new_password() {
             # USE PASS
             if [[ $PASS = 1 ]]; then
                 act "using pass for password-store"
-                print "$password\n" | pass insert -e ${login}
+                print "$password\n" | _pass insert -e ${login}
                 if [[ $? = 0 ]]; then
                     notice "New password saved in password-store"
                 else
