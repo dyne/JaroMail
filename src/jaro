@@ -128,7 +128,7 @@ global_quit=0
 
 # global variable for account selection
 vars+=(account account_type)
-# account=default
+account=default
 vars+=(list)
 list=whitelist
 
@@ -209,10 +209,10 @@ if [ -d $WORKDIR/zlibs ]; then
         done
     fi
 
-    act "full set of auxiliary functions loaded"
+    func "full set of auxiliary functions loaded"
 elif [[ $1 = source ]]; then
 
-    act "limited set of auxiliary functions loaded"
+    act "limited set of auxiliary functions sourced"
 
 else
     error "No ZLibs found in $WORKDIR/zlibs"
@@ -590,13 +590,11 @@ main() {
             exitcode=$?
             ;;
 
-    fetch)
-            account=${account:-default}
-            fetch ${option_params} && \
-                update_filters && \
-                filter_maildir incoming && \
-                update_notmuch
-        ;;
+    fetch)  fetch ${option_params} && \
+                 update_filters && \
+                 filter_maildir incoming && \
+                 update_notmuch
+			;;
 
     send)   send ${option_params}
             exitcode=$?

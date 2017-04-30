@@ -56,6 +56,7 @@ stdin_compose() {
     act "recipients: ${_addrs}"
     [[ "$_files" = "" ]] || act "attachments: ${_files}"
     act "subject: $subject"
+	read_account ${account}
     cat <<EOF | x_mutt -s "${subject// /_}" -i $ztmpfile ${=_files} -- ${=_addrs}
 EOF
     # _mutt -H <(print "To: ${option_params}")

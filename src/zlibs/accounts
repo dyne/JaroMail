@@ -148,6 +148,7 @@ read_account() {
     { test -z $accountopt } && { accountopt=keep }
     # cert and password can be missing
 
+	act "account in use: $login"
     func "name: $name"
     func "email: $email"
     func "login: $login"

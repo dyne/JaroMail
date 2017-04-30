@@ -63,7 +63,7 @@ x_mutt() {
 	gpgkey=""
 	[[ -r $HOME/.gnupg/gpg.conf ]] && {
 		gpgkey=`awk '/^default-key/ { print $2 }' $HOME/.gnupg/gpg.conf`
-		act "default GPG key configured: $gpgkey"
+		act "GPG key in use: $gpgkey"
 	}
 
     cat<<EOF > "$MAILDIRS/.mutt"/rc
