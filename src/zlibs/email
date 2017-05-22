@@ -431,7 +431,7 @@ EOF
 # SEND
 # this function should send all mails in outbox
 send() {
-    fn send *
+    fn send $*
 
     # list mails to send
     queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
