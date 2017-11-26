@@ -7,7 +7,7 @@ JARO_SHARE_DIR=$PREFIX/share
 JARO_LIBEXEC=$JARO_SHARE_DIR/jaromail
 JARO_SHARE=$JARO_SHARE_DIR/jaromail
 mkdir -p $JARO_SHARE_DIR || {
-    print "Error: cannot create $PREFIX"
+    print "Error: cannot create $PREFIX or $JARO_SHARE_DIR"
     print "Run as root or set PREFIX to another location"
     return 1
 }
