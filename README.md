@@ -64,6 +64,10 @@ A round-up on Jaro Mail features follows:
 
 # INSTALL
 
+If building and installing from Git source, please run `git submodule
+init; git submodule update` after cloning to initialize and clone the
+submodules used as part of Jaro Mail's tree.
+
 **GNU/Linux** users can run `make` to install all needed components
   (done automatically, requires root) and compile auxiliary
   tools. Once compiled then `sudo make install` will put Jaro Mail in
