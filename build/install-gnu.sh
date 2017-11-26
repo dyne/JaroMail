@@ -3,8 +3,14 @@
 PREFIX=${PREFIX:-/usr/local}
 
 # TODO: separate libexec from share
-JARO_LIBEXEC=$PREFIX/share/jaromail
-JARO_SHARE=$PREFIX/share/jaromail
+JARO_SHARE_DIR=$PREFIX/share
+JARO_LIBEXEC=$JARO_SHARE_DIR/jaromail
+JARO_SHARE=$JARO_SHARE_DIR/jaromail
+mkdir -p $JARO_SHARE_DIR || {
+    print "Error: cannot create $PREFIX or $JARO_SHARE_DIR"
+    print "Run as root or set PREFIX to another location"
+    return 1
+}
 touch $JARO_SHARE || {
     print "Error: cannot write to $JARO_SHARE"
     print "Run as root or set PREFIX to another location"
