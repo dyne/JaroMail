@@ -62,31 +62,38 @@ A round-up on Jaro Mail features follows:
 * Multi platform: GNU/Linux/BSD, Apple/OSX
 * Old school, used by its author for the past 10 years
 
+# Build
+
+Make sure you have installed the following dependencies on your operating system, they should be named in a similar way across distributions, here below the names of the packages are referring to those found in Devuan/Debian.
+
+To build:
+```
+libglib2.0-dev libgnome-keyring-dev libxapian-dev libgmime-2.6-dev libtalloc-dev zlib1g-dev libgpgme11-dev
+```
+To run:
+```
+fetchmail msmtp neomutt notmuch pinentry-curses abook wipe
+```
+
 # INSTALL
 
-If building and installing from Git source, please run `git submodule
-init; git submodule update` after cloning to initialize and clone the
-submodules used as part of Jaro Mail's tree.
+If building and installing from Git source, please run:
+```
+git submodule update --init --recursive
+```
+to initialize and clone the submodules used as part of Jaro Mail's tree.
 
-**GNU/Linux** users can run `make` to install all needed components
-  (done automatically, requires root) and compile auxiliary
-  tools. Once compiled then `sudo make install` will put Jaro Mail in
-  `/usr/local`. Or To install it as user into a self-contained place:
-
+Then compile and install all jaromail in a self-contained directory with one command:
 ```
    PREFIX=$HOME/Postbox make install
 ```
 
-Will create the directory `Postbox` in your home directory and install
+This will create the directory `Postbox` in your home directory and install
 Jaro Mail inside it, with the `jaro` executable in `Postbox/bin`.
 
 When Jaro Mail is installed system-wide, the `JAROMAILDIR`
 environmental variable can be changed to point to where all emails
 will be stored, by default it is `$HOME/Mail`.
-
-The dependencies to be installed on the system for Jaro Mail are
-* build: `make gcc libglib2.0-dev libgnome-keyring-dev libxapian-dev libgmime-2.6-dev libtalloc-dev zlib1g-dev libgpgme11-dev`
-* run: `fetchmail msmtp mutt-kz notmuch pinentry-curses abook wipe`
 
 Keep in mind **you need to read the Manual**: this software is not
 graphical, it is not meant to be intuitive, does not contains

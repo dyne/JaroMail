@@ -7,78 +7,11 @@ builddir=`pwd`
 cc="gcc -O3"
 [[ "$OSTYPE" = linux-musl ]] && cc="gcc -Os -static"
 
-which apt-get > /dev/null && distro=debian
-which yum > /dev/null && distro=fedora
-which pacman > /dev/null && distro=arch
-
 target=all
 { test -z $1 } || { target="$1" }
 # no other distro supported atm
 
 mkdir -p build/gnu
-
-debian_req() {
-    for p in "$@"; do
-        { dpkg --get-selections "$p" | grep -q "[[:space:]]install$" } || {
-            sudo apt-get install "$p" } || {
-            print "Failed to install $p"
-            return 1
-        }
-    done
-    return 0
-}
-
-
-{ test "$target" = "deps" } || {
-    test "$target" = "all" } && {
-    case $distro in
-        debian)
-            deps=(fetchmail msmtp mutt-kz pinentry-curses)
-            deps+=(wipe notmuch sqlite3 abook elinks)
-            deps+=(gcc make libglib2.0-dev)
-
-        print "Building on Debian"
-        print "Checking software to install"
-        debian_req $deps
-        ;;
-
-    fedora)
-
-        print "Building on Fedora"
-        print "Checking software to install..."
-        which zsh || sudo yum install zsh
-        which mutt || sudo yum install mutt
-        which procmail || sudo yum install procmail
-        which msmtp || sudo yum install msmtp
-        which pinentry || sudo yum install pinentry
-        which fetchmail || sudo yum install fetchmail
-        which wipe || sudo yum install wipe
-        which abook || sudo yum install abook
-        which notmuch || sudo yum install notmuch
-
-        print "Checking build dependencies"
-        which gcc || sudo yum install gcc
-        which bison || sudo yum install bison
-        which flex || sudo yum install flex
-        rpm -q glib2-devel || sudo yum install glib2-devel
-        rpm -q libgnome-keyring-devel || sudo yum install libgnome-keyring-devel
-        rpm -q bzip2-devel || sudo yum install bzip2-devel
-        rpm -q zlib-devel || sudo yum install zlib-devel
-
-        ;;
-
-    arch)
-        print "All dependencies installed via pacman/AUR"
-        print "Building on Arch..."
-        ;;
-
-    *)
-        print "Error: no distro recognized, build by hand."
-        ;;
-    esac
-
-    print "All dependencies installed"
-}
 
 [[ "$target" = "mutt-kz" ]] && {
     pushd src/mutt-kz
