@@ -765,8 +765,8 @@ s/\*/\\*/g
         ;;
 
     imap)
-        imapcmd="$1"
-        case $1 in
+        imapcmd="${option_params[(w)1]}"
+        case $imapcmd in
             console)
                 read_account $account
                 host=${imap:-$host}
