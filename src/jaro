@@ -135,7 +135,7 @@ list=whitelist
 # global variables for accounts
 vars+=(name login imap imap_port smtp smtp_port protocol password auth accountopt)
 arrs+=(folders exclude)
-vars+=(host port type)
+vars+=(proto host port type)
 vars+=(my_hdr)
 
 # global for server fingerprints

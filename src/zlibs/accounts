@@ -60,7 +60,8 @@ new_account() {
 name $name
 email $acct
 login $acct
-imap $imap
+proto imap
+host $imap
 smtp $smtp
 auth $auth
 cert $cert
@@ -70,13 +71,12 @@ EOF
 	return 1
 }
 
-# account = type.name es: imap.default or smtp.gmail
 # -a defines which account name other than 'default'
 # results in the definition of global account variables:
 # name login host protocol port auth folders accountopt
 read_account() {
     typeset -al all
-    unset name email imap imap_port smtp smtp_port \
+    unset name email imap imap_port smtp smtp_port proto \
         host login transport auth cert options folders exclude
     # parse arguments
 
@@ -101,6 +101,7 @@ read_account() {
     /^#/ { next }
     /^name/ { printf "name=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^email/ { printf "email=\"%s\";", $2 }
+	/^proto/ { printf "proto=\"%s\";", $2 }
     /^imap / { printf "imap=\"%s\";", $2 }
     /^smtp / { printf "smtp=\"%s\";", $2 }
     /^host / { printf "host=\"%s\";", $2 }
@@ -135,18 +136,16 @@ read_account() {
     smtp_port=${smtp_port:-$imap_port}
 
     # fill in defaults
-    { test -z $name }       && { name="$type" }
-    { test -z $login }      && { login="$email" } # usually email and login are the same
-    { test -z $email }      && { email="$login" } # so if one is specified, deduce the other
-    { test -z $transport }  && { transport=TLS1 }
-    { test -z $certfile }   && { certfile="" }
-    { test -z $imap_port }  && { imap_port=993 }
-    { test -z $smtp_port }  && { smtp_port=587 }
-
-    { test -z $auth }       && { auth=plain }
-    { test -z $cert }       && { cert=ignore }
-    { test -z $accountopt } && { accountopt=keep }
-    # cert and password can be missing
+	proto=${proto:-imap}
+    name=${name:-$account}
+	login=${login:-$email}
+	email=${email:-$login}
+	transport=${transport:-TLS1}
+	imap_port=${imap_port:-993}
+	smtp_port=${smtp_port:-587}
+	auth=${auth:-plain}
+	cert=${cert:-ignore}
+	accountopt=${accountopt:-keep}
 
 	act "account in use: $login"
     func "name: $name"

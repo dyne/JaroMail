@@ -205,73 +205,85 @@ fetch() {
     nm_setup unread
     # setup :unread: as default tag
 
-    notice "Fetching email for account ${account}"
+	if [[ "$proto" = "imap" ]]; then
 
-    is_online ${imap} ${imap_port}
-    [[ $? = 0 ]] || { return 1 }
+		notice "Fetching email for IMAP account ${account}"
 
-    type=imap
-    host=$imap
-    port=$imap_port
-    [[ "$password" = "" ]] && {
-        ask_password
-        [[ $? = 0 ]] || {
-            error "Impossible to fetch email for account ${account}";
-            return 1 }
-    }
+		is_online ${imap} ${imap_port}
+		[[ $? = 0 ]] || { return 1 }
 
-    # this puts total size in $imap_info
-    # experimental only, commented out for now
-    # get_imap_info
+		type=imap
+		host=$imap
+		port=$imap_port
+		[[ "$password" = "" ]] && {
+			ask_password
+			[[ $? = 0 ]] || {
+				error "Impossible to fetch email for account ${account}";
+				return 1 }
+		}
 
-    # return here if the imap folders are all empty
-    # { test ${imap_info[${#imap_info}]} = 0 } && {
-    #	act "Mailbox is empty, nothing to fetch."
-    #	return 0 }
+		fmconf=("poll $imap with proto IMAP user \"$login\" there with password \"$password\"")
 
-    # notice "Total occupation is `human_size ${imap_info[${#imap_info}]}`"
+		[[ -z $accountopt ]] || { # add option configuration
+			fmconf+=(" ${accountopt} ") }
 
-    fmconf=("poll $imap with proto IMAP user \"$login\" there with password \"$password\"")
+		# check if folders on commandline
+		if [[ "$1" != "" ]]; then
 
-    [[ -z $accountopt ]] || { # add option configuration
-        fmconf+=(" ${accountopt} ") }
+			unset password
 
-    # check if folders on commandline
-    if [[ "$1" != "" ]]; then
+			act "commanded to fetch folders: $1"
+			folders=($1)
 
-        unset password
+        else
 
-        act "commanded to fetch folders: $1"
-        folders=($1)
+			# if no folders specified, use all
+			[[ "$folders" == "" ]] && {
+				folders=(`imap_list_folders`) }
+			act "${#folders} folders found"
 
+			# unset here because listing folders still needed a pass
+			unset password
 
-    else
+			# nothing to download, bail out with error
+			[[ ${#folders} == "0" ]] && return 1
 
-        # if no folders specified, use all
-        [[ "$folders" == "" ]] && {
-            folders=(`imap_list_folders`) }
-        act "${#folders} folders found"
+			# remove excludes
+			[[ ${#exclude} == "0" ]] || {
+				func "exclude folders: $exclude"
+				for e in ${exclude}; do
+					# fuzzy match
+					for f in ${folders}; do
+						[[ "$f" =~ "$e" ]] && {
+							folders=(${folders:#$f})
+						}
+					done
+				done
+			}
 
-        # unset here because listing folders still needed a pass
-        unset password
+		fi
 
-        # nothing to download, bail out with error
-        [[ ${#folders} == "0" ]] && return 1
+	elif [[ "$proto" = "pop" ]]; then
 
-        # remove excludes
-        [[ ${#exclude} == "0" ]] || {
-            func "exclude folders: $exclude"
-            for e in ${exclude}; do
-                # fuzzy match
-                for f in ${folders}; do
-                    [[ "$f" =~ "$e" ]] && {
-                        folders=(${folders:#$f})
-                    }
-                done
-            done
-        }
+		notice "Fetching email for POP account ${account}"
 
-    fi
+		is_online ${host} ${port}
+		[[ $? = 0 ]] || { return 1 }
+
+		type=pop
+		[[ "$password" = "" ]] && {
+			ask_password
+			[[ $? = 0 ]] || {
+				error "Impossible to fetch email for account ${account}";
+				return 1 }
+		}
+
+		fmconf=("poll $host with proto POP3 user \"$login\" there with password \"$password\"")
+
+		[[ -z $accountopt ]] || { # add option configuration
+			fmconf+=(" ${accountopt} ") }
+
+	fi
 
     if [ "$cert" = "check" ]; then
         # we now use system-wide certs
