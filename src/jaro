@@ -187,6 +187,7 @@ mkdir="`command -v mkdir` -m 700 -p"
 
 
 act "System in $WORKDIR"
+act "Mail in $MAILDIRS"
 
 PATH="$WORKDIR/bin:$PATH"
 

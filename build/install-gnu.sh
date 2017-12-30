@@ -17,6 +17,8 @@ touch $JARO_SHARE || {
     return 1
 }
 
+print "Installing in $JARO_SHARE"
+
 # cleanup previous installs
 rm -rf "$JARO_SHARE"
 mkdir -p "$JARO_SHARE"
