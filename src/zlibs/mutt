@@ -330,5 +330,7 @@ rm -f $MAILDIRS/.mutt/muttpass
 touch $MAILDIRS/.mutt/muttpass"
 
     mutt -F $MUTTDIR/rc ${=muttflags} ${=_fa}
-    return $?
+	local res=$?
+	reset
+    return $res
 }
