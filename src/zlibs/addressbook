@@ -294,13 +294,31 @@ import() {
     # case insensitive match
     unsetopt CASE_MATCH
 
+	# if argument is a file, assume is a group (one address per line)
+	# and add addresses from stdin to it, eliminating duplicates and
+	# invalid lines
+	[[ -r "$1" ]] && {
+		notice "Import address list into file: $1"
+		ztmp
+		local oldgroup=$ztmpfile
+		cp "$1" $oldgroup
+		local oldlines=${"$(wc -l $1)"[(w)1]}
+		ztmp
+		local input=$ztmpfile
+		grep -v '^#' >> $input
+		cat $oldgroup $input | sort | uniq > "$1"
+		local newlines=${"$(wc -l $1)"[(w)1]}
+		act "New addresses found: $(( $newlines - $oldlines ))"
+		return 0
+	}
+
+	# assume target is an addressbook
     notice "Import address list from stdin into addressbook $list"
 
     _new=0
     act "imported new entries will be printed on stdout"
 
-    e_addr=()
-    
+    local parsed=0
     # read_stdin
     # _stdin=`cat` # reads into var _stdin
     for i in "${(f)$(cat)}"; do
@@ -309,29 +327,27 @@ import() {
         # skip comments starting with #
         [[ "$i[1]" = "#" ]] && continue
 
+		e_addr=()
         print - "From: $i" | e_parse From
         [[ $? = 0 ]] || continue
 
-        _e="${e_parsed[(ws:,:)1]:l}"
-
-		# this error of parsed '@' occurs sometimes
-		[[ "$_e" = "@" ]] && continue
+		parsed=$(( $parsed + 1 ))
 
         # check if the email is not already known
-        lookup_email "$_e"
+        lookup_email "${(k)e_addr}"
         [[ $? = 0 ]] && {
-            func "email already known: $_e"
+            func "email already known: ${(k)e_addr}"
             continue
         }
 
-        _n="${e_parsed[(ws:,:)2]}"
+        # _n="${e_parsed[(ws:,:)2]}"
 
-        print - "$_n <$_e>"
-        [[ $DRYRUN = 0 ]] && insert_address "$_e" "$_n"
+        print - "${e_addr} <${(k)e_addr}>"
+        [[ $DRYRUN = 0 ]] && insert_address "${(k)e_addr}" "$e_addr"
 
         _new=$(( $_new + 1 ))
     done
-    notice "Valid unique entries parsed: ${#e_addr}"
+    notice "Valid unique entries parsed: $parsed"
     act "new addresses found: ${_new}"
     return 0
 }

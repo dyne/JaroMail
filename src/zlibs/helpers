@@ -85,6 +85,8 @@ e_parse() {
 
     for _p in ${(f)e_parsed}; do
         _e="${(Q)_p[(ws:,:)1]:l}"
+		# this error of parsed '@' occurs sometimes
+		[[ "$_e" = "@" ]] && continue
         # check if an email address was found
         isemail "$_e" || continue
         # avoid duplicates
