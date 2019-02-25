@@ -23,20 +23,19 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-is_mutt_kz() {
-	fn is_mutt_kz
+is_mutt_notmuch() {
+	fn is_mutt_notmuch
 	req=(MAILDIRS)
 	ckreq || return 1
 
     rm -f "$MAILDIRS/.mutt/notmuch"
     touch "$MAILDIRS/.mutt/notmuch"
     kz=`mutt -v | awk '/Configure options.*enable-notmuch/ { print $0 }'`
-    if [[ "$kz" = "" ]]; then
-         return 1
-    else
-        act "Notmuch powered mutt-kz detected, enabling extra features"
-        return 0
-    fi
+    [[ "$kz" = "" ]] || return 0
+	neo=`mutt -v | awk '/Configure options.*notmuch/ { print $0 }'`
+	[[ "$neo" = "" ]] || return 0
+    act "Notmuch support not found in mutt, disabling extra features"
+    return 1
 }
 
 use_notmuch() {
@@ -231,7 +230,7 @@ EOF
 	rm -f "$MAILDIRS/.mutt/notmuch"
 	touch "$MAILDIRS/.mutt/notmuch"
     # when peeking and using mutt-kz use the sidebar
-    is_mutt_kz && {
+    is_mutt_notmuch && {
 
 		# avoid hangs at boot for files not found
 		mkdir -p $MAILDIRS/.notmuch
