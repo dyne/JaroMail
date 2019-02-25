@@ -3,19 +3,15 @@
 os=`uname -o`
 action=$1
 
-[[ "$action" = "" ]] && {
-	print "usage: auto [ build | install ]"
-	return 1
-}
-
+print "$action on $os"
 case $os in
-	Cygwin)
-		print "Windows $action"
-		./build/${action}-win.sh
-		;;
-	GNU/Linux)
-		print "GNU/Linux $action"
-		./build/${action}-gnu.sh
-		;;
+    Cygwin)
+        print "Windows $action"
+        ./build/${action}-win.sh
+        ;;
+    GNU/Linux)
+        print "GNU/Linux $action"
+        ./build/${action}-gnu.sh
+        ;;
 esac
 
