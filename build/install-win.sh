@@ -46,7 +46,7 @@ done
 
 # fix pinentry w32 path
 [[ -r /usr/bin/pinentry ]] || {
-    ln -s /usr/bin/pinentry-w32 /usr/bin/pinentry
+    ln -sf /usr/bin/pinentry-w32 /usr/bin/pinentry
 }
 
 mkdir -p /usr/local/bin

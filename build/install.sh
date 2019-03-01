@@ -1,6 +1,12 @@
 #!/usr/bin/env zsh
 
 PREFIX=${PREFIX:-/usr/local}
+target=gnu
+os=`uname -o`
+case $os in
+    Cygwin) target=win ;;
+    GNU/Linux) target=gnu ;;
+esac
 
 # TODO: separate libexec from share
 JARO_SHARE_DIR=$PREFIX/share
@@ -27,7 +33,7 @@ mkdir -p "$JARO_SHARE"
     print "No permissions to install system-wide."; return 1 }
 
 { test -r doc } && { srcdir=. }
-{ test -r install-gnu.sh } && { srcdir=.. }
+{ test -r install-${target}.sh } && { srcdir=.. }
 
 { test -r $srcdir/src/fetchaddr } || {
     print "Error: first build, then install."; return 1 }
@@ -40,7 +46,7 @@ cp -ra $srcdir/src/stats/* $JARO_SHARE/.stats/
 # copy the executables
 mkdir -p $JARO_LIBEXEC/{bin,zlibs}
 cp $srcdir/src/jaro $JARO_LIBEXEC/bin
-cp -ra $srcdir/build/gnu/* $JARO_LIBEXEC/bin
+cp -ra $srcdir/build/${target}/* $JARO_LIBEXEC/bin
 cp -r $srcdir/src/zlibs/* $JARO_LIBEXEC/zlibs/
 cp -r $srcdir/src/zuper/{zuper,zuper.init} $JARO_LIBEXEC/zlibs
 

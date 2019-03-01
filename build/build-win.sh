@@ -6,8 +6,6 @@ builddir=`pwd`
 # cc="${builddir}/cc-static.zsh"
 cc="gcc -O3"
 
-pushd ..
-
 target=all
 { test -z $1 } || { target="$1" }
 # no other distro supported atm
@@ -17,7 +15,7 @@ mkdir -p build/win
 { test "$target" = "deps" } || {
     test "$target" = "all" } && {
     # only babun's pact supported for now
-            deps=(fetchmail msmtp mutt pinentry-curses pinentry-w32)
+            deps=(fetchmail msmtp neomutt pinentry)
             deps+=(sqlite3 abook)
             deps+=(make)
 
@@ -97,4 +95,3 @@ print "Now run 'make install' as root to install jaromail in /usr/local"
 print "use PREFIX=/home/private/jaromail to avoid system-wide installation."
 print
 
-popd

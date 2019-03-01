@@ -2,8 +2,17 @@
 
 os=`uname -o`
 action=$1
+# install is same script for both gnu and win
+[[ "$action" == "install" ]] && {
+	./build/install.sh
+	[[ "$os" == "Cygwin" ]] && {
+		# fix pinentry w32 path
+		ln -sf /usr/sbin/msmtp.exe /usr/bin/msmtp
+		ln -sf /usr/bin/neomutt.exe /usr/bin/mutt
+	}
+	return 0
+}
 
-print "$action on $os"
 case $os in
     Cygwin)
         print "Windows $action"
