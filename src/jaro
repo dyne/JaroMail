@@ -106,7 +106,7 @@ vars+=(PASS GNOMEKEY SECRET_TOOL PASSWORD_STORE_DIR)
 PASS=${PASS:-0}
 GNOMEKEY=${GNOMEKEY:-0}
 SECRET_TOOL=${SECRET_TOOL:-0}
-PASSWORD_STORE_DIR=${JARO_PASSWORD_STORE_DIR:-$MAILDIRS/.password-store}
+# PASSWORD_STORE_DIR=${JARO_PASSWORD_STORE_DIR:-$MAILDIRS/.password-store}
 
 # global variables for binaries called
 vars+=(rm mkdir mutt SQL OS)
@@ -371,7 +371,7 @@ check_bin() {
 		case $JARO_KEYRING in
 			pass)
 				act "keyring in use: pass (set in JARO_KEYRING)"
-				export PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
+				PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
 				[[ -d $PASSWORD_STORE_DIR ]] || {
 					error "the 'pass' keyring is found but not initialised"
 					error "run 'pass init your-gpg-id'"
