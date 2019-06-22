@@ -209,7 +209,6 @@ and actions involved in managing one's email communication:
 
    The most important files to start configuring are:
 
-   - Identity.txt : set up the way your email identity appear to others
    - Accounts/default.txt : main account configuration (there can be more)
    - Aliases.txt : more email addresses one may receive on the configured accounts
    - Filters.txt : Full set of mailinglist sorting rules
@@ -231,12 +230,10 @@ and actions involved in managing one's email communication:
    unless one is explicitly selected using the *-a* commandline
    option.
 
-   The file *Identity.txt* is also found in the Mail directory and it
-   contains basic settings on the published user identity (From:
-   field) and any other Mutt specific configuration directives, such
-   as custom headers appearing in composed e-mails and the default
-   GPG[fn:gpg] key to be used when signing and encrypting them.  For
-   more information about the vast amount of configurations that are
+   The file *Accounts/default.txt* can also contain *my_hdr* sections
+   that will configure custom header lines (for instance GPG-ID or
+   X-Organisation) that will be added to the mails sent. For more
+   information about the vast amount of configurations that are
    supported please refer to the Mutt documentation[fn:muttman]
 
 [fn:gpg] GPG stands for GNU Privacy Guard, a system to securely
@@ -1191,7 +1188,6 @@ version.
 
 # Give a name to this account
 name To Be Configured
-# configure Identity.txt to set your From: field
 
 # Email address (default is same as login)
 email unknown@dyne.org

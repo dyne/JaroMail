@@ -69,9 +69,6 @@ init_inbox() {
     { test -r "$MAILDIRS"/Manual.pdf } || {
     cp "$WORKDIR"/jaromail-manual.pdf "$MAILDIRS"/Manual.pdf }
 
-    { test -r "$MAILDIRS"/Identity.txt } || {
-    cp "$WORKDIR"/Identity.txt "$MAILDIRS"/Identity.txt }
-
     { test -r "$MAILDIRS"/Filters.txt } || {
     cp "$WORKDIR"/Filters.txt "$MAILDIRS"/Filters.txt }
 

@@ -30,6 +30,9 @@
 # in some localiaztion environments, generates 8bit data in that header, thereby
 # breaking PGP/MIME.
 
+# use long pgp ids (it is safer)
+set pgp_long_ids = yes
+
 # decode application/pgp
 set pgp_decode_command="gpg --status-fd=2 %?p?--passphrase-fd 0? --no-verbose --quiet --batch --output - '%f'"
 

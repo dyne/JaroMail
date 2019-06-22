@@ -16,6 +16,8 @@ unset use_8bitmime
 #set locale = "C"
 unset suspend
 unset wait_key
+# remove all extra headers first.
+unmy_hdr *
 
 set send_charset = utf-8
 set assumed_charset = utf-8
@@ -72,7 +74,10 @@ auto_view text/html
 
 ##################
 ## Compose options
-set weed = no
+set weed = yes
+set timeout = 5
+set imap_keepalive = 4
+
 
 ################
 ## Reply options

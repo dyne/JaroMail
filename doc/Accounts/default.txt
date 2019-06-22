@@ -3,7 +3,6 @@
 
 # Give a name to this account
 name To Be Configured
-# configure Identity.txt to set your From: field
 
 # Email address (default is same as login)
 email unknown@gmail.com
