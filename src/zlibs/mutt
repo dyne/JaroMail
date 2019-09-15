@@ -321,11 +321,6 @@ EOF
 
     uniq $_mboxes > $MAILDIRS/.mutt/mboxes
 
-    # schedule deletion of muttpass file after use
-    sched +3 "
-rm -f $MAILDIRS/.mutt/muttpass
-touch $MAILDIRS/.mutt/muttpass"
-
 	if [[ $DEBUG == 0 ]]; then
 		mutt -F $MUTTDIR/rc ${=muttflags} ${=_fa}
 	else
