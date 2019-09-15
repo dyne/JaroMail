@@ -302,19 +302,20 @@ set spoolfile=${iproto}://${ilogin}@${imap}:${imap_port}/INBOX
 EOF
 
 		print -n "mailboxes +INBOX +priv" > $_mboxes
+
 	else
 		print -n "mailboxes +known +priv" > $_mboxes
-	fi
+		# make the mailboxes according to filters and such
 
-    # make the mailboxes according to filters and such
-
-    for f in `cat "$MAILDIRS/Filters.txt" | awk '
+		for f in `cat "$MAILDIRS/Filters.txt" | awk '
     /^#/ {next}
     /^./ { print $4 }'`; do
-        # MUTT (generate mailboxes priority this parser)
-        print  " \\" >> $_mboxes
-        print -n " +${f} " >> $_mboxes
-    done
+			# MUTT (generate mailboxes priority this parser)
+			print  " \\" >> $_mboxes
+			print -n " +${f} " >> $_mboxes
+		done
+	fi
+
     print " \\" >> $_mboxes
     print " +unsorted.ml +unsorted" >> $_mboxes
 
