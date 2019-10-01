@@ -427,10 +427,11 @@ port ${smtp_port}
 tls on
 tls_starttls on
 tls_certcheck off
-logfile "${MAILDIRS}/logs/msmtp.log"
 auth ${auth}
 password ${password}
 EOF
+#	logfile "${MAILDIRS}/logs/msmtp.log"
+
     unset password
     msmtp -C $msmtpcfg -t
     res=$?
