@@ -622,9 +622,9 @@ elsif header :matches "X-BeenThere" "*@*" {
 elsif header :matches "List-Post" "<mailto:*@*" {
  fileinto :create "lists.\${1}.\${2}"; stop; }
 
-if anyof (header :contains "X-Mailman-Version" ".",
-          header :contains "Mailing-List" ".") {
-  fileinto :create "lists.unsorted"; stop; }
+if anyof (header :contains "X-Mailman-Version" "*",
+          header :contains "Mailing-List" "*") {
+  fileinto :create "unsorted.ml"; stop; }
 
 fileinto :create "unsorted";
 EOF
