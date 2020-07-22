@@ -54,7 +54,7 @@ ask_password() {
     password=""
     act "retrieving login credentials for ${email} ($account)"
     act "username '$login' on host '$host'"
-    func "keyring path: jaromail/${login}/${host}"
+    func "keyring path: email/${login}/${host}"
 
     # $host is set by the caller
     case $OS in
