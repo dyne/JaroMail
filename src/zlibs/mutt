@@ -79,7 +79,7 @@ set postponed= '$MAILDIRS/postponed/'
 set tmpdir = '$MAILDIRS/.mutt/cache'
 set sendmail = "$WORKDIR/bin/jaro -q queue"
 set header_cache= '$MAILDIRS/.mutt/cache'
-set maildir_header_cache_verify=no
+set message_cachedir = '$MAILDIRS/.mutt/cache
 set editor = "$WORKDIR/bin/jaro -q edit"
 set mailcap_path = "$MAILDIRS/.mutt/mailcap:$MAILDIRS/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
 
@@ -174,29 +174,30 @@ EOF
 
     # MUTT MAILCAP
 
-	# charset conversion
-    cat <<EOF > $MAILDIRS/.mutt/mailcap
-text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
-  && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
-text/plain; cat %s
-EOF
+# 	# charset conversion
+#     cat <<EOF > $MAILDIRS/.mutt/mailcap
+# text/plain; iconv -f iso-8859-1 -t utf-8; test=charset=%{charset} \
+#   && test x`echo \"$charset\" | tr a-z A-Z` = xISO-8859-1; copiousoutput
+# text/plain; cat %s
+# EOF
 
-	# HTML conversion
-    wwwtext=w3m
-    if command -v elinks > /dev/null; then
-    cat <<EOF >> $MAILDIRS/.mutt/mailcap
-text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput
-EOF
-    elif command -v w3m > /dev/null; then
-    cat <<EOF >> $MAILDIRS/.mutt/mailcap
-text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput
-EOF
-    elif command -v lynx > /dev/null; then
-    cat <<EOF >> $MAILDIRS/.mutt/mailcap
-text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
-EOF
-    fi
+# 	# HTML conversion
+#     wwwtext=w3m
+#     if command -v elinks > /dev/null; then
+#     cat <<EOF >> $MAILDIRS/.mutt/mailcap
+# text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput
+# EOF
+#     elif command -v w3m > /dev/null; then
+#     cat <<EOF >> $MAILDIRS/.mutt/mailcap
+# text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput
+# EOF
+#     elif command -v lynx > /dev/null; then
+#     cat <<EOF >> $MAILDIRS/.mutt/mailcap
+# text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
+# EOF
+#     fi
 
+## TODO: import into gcal?
 	command -v vcal > /dev/null && {
 		# VCAL conversion
 	cat <<EOF >> $MAILDIRS/.mutt/mailcap

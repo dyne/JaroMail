@@ -29,12 +29,8 @@ set hdr_format="%Z %3C %{%b %d} %-19.19L (%5c) %s"
 
 
 ignore *
-unignore From:
-unignore To:
-unignore Cc:
-unignore Subject:
-unignore Date:
-unignore User-Agent:
-unignore X-BeenThere:
-unignore Organization:
-unignore List-Id:
+unignore From: To: Cc: Subject: Date: User-Agent: X-BeenThere: Organization: List-Id:
+unhdr_order *
+hdr_order from: to: cc: bcc: date: subject:
+alternative_order text/plain text/enriched text/html
+auto_view text/html

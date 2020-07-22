@@ -68,9 +68,7 @@ set tilde
 set pager_stop
 # set pager_format = "-%S- %C/%m: %-20.20n   %s"
 set quote_regexp="^ *[a-zA-Z]*[]>|}=][]>|}:=]*"
-auto_view text/html
 # also text/plain to convert charset
-# auto_view text/plain
 
 ##################
 ## Compose options
