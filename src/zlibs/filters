@@ -575,7 +575,7 @@ EOF
     sieve_complex_filter 'if header :contains [ "To","Cc" ] '
 
     set -A sieve_filter_map ${(kv)filter_from}
-    sieve_complex_filter 'if header :contains "From"'
+    sieve_complex_filter 'if header :contains [ "From","Sender" ] '
 
 
 
@@ -595,7 +595,7 @@ EOF
             sieve_filter_array+=("$i")
         done
         sieve_filter \
-            'if header :contains "From"' \
+            'if header :contains [ "From","Sender" ]' \
             INBOX
     }
 
