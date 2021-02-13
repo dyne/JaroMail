@@ -169,7 +169,7 @@ int main(int argc, char* argv[])
     
     if (i < MAXHDRS-1 && *fieldname != '\0') {
       hdr[i].tag = safe_malloc (strlen (fieldname) + 2);
-      strncpy (hdr[i].tag, fieldname, strlen (fieldname));
+      strcpy (hdr[i].tag, fieldname);
       hdr[i].tag[strlen (fieldname)] = ':';
       hdr[i].tag[strlen (fieldname) + 1] = '\0';
       hdr[i].taglen = strlen (fieldname) + 1;
