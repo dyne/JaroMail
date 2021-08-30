@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyright (C) 2010-2015 Dyne.org Foundation
+# Copyright (C) 2010-2021 Dyne.org Foundation
 #
 # JaroMail is designed, written and maintained by Denis Roio <jaromil@dyne.org>
 #
@@ -23,8 +23,8 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 PROGRAM=jaro-mail
-VERSION=4.3-dev
-DATE=Mar/2017
+VERSION=5.0-dev
+DATE=Aug/2021
 JAROMAILEXEC=$0
 
 # default permission on files
@@ -233,24 +233,9 @@ fi
 
 
 ACCOUNTS="$MAILDIRS/Accounts"
-KEYRING="$MAILDIRS/Keyring"
-
-case $OS in
-    GNU)
-        # backward compatibility tests for old paths in JaroMail <1.3
-        { test -d $WORKDIR/Accounts } && { test ! -d $ACCOUNTS } && {
-            act "Updating accounts location: $ACCOUNTS"
-            cp -ra $WORKDIR/Accounts $ACCOUNTS
-        }
-
-        { test -r "$WORKDIR/keyring" } && { test ! -r "$KEYRING" } && {
-            act "Updating keyring location: $KEYRING"
-            cp $WORKDIR/keyring "$KEYRING"
-        }
-    ;;
-    MAC)
-    ;;
-esac
+mkdir -p $ACCOUNTS
+mkdir -p $ACCOUNTS
+cp -ra $WORKDIR/Accounts/* $ACCOUNTS/
 
 hostname=$(hostname) # gather the current hostname
 
@@ -295,7 +280,7 @@ hostname=$(hostname) # gather the current hostname
 check_bin() {
 
     # required programs
-    for req in pinentry fetchmail gpg mutt msmtp; do
+    for req in pinentry fetchmail gpg msmtp; do
         isfound $req
         { test $? != 0 } && {
             error "Cannot find $req. Please install it."
@@ -329,26 +314,21 @@ check_bin() {
 
     # which mutt binary to use
     if isfound mutt; then
-        # system-wide
-        # TODO: check if this is also the location on Fedora
-        pgpewrap="${WORKDIR}/bin/gpgewrap"
-        dotlock="${WORKDIR}/bin/dotlock"
-    elif isfound mutt-jaro; then
-        # in-house compiled
-        mutt=mutt-jaro
-        pgpewrap=pgpewrap
-        dotlock=dotlock
-    else
-        error "Cannot find Mutt. Please install it."
-        exit 1
+	mutt_exec=mutt
+    elif isfound neomutt; then
+	mutt_exec=neomutt
     fi
-    func "Mutt binary: `command -v mutt`"
+    pgpewrap="${WORKDIR}/bin/gpgewrap"
+    dotlock="${WORKDIR}/bin/dotlock"
+
+    func "Mutt binary: $mutt_exec"
     func "Notmuch binary: `command -v notmuch`"
 	func "Keyring set: $JARO_KEYRING"
 	if [[ "$JARO_KEYRING" == "" ]]; then
 		# check for pass, else fallback
 		if isfound pass; then
 			act "keyring in use: pass (auto-detected)"
+			PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
 			[[ -d $PASSWORD_STORE_DIR ]] ||
 				warning "the 'pass' keyring is found but not initialised"
 

@@ -68,7 +68,7 @@ Make sure you have installed the following dependencies on your operating system
 
 To build:
 ```
-libglib2.0-dev libgnome-keyring-dev libxapian-dev libgmime-2.6-dev libtalloc-dev zlib1g-dev libgpgme11-dev
+make gcc libc-dev
 ```
 To run:
 ```

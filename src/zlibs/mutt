@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyright (C) 2017 Dyne.org Foundation
+# Copyright (C) 2017-2021 Dyne.org Foundation
 #
 # JaroMail is designed, written and maintained by Denis Roio <jaromil@dyne.org>
 #
@@ -25,15 +25,13 @@
 
 is_mutt_notmuch() {
 	fn is_mutt_notmuch
-	req=(MAILDIRS)
+	req=(MAILDIRS mutt_exec)
 	ckreq || return 1
 
     rm -f "$MAILDIRS/.mutt/notmuch"
     touch "$MAILDIRS/.mutt/notmuch"
-    kz=`mutt -v | awk '/Configure options.*enable-notmuch/ { print $0 }'`
-    [[ "$kz" = "" ]] || return 0
-	neo=`mutt -v | awk '/Configure options.*notmuch/ { print $0 }'`
-	[[ "$neo" = "" ]] || return 0
+    res=`${mutt_exec} -v | awk '/Configure options.*notmuch/ { print $0 }'`
+    [[ "$res" = "" ]] || return 0
     act "Notmuch support not found in mutt, disabling extra features"
     return 1
 }
@@ -48,7 +46,7 @@ use_notmuch() {
 
 x_mutt() {
 	fn x_mutt $*
-	req=(MAILDIRS WORKDIR)
+	req=(MAILDIRS WORKDIR mutt_exec)
 	ckreq || return 1
 
 	# main conf
@@ -280,7 +278,7 @@ EOF
     rm -f $MAILDIRS/.mutt/mboxes
 
     for i; do _fa+=" $i "; done
-    func "exec: mutt -F $MUTTDIR/rc ${=muttflags} ${_fa}"
+    func "exec: ${mutt_exec} -F $MUTTDIR/rc ${=muttflags} ${_fa}"
 
 	ztmp
 	_mboxes=$ztmpfile
@@ -306,6 +304,8 @@ EOF
 
 	else
 		print -n "mailboxes +known +priv" > $_mboxes
+		maildirmake "${MAILDIRS}/known"
+		maildirmake "${MAILDIRS}/priv"
 		# make the mailboxes according to filters and such
 
 		for f in `cat "$MAILDIRS/Filters.txt" | awk '
@@ -314,18 +314,22 @@ EOF
 			# MUTT (generate mailboxes priority this parser)
 			print  " \\" >> $_mboxes
 			print -n " +${f} " >> $_mboxes
+			# make sure the maildir exists (no overwrite)
+			maildirmake "${MAILDIRS}/${f}"
 		done
 	fi
 
     print " \\" >> $_mboxes
     print " +unsorted.ml +unsorted" >> $_mboxes
+    maildirmake "${MAILDIRS}/unsorted"
+    maildirmake "${MAILDIRS}/unsorted.ml"
 
     uniq $_mboxes > $MAILDIRS/.mutt/mboxes
 
 	if [[ $DEBUG == 0 ]]; then
-		mutt -F $MUTTDIR/rc ${=muttflags} ${=_fa}
+		${mutt_exec} -F $MUTTDIR/rc ${=muttflags} ${=_fa}
 	else
-		mutt -D -d 2 -F $MUTTDIR/rc ${=muttflags} ${=_fa}
+		${mutt_exec} -D -d 2 -F $MUTTDIR/rc ${=muttflags} ${=_fa}
 		func "DEBUG log in ~/.*muttdebug*"
 	fi
 
