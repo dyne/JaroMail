@@ -235,7 +235,7 @@ fi
 ACCOUNTS="$MAILDIRS/Accounts"
 mkdir -p $ACCOUNTS
 mkdir -p $ACCOUNTS
-cp -ra $WORKDIR/Accounts/* $ACCOUNTS/
+[[ -r $ACCOUNTS/default.txt ]] || cp -ra $WORKDIR/Accounts/* $ACCOUNTS/
 
 hostname=$(hostname) # gather the current hostname
 
