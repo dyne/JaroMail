@@ -595,7 +595,20 @@ main() {
         exitcode=$?
         ;;
 
-    update|init)
+    init)
+        [[ "$option_params" = "" ]] || {
+            for p in $option_params; do
+                [[ "$p" = "." ]] && p=$PWD
+                [[ -d $p ]] && MAILDIRS=$p
+            done
+        }
+        init_inbox
+	nm_index
+        notice "Initialization completed in $MAILDIRS"
+        act "configure accounts in $MAILDIRS/Accounts"
+        ;;
+
+    update)
         [[ "$option_params" = "" ]] || {
             for p in $option_params; do
                 [[ "$p" = "." ]] && p=$PWD
