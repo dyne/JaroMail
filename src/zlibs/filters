@@ -54,10 +54,13 @@ init_inbox() {
     maildirmake "$MAILDIRS/remember"
     maildirmake "$MAILDIRS/outbox"
 
-    if [[ $PASS = 1 ]]; then
-        GPGID=${$(awk '/default-key/ { print $2 }' $HOME/.gnupg/gpg.conf)}
-		[[ -f "$PASSWORD_STORE_DIR/.gpg-id" ]] || pass init ${GPGID}
-    fi
+    [[ -f "$PASSWORD_STORE_DIR/.gpg-id" ]] || {
+	[[ -r $HOME/.gnupg/gpg.conf ]] && {
+            GPGID=${$(awk '/default-key/ { print $2 }' $HOME/.gnupg/gpg.conf)}
+	    pass init ${GPGID}
+	}
+    }
+
     ${=mkdir} "$MAILDIRS/cache"
     ${=mkdir} "$MAILDIRS/logs"
     ${=mkdir} "$MAILDIRS/tmp"
