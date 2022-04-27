@@ -320,9 +320,8 @@ EOF
 	fi
 
     print " \\" >> $_mboxes
-    print " +unsorted.ml +unsorted" >> $_mboxes
+    print " +unsorted" >> $_mboxes
     maildirmake "${MAILDIRS}/unsorted"
-    maildirmake "${MAILDIRS}/unsorted.ml"
 
     uniq $_mboxes > $MAILDIRS/.mutt/mboxes
 

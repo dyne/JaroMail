@@ -277,7 +277,6 @@ content, even when intercepting the communication.
 | *known*        | Mails whose sender is known (Whitelist)          |
 | *priv*         | Unknown sender, we are among explicit recipients |
 | *unsorted*     | Unknown sender, we are not among recipients      |
-| *unsorted.ml*  | From a mailinglist that we haven't filtered yet  |
 | *zz.blacklist* | Mails whose sender is not desired (Blacklist)    |
 | *zz.spam*      | Mails that are tagged as spam (server-side)      |
 | *zz.bounces*   | Mail bounces like mailman and similar            |
@@ -357,7 +356,7 @@ If you have configured the *keep* option, which is the default, Jaro Mail will o
 
 This will launch mutt on the first folder containing unread emails, starting from the *known* folder, then *priv*, then all the destinations specified by *Filters.txt* exactly in the ascending order they are listed in that configuration file..
 
-From there on, pressing *=* or *c* you can change to other folders and your *unsorted* and *unsorted.ml* mails.
+From there on, pressing *=* or *c* you can change to other folders and your *unsorted* mails.
 
 ** Write a new mail
 

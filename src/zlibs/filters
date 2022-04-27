@@ -50,7 +50,6 @@ init_inbox() {
     maildirmake "$MAILDIRS/priv"
     maildirmake "$MAILDIRS/postponed"
     maildirmake "$MAILDIRS/unsorted"
-    maildirmake "$MAILDIRS/unsorted.ml"
     maildirmake "$MAILDIRS/remember"
     maildirmake "$MAILDIRS/outbox"
 
@@ -445,22 +444,6 @@ filter_maildir() {
         done
         [[ $match = 1 ]] && continue
 
-        # its an unkown mailinglist
-        [[ $_ml = 1 ]] && {
-            [[ "$mdinput" = "unsorted.ml" ]] && {
-                act "$c\t/ $numm"
-                continue
-            }
-            act "$c\t/ $numm\t-> unsorted.ml"
-            [[ $DRYRUN = 1 ]] || {
-                printfile "$m" | deliver unsorted.ml "+unsorted +mailinglist"
-                [[ $? = 0 ]] && {
-                    rm "$m"
-                    continue
-                }
-            }
-        }
-
         # if here then file to unsorted
         if [ "$mdinput" = "unsorted" ]; then
             act "$c\t/ $numm"
@@ -624,10 +607,6 @@ elsif header :matches "X-BeenThere" "*@*" {
  fileinto :create "lists.\${1}.\${2}"; stop; }
 elsif header :matches "List-Post" "<mailto:*@*" {
  fileinto :create "lists.\${1}.\${2}"; stop; }
-
-if anyof (header :contains "X-Mailman-Version" "*",
-          header :contains "Mailing-List" "*") {
-  fileinto :create "unsorted.ml"; stop; }
 
 fileinto :create "unsorted";
 EOF
