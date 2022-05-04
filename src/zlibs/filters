@@ -601,14 +601,9 @@ EOF
 
     # unsorted
     cat <<EOF >> "$MAILDIRS/Filters.sieve"
-if header :matches "List-Id" "*<*>" {
-  fileinto :create "lists.\${2}"; stop; }
-elsif header :matches "X-BeenThere" "*@*" {
- fileinto :create "lists.\${1}.\${2}"; stop; }
-elsif header :matches "List-Post" "<mailto:*@*" {
- fileinto :create "lists.\${1}.\${2}"; stop; }
 
 fileinto :create "unsorted";
+
 EOF
 
     unlock "$MAILDIRS/Filters.sieve"
