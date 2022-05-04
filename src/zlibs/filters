@@ -28,7 +28,7 @@
 #  3. Check if From Filters match  -> own.setup
 #  4. Check if To   Filters match  -> own.setup
 #  5. Check if From in whitelist   -> known
-#  6. Check if /X-Spam-Flag.*YES/  -> zz.spam
+#  6. Check if /X-Spam-Flag.*YES/  -> Spam
 #  7. Check if To own address      -> priv
 #  8. All the rest                 -> unsorted
 #
@@ -409,13 +409,13 @@ filter_maildir() {
 
         hdr "$m" | awk '/X-Spam-Flag.*YES/ { exit 1 }'
         { test $? = 0 } || {
-            [[ "$mdinput" = "zz.spam" ]] && {
+            [[ "$mdinput" = "Spam" ]] && {
                 act "$c\t/ $numm"
                 continue
             }
-            act "$c\t/ $numm\t-> zz.spam"
+            act "$c\t/ $numm\t-> Spam"
             [[ $DRYRUN = 1 ]] || {
-                printfile "$m" | deliver zz.spam
+                printfile "$m" | deliver Spam
                 [[ $? = 0 ]] && { rm "$m" }
                 continue
             }
@@ -588,7 +588,7 @@ EOF
         cat <<EOF >> "$MAILDIRS/Filters.sieve"
 # spam
 if header :is "X-Spam-Flag" "YES" {
-    fileinto :create "zz.spam"; stop;
+    fileinto :create "Spam"; stop;
 }
 
 EOF

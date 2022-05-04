@@ -70,7 +70,7 @@ path=$MAILDIRS
 
 [new]
 tags=$deftags
-ignore=tmp;cache;logs;outbox;incoming;zz.social;zz.bounces;zz.blacklist;zz.spam;Accounts;Groups;.mutt;webnomad;Aliases.txt;Filters;Manual.pdf;Mutt.txt;whitelist.abook;blacklist.abook;Applications.txt;Filters.sieve;Filters.txt
+ignore=tmp;cache;logs;outbox;incoming;zz.social;zz.bounces;zz.blacklist;zz.spam;Spam;Accounts;Groups;.mutt;webnomad;Aliases.txt;Filters;Manual.pdf;Mutt.txt;whitelist.abook;blacklist.abook;Applications.txt;Filters.sieve;Filters.txt
 
 [maildir]
 synchronize_flags=true
