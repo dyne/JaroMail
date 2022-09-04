@@ -78,15 +78,18 @@ fi
 
 # what operating system are we in? use os_detect()
 # simplifying modes of operation: GNU or MAC
-case $(uname -o) in
-    GNU/Linux) OS=GNU
+case $(uname -s) in
+    Linux) OS=GNU
     notice "Jaro Mail v${VERSION} running on GNU/Linux"	;;
 
     Darwin) OS=MAC
     notice "Jaro Mail v${VERSION} running on Mac/OSX"	;;
 
     Cygwin) OS=WIN
-        notice "Jaro Mail v${VERSION} runing on MS/Win" ;;
+        notice "Jaro Mail v${VERSION} running on MS/Win" ;;
+
+    OpenBSD) OS=GNU
+	notice "Jaro Mail v${VERSION} running on OpenBSD" ;;
 
     *) OS=GNU # default
     error "Running on an unknown operating system, assuming GNU" ;;
@@ -235,7 +238,7 @@ fi
 ACCOUNTS="$MAILDIRS/Accounts"
 mkdir -p $ACCOUNTS
 mkdir -p $ACCOUNTS
-[[ -r $ACCOUNTS/default.txt ]] || cp -ra $WORKDIR/Accounts/* $ACCOUNTS/
+[[ -r $ACCOUNTS/default.txt ]] || cp -a $WORKDIR/Accounts/* $ACCOUNTS/
 
 hostname=$(hostname) # gather the current hostname
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 
-os=`uname -o`
+os=`uname -s`
 action=$1
 # install is same script for both gnu and win
 [[ "$action" == "install" ]] && {
@@ -18,9 +18,14 @@ case $os in
         print "Windows $action"
         ./build/${action}-win.sh
         ;;
-    GNU/Linux)
+    Linux)
         print "GNU/Linux $action"
         ./build/${action}-gnu.sh
         ;;
+    OpenBSD)
+	print "OpenBSD $action"
+        ./build/${action}-bsd.sh
+	;;
+
 esac
 

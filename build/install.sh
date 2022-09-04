@@ -2,10 +2,10 @@
 
 PREFIX=${PREFIX:-/usr/local}
 target=gnu
-os=`uname -o`
+os=`uname -s`
 case $os in
     Cygwin) target=win ;;
-    GNU/Linux) target=gnu ;;
+    Linux) target=gnu ;;
 esac
 
 # TODO: separate libexec from share
@@ -39,14 +39,14 @@ mkdir -p "$JARO_SHARE"
     print "Error: first build, then install."; return 1 }
 
 mkdir -p $JARO_SHARE/{.mutt,.stats}
-cp -ra $srcdir/doc/* $JARO_SHARE/
-cp -ra $srcdir/src/mutt/* $JARO_SHARE/.mutt/
-cp -ra $srcdir/src/stats/* $JARO_SHARE/.stats/
+cp -r $srcdir/doc/* $JARO_SHARE/
+cp -r $srcdir/src/mutt/* $JARO_SHARE/.mutt/
+cp -r $srcdir/src/stats/* $JARO_SHARE/.stats/
 
 # copy the executables
 mkdir -p $JARO_LIBEXEC/{bin,zlibs}
 cp $srcdir/src/jaro $JARO_LIBEXEC/bin
-cp -ra $srcdir/build/${target}/* $JARO_LIBEXEC/bin
+cp -r $srcdir/build/${target}/* $JARO_LIBEXEC/bin
 cp -r $srcdir/src/zlibs/* $JARO_LIBEXEC/zlibs/
 cp -r $srcdir/src/zuper/{zuper,zuper.init} $JARO_LIBEXEC/zlibs
 
