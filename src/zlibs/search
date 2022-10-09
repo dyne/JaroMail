@@ -29,12 +29,9 @@
 nm() {
     fn "notmuch $*"
 
-    [[ -r "$MAILDIRS"/cache/notmuch/rc ]] || nm_setup
-    lock "$MAILDIRS"/cache/notmuch
-    notmuch --config="$MAILDIRS"/cache/notmuch/rc $*
-    _res=$?
-    unlock "$MAILDIRS"/cache/notmuch
-    [[ $_res = 0 ]] || {
+    [[ -r "$MAILDIRS"/notmuch-config ]] || nm_setup
+    notmuch --config="$MAILDIRS"/notmuch-config $*
+    [[ $? = 0 ]] || {
         error "Notmuch error on command: ${@}"
         func "Returning status to caller: $_res"
     }
@@ -44,8 +41,7 @@ nm() {
 nm_setup() {
     fn nm_setup
 
-    nm_dir="$MAILDIRS"/cache/notmuch
-    mkdir -p $nm_dir
+    nm_conf="$MAILDIRS"/notmuch-config
 
     # setup the default tags for all new messages
     deftags="$1"
@@ -55,7 +51,7 @@ nm_setup() {
     # read if there are other email aliases configured
     [[ -r "$MAILDIRS"/Aliases.txt ]] && {
         other_email="other_email"
-        _aliases=`cat "$MAILDIRS"/Aliases.txt`
+        _aliases=`grep -v '^#' "$MAILDIRS"/Aliases.txt`
         _sep=\=
         for i in ${(f)_aliases}; do
             other_email+="${_sep}${i}"
@@ -63,27 +59,27 @@ nm_setup() {
         done
     }
 
-    rm -f "$nm_dir"/rc
-    cat <<EOF > "$nm_dir"/rc
+    rm -f "$nm_conf"
+    cat <<EOF > "$nm_conf"
 [database]
 path=$MAILDIRS
 
 [new]
 tags=$deftags
-ignore=tmp;cache;logs;outbox;incoming;zz.social;zz.bounces;zz.blacklist;zz.spam;Spam;Accounts;Groups;.mutt;webnomad;Aliases.txt;Filters;Manual.pdf;Mutt.txt;whitelist.abook;blacklist.abook;Applications.txt;Filters.sieve;Filters.txt
+ignore=tmp;cache;logs;outbox;incoming;zz.social;zz.bounces;zz.blacklist;zz.spam;Spam;Accounts;Groups;.mutt;webnomad;Aliases.txt;Filters;Manual.pdf;Mutt.txt;whitelist.abook;blacklist.abook;Applications.txt;Filters.sieve;Filters.txt;.password-store;.envrc;.host;.last;.tty;.uid;alot-config;notmuch-config;bind-hooks;sieve-update
 
 [maildir]
 synchronize_flags=true
 EOF
-    [[ "$name" = "" ]] || {
-        cat <<EOF >> "$nm_dir"/rc
+    [[ "$name" = "" ]] && read_account
 
+    cat <<EOF >> "$nm_conf"
 [user]
 name=$name
 primary_email=$email
 $other_email
 EOF
-    }
+
 }
 
 nm_index() {
@@ -93,7 +89,8 @@ nm_index() {
     read_account
     notice "Indexing all mail archive"
     act "please wait, this may take a while..."
-    nm_setup
+    lock "$MAILDIRS"/cache/notmuch
+
     nm new
     nm tag +inbox +priv -unsorted folder:known
     nm tag +inbox +priv -unsorted folder:sent
@@ -101,6 +98,7 @@ nm_index() {
     nm tag -inbox -priv +unsorted folder:unsorted
     act "compressing database"
     nm compact
+    unlock "$MAILDIRS"/cache/notmuch
     notice "Indexing completed"
 }
 
@@ -116,57 +114,38 @@ update_notmuch() {
 
 search() {
     fn search $*
-    func "searching for ${#option_params} terms"
+    notice "Searching for ${#option_params} terms"
     # launch the search with notmuch
-    _results=""
 
-    ztmp
-    nm search --output=files $* >> $ztmpfile
-    search_results=(`cat $ztmpfile`)
-    
+    nm search --output=files $*
+
     [[ $? = 0 ]] || {
         error "notmuch search failed with an error"
         return 1
     }
-
-    notice "${#search_results} matches found"
 }
 
-
-# run a search with notmuch and show results with alot
-alot_search() {
-    fn alot_search $*
-
-    read_account
-    nm_setup
-    
-    notice "Searching emails for: ${=option_params}"
-
-    # read if there are other email aliases configured
-    [[ -r "$MAILDIRS"/Aliases.txt ]] && {
-        other_email="aliases"
-        _aliases=`cat "$MAILDIRS"/Aliases.txt`
-        _sep=" = "
-        for i in ${(f)_aliases}; do
-            other_email+="${_sep}${i}"
-            _sep=","
-        done
-    }
+alot_setup() {
+	fn alot_setup $*
+	nm_setup
+	act "alot setup configuration"
+	other_email=`grep '^other_email' "${MAILDIRS}/notmuch-config"`
+	name=`grep '^name=' "${MAILDIRS}/notmuch-config" | cut -d= -f2`
+	email=`grep '^primary_email=' "${MAILDIRS}/notmuch-config" | cut -d= -f2`
 
     # setup alot to show results
-    mkdir -p "$MAILDIRS"/cache/alot
-    cat <<EOF > "$MAILDIRS"/cache/alot/rc
+    cat <<EOF > "$MAILDIRS"/alot-config
 
 editor_cmd = jaro edit
 edit_headers_whitelist = From,To,Cc,Subject
-displayed_headers = From,To,Cc,Bcc,Subject,User-Agent
+displayed_headers = From,To,Cc,Bcc,Subject
 auto_remove_unread = True
 honor_followup_to = True
 hooksfile = $MAILDIRS/cache/alot/hooks.py
 initial_command = search tag:inbox
 prefer_plaintext = True
 tabwidth = 4
-user_agent = Jaro Mail <http://jaromail.dyne.org>
+user_agent = JaroMail <https://dyne.org/software/jaro-mail>
 
 [bindings]
   i = search tag:inbox
@@ -185,7 +164,7 @@ user_agent = Jaro Mail <http://jaromail.dyne.org>
         $other_email
         [[[abook]]]
            type = shellcommand
-           command = jaro -q search addr 
+           command = jaro -q search addr
            regexp = (?P<name>.+)\s*<(?P<email>.*.+?@.+?)>
 
 [tags]
@@ -215,7 +194,22 @@ user_agent = Jaro Mail <http://jaromail.dyne.org>
     translated = ☰
 EOF
 
-    alot -c "$MAILDIRS"/cache/alot/rc -n "$MAILDIRS"/cache/notmuch/rc \
+}
+
+# run a search with notmuch and show results with alot
+alot_search() {
+    fn alot_search $*
+
+    notice "Searching emails for: ${=option_params}"
+	[[ -r "$MAILDIRS"/notmuch-config ]] || {
+		error "notmuch configuration not found"
+		error "run: jaro update"
+		return 1
+	}
+
+    alot -r \
+		-c "$MAILDIRS"/alot-config \
+		-n "$MAILDIRS"/notmuch-config \
         search $*
 
     return $?

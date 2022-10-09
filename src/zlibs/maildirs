@@ -305,16 +305,14 @@ deliver() {
     dest=${1:-incoming}
     
     # create destination maildir if not existing
-    [[ -r "$MAILDIRS/$dest" ]] || {
+    [[ -d "$MAILDIRS/$dest" ]] || {
         act "creating destination maildir: $dest"
         maildirmake "$MAILDIRS/$dest"
-    }
-
-    maildircheck "$MAILDIRS/$dest"
-    [[ $? = 0 ]] || {
-        error "Invalid maildir destination for delivery, operation aborted."
-        func "Returning error to caller."
-        return 1
+		[[ $? = 0 ]] || {
+            error "Could not deliver email file into maildir $dest"
+            func "Returning error to caller."
+            return 1
+        }
     }
 
     func "deliver to $dest"
@@ -336,17 +334,19 @@ deliver() {
         }
         return 0
     }
-    
+
     #########
     # notmuch indexing from here
-    tags="$2"
-    func "indexing tags: $tags"
-
-    nm insert --folder="$dest" ${=tags}
-    res=$?
-    [[ $res = 0 ]] || \
-        error "Could not deliver email file into maildir $dest with tags $tags"
+	command -v notmuch > /dev/null && {
+		tags="$2"
+		func "indexing tags: $tags"
+		# nm is our function wrapper to notmuch providing lock
+		nm insert --folder="$dest" ${=tags}
+		notmuch_res=$?
+		[[ $notmuch_res = 0 ]] || \
+			error "Could not deliver email file into maildir $dest with tags $tags"
+	}
     
-    return $res
+    return 0
     
 }

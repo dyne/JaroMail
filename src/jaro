@@ -471,7 +471,10 @@ main() {
 
     option_subcommands[index]=""
     option_subcommands[search]=""
+
+    option_subcommands[alot-config]=""
     option_subcommands[alot]=""
+    option_subcommands[notmuch-config]=""
     option_subcommands[notmuch]=""
 
     option_subcommands[addr]=""
@@ -601,14 +604,17 @@ main() {
     init)
         [[ "$option_params" = "" ]] || {
             for p in $option_params; do
-                [[ "$p" = "." ]] && p=$PWD
-                [[ -d $p ]] && MAILDIRS=$p
+                [[ "$p" = "." ]] && p="$PWD"
+				[[ -d "$JAROMAILDIR" ]] && MAILDIRS="$JAROMAILDIR"
+                [[ -d "$p" ]] && MAILDIRS="$p"
             done
         }
         init_inbox
-	nm_index
+		nm_setup
         notice "Initialization completed in $MAILDIRS"
         act "configure accounts in $MAILDIRS/Accounts"
+		act "notmuch config in $MAILDIRS/notmuch-config"
+		act "sieve filters in $MAILDIRS/Filters.sieve"
         ;;
 
     update)
@@ -624,11 +630,14 @@ main() {
         update_notmuch
         notice "Initialization completed in $MAILDIRS"
         act "configure accounts in $MAILDIRS/Accounts"
+		act "notmuch config in $MAILDIRS/notmuch-config"
+		act "sieve filters in $MAILDIRS/Filters.sieve"
         ;;
 
     help) usage ;;
 
-    index) nm_index
+    index) nm_setup
+		   nm_index
            exitcode=$?
            ;;
 
@@ -641,8 +650,18 @@ main() {
             } | save_replay $subcommand
             ;;
 
+	alot-config)
+		alot_setup
+		cat "$MAILDIRS/alot-config"
+		notice "to set as default do:\nmkdir -p ~/.config/alot && jaro alot-config > ~/.config/alot/config"
+		;;
+
     alot) alot_search ${option_params} ;;
 
+	notmuch-config)
+		nm_setup
+		cat "$MAILDIRS/notmuch-config"
+		;;
     notmuch)
             notice "Command: notmuch ${option_params}"
             nm ${option_params} | save_replay $subcommand

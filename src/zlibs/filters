@@ -126,14 +126,12 @@ EOF
 filter_to+=("${regexp}" "${destination}")
 EOF
                 func "from: <${regexp}> -> ${destination}"
-                maildirmake $MAILDIRS/$destination
                 ;;
             from)
                 cat <<EOF >> "$ff"
 filter_from+=("${regexp}" "${destination}")
 EOF
                 func "to: <${regexp}> -> ${destination}"
-                maildirmake $MAILDIRS/$destination
                 ;;
 
             *)
