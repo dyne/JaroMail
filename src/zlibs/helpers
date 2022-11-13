@@ -175,13 +175,11 @@ replay() {
 }
 
 #########
-## Editor
-# this part guesses what is the best editor already present on the system
-# of course we have a preference for AutOrg, the editor from our suite
-# however the default is nano if nothing else is choosen.
+## Vim Editor
+## no more line wrap to 72
 jarovim() {
     fn jarovim
-    vim -c 'set fo=tcrq' -c 'set tw=72' \
+    vim -c 'set formatoptions=tcrq' -c 'set tw=4096' \
         -c 'map <C-j> {gq}' -c 'imap <C-j> <esc>{gq}i' \
         "${@}"
     return $?
