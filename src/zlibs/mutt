@@ -89,12 +89,12 @@ macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q learn sende
 
 
 # specific configuration files
-source '$WORKDIR/.mutt/gpg'
-source '$WORKDIR/.mutt/crypto'
-source '$WORKDIR/.mutt/general'
-source '$WORKDIR/.mutt/formats'
-source '$WORKDIR/.mutt/keybindings'
-source '$WORKDIR/.mutt/colors'
+source '$WORKDIR/mutt/gpg'
+source '$WORKDIR/mutt/crypto'
+source '$WORKDIR/mutt/general'
+source '$WORKDIR/mutt/formats'
+source '$WORKDIR/mutt/keybindings'
+source '$WORKDIR/mutt/colors'
 
 # identity built parsing accounts (using myhdr)
 source '$MAILDIRS/.mutt/identity'

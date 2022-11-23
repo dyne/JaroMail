@@ -88,7 +88,7 @@ case $(uname -s) in
     Cygwin) OS=WIN
         notice "Jaro Mail v${VERSION} running on MS/Win" ;;
 
-    OpenBSD) OS=GNU
+    OpenBSD|FreeBSD) OS=GNU
 	notice "Jaro Mail v${VERSION} running on OpenBSD" ;;
 
     *) OS=GNU # default

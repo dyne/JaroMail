@@ -11,7 +11,7 @@ all:
 install:
 	$(info Installing JaroMail in ${JARO_SHARE})
 	@mkdir -p ${JARO_SHARE}/mutt ${JARO_SHARE}/stats
-	@mkdir -p ${JARO_LIBEXEC}/bin ${JARP_LIBEXEC}/zlibs
+	@mkdir -p ${JARO_LIBEXEC}/bin ${JARO_LIBEXEC}/zlibs
 	@chmod -R a+rX ${JARO_SHARE}
 	@cp -r ${srcdir}/doc/* ${JARO_SHARE}/
 	@cp -r ${srcdir}/src/mutt/* ${JARO_SHARE}/mutt/
@@ -19,7 +19,7 @@ install:
 	@cp ${srcdir}/src/jaro ${JARO_LIBEXEC}/bin
 	@cp -r ${srcdir}/build/gnu/* ${JARO_LIBEXEC}/bin
 	@cp -r ${srcdir}/src/zlibs/* ${JARO_LIBEXEC}/zlibs/
-	@cp -r ${srcdir}/src/zuper/zuper* ${JARO_LIBEXEC}/zlibs
+	@cp -r ${srcdir}/src/zuper/zuper* ${JARO_LIBEXEC}/zlibs/
 	@mkdir -p ${PREFIX}/bin
 	@echo "#!/usr/bin/env zsh" > ${PREFIX}/bin/jaro
 	@echo "export JAROWORKDIR=${JARO_SHARE}" >> ${PREFIX}/bin/jaro

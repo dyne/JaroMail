@@ -22,8 +22,8 @@ case $os in
         print "GNU/Linux $action"
         ./build/${action}-gnu.sh
         ;;
-    OpenBSD)
-	print "OpenBSD $action"
+    OpenBSD|FreeBSD)
+	print "BSD $action"
         ./build/${action}-bsd.sh
 	;;
 

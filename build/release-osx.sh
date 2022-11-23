@@ -37,7 +37,7 @@ for z in `find $WORKDIR/zlibs -type f`; do
 done
 
 
-cp -r ../src/mutt/*     $WORKDIR/.mutt/
+cp -r ../src/mutt/*     $WORKDIR/mutt/
 cp -r ../src/stats/*    $WORKDIR/.stats/
 cp ../doc/Applications.txt $WORKDIR/
 cp ../doc/Filters.txt      $WORKDIR/
