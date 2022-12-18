@@ -88,8 +88,8 @@ case $(uname -s) in
     Cygwin) OS=WIN
         notice "Jaro Mail v${VERSION} running on MS/Win" ;;
 
-    OpenBSD|FreeBSD) OS=GNU
-	notice "Jaro Mail v${VERSION} running on OpenBSD" ;;
+    OpenBSD|FreeBSD|NetBSD) OS=BSD
+	notice "Jaro Mail v${VERSION} running on a BSD System" ;;
 
     *) OS=GNU # default
     error "Running on an unknown operating system, assuming GNU" ;;
@@ -136,7 +136,7 @@ vars+=(list)
 list=whitelist
 
 # global variables for accounts
-vars+=(name login imap imap_port smtp smtp_port protocol password auth accountopt)
+vars+=(name login iproto imap imap_port smtp smtp_port protocol password auth accountopt)
 arrs+=(folders exclude)
 vars+=(proto host port type)
 vars+=(my_hdr)
