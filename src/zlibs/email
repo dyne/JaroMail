@@ -572,17 +572,13 @@ peek() {
 		folder="${1}"
 		act "opening folder ${folder}"
     fi
+	iproto="imaps"
+	[[ "$transport" == "plain" ]] && {
+		warning "using clear text connection"
+		iproto="imap"
+    }
+	act "IMAP transport: $transport ($iproto)"
 
-    case $transport in
-		SSL*|TLS*) act "using secure connection ($transport)"
-				   iproto="imaps" ;;
-		plain) act "using clear text connection"
-			   iproto="imap"  ;;
-		*)
-			error "Unknown transport: $transport"
-			error "Configuration error in imap account ${account}"
-			return 1 ;;
-    esac
     # escape at sign in login
     ilogin=`print $login | sed 's/@/\\@/'`
 
