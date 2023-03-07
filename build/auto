@@ -23,7 +23,7 @@ case $os in
         ./build/${action}-gnu.sh
         ;;
     OpenBSD|FreeBSD)
-	print "BSD $action"
+	print "$os $action"
         ./build/${action}-bsd.sh
 	;;
 
