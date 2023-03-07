@@ -615,6 +615,11 @@ main() {
         act "configure accounts in $MAILDIRS/Accounts"
 		act "notmuch config in $MAILDIRS/notmuch-config"
 		act "sieve filters in $MAILDIRS/Filters.sieve"
+		cat <<EOF > $MAILDIRS/.envrc
+export JAROMAILDIR=\$(pwd)
+export JAROWORKDIR=/usr/local/share/jaromail
+EOF
+		act "direnv configuration in $MAILDIRS/.envrc"
         ;;
 
     update)
