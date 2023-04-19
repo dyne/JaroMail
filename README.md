@@ -72,7 +72,7 @@ make gcc libc-dev
 ```
 To run:
 ```
-fetchmail msmtp neomutt notmuch pinentry-curses abook wipe
+fetchmail msmtp neomutt notmuch pinentry-curses abook wipe netcat-traditional
 ```
 
 # INSTALL
