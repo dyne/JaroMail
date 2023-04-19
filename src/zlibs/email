@@ -176,7 +176,7 @@ fetchall() {
 
     notice "Fetching all accounts in $MAILDIRS"
     res=0
-    accts=`${=find} $MAILDIRS/Accounts -type f | grep -v README`
+    accts=`${=find} $ACCOUNTS -type f | grep -v README`
     notice "Fetching mail for all accounts: `print ${accts} | wc -l` found"
     for i in ${(f)accts}; do
         account=`basename $i`

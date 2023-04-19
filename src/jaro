@@ -45,10 +45,13 @@ elif [ -r /Applications/JaroMail.app ]; then
 else
     MAILDIRS=$HOME/Mail
 fi
-
 # end override
 MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
 
+if [ -r $MAILDIRS/Accounts ]; then
+	ACCOUNTS="$MAILDIRS/Accounts"
+fi
+ACCOUNTS=${JAROACCOUNT:-$ACCOUNTS}
 
 # check if we are testing from source
 if [[ -r ../src/jaro ]]; then
@@ -612,7 +615,7 @@ main() {
         init_inbox
 		nm_setup
         notice "Initialization completed in $MAILDIRS"
-        act "configure accounts in $MAILDIRS/Accounts"
+        act "configure accounts in $ACCOUNTS"
 		act "notmuch config in $MAILDIRS/notmuch-config"
 		act "sieve filters in $MAILDIRS/Filters.sieve"
 		cat <<EOF > $MAILDIRS/.envrc
@@ -634,7 +637,7 @@ EOF
         update_sieve
         update_notmuch
         notice "Initialization completed in $MAILDIRS"
-        act "configure accounts in $MAILDIRS/Accounts"
+        act "configure accounts in $ACCOUNTS"
 		act "notmuch config in $MAILDIRS/notmuch-config"
 		act "sieve filters in $MAILDIRS/Filters.sieve"
         ;;
