@@ -180,20 +180,20 @@ EOF
 # EOF
 
 # 	# HTML conversion
-#     wwwtext=w3m
-#     if command -v elinks > /dev/null; then
-#     cat <<EOF >> $MAILDIRS/.mutt/mailcap
-# text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput
-# EOF
-#     elif command -v w3m > /dev/null; then
-#     cat <<EOF >> $MAILDIRS/.mutt/mailcap
-# text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput
-# EOF
-#     elif command -v lynx > /dev/null; then
-#     cat <<EOF >> $MAILDIRS/.mutt/mailcap
-# text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
-# EOF
-#     fi
+wwwtext=w3m
+if command -v elinks > /dev/null; then
+cat <<EOF >> $MAILDIRS/.mutt/mailcap
+text/html; elinks -dump -dump-charset %{charset} %s; nametemplate=%s.html; copiousoutput
+EOF
+elif command -v w3m > /dev/null; then
+cat <<EOF >> $MAILDIRS/.mutt/mailcap
+text/html; w3m -I %{charset} -T text/html %s; nametemplate=%s.html; copiousoutput
+EOF
+elif command -v lynx > /dev/null; then
+cat <<EOF >> $MAILDIRS/.mutt/mailcap
+text/html; lynx -dump -assume_charset=%{charset} %s; nametemplate=%s.html; copiousoutput
+EOF
+fi
 
 ## TODO: import into gcal?
 	command -v vcal > /dev/null && {
