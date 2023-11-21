@@ -20,6 +20,23 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+mblaze_setup() {
+	fn mblaze_setup $*
+	${=mkdir} "$MAILDIRS/.mblaze"
+	if [[ -r  "$MAILDIRS/.mblaze/profile" ]]; then
+		warning "Cannot overwrite mblaze conf: $MAILDIRS/.mblaze/profile"
+		warning "Delete it manually if desired."
+	else
+		read_account
+		cat <<EOF > "$MAILDIRS/.mblaze/profile"
+Local-Mailbox: ${name} <${email}>
+# Alternate-Mailboxes: TODO Aliases.txt
+FQDN: jaromail
+Sendmail: jaro queue
+Sendmail-Args: ""
+EOF
+	fi
+}
 # extract all emails found in stdin, one per line
 stdin_compose() {
     fn stdin_compose $*

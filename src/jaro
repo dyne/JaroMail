@@ -607,13 +607,18 @@ main() {
     init)
         init_inbox
 		nm_setup
-		[[ -r "$MAILDIRS/.envrc" ]] || {
+		mblaze_setup
+		if [[ -r "$MAILDIRS/.envrc" ]]; then
+			warning "Cannot overwrite direnv conf: $MAILDIRS/.envrc"
+			warning "Delete it manually if desired."
+		else
 			cat <<EOF > "$MAILDIRS/.envrc"
 export JAROMAILDIR=$MAILDIRS
 export JAROWORKDIR=/usr/local/share/jaromail
 export NOTMUCH_CONFIG=$MAILDIRS/notmuch-config
+export MBLAZE=$MAILDIRS/.mblaze
 EOF
-		}
+		fi
 		command -v direnv >/dev/null || {
 			direnv allow
 			act "direnv configuration in .envrc"
