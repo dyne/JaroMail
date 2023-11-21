@@ -35,26 +35,6 @@ if [[ ${@} == *-q* ]]; then QUIET=1; fi
 if [[ ${@} == *-D* ]]; then DEBUG=1; fi
 
 
-# check if we are inside the directory
-if [ -r jaro/bin/jaro ]; then
-    MAILDIRS="$PWD"
-# check if we are on OSX
-elif [ -r /Applications/JaroMail.app ]; then
-    MAILDIRS="$HOME/Library/Application Support/JaroMail"
-# else use GNU/Linux default
-elif [ -r "$HOME/Mail" ]; then
-	MAILDIRS="$HOME/Mail"
-else
-	MAILDIRS="$PWD"
-fi
-# end override
-MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
-
-if [ -r $MAILDIRS/Accounts ]; then
-	ACCOUNTS="$MAILDIRS/Accounts"
-fi
-ACCOUNTS=${JAROACCOUNT:-$ACCOUNTS}
-
 # check if we are testing from source
 if [[ -r ../src/jaro ]]; then
     WORKDIR="../src"
@@ -104,6 +84,8 @@ esac
 
 # global variables
 vars+=(DEBUG QUIET DRYRUN CALLMUTT MAILDIRS WORKDIR)
+vars+=(ADDRESSBOOK)
+
 QUIET=${QUIET:-0}
 DEBUG=${DEBUG:-0}
 DRYRUN=${DRYRUN:-0}
@@ -187,15 +169,32 @@ vars+=(muttflags)
 
 autoload colors; colors
 
-# default addressbook
-ADDRESSBOOK="$MAILDIRS/whitelist.abook"
-
 # which command to use when creating dirs
 mkdir="`command -v mkdir` -m 700 -p"
 
 
+MAILDIRS="$PWD"
+# check if we are on OSX
+if [ -r /Applications/JaroMail.app ]; then
+    MAILDIRS="$HOME/Library/Application Support/JaroMail"
+# else use GNU/Linux default
+elif [ -r "$HOME/Mail/Filters.txt" ]; then
+	MAILDIRS="$HOME/Mail"
+fi
+# end override
+MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
+
+# default addressbook
+ADDRESSBOOK="$MAILDIRS/whitelist.abook"
+
+if [ -r $MAILDIRS/Accounts ]; then
+	ACCOUNTS="$MAILDIRS/Accounts"
+fi
+ACCOUNTS=${JAROACCOUNT:-$ACCOUNTS}
+
 act "System in $WORKDIR"
 act "Mail in $MAILDIRS"
+act "Accounts in $ACCOUNTS"
 
 PATH="$WORKDIR/bin:$PATH"
 
@@ -536,6 +535,19 @@ main() {
 	option.parse $* || return 1
 	func "subcommand: $subcommand"
 
+    if [[ "$option_params" = "" ]]; then
+		MAILDIRS="$PWD"
+	else
+        for p in $option_params; do
+            [[ "$p" = "." ]] && p="$PWD"
+			[[ -d "$JAROMAILDIR" ]] && MAILDIRS="$JAROMAILDIR"
+            [[ -d "$p" ]] && MAILDIRS="$p"
+        done
+    fi
+        act "configure accounts in $ACCOUNTS"
+		act "notmuch config in $MAILDIRS/notmuch-config"
+		act "sieve filters in $MAILDIRS/Filters.sieve"
+
 	# print out version
     if option.is_set -v; then
 		cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
@@ -579,7 +591,7 @@ main() {
             exitcode=$?
             ;;
 
-    fetch)  fetch ${option_params} && \
+    fetch) 	fetch ${option_params} && \
                  update_filters && \
                  filter_maildir incoming && \
                  update_notmuch
@@ -604,23 +616,8 @@ main() {
         ;;
 
     init)
-        if [[ "$option_params" = "" ]]; then
-			MAILDIRS="$PWD"
-		else
-            for p in $option_params; do
-                [[ "$p" = "." ]] && p="$PWD"
-				[[ -d "$JAROMAILDIR" ]] && MAILDIRS="$JAROMAILDIR"
-                [[ -d "$p" ]] && MAILDIRS="$p"
-            done
-        fi
-
         init_inbox
 		nm_setup
-
-        notice "Initialization completed in $MAILDIRS"
-        act "configure accounts in $ACCOUNTS"
-		act "notmuch config in $MAILDIRS/notmuch-config"
-		act "sieve filters in $MAILDIRS/Filters.sieve"
 		[[ -r "$MAILDIRS/.envrc" ]] || {
 			cat <<EOF > "$MAILDIRS/.envrc"
 export JAROMAILDIR=$MAILDIRS
@@ -631,6 +628,8 @@ EOF
 			direnv allow
 			act "direnv configuration in .envrc"
 		}
+        notice "Initialization completed in $MAILDIRS"
+
         ;;
 
     update)
@@ -645,9 +644,6 @@ EOF
         update_sieve
         update_notmuch
         notice "Initialization completed in $MAILDIRS"
-        act "configure accounts in $ACCOUNTS"
-		act "notmuch config in $MAILDIRS/notmuch-config"
-		act "sieve filters in $MAILDIRS/Filters.sieve"
         ;;
 
     help) usage ;;
