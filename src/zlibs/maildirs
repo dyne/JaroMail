@@ -52,6 +52,12 @@ maildirmake() {
     error "internal error: missing argument for maildirmake"
     return 255 }
 
+	# use mblaze if found
+	command -v mmkdir > /dev/null && {
+		mmkdir "$1"
+		return $?
+	}
+
     { test -f "$1" } && {
     func "not a maildir, but a file: $1"
     return 254 }
@@ -149,152 +155,6 @@ rmdupes() {
         act "$tot total duplicates found and deleted"
     fi
 }
-
-merge() {
-    _src=${1}
-    _dst=${2}
-
-    [[ "$_src" = "$_dst" ]] && {
-        error "Cannot merge same directory in itself: $_src = $_dst"
-        return 1 }
-
-    maildircheck "$_src"
-    [[ $? = 0 ]] || {
-        error "Source is not a maildir: $_src"
-        return 1
-    }
-    
-    maildircheck "$_dst"
-    [[ $? = 0 ]] || {
-        error "Destination is not a maildir: $_dst"
-        return 1
-    }
-
-    # merge does not uses deliver() because
-    # the new-flag and read-flags must be kept intact.
-    # it will abort on any single error on moving each file.
-    notice "Merging maildir ${_src} into ${_dst}"
-    fr=`${=find} ${_src} -type f`
-
-    c=0
-    for i in ${(f)fr}; do
-        
-        refile "$i" "$_dst"
-        [[ $? = 0 ]] || {
-            # bail out on every single error
-            error "Error refiling emails to destination maildir"
-            error "Operation aborted, $c files moved."
-            return 1
-        }
-        c=$(($c + 1))
-    done
-    notice "$c mails succesfully moved"
-
-    [[ $DRYRUN = 0 ]] && {
-        act "Removing source directory ${_src}"
-        ${=rm} -r "${_src}"
-    }
-    
-    act "Done. All mails merged into ${_dst}"
-}
-
-maildir_shift() {
-    fn maildir_shift $*
-    dst=${1}
-    cmd=${2:-cp}
-    req=(dst)
-    freq=($dst)
-    ckreq || return 1
-
-    maildircheck "$dst"
-    [[ $? = 0 ]] || {
-        error "Destination is not a maildir: $dst"
-        return 1
-    }
-
-    [[ "$cmd" = "" ]] || {
-        case $cmd in
-            mv|cp) ;;
-            ln)
-                cmd="ln -s"
-                ;;
-            *)
-                error "refile command not supported: $cmd"
-                return 1
-                ;;
-        esac
-    }
-
-    notice "Moving paths on stdin to maildir: $dst"
-
-    for f in "${(f)$(cat)}"; do
-        [[ -r $f ]] || {
-            error "file not found: $f"
-            error "move operation aborted."
-            return 1
-        }
-
-        srcarr=(  ${=f//\// } )
-        srcnum=${#srcarr}
-        pos=${srcarr[$(( $srcnum - 1 ))]}
-
-        func "$cmd $f ${dst}/${pos}/"
-        [[ $DRYRUN = 0 ]] && {
-            ${=cmd} $f ${dst}/${pos}/
-            print -n .
-        }
-    done
-    return 0
-}
-    
-
-# move an email file from a maildir to another
-# keeping cur/new/tmp positioning
-refile() {
-    fn refile $*
-    src="$1"
-    dst="$2"
-    cmd=${3:-mv}
-    req=(src dst)
-    ckreq || {
-        error "refile() needs 2 args: source file and destination maildir"
-        return 1
-    }
-
-    [[ -r "$src" ]] || {
-        error "refile origin file not existing: $src"
-        return 1
-    }
-
-    # weak destination check, called should use maildircheck anyway
-    [[ -d "$dst"/new ]] || {
-        error "refile destination not a maildir: $dst"
-        return 1
-    }
-
-    [[ "$cmd" = "" ]] || {
-        case $cmd in
-            mv|cp) ;;
-            ln)
-                cmd="ln -s"
-                ;;
-            *)
-                error "refile command not supported: $cmd"
-                return 1
-                ;;
-        esac
-    }
-
-    func "refile command: $cmd"
-
-    srcarr=(  ${=src//\// } )
-    srcnum=${#srcarr}
-    pos=${srcarr[$(( $srcnum - 1 ))]}
-    func "$cmd $src ${dst}/${pos}/"
-    [[ $DRYRUN = 0 ]] && ${=cmd} $src ${dst}/${pos}/
-    return $?
-}
-
 
 # LDA delivery to a maildir
 # important to return 1 on all errors

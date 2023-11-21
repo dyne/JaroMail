@@ -715,23 +715,7 @@ EOF
         exitcode=$?
         ;;
 
-    copy)
-        maildir_shift ${option_params} cp
-        exitcode=$?
-        ;;
-
-    move)
-        maildir_shift ${option_params} mv
-        exitcode=$?
-        ;;
-
-    link)
-        maildir_shift ${option_params} ln
-        exitcode=$?
-        ;;
-
     rmdupes) rmdupes ${option_params} ;;
-    merge)   merge ${option_params}   ;;
 
     filter)
         update_filters || {
