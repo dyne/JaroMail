@@ -37,13 +37,15 @@ if [[ ${@} == *-D* ]]; then DEBUG=1; fi
 
 # check if we are inside the directory
 if [ -r jaro/bin/jaro ]; then
-    MAILDIRS=`pwd`
+    MAILDIRS="$PWD"
 # check if we are on OSX
 elif [ -r /Applications/JaroMail.app ]; then
     MAILDIRS="$HOME/Library/Application Support/JaroMail"
 # else use GNU/Linux default
+elif [ -r "$HOME/Mail" ]; then
+	MAILDIRS="$HOME/Mail"
 else
-    MAILDIRS=$HOME/Mail
+	MAILDIRS="$PWD"
 fi
 # end override
 MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
@@ -238,17 +240,21 @@ else
 fi
 
 
-ACCOUNTS="$MAILDIRS/Accounts"
-mkdir -p $ACCOUNTS
-mkdir -p $ACCOUNTS
-[[ -r $ACCOUNTS/default.txt ]] || cp -a $WORKDIR/Accounts/* $ACCOUNTS/
-
 hostname=$(hostname) # gather the current hostname
 
 [[ "$1" = "source" ]] || { # skip checks if just sourcing
 
+    [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
+
+    # make sure the permissions are private
+    chmod 700 "$MAILDIRS"
+
+    [[ -d "$MAILDIRS/logs" ]] || { ${=mkdir} "$MAILDIRS/logs" }
+
     # make sure we have a directory for account configurations
-    { test -d "$ACCOUNTS" } || { ${=mkdir} "$ACCOUNTS" }
+    [[ -d "$ACCOUNTS" ]] || { ${=mkdir} "$ACCOUNTS" }
+
+	[[ -r $ACCOUNTS/default.txt ]] || cp -a $WORKDIR/Accounts/* $ACCOUNTS/
 
     # make sure we have a local keyring in case system-wide not found
     # { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
@@ -256,13 +262,6 @@ hostname=$(hostname) # gather the current hostname
     # make sure we have an addressbook
     [[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
 
-    ${=mkdir} "$MAILDIRS"
-
-    # make sure the permissions are private
-    chmod 700 "$MAILDIRS"
-
-    ${=mkdir} "$MAILDIRS/logs"
-    # ${=mkdir} "$MAILDIRS/certs"
 
     MUTTDIR="$MAILDIRS/.mutt"
     { test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
@@ -605,24 +604,33 @@ main() {
         ;;
 
     init)
-        [[ "$option_params" = "" ]] || {
+        if [[ "$option_params" = "" ]]; then
+			MAILDIRS="$PWD"
+		else
             for p in $option_params; do
                 [[ "$p" = "." ]] && p="$PWD"
 				[[ -d "$JAROMAILDIR" ]] && MAILDIRS="$JAROMAILDIR"
                 [[ -d "$p" ]] && MAILDIRS="$p"
             done
-        }
+        fi
+
         init_inbox
 		nm_setup
+
         notice "Initialization completed in $MAILDIRS"
         act "configure accounts in $ACCOUNTS"
 		act "notmuch config in $MAILDIRS/notmuch-config"
 		act "sieve filters in $MAILDIRS/Filters.sieve"
-		cat <<EOF > $MAILDIRS/.envrc
-export JAROMAILDIR=\$(pwd)
+		[[ -r "$MAILDIRS/.envrc" ]] || {
+			cat <<EOF > "$MAILDIRS/.envrc"
+export JAROMAILDIR=$MAILDIRS
 export JAROWORKDIR=/usr/local/share/jaromail
 EOF
-		act "direnv configuration in $MAILDIRS/.envrc"
+		}
+		command -v direnv >/dev/null || {
+			direnv allow
+			act "direnv configuration in .envrc"
+		}
         ;;
 
     update)
