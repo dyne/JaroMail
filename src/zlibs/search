@@ -80,6 +80,7 @@ primary_email=$email
 $other_email
 EOF
 
+	notmuch --config "$nm_conf" new
 }
 
 nm_index() {

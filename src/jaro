@@ -4,7 +4,7 @@
 #
 # a tool to easily and privately handle your e-mail communication
 #
-# Copyright (C) 2010-2021 Dyne.org Foundation
+# Copyright (C) 2010-2023 Dyne.org Foundation
 #
 # JaroMail is designed, written and maintained by Denis Roio <jaromil@dyne.org>
 #
@@ -23,8 +23,8 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 PROGRAM=jaro-mail
-VERSION=5.0-dev
-DATE=Aug/2021
+VERSION=6.0
+DATE=Nov/2023
 JAROMAILEXEC=$0
 
 # default permission on files
@@ -84,7 +84,7 @@ esac
 
 # global variables
 vars+=(DEBUG QUIET DRYRUN CALLMUTT MAILDIRS WORKDIR)
-vars+=(ADDRESSBOOK)
+vars+=(ADDRESSBOOK ACCOUNTS)
 
 QUIET=${QUIET:-0}
 DEBUG=${DEBUG:-0}
@@ -187,9 +187,7 @@ MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
 # default addressbook
 ADDRESSBOOK="$MAILDIRS/whitelist.abook"
 
-if [ -r $MAILDIRS/Accounts ]; then
-	ACCOUNTS="$MAILDIRS/Accounts"
-fi
+ACCOUNTS="$MAILDIRS/Accounts"
 ACCOUNTS=${JAROACCOUNT:-$ACCOUNTS}
 
 act "System in $WORKDIR"
@@ -622,6 +620,7 @@ main() {
 			cat <<EOF > "$MAILDIRS/.envrc"
 export JAROMAILDIR=$MAILDIRS
 export JAROWORKDIR=/usr/local/share/jaromail
+export NOTMUCH_CONFIG=$MAILDIRS/notmuch-config
 EOF
 		}
 		command -v direnv >/dev/null || {
