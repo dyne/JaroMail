@@ -311,11 +311,13 @@ EOF
 		for f in `cat "$MAILDIRS/Filters.txt" | awk '
     /^#/ {next}
     /^./ { print $4 }'`; do
-			# MUTT (generate mailboxes priority this parser)
-			print  " \\" >> $_mboxes
-			print -n " +${f} " >> $_mboxes
-			# deliver() will make sure the maildir exists
-			# maildirmake "${MAILDIRS}/${f}"
+			[[ -d "$f" ]] && {
+				# MUTT (generate mailboxes priority this parser)
+				print  " \\" >> $_mboxes
+				print -n " +${f} " >> $_mboxes
+				# deliver() will make sure the maildir exists
+				# maildirmake "${MAILDIRS}/${f}"
+			}
 		done
 	fi
 
