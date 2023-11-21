@@ -89,7 +89,7 @@ update_filters() {
     fn update_filters
     req=(MAILDIRS)
     freq=($MAILDIRS/Filters.txt)
-    ckreq
+    ckreq || return 1
 
     notice "Updating filters..."
 
@@ -189,7 +189,8 @@ filter_maildir() {
     # Makes glob matching case insensitive
     unsetopt CASE_MATCH
 
-    mdinput="$1"
+    # default maildir to filter is incoming
+    mdinput="${1:-incoming}"
 
     # for safety we bail out in case the final fallback
     # maildir is not existing. unsorted should always
@@ -206,9 +207,6 @@ filter_maildir() {
         source $MAILDIRS/cache/filters
         ownfilters=1
     }
-
-    # default maildir to filter is incoming
-    mdinput=${1:-incoming}
 
     maildircheck "$MAILDIRS/$mdinput"
     [[ $? = 0 ]] || {

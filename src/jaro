@@ -35,6 +35,9 @@ if [[ ${@} == *-q* ]]; then QUIET=1; fi
 if [[ ${@} == *-D* ]]; then DEBUG=1; fi
 
 
+# use GNU/Linux default in local
+WORKDIR="/usr/local/share/jaromail"
+
 # check if we are testing from source
 if [[ -r ../src/jaro ]]; then
     WORKDIR="../src"
@@ -44,9 +47,6 @@ elif [[ -r /Applications/JaroMail.app/Contents/Resources/jaro ]]; then
 elif [[ -r /usr/share/jaromail/bin/jaro ]]; then
     # use GNU/Linux default in usr
     WORKDIR="/usr/share/jaromail"
-else
-    # use GNU/Linux default in local
-    WORKDIR="/usr/local/share/jaromail"
 fi
 
 # env override
@@ -533,18 +533,9 @@ main() {
 	option.parse $* || return 1
 	func "subcommand: $subcommand"
 
-    if [[ "$option_params" = "" ]]; then
-		MAILDIRS="$PWD"
-	else
-        for p in $option_params; do
-            [[ "$p" = "." ]] && p="$PWD"
-			[[ -d "$JAROMAILDIR" ]] && MAILDIRS="$JAROMAILDIR"
-            [[ -d "$p" ]] && MAILDIRS="$p"
-        done
-    fi
-        act "configure accounts in $ACCOUNTS"
-		act "notmuch config in $MAILDIRS/notmuch-config"
-		act "sieve filters in $MAILDIRS/Filters.sieve"
+    func "configure accounts in $ACCOUNTS"
+	func "notmuch config in $MAILDIRS/notmuch-config"
+	func "sieve filters in $MAILDIRS/Filters.sieve"
 
 	# print out version
     if option.is_set -v; then
@@ -743,10 +734,9 @@ EOF
     merge)   merge ${option_params}   ;;
 
     filter)
-        update_filters ${option_params}
-        [[ $? = 0 ]] || {
+        update_filters || {
             error "error updating filters, operation aborted."
-            break
+			return 1
         }
         filter_maildir ${option_params} | save_replay $subcommand
         exitcode=$?
