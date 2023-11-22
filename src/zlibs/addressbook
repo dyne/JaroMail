@@ -123,17 +123,20 @@ complete() {
 
 sender_isknown() {
 	fn sender_isknown $*
-    # extract only headers from stdin
-    head="`awk '
+	local e_from=""
+	if command -v maddr > /dev/null; then
+		local email_regex="([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})"
+		e_from=`echo $body | maddr -h 'from' - | grep -oP "$email_regex"`
+		e_from=${e_from:l}
+	else
+		local head="`awk '
 { print $0 }
 /^$/ { exit }' | ${WORKDIR}/bin/fetchaddr -x From -a`"
-
-    email="${head[(ws:,:)1]:l}"
-    isemail $email
-    [[ $? = 0 ]] || { return 1 }
-
-    abook --datafile $MAILDIRS/$list.abook \
-        --mutt-query "$email" > /dev/null
+		e_from="${head[(ws:,:)1]:l}"
+	fi
+	isemail $e_from || return 1
+	abook --datafile $MAILDIRS/$list.abook \
+		  --mutt-query "$e_from" > /dev/null
     return $?
 }
 

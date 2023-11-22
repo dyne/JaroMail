@@ -98,7 +98,7 @@ update_filters() {
 
     notice "Updating filters..."
 
-    ff="$MAILDIRS/cache/filters"
+    local ff="$MAILDIRS/cache/filters"
     ${=mkdir} "$MAILDIRS/cache"
 
     [[ -r "$ff" ]] && { rm -f "$ff" }
@@ -113,6 +113,9 @@ filter_own=()
 filter_to=()
 
 EOF
+
+	local ffilters
+
     ffilters=`awk '
     /^#/ {next}
     /^./ { print $1 ";" $2 ";" $3 ";" $4 }' "$MAILDIRS/Filters.txt"`
@@ -174,6 +177,14 @@ filter_own+=($i)
 EOF
         done
     }
+
+	func "insert addressbook whitelist in the cache"
+	ffilters=`jaro addr -l whitelist | getemail`
+	for f in ${(f)ffilters}; do
+		cat <<EOF >> "$ff"
+filter_from+=("${f}" "known")
+EOF
+	done
 
     #
     func "unlocking and compiling the cache"
@@ -292,50 +303,48 @@ filter_maildir() {
             # run all filter regexps on the from: field
             _dest=""
             e_addr=()
-            hdr "$m" | e_parse From
-            [[ $? = 0 ]] && {
+			local femail=""
+			if command -v maddr > /dev/null; then
+				femail=`maddr -h from "$m" | getemail`
+			else
+				hdr "$m" | e_parse From
                 femail="${(k)e_addr}" # e_parse From hit is always one
-                for exp in ${(k)filter_from}; do
-
-                    # fuzzy match on a string (PCRE)
-                    if [[ "$femail" =~ "$exp" ]]; then
-
-                        # retrieve the filter destination maildir
-                        _dest="${filter_from[$exp]}"
-
-                        # if destination maildir is same as input, skip
-                        [[ "$_dest" = "$mdinput" ]] && {
-                            act "$c\t/ $numm"
-                            match=1
-                            break
-                        }
-
-                        act "$c\t/ $numm\t-> $_dest\t(from $femail)"
-
-                        # tag mailinglists
-                        [[ $DRYRUN = 1 ]] || {
-                            if [[ $_ml = 1 ]]; then
-                                printfile "$m" | deliver "$_dest" "+filtered +mailinglist"
-                            else
-                                printfile "$m" | deliver "$_dest" "+filtered"
-                            fi
-                        }
-
-                        if [[ $? = 0 ]]; then
-                            match=1
-                            rm "$m"
-                            break
-                        else
-                            error "Error filtering to maildir $_dest"
-                            error "File: $m"
-                            continue
-                        fi
+			fi
+            for exp in ${(k)filter_from}; do
+				local found=0
+				if [[ "$femail" == "$exp" ]]; then
+					found=1
+				elif [[ "$femail" =~ "$exp" ]]; then
+					found=1	# fuzzy match on a string (PCRE)
+				fi
+                if [[ "$found" == "1" ]]; then
+                    # retrieve the filter destination maildir
+                    _dest="${filter_from[$exp]}"
+                    # if destination maildir is same as input, skip
+                    [[ "$_dest" == "$mdinput" ]] && {
+                        act "$c\t/ $numm"
+                        match=1
+                        break
+                    }
+                    act "$c\t/ $numm\t-> $_dest\t(from $femail)"
+                    # tag mailinglists
+                    [[ $DRYRUN = 1 ]] || {
+						printfile "$m" | deliver "$_dest"
+                    }
+                    if [[ $? = 0 ]]; then
+                        match=1
+                        rm "$m"
+                        break
+                    else
+                        error "Error filtering to maildir $_dest"
+                        error "File: $m"
+                        continue
                     fi
-                done
-                [[ "$match" = "1" ]] && {
-                    func "matched filter from: field"
-                    continue
-                }
+                fi
+            done
+            [[ "$match" = "1" ]] && {
+                func "matched filter from: field"
+                continue
             }
 
             _dest=""
@@ -347,15 +356,20 @@ filter_maildir() {
             [[ $? = 0 ]] && {
                 for ft in ${(k)e_addr}; do
                     for exp in ${(k)filter_to}; do
-
+						local found=0
+						if [[ "$ft" == "$exp" ]]; then
+							found=1
+						elif [[ "$ft" =~ "$exp" ]]; then
+							found=1	# fuzzy match on a string (PCRE)
+						fi
                         # fuzzy match on a string (PCRE)
-                        if [[ "$ft" =~ "$exp" ]]; then
+                        if [[ "$found" == "1" ]]; then
 
                             # retrieve the filter destination maildir
                             _dest="${filter_to[$exp]}"
 
                             # if destination maildir is same as input, skip
-                            [[ "$_dest" = "$mdinput" ]] && {
+                            [[ "$_dest" == "$mdinput" ]] && {
                                 act "$c\t/ $numm"
                                 match=1
                                 break
@@ -364,11 +378,7 @@ filter_maildir() {
                             act "$c\t/ $numm\t-> $_dest\t(to $ft)"
                             # tag mailinglists
                             [[ $DRYRUN = 1 ]] || {
-                                if [[ $_ml = 1 ]]; then
-                                    printfile "$m" | deliver "$_dest" "+filtered +mailinglist"
-                                else
-                                    printfile "$m" | deliver "$_dest" "+filtered"
-                                fi
+                                printfile "$m" | deliver "$_dest"
                             }
 
                             if [[ $? = 0 ]]; then
@@ -392,21 +402,6 @@ filter_maildir() {
             }
 
         } # own filters
-
-        list="whitelist"
-        hdr "$m" | sender_isknown
-        [[ $? = 0 ]] && {
-            [[ "$mdinput" = "known" ]] && {
-                act "$c\t/ $numm"
-                continue
-            }
-            act "$c\t/ $numm\t-> known"
-            [[ $DRYRUN = 1 ]] || {
-                printfile "$m" | deliver known "+inbox +priv"
-                [[ $? = 0 ]] && { rm "$m" }
-                continue
-            }
-        }
 
         hdr "$m" | awk '/X-Spam-Flag.*YES/ { exit 1 }'
         { test $? = 0 } || {

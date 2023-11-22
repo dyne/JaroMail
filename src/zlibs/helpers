@@ -47,6 +47,10 @@ awk '{ for (i=1;i<=NF;i++)
        gsub(/<|>|,/ , "" , $i); print $i } }'
 }
 
+getemail() {
+	grep -oP "([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})"
+}
+
 # zmodload zsh/regex
 isemail() {
 	[[ "$1" == "" ]] && return 1
@@ -109,11 +113,16 @@ e_parse() {
 
 # short utility to print only mail headers
 hdr() {
-   [[ -r "$1" ]] || {
-        error "hdr() called on non existing file: $1"
-        return 1 }
-    awk '{ print $0 }
+	if command -v mhdr > /dev/null; then
+		mhdr "$1"
+	else
+		[[ -r "$1" ]] || {
+			error "hdr() called on non existing file: $1"
+			return 1 }
+		awk '
+{ print $0 }
 /^$/ { exit }' "$1"
+	fi
 }
 
 # short utility to print only mail body
