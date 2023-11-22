@@ -169,13 +169,19 @@ deliver() {
 	[[ $? = 0 ]] || {
         error "Could not deliver email file into maildir $dest"
         func "Returning error to caller."
+		sleep 3
         return 1
     }
 
 	# use mblaze if found
     command -v mdeliver > /dev/null && {
-		mdeliver "$MAILDIRS/$dest"
-		return $?
+		last_deliver=`mdeliver -v "$MAILDIRS/$dest"`
+		local ret=$?
+		[[ $ret == 0 ]] || {
+			error "Deliver error (mblaze $res) to maildir $dest"
+			sleep 3
+		}
+		return $ret
 	}
 
     # no tag specified, plain delivery without indexing

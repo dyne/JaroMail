@@ -99,7 +99,11 @@ stdin_queue() {
 /User-Agent:/ { print "User-Agent: Jaro Mail <https://www.dyne.org/software/jaromail>"; next }
 { print $0 }
 ' > "$tmpqueue"
-    [[ $? = 0 ]] || { error "Error queing email from stdin into outbox"; return 1 }
+    [[ $? = 0 ]] || {
+		error "Error queing email from stdin into outbox";
+		sleep 3
+		return 1
+	}
 
     # calculate the sha1sum of the body to check integrity of delivery
     _sha1sum=`body $ztmpfile | sha1sum -t`
@@ -107,8 +111,7 @@ stdin_queue() {
     func "Body SHA1 checksum: $_sha1sum"
 
     maildirmake "$MAILDIRS/outbox"
-    # ${=mkdir} "$MAILDIRS/outbox/send"
-    lock "$MAILDIRS/outbox"
+    # lock "$MAILDIRS/outbox"
 
     # check if recipients are a Group
     if [[ "${=queue_to}" =~ '@jaromail.group' ]]; then
@@ -119,8 +122,9 @@ stdin_queue() {
         [[ -r "$MAILDIRS/Groups/$groupfile" ]] || {
             maildirmake "$MAILDIRS/postponed"
             mv "$tmpqueue" "$MAILDIRS/postponed/new"
-            unlock "$MAILDIRS/outbox"
+            # unlock "$MAILDIRS/outbox"
             error "Group not found: $groupfile"
+			sleep 3
             return 1 }
 
         recipients=`grep -v '^#' $MAILDIRS/Groups/$groupfile`
@@ -137,8 +141,9 @@ stdin_queue() {
                 for i in ${(f)recipients}; do
                     ig=${base}-${RANDOM}
                     cat "$tmpqueue" | \
-                        awk '/^To:/ { print "'"To: $i"'"; next } { print $0 }' \
-                        | deliver outbox # > "${MAILDIRS}/outbox/new/${ig}.mail"
+                        awk '
+/^To:/ { print "'"To: $i"'"; next }
+       { print $0 }'    | deliver outbox
                 done
                 ;;
 
@@ -152,9 +157,9 @@ stdin_queue() {
                 done
                 ig=${base}-${RANDOM}
                 cat "$tmpqueue" | \
-                    awk '/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
-                { print $0 }' \
-                    | deliver outbox # "${MAILDIRS}/outbox/new/${ig}.mail"
+                    awk '
+/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
+       { print $0 }' | deliver outbox
                 ;;
         esac
 
@@ -163,7 +168,7 @@ stdin_queue() {
         cat "$tmpqueue" | deliver outbox
     fi
 
-    unlock "$MAILDIRS/outbox"
+    # unlock "$MAILDIRS/outbox"
 
     _sha1sum_delivered=`body $last_deliver | sha1sum -t`
     _sha1sum_delivered=${_sha1sum_delivered[(w)1]}
@@ -179,6 +184,7 @@ stdin_queue() {
         diff $tmpqueue $last_deliver
         func "-----"
     }
+	sleep 3
     rm -f $last_deliver
     return 1
 
