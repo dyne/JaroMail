@@ -243,19 +243,6 @@ hostname=$(hostname) # gather the current hostname
 
     [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
 
-    # make sure the permissions are private
-    chmod 700 "$MAILDIRS"
-
-    [[ -d "$MAILDIRS/logs" ]] || { ${=mkdir} "$MAILDIRS/logs" }
-
-    # make sure we have a directory for account configurations
-    [[ -d "$ACCOUNTS" ]] || { ${=mkdir} "$ACCOUNTS" }
-
-	[[ -r $ACCOUNTS/default.txt ]] || cp -a $WORKDIR/Accounts/* $ACCOUNTS/
-
-    # make sure we have a local keyring in case system-wide not found
-    # { test -r "$KEYRING" } || { create_keyring "$KEYRING" }
-
     # make sure we have an addressbook
     [[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
 
@@ -607,6 +594,7 @@ main() {
     init)
         init_inbox
 		nm_setup
+		read_account
 		mblaze_setup
 		if [[ -r "$MAILDIRS/.envrc" ]]; then
 			warning "Cannot overwrite direnv conf: $MAILDIRS/.envrc"
@@ -635,6 +623,8 @@ EOF
             done
         }
         init_inbox
+		read_account
+		mblaze_setup
         update_filters
         update_sieve
         update_notmuch

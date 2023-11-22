@@ -49,8 +49,8 @@ maildirmake() {
 	fn maildirmake $*
 
     { test -z "$1" } && {
-    error "internal error: missing argument for maildirmake"
-    return 255 }
+		error "internal error: missing argument for maildirmake"
+		return 255 }
 
 	# use mblaze if found
 	command -v mmkdir > /dev/null && {
@@ -59,16 +59,16 @@ maildirmake() {
 	}
 
     { test -f "$1" } && {
-    func "not a maildir, but a file: $1"
-    return 254 }
+		func "not a maildir, but a file: $1"
+		return 254 }
 
     { test -d "$1/new" } && {
-    func "maildir already exists: $1"
-    return 0 }
+		func "maildir already exists: $1"
+		return 0 }
 
     { test -r "$1" } && {
-    func "directory exists, but is not a maildir: $1"
-    return 254 }
+		func "directory exists, but is not a maildir: $1"
+		return 254 }
 
     func "creating maildir: $1"
 
@@ -163,50 +163,31 @@ deliver() {
 	fn deliver $*
     # default destination is incoming
     dest=${1:-incoming}
-    
+
     # create destination maildir if not existing
-    [[ -d "$MAILDIRS/$dest" ]] || {
-        act "creating destination maildir: $dest"
-        maildirmake "$MAILDIRS/$dest"
-		[[ $? = 0 ]] || {
-            error "Could not deliver email file into maildir $dest"
-            func "Returning error to caller."
-            return 1
-        }
+    maildirmake "$MAILDIRS/$dest"
+	[[ $? = 0 ]] || {
+        error "Could not deliver email file into maildir $dest"
+        func "Returning error to caller."
+        return 1
     }
 
-    func "deliver to $dest"
-    
-    [[ "$2" = "" ]] && {
-        # no tag specified, plain delivery without indexing
-        ## destinations excluded from notmuch indexing
-        # for indexing rules see filter_maildir()
-        # [[ "$dest" = "outbox" ]] \
-        #     || [[ "$dest" =~ "^zz." ]] \
-        #     || [[ "$dest" = "incoming" ]] && {
-        base="${HOST}_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"                
-        last_deliver="$MAILDIRS/$dest/new/$base"
-        cat > "$last_deliver"
-        [[ $? = 0 ]] || {
-            error "Could not deliver email file into maildir $dest"
-            func "Returning error to caller."
-            return 1
-        }
-        return 0
-    }
-
-    #########
-    # notmuch indexing from here
-	command -v notmuch > /dev/null && {
-		tags="$2"
-		func "indexing tags: $tags"
-		# nm is our function wrapper to notmuch providing lock
-		nm insert --folder="$dest" ${=tags}
-		notmuch_res=$?
-		[[ $notmuch_res = 0 ]] || \
-			error "Could not deliver email file into maildir $dest with tags $tags"
+	# use mblaze if found
+    command -v mdeliver > /dev/null && {
+		mdeliver "$MAILDIRS/$dest"
+		return $?
 	}
-    
+
+    # no tag specified, plain delivery without indexing
+    ## destinations excluded from notmuch indexing
+    # for indexing rules see filter_maildir()
+    base="${HOST}_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"
+    last_deliver="$MAILDIRS/$dest/new/$base"
+    cat > "$last_deliver"
+    [[ $? = 0 ]] || {
+        error "Could not deliver email file into maildir $dest"
+        func "Returning error to caller."
+        return 1
+    }
     return 0
-    
 }

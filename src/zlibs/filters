@@ -34,13 +34,14 @@
 #
 
 # load zsh filter cache arrays
-{ test -r  "$MAILDIRS/cache/filters" } && {
-    source "$MAILDIRS/cache/filters" }
+test -r  "$MAILDIRS/cache/filters" && {
+    source "$MAILDIRS/cache/filters"
+}
 
 init_inbox() {
     fn init_inbox
     req=(MAILDIRS)
-    ckreq
+    ckreq || return 1
 
     # make sure maildirs where to put mails exist
     ${=mkdir} "$MAILDIRS"
@@ -49,24 +50,25 @@ init_inbox() {
     maildirmake "$MAILDIRS/sent"
     maildirmake "$MAILDIRS/priv"
     maildirmake "$MAILDIRS/postponed"
+    maildirmake "$MAILDIRS/drafts"
     maildirmake "$MAILDIRS/unsorted"
     maildirmake "$MAILDIRS/remember"
     maildirmake "$MAILDIRS/outbox"
 
     [[ -f "$PASSWORD_STORE_DIR/.gpg-id" ]] || {
-	[[ -r $HOME/.gnupg/gpg.conf ]] && {
+		[[ -r $HOME/.gnupg/gpg.conf ]] && {
             GPGID=${$(awk '/default-key/ { print $2 }' $HOME/.gnupg/gpg.conf)}
-	    pass init ${GPGID}
-	}
+			pass init ${GPGID}
+		}
     }
 
     ${=mkdir} "$MAILDIRS/cache"
     ${=mkdir} "$MAILDIRS/logs"
     ${=mkdir} "$MAILDIRS/tmp"
+    ${=mkdir} "$ACCOUNTS"
 
-    { test -d "$MAILDIRS/Accounts" } || {
-    ${=mkdir} "$MAILDIRS/Accounts"
-    cp "$WORKDIR"/Accounts/* "$MAILDIRS/Accounts/" }
+    test -r "$ACCOUNTS/default.txt" ||
+		cp -a "$WORKDIR"/Accounts/* "$ACCOUNTS/"
 
     { test -r "$MAILDIRS"/Manual.pdf } || {
     cp "$WORKDIR"/jaromail-manual.pdf "$MAILDIRS"/Manual.pdf }
@@ -79,6 +81,9 @@ init_inbox() {
 
     { test -r "$MAILDIRS"/Applications.txt } || {
     cp "$WORKDIR"/Applications.txt "$MAILDIRS"/Applications.txt }
+
+    # make sure the permissions are private
+    chmod 700 "$MAILDIRS"
 
     return 0
 }
