@@ -634,7 +634,8 @@ EOF
     help) usage ;;
 
     index) nm_setup
-		   nm_index
+		   nm_index # more expensive than update_notmuch
+		   # redo tags for all messages in the main folders
            exitcode=$?
            ;;
 

@@ -186,6 +186,14 @@ filter_from+=("${f}" "known")
 EOF
 	done
 
+	func "insert addressbook blacklist in the cache"
+	ffilters=`jaro addr -l blacklist | getemail`
+	for f in ${(f)ffilters}; do
+		cat <<EOF >> "$ff"
+filter_from+=("${f}" "zz.blacklist")
+EOF
+	done
+
     #
     func "unlocking and compiling the cache"
 
@@ -260,28 +268,6 @@ filter_maildir() {
             continue
         }
 
-        # parse if its a mailinglist
-        _ml=0
-        hdr "$m" | ismailinglist
-        [[ $? = 0 ]] && _ml=1
-
-        list="blacklist"
-        hdr "$m" | sender_isknown
-        [[ $? = 0 ]] && {
-            [[ "$mdinput" = "zz.blacklist" ]] && {
-                act "$c\t/ $numm"
-                continue
-            }
-
-            act "$c\t/ $numm\t-> zz.blacklist"
-
-            [[ $DRYRUN = 1 ]] || {
-                printfile "$m" | deliver zz.blacklist
-                [[ $? = 0 ]] && { rm "$m" }
-                continue
-            }
-        }
-
         hdr "$m" | awk '/Sender.*mailman-bounce/ { exit 1 }'
         [[ $? = 0 ]] || {
             [[ "$mdinput" = "zz.bounces" ]] && {
@@ -322,7 +308,7 @@ filter_maildir() {
                     _dest="${filter_from[$exp]}"
                     # if destination maildir is same as input, skip
                     [[ "$_dest" == "$mdinput" ]] && {
-                        act "$c\t/ $numm"
+                        func "$c\t/ $numm"
                         match=1
                         break
                     }
@@ -370,7 +356,7 @@ filter_maildir() {
 
                             # if destination maildir is same as input, skip
                             [[ "$_dest" == "$mdinput" ]] && {
-                                act "$c\t/ $numm"
+                                func "$c\t/ $numm"
                                 match=1
                                 break
                             }
@@ -406,7 +392,7 @@ filter_maildir() {
         hdr "$m" | awk '/X-Spam-Flag.*YES/ { exit 1 }'
         { test $? = 0 } || {
             [[ "$mdinput" = "Spam" ]] && {
-                act "$c\t/ $numm"
+                func "$c\t/ $numm"
                 continue
             }
             act "$c\t/ $numm\t-> Spam"
@@ -423,7 +409,7 @@ filter_maildir() {
             # check if destination address is in filter_own array
             [[ ${filter_own[(r)$f]} == ${f} ]] && {
                 [[ "$mdinput" = "priv" ]] && {
-                    act "$c\t/ $numm"
+                    func "$c\t/ $numm"
                     match=1
                     break
                 }
@@ -442,7 +428,7 @@ filter_maildir() {
 
         # if here then file to unsorted
         if [ "$mdinput" = "unsorted" ]; then
-            act "$c\t/ $numm"
+            func "$c\t/ $numm"
         else
             act "$c\t/ $numm\t-> unsorted"
             [[ $DRYRUN = 1 ]] || {
