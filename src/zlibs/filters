@@ -167,7 +167,7 @@ EOF
 filter_own+=($i)
 EOF
     done
-    { test -r $MAILDIRS/Aliases.txt } && {
+    test -r $MAILDIRS/Aliases.txt && {
         for i in `awk '
 /^#/ { next }
 /^$/ { next }
@@ -179,7 +179,8 @@ EOF
     }
 
 	func "insert addressbook whitelist in the cache"
-	ffilters=`jaro addr -l whitelist | getemail`
+	ADDRESSBOOK=whitelist.abook
+	ffilters=`search_addressbook | getemail`
 	for f in ${(f)ffilters}; do
 		cat <<EOF >> "$ff"
 filter_from+=("${f}" "known")
@@ -187,7 +188,8 @@ EOF
 	done
 
 	func "insert addressbook blacklist in the cache"
-	ffilters=`jaro addr -l blacklist | getemail`
+	ADDRESSBOOK=blacklist.abook
+	ffilters=`search_addressbook | getemail`
 	for f in ${(f)ffilters}; do
 		cat <<EOF >> "$ff"
 filter_from+=("${f}" "zz.blacklist")

@@ -622,7 +622,7 @@ EOF
                 [[ -d $p ]] && MAILDIRS=$p
             done
         }
-        init_inbox
+        # init_inbox
 		read_account
 		mblaze_setup
         update_filters
@@ -711,14 +711,11 @@ EOF
         exitcode=$?
         ;;
 
-    rmdupes) rmdupes ${option_params} ;;
+    rmdupes)
+		rmdupes ${option_params} ;;
 
     filter)
-        update_filters || {
-            error "error updating filters, operation aborted."
-			return 1
-        }
-        filter_maildir ${option_params} | save_replay $subcommand
+        filter_maildir ${option_params}
         exitcode=$?
         ;;
 
