@@ -26,7 +26,7 @@
 # Jaro Brother DB
 create_addressbook() {
     # $ADDRESSBOOK is set in jaro
-    ab="$ADDRESSBOOK"
+    ab="${MAILDIRS}/${ADDRESSBOOK}"
     func "create addressbook: $ab"
     [[ -r "$ab" ]] && {
         error "Addressbook already exists: $ab"
@@ -63,27 +63,38 @@ insert_address() {
     }
 
     print "From: $_name <$_email>" | \
-        abook --datafile "$ADDRESSBOOK" \
+        abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" \
         --add-email-quiet > /dev/null
 
     return 0
 }
 
 search_addressbook() {
-    fn search_addressbook $*
+    fn search_addressbook ${ADDRESSBOOK} $*
     
-    abook --datafile "$ADDRESSBOOK" --mutt-query "${*:l}" | awk '
+    abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" --mutt-query "${*:l}" | awk '
 /^$/ { next }
 { for(c=2;c<=NF;c++) printf "%s ", $c
   print "<" $1 ">" }'
 
 }
 
+all_addressbook_emails() {
+    fn all_addressbook_emails ${ADDRESSBOOK} $*
+    abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" --mutt-query "" | awk '
+/^$/{ next } {print $1}'
+#         for i in `awk -F'=' '
+# /^email/ { print $2 }
+# ' "$MAILDIRS/$ADDRESSBOOK"`; do
+#             sieve_filter_array+=("$i")
+#         done
+
+}
 
 lookup_email() {
     _addr=${1:l}
     func "lookup address $_addr in $list"
-    abook --datafile "$ADDRESSBOOK" \
+    abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" \
         --mutt-query "$_addr" > /dev/null
     return $?
 }
@@ -117,7 +128,7 @@ complete() {
     }
 
     act "Searching for \"$1\" in addressbook $list"
-    abook --datafile "$ADDRESSBOOK" --mutt-query "$1"
+    abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" --mutt-query "$1"
     return $?
 }
 
@@ -255,7 +266,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
 
     #    ${=rm} $tmp
 
-    lock $ADDRESSBOOK
+    lock ${MAILDIRS}/${ADDRESSBOOK}
 
     newa=1; _name=""; _email=""
     for a in ${(f)addresses}; do
@@ -285,7 +296,7 @@ BEGIN { newcard=0; c=0; name=""; email=""; }
         fi
     done
 
-    unlock $ADDRESSBOOK
+    unlock ${MAILDIRS}/${ADDRESSBOOK}
 
     notice "Done importing addresses"
 }
@@ -450,7 +461,7 @@ set autosave=true
 set mutt_command=jaro compose
 set sort_field=name
 EOF
-) --datafile "$ADDRESSBOOK"
+) --datafile "${MAILDIRS}/${ADDRESSBOOK}"
 }
 
 # print out all addresses into the selected addressbook
@@ -463,7 +474,7 @@ list_abook() {
     awk -F'=' '
 /^name/  { printf("%s ",$2)    }
 /^email/ { printf("<%s>\n",$2) }
-' $ADDRESSBOOK
+' ${MAILDIRS}/${ADDRESSBOOK}
     return 0
 }
 
