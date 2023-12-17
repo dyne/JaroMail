@@ -27,6 +27,12 @@
 extract_mails() {
 	fn extract_mails $*
 
+	# use mblaze
+	command -v maddr > /dev/null && {
+		maddr
+		return $?
+	}
+
     mailpaths=( ${=stdin} )
     _tot=${#mailpaths}
 
