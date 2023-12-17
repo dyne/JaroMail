@@ -452,6 +452,7 @@ main() {
     option_subcommands[help]=""
 
     option_subcommands[update]=""
+    option_subcommands[sieve]=""
 
     option_subcommands[stat]=""
 
@@ -630,6 +631,14 @@ EOF
         update_notmuch
         notice "Initialization completed in $MAILDIRS"
         ;;
+
+	sieve)
+		read_account
+		mblaze_setup
+		update_filters
+		update_sieve
+		notice "Sieve filters updated in $MAILDIRS"
+		;;
 
     help) usage ;;
 
