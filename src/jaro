@@ -194,6 +194,11 @@ act "System in $WORKDIR"
 act "Mail in $MAILDIRS"
 act "Accounts in $ACCOUNTS"
 
+# own mblaze workdir and init empty sequence
+export MBLAZE="$MAILDIRS/cache/mblaze"
+mkdir -p "${MBLAZE}"
+touch ${MBLAZE}/seq
+
 PATH="$WORKDIR/bin:$PATH"
 
 # load our ZLibs

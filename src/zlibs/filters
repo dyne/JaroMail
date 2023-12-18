@@ -215,34 +215,27 @@ filter_maildir() {
     unsetopt CASE_MATCH
 
     # default maildir to filter is incoming
-    mdinput="${1:-incoming}"
+    mdinput="${1:-${MAILDIRS}/incoming}"
+	srcpath=`realpath "$mdinput"`
+
+    maildircheck "$srcpath" || {
+        error "Invalid maildir: $mdinput"
+        return 1
+    }
 
     # for safety we bail out in case the final fallback
     # maildir is not existing. unsorted should always
     # be there.
-    maildircheck "$MAILDIRS/unsorted"
-    [[ $? = 0 ]] || {
-        error "Invalid fallback maildir destination, operation aborted."
-        func "Returning error to caller."
-        return 1
-    }
+    maildirmake "$MAILDIRS/unsorted"
 
     # loads up the filter cache (zsh compiled arrays)
-    [[ -r "$MAILDIRS/cache/filters" ]] && {
+    [[ -r "$MAILDIRS/cache/filters" ]] &&
         source $MAILDIRS/cache/filters
-        ownfilters=1
-    }
-
-    maildircheck "$MAILDIRS/$mdinput"
-    [[ $? = 0 ]] || {
-        error "Invalid maildir to filter: $mdinput"
-        return 1
-    }
 
 	if command -v mlist > /dev/null; then
-		mails=`mlist "$mdinput"`
+		mails=`mlist "$srcpath"`
 	else
- 		mails=`${=find} "$mdinput" -maxdepth 2 -type f`
+ 		mails=`${=find} "$srcpath" -maxdepth 2 -type f`
 	fi
     numm=`print $mails | wc -l`
 
@@ -273,208 +266,238 @@ filter_maildir() {
             continue
         }
 
-        hdr "$m" | awk '/Sender.*mailman-bounce/ { exit 1 }'
-        [[ $? = 0 ]] || {
-            [[ "$mdinput" = "zz.bounces" ]] && {
-                act "$c\t/ $numm"
-                continue
+		# print progress for each 1000 mails processed if many
+		(( $c > 999 )) && (( $c % 1000 == 0 )) &&
+			act "$c\t/ $numm processed"
+
+        # hdr "$m" | awk '/Sender.*mailman-bounce/ { exit 1 }'
+        # [[ $? = 0 ]] || {
+        #     [[ "$mdinput" = "zz.bounces" ]] && {
+        #         act "$c\t/ $numm"
+        #         continue
+        #     }
+        #     act "$c\t/ $numm\t-> zz.bounces"
+        #     [[ $DRYRUN = 1 ]] || {
+        #         printfile "$m" | deliver zz.bounces
+        #         [[ $? = 0 ]] && { rm "$m" }
+        #         continue
+        #     }
+        # }
+
+        func "processing through own filters"
+
+        # run all filter regexps on the from: field
+        local _dest=""
+		# this also sets the mblaze sequence to avoid warnings
+		mseq -c "$m"
+		local femail=`maddr -h from -a`
+
+		# fuzzy match if in own Filters.txt
+        for exp in ${(k)filter_from}; do
+			[[ $global_quit = 1 ]] && {
+				error "User break requested, interrupting operation"
+				break }
+			local found=0
+			if [[ "$femail" == "$exp" ]]; then
+				found=1
+			elif [[ "$femail" =~ "$exp" ]]; then
+				found=1	# fuzzy match on a string (PCRE)
+			fi
+            [[ "$found" == "1" ]] && {
+                # retrieve the filter destination maildir
+                _dest="${filter_from[$exp]}"
+				target=`realpath "${MAILDIRS}/$_dest"`
+                # if destination maildir is same as input, skip
+                func "check: $target == $srcpath"
+                [[ "$target" == "$srcpath" ]] && {
+                    func "$c\t/ $numm"
+                    match=1
+                    break
+                }
+                act "$c\t/ $numm\t-> $_dest\t(from $femail)"
+                # tag mailinglists
+                [[ $DRYRUN = 1 ]] || {
+					mrefile "$m" "$target"
+					if [[ $? = 0 ]]; then
+						match=1
+						break
+					else
+						error "Filter error: $m -> $target"
+					fi
+				}
             }
-            act "$c\t/ $numm\t-> zz.bounces"
-            [[ $DRYRUN = 1 ]] || {
-                printfile "$m" | deliver zz.bounces
-                [[ $? = 0 ]] && { rm "$m" }
-                continue
-            }
+        done
+
+        [[ "$match" = "1" ]] && {
+            func "matched filter from: field"
+            continue
         }
 
-        [[ "$ownfilters" = "1" ]] && {
-
-            func "processing through own filters"
-
-            # run all filter regexps on the from: field
-            _dest=""
-            e_addr=()
-			local femail=`maddr -h from "$m" | getemail`
-
-			# fuzzy match if in own Filters.txt
-            for exp in ${(k)filter_from}; do
+        _dest=""
+        # run all filter regexps on the to: and cc: fields
+		tocc_addr=(`print "$m" | maddr -a -h to:cc | sort | uniq`)
+        for ft in ${(f)tocc_addr}; do
+			[[ $global_quit = 1 ]] && {
+				error "User break requested, interrupting operation"
+				break }
+            for exp in ${(k)filter_to}; do
+				[[ $global_quit = 1 ]] && {
+					error "User break requested, interrupting operation"
+					break }
 				local found=0
-				if [[ "$femail" == "$exp" ]]; then
-					found=1
-				elif [[ "$femail" =~ "$exp" ]]; then
-					found=1	# fuzzy match on a string (PCRE)
+				if [[ "$ft" == "$exp" ]]; then found=1
+											   # fuzzy match on a string (PCRE)
+				elif [[ "$ft" =~ "$exp" ]]; then found=1
 				fi
-                if [[ "$found" == "1" ]]; then
-                    # retrieve the filter destination maildir
-                    _dest="${filter_from[$exp]}"
-                    # if destination maildir is same as input, skip
-                    [[ "$_dest" == "$mdinput" ]] && {
-                        func "$c\t/ $numm"
-                        match=1
-                        break
-                    }
-                    act "$c\t/ $numm\t-> $_dest\t(from $femail)"
-                    # tag mailinglists
-                    [[ $DRYRUN = 1 ]] || {
-						printfile "$m" | deliver "$_dest"
-                    }
-                    if [[ $? = 0 ]]; then
-                        match=1
-                        rm "$m"
-                        break
-                    else
-                        error "Error filtering to maildir $_dest"
-                        error "File: $m"
-                        continue
-                    fi
-                fi
+				(( $found == 1 )) || continue
+                # retrieve the filter destination maildir
+                _dest="${filter_to[$exp]}"
+				target=`realpath "${MAILDIRS}/$_dest"`
+                # if destination maildir is same as input, skip
+                [[ "$target" == "$srcpath" ]] && {
+                    func "$c\t/ $numm"
+					match=1
+                    break
+                }
+                act "$c\t/ $numm\t-> $_dest\t(to $ft)"
+                # tag mailinglists
+                [[ $DRYRUN = 1 ]] || {
+					mrefile "$m" "$target"
+					if [[ $? = 0 ]]; then
+						match=1
+						break
+					else
+						error "Refile error: $m -> $target"
+					fi
+				}
             done
-            [[ "$match" = "1" ]] && {
-                func "matched filter from: field"
-                continue
-            }
+            [[ "$match" = "1" ]] && { break }
+        done
 
-            _dest=""
-			# TODO: use mblaze here instead of hdr and
-			# fetchaddr. also: honor SIGQUIT during filtering for a
-			# clean quit on ctrl-c
-            # recompile the array of destination addresses
-            e_addr=()
-            hdr "$m" | e_parse To
-            hdr "$m" | e_parse Cc
-            # run all filter regexps on the to: and cc: fields
-            [[ $? = 0 ]] && {
-                for ft in ${(k)e_addr}; do
-                    for exp in ${(k)filter_to}; do
-						local found=0
-						if [[ "$ft" == "$exp" ]]; then
-							found=1
-						elif [[ "$ft" =~ "$exp" ]]; then
-							found=1	# fuzzy match on a string (PCRE)
-						fi
-                        # fuzzy match on a string (PCRE)
-                        if [[ "$found" == "1" ]]; then
+        [[ "$match" = "1" ]] && {
+            func "matched filter to:/cc: fields"
+            continue
+        }
 
-                            # retrieve the filter destination maildir
-                            _dest="${filter_to[$exp]}"
-
-                            # if destination maildir is same as input, skip
-                            [[ "$_dest" == "$mdinput" ]] && {
-                                func "$c\t/ $numm"
-                                match=1
-                                break
-                            }
-
-                            act "$c\t/ $numm\t-> $_dest\t(to $ft)"
-                            # tag mailinglists
-                            [[ $DRYRUN = 1 ]] || {
-                                printfile "$m" | deliver "$_dest"
-                            }
-
-                            if [[ $? = 0 ]]; then
-                                match=1
-                                rm "$m"
-                                break
-                            else
-                                error "Error filtering to maildir $_dest"
-                                error "File: $m"
-                                continue
-                            fi
-                        fi
-                    done
-                    [[ "$match" = "1" ]] && { break }
-                done
-            }
-
-            [[ "$match" = "1" ]] && {
-                func "matched filter to:/cc: fields"
-                continue
-            }
-
-        } # own filters
+		[[ $global_quit = 1 ]] && {
+			error "User break requested, interrupting operation"
+			break }
 
 		# simple match if in whitelist
-		if ((${filter_whitelist[(Ie)$femail]})); then
-            [[ "known" == "$mdinput" ]] && {
+		(( ${filter_whitelist[(Ie)$femail]} )) && {
+			target=`realpath "${MAILDIRS}/known"`
+            [[ "$target" == "$srcpath" ]] && {
                 func "$c\t/ $numm"
 				continue
             }
             act "$c\t/ $numm\t-> known\t(from $femail)"
             [[ $DRYRUN = 1 ]] || {
-				print "$m" | mrefile "${MAILDIRS}/known"
-				[[ $? = 0 ]] || {
-					error "Error filtering to maildir: known"
-					error "File: $m"
-				}
+				mrefile "$m" "$target"
+				if [[ $? = 0 ]]; then
+					func "matched whitelist from: field"
+					continue
+				else
+					error "Refile error: $m -> $target"
+				fi
             }
-            continue
-		fi
+		}
 
-        hdr "$m" | awk '/X-Spam-Flag.*YES/ { exit 1 }'
-        { test $? = 0 } || {
-            [[ "$mdinput" = "Spam" ]] && {
+		[[ $global_quit = 1 ]] && {
+			error "User break requested, interrupting operation"
+			break }
+
+		# X-Spam flag set server-side
+        print "$m" | mpick -t '"X-Spam-Flag" =~ "YES"'
+        [[ $? = 0 ]] || {
+			target=`realpath "${MAILDIRS}/zz.spam"`
+            [[ "$target" = "$srcpath" ]] && {
                 func "$c\t/ $numm"
                 continue
             }
-            act "$c\t/ $numm\t-> Spam"
+            act "$c\t/ $numm\t-> zz.spam"
             [[ $DRYRUN = 1 ]] || {
-                printfile "$m" | deliver Spam
-                [[ $? = 0 ]] && { rm "$m" }
-                continue
+				maildirmake "$target"
+				mrefile "$m" "$target"
+				if [[ $? = 0 ]]; then
+					func "matched X-Spam flag"
+					continue
+				else
+					error "Refile error: $m -> $target"
+				fi
             }
         }
 
+		[[ $global_quit = 1 ]] && {
+			error "User break requested, interrupting operation"
+			break }
+
 		# simple match if in blacklist
-		[[ -d "${MAILDIRS}/zz.blacklist" ]] ||
-			mmkdir "${MAILDIRS}/zz.blacklist"
-		if ((${filter_blacklist[(Ie)$femail]})); then
-            [[ "zz.blacklist" == "$mdinput" ]] && {
+		(( ${filter_blacklist[(Ie)$femail]} )) && {
+			target=`realpath "${MAILDIRS}/zz.blacklist"`
+            [[ "$target" == "$srcpath" ]] && {
                 func "$c\t/ $numm"
 				continue
             }
             act "$c\t/ $numm\t-> zz.blacklist\t(from $femail)"
             [[ $DRYRUN = 1 ]] || {
-				print "$m" | mrefile "${MAILDIRS}/zz.blacklist"
-				[[ $? = 0 ]] || {
-					error "Error filtering to maildir: zz.blacklist"
-					error "File: $m"
-				}
+				maildirmake "$target"
+				mrefile "$m" "$target"
+				if [[ $? = 0 ]]; then
+					func "matched blacklist from: field"
+					continue
+				else
+					error "Refile error: $m -> $target"
+				fi
             }
-			continue
-		fi
+		}
 
         # parse own email and aliases
         match=0
-        for f in ${(k)e_addr}; do
+		target=`realpath "${MAILDIRS}/priv"`
+        for f in ${(f)tocc_addr}; do
+			[[ $global_quit = 1 ]] && {
+				error "User break requested, interrupting operation"
+				break }
+
             # check if destination address is in filter_own array
             [[ ${filter_own[(r)$f]} == ${f} ]] && {
-                [[ "$mdinput" = "priv" ]] && {
+                [[ "$target" = "$srcpath" ]] && {
                     func "$c\t/ $numm"
                     match=1
                     break
                 }
                 act "$c\t/ $numm\t-> priv"
                 [[ $DRYRUN = 1 ]] || {
-                    printfile "$m" | deliver priv "+priv"
-                    [[ $? = 0 ]] && {
-                        rm "$m";
-                        match=1
-                        break
-                    }
+					mrefile "$m" "$target"
+					if [[ $? = 0 ]]; then
+						func "matched own address in to/cc: fields"
+						match=1
+						break
+					else
+						error "Refile error: $m -> $target"
+					fi
                 }
             }
         done
 
         [[ $match == 1 ]] && continue
+		[[ $global_quit = 1 ]] && {
+			error "User break requested, interrupting operation"
+			break }
 
         # if here then file to unsorted
-        if [ "$mdinput" = "unsorted" ]; then
+		target=`realpath "${MAILDIRS}/priv"`
+        if [ "$target" = "$srcpath" ]; then
             func "$c\t/ $numm"
         else
             act "$c\t/ $numm\t-> unsorted"
             [[ $DRYRUN = 1 ]] || {
-                printfile "$m" | deliver unsorted "+unsorted"
-                [[ $? = 0 ]] && { rm "$m" }
+				mrefile "$m" "$target"
+				if [[ $? = 0 ]]; then
+					func "no match found, sent to unsorted"
+				else
+					error "Refile error: $m -> $target"l
+				fi
             }
         fi
 
