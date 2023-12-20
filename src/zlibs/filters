@@ -486,7 +486,7 @@ filter_maildir() {
 			break }
 
         # if here then file to unsorted
-		target=`realpath "${MAILDIRS}/priv"`
+		target=`realpath "${MAILDIRS}/unsorted"`
         if [ "$target" = "$srcpath" ]; then
             func "$c\t/ $numm"
         else
