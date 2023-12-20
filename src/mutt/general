@@ -58,7 +58,7 @@ set pipe_sep = "#+++JAROMAIL_PIPE_SEPARATOR\n"
 ## Sorting
 set sort=threads
 set sort_browser=reverse-date
-set sort_aux=reverse-date
+set sort_aux=reverse-last-date-received
 
 ################
 ## Pager options
