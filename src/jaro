@@ -156,7 +156,7 @@ search_results=()
 vars+=(mutt pgpewrap dotlock)
 
 # global variable for exit code
-vars+=(exitcode)
+vars+=(exitcode global_quit)
 # exitcode=0
 
 # global variable for infos on imap folder
@@ -185,7 +185,7 @@ fi
 MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
 
 # default addressbook
-ADDRESSBOOK="$MAILDIRS/whitelist.abook"
+ADDRESSBOOK="whitelist.abook"
 
 ACCOUNTS="$MAILDIRS/Accounts"
 ACCOUNTS=${JAROACCOUNT:-$ACCOUNTS}
@@ -249,7 +249,8 @@ hostname=$(hostname) # gather the current hostname
     [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
 
     # make sure we have an addressbook
-    [[ -r "$ADDRESSBOOK" ]] || { create_addressbook "$ADDRESSBOOK" }
+    [[ -r "$MAILDIRS/$ADDRESSBOOK" ]] ||
+		create_addressbook "$MAILDIRS/$ADDRESSBOOK"
 
 
     MUTTDIR="$MAILDIRS/.mutt"
@@ -545,7 +546,7 @@ main() {
         else
             list=`option.value -l`
         fi
-        ADDRESSBOOK="$MAILDIRS"/$list.abook
+        ADDRESSBOOK="${list}.abook"
     }
     { option.is_set -h } && { usage; return 0 }
     { option.is_set -v } && {
