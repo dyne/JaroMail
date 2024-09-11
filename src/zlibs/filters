@@ -157,13 +157,10 @@ EOF
 
     #
     act "generate the list of own addresses and aliases"
-	print "\n# own accounts" >> "$ff"
-    for i in `awk '
-/^#/ { next }
-/^$/ { next }
-/^email/ { print $2 }' \
- "$MAILDIRS"/Accounts/*`; do
-        cat <<EOF >> "$ff"
+	  print "\n# own accounts" >> "$ff"
+    for i in `find ${MAILDIRS}/Accounts/ -type f -exec awk '/^email/ { print $2 }' {} \;`; do
+	  func "own account: $i"
+      cat <<EOF >> "$ff"
 filter_own+=($i)
 EOF
     done
