@@ -23,6 +23,39 @@
 
 
 ###################
+
+cmd_addr_list() {
+    search_addressbook ${option_params}
+}
+
+cmd_complete() {
+    complete ${option_params}
+    exitcode=$?
+}
+
+cmd_isknown() {
+    sender_isknown ${option_params}
+    exitcode=$?
+}
+
+cmd_learn() {
+    learn ${option_params}
+    exitcode=$?
+}
+
+cmd_import() {
+    import ${option_params}
+    exitcode=$?
+}
+
+cmd_export() {
+    export_vcard ${option_params}
+}
+
+cmd_abook() {
+    edit_abook ${option_params}
+    exitcode=$?
+}
 # Jaro Brother DB
 create_addressbook() {
     # $ADDRESSBOOK is set in jaro
@@ -135,12 +168,14 @@ complete() {
 sender_isknown() {
 	fn sender_isknown $*
 	local e_from=""
+    local _mail_input="${body:-}"
+    [[ -z "${_mail_input}" ]] && _mail_input="$(cat)"
 	if command -v maddr > /dev/null; then
 		local email_regex="([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})"
-		e_from=`echo $body | maddr -h 'from' - | grep -oP "$email_regex"`
+		e_from=`print - "${_mail_input}" | maddr -h 'from' - | grep -oP "$email_regex"`
 		e_from=${e_from:l}
 	else
-		local head="`awk '
+		local head="`print - "${_mail_input}" | awk '
 { print $0 }
 /^$/ { exit }' | ${WORKDIR}/bin/fetchaddr -x From -a`"
 		e_from="${head[(ws:,:)1]:l}"

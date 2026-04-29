@@ -1,0 +1,121 @@
+#!/usr/bin/env zsh
+
+cmd_replay() {
+    replay ${option_params}
+    exitcode=$?
+}
+
+cmd_help() {
+    usage
+}
+
+cmd_new() {
+    new_account ${option_params}
+    exitcode=$?
+}
+
+cmd_stat() {
+    stats ${option_params} | sort -n
+    exitcode=$?
+}
+
+cmd_edit_vim() {
+    edit_file ${option_params}
+}
+
+cmd_open() {
+    x_mutt -f ${option_params}
+}
+
+cmd_preview() {
+    preview_file ${option_params}
+}
+
+cmd_passwd() {
+    read_account $account
+    host=${option_params:-$imap}
+    new_password
+}
+
+cmd_isonline() {
+    is_online ${option_params}
+    exitcode=$?
+}
+
+cmd_publish() {
+    md="$1"
+    { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
+    pubdb_update "$md"
+    pubdb_render_maildir "$md"
+    exitcode=$?
+}
+
+cmd_askpass() {
+    read_account $account
+    ask_password
+    # shell escape special chars
+    print - "$password" | sed '
+s/\&/\\&/g
+s/\$/\\$/g
+s/ /\\ /g
+s/;/\\;/g
+s/\?/\\?/g
+s/\*/\\*/g
+'
+    exitcode=$?
+}
+
+cmd_extract_parse() {
+    extract_addresses ${option_params} \
+        | save_replay $subcommand
+    exitcode=$?
+}
+
+cmd_header_headers() {
+    extract_headers ${option_params}
+    exitcode=$?
+}
+
+cmd_isml() {
+    ismailinglist
+    [[ $? = 0 ]] && \
+        notice "Email read from stdin is a mailinglist"
+    exitcode=$?
+}
+
+cmd_empty() {
+    func "no command, autostart"
+    func "subcommand: $subcommand"
+    read_account "$account"
+    if [[ "$subcommand" = "__empty" ]]; then
+        if [[ "$option_params" = "" ]]; then
+            x_mutt -Z
+        else
+            x_mutt -f "$option_params"
+        fi
+    fi
+    exitcode=$?
+}
+
+cmd_unknown() {
+    subcommand=${subcommand[(ws@:@)2]}
+    func "subcommand: $subcommand"
+    read_account "$account"
+    if isemail "$subcommand"; then
+        notice "Composing message to: $*"
+        x_mutt $*
+        exitcode=0
+    elif maildircheck "$subcommand"; then
+        x_mutt -f "$subcommand"
+        exitcode=$?
+    elif maildircheck "$MAILDIRS/$subcommand"; then
+        x_mutt -f "$MAILDIRS/$subcommand"
+        exitcode=$?
+    elif [[ -f "$subcommand" ]]; then
+        x_mutt -a $*
+        exitcode=0
+    else
+        x_mutt
+        exitcode=$?
+    fi
+}

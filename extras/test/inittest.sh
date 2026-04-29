@@ -1,5 +1,8 @@
 #!/usr/bin/env zsh
 
+export LC_ALL=C
+export LANG=C
+
 function j() {
 	JAROMAILDIR=/tmp/jaromail-test \
 			   JAROWORKDIR=/usr/local/share/jaromail \

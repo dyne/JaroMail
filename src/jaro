@@ -34,336 +34,13 @@ umask 066
 if [[ ${@} == *-q* ]]; then QUIET=1; fi
 if [[ ${@} == *-D* ]]; then DEBUG=1; fi
 
-
-# use GNU/Linux default in local
-WORKDIR="/usr/local/share/jaromail"
-
-# check if we are testing from source
-if [[ -r ../src/jaro ]]; then
-    WORKDIR="../src"
-# check if we are on OSX
-elif [[ -r /Applications/JaroMail.app/Contents/Resources/jaro ]]; then
-    WORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
-elif [[ -r /usr/share/jaromail/bin/jaro ]]; then
-    # use GNU/Linux default in usr
-    WORKDIR="/usr/share/jaromail"
-fi
-
-# env override
-WORKDIR=${JAROWORKDIR:-$WORKDIR}
-
-# load our zuper extension
-# different load paths from inside source or installed
-if [ "$WORKDIR" = "../src" ]; then
-	source $WORKDIR/zuper/zuper
-else
-	source $WORKDIR/zlibs/zuper
-fi
-
-
-# what operating system are we in? use os_detect()
-# simplifying modes of operation: GNU or MAC
-case $(uname -s) in
-    Linux) OS=GNU
-    notice "Jaro Mail v${VERSION} running on GNU/Linux"	;;
-
-    Darwin) OS=MAC
-    notice "Jaro Mail v${VERSION} running on Mac/OSX"	;;
-
-    Cygwin) OS=WIN
-        notice "Jaro Mail v${VERSION} running on MS/Win" ;;
-
-    OpenBSD|FreeBSD|NetBSD) OS=BSD
-	notice "Jaro Mail v${VERSION} running on a BSD System" ;;
-
-    *) OS=GNU # default
-    error "Running on an unknown operating system, assuming GNU" ;;
-esac
-
-
-
-# global variables
-vars+=(DEBUG QUIET DRYRUN CALLMUTT MAILDIRS WORKDIR)
-vars+=(ADDRESSBOOK ACCOUNTS)
-
-QUIET=${QUIET:-0}
-DEBUG=${DEBUG:-0}
-DRYRUN=${DRYRUN:-0}
-CALLMUTT=${CALLMUTT:-1}
-
-# use gnome-keyring for passwords on GNU systems
-vars+=(PASS GNOMEKEY SECRET_TOOL PASSWORD_STORE_DIR)
-PASS=${PASS:-0}
-GNOMEKEY=${GNOMEKEY:-0}
-SECRET_TOOL=${SECRET_TOOL:-0}
-# PASSWORD_STORE_DIR=${JARO_PASSWORD_STORE_DIR:-$MAILDIRS/.password-store}
-
-# global variables for binaries called
-vars+=(rm mkdir mutt SQL OS)
-
-# load zsh modules
-zmodload zsh/regex
-zmodload zsh/mapfile
-zmodload zsh/system
-zmodload -F zsh/stat b:zstat
-zmodload zsh/sched
-
-##########################
-
-# SQL command
-SQL=sqlite3
-
-vars+=(PROGRAM global_quit)
-global_quit=0
-
-# global variable for account selection
-vars+=(account account_type)
-account=default
-vars+=(list)
-list=whitelist
-
-# global variables for accounts
-vars+=(name login iproto imap imap_port smtp smtp_port protocol password auth accountopt)
-arrs+=(folders exclude)
-vars+=(proto host port type)
-vars+=(my_hdr)
-
-# global for server fingerprints
-vars+=(fingerprint)
-
-# global variables for addressbook
-vars+=(hostname addressbook addressbook_tmp)
-
-# global variables for email parsers
-typeset -A e_addr
-vars+=(e_parsed)
-
-# global array for maildirs (filled by list_maildirs)
-arrs+=(maildirs)
-vars+=(last_deliver)
-
-# stdin when read becomes globally accessible
-vars+=(stdin bytesread)
-stdin=""
-bytesread=0
-
-# global arrays for search results and mailpaths
-# are all arrays of absolute paths
-arrs+=(search_results mailpaths)
-search_results=()
-
-# global variable for mutt binary
-vars+=(mutt pgpewrap dotlock)
-
-# global variable for exit code
-vars+=(exitcode global_quit)
-# exitcode=0
-
-# global variable for infos on imap folder
-# format: name;num_of_messages;size_in_bytes
-# last entry is grand_total_in_bytes ${imap_info[${#imap_info}]}
-typeset -alU imap_info
-
-# global variable for mutt options
-vars+=(muttflags)
-
-autoload colors; colors
-
-# which command to use when creating dirs
-mkdir="`command -v mkdir` -m 700 -p"
-
-
-MAILDIRS="$PWD"
-# check if we are on OSX
-if [ -r /Applications/JaroMail.app ]; then
-    MAILDIRS="$HOME/Library/Application Support/JaroMail"
-# else use GNU/Linux default
-elif [ -r "$HOME/Mail/Filters.txt" ]; then
-	MAILDIRS="$HOME/Mail"
-fi
-# end override
-MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
-
-# default addressbook
-ADDRESSBOOK="whitelist.abook"
-
-ACCOUNTS="$MAILDIRS/Accounts"
-ACCOUNTS=${JAROACCOUNT:-$ACCOUNTS}
-
-act "System in $WORKDIR"
-act "Mail in $MAILDIRS"
-act "Accounts in $ACCOUNTS"
-
-# own mblaze workdir and init empty sequence
-export MBLAZE="$MAILDIRS/cache/mblaze"
-mkdir -p "${MBLAZE}"
-touch ${MBLAZE}/seq
-
-PATH="$WORKDIR/bin:$PATH"
-
-# load our ZLibs
-if [ -d $WORKDIR/zlibs ]; then
-    # if testing from source load uncompiled libs
-    if [ "$WORKDIR" = "../src" ]; then
-		for z in `find $WORKDIR/zlibs -type f`; do
-			[[ "$z" =~ "zuper" ]] && continue
-			func "Loading zlib: ${z}"
-			source ${z}
-		done
-    else
-		fpath+=($WORKDIR/zlibs)
-        for z in `ls $WORKDIR/zlibs`; do
-            [[ "$z" =~ "zuper" ]] && continue
-			[[ "$z" =~ ".zwc"  ]] && continue
-            func "Loading zlib: ${z}"
-            source $WORKDIR/zlibs/${z}
-        done
-    fi
-
-    func "full set of auxiliary functions loaded"
-elif [[ $1 = source ]]; then
-
-    act "limited set of auxiliary functions sourced"
-
-else
-    error "No ZLibs found in $WORKDIR/zlibs"
-    error "This installation of Jaro Mail is broken."
+script_dir="${JAROMAILEXEC:A:h}"
+bootstrap_path="${script_dir}/zlibs/bootstrap"
+[[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../zlibs/bootstrap"
+[[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../src/zlibs/bootstrap"
+source "${bootstrap_path}" || {
+    print -u2 "Cannot source bootstrap module: ${bootstrap_path}"
     exit 1
-fi
-
-
-
-##########
-# complete
-if [ "$WORKDIR" = "../src" ]; then
-	source $WORKDIR/zuper/zuper.init
-else
-	source $WORKDIR/zlibs/zuper.init
-fi
-
-
-hostname=$(hostname) # gather the current hostname
-
-[[ "$1" = "source" ]] || { # skip checks if just sourcing
-
-    [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
-
-    # make sure we have an addressbook
-    [[ -r "$MAILDIRS/$ADDRESSBOOK" ]] ||
-		create_addressbook "$MAILDIRS/$ADDRESSBOOK"
-
-
-    MUTTDIR="$MAILDIRS/.mutt"
-    { test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
-
-    # make sure we have Filters.txt Applications.txt Mutt.txt
-    { test -r "$MAILDIRS/Filters.txt" } || {
-        cp "$WORKDIR/Filters.txt" "$MAILDIRS/Filters.txt"
-        notice "Default filters created" }
-
-    { test -r "$MAILDIRS/Applications.txt" } || {
-        cp "$WORKDIR/Applications.txt" "$MAILDIRS/Applications.txt"
-        notice "Default helper applications settings created" }
-
-    { test -r "$MAILDIRS/Mutt.txt" } || {
-        cp "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
-        notice "Default Mutt configuration template created" }
-
-} # if not sourcing
-
-# binary programs recognition
-check_bin() {
-
-    # required programs
-    for req in pinentry fetchmail gpg msmtp; do
-        isfound $req
-        { test $? != 0 } && {
-            error "Cannot find $req. Please install it."
-            exit 1
-        }
-    done
-
-    # make sure a gnupg dir exists
-    { test -r $HOME/.gnupg/pubring.gpg } || {
-        ${=mkdir} $HOME/.gnupg
-        touch $HOME/.gnupg/pubring.gpg
-        touch $HOME/.gnupg/secring.gpg
-    }
-
-    # which find command to use
-    case $OS in
-        GNU) find="find -O3" ;;
-        MAC) find="gfind -O3" ;;
-        *) find="find"
-    esac
-
-    # which wipe command to use
-    if  isfound wipe; then
-        rm="wipe -f -s -q -R /dev/urandom"
-    elif isfound srm; then
-        rm="srm -m"
-    else
-        rm="rm -f"
-    fi
-    func "Rm binary: $rm"
-
-    # which mutt binary to use
-    if isfound mutt; then
-	mutt_exec=mutt
-    elif isfound neomutt; then
-	mutt_exec=neomutt
-    fi
-    pgpewrap="${WORKDIR}/bin/gpgewrap"
-    dotlock="${WORKDIR}/bin/dotlock"
-
-    func "Mutt binary: $mutt_exec"
-    func "Notmuch binary: `command -v notmuch`"
-	func "Keyring set: $JARO_KEYRING"
-	if [[ "$JARO_KEYRING" == "" ]]; then
-		# check for pass, else fallback
-		if isfound pass; then
-			act "keyring in use: pass (auto-detected)"
-			PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
-			[[ -d $PASSWORD_STORE_DIR ]] ||
-				warning "the 'pass' keyring is found but not initialised"
-
-			PASS=1
-
-			# check if secret-tool is present else fallback to gnome-keyring
-		elif isfound secret-tool; then
-			act "keyring in use: secret-tool (auto-detected)"
-			SECRET_TOOL=1
-		else
-			ps ax | grep '[g]nome-keyring-daemon' > /dev/null
-			[[ $? = 0 ]] && {
-				act "keyring in use: gnome-keyring (auto-detected)"
-				GNOMEKEY=1
-			}
-		fi
-
-	else # JARO_KEYRING defined
-
-		case $JARO_KEYRING in
-			pass)
-				act "keyring in use: pass (set in JARO_KEYRING)"
-				PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
-				[[ -d $PASSWORD_STORE_DIR ]] || {
-					error "the 'pass' keyring is found but not initialised"
-					error "run 'pass init your-gpg-id'"
-				}
-				PASS=1 ;;
-			secret-tool)
-				act "keyring in use: secret-tool (set in JARO_KEYRING)"
-				SECRET_TOOL=1 ;;
-			gnome-keyring)
-				act "keyring in use: gnome-keyring (set in JARO_KEYRING)"
-				GNOMEKEY=1  ;;
-		esac
-
-	fi
-
-
-    return 0
 }
 
 
@@ -566,339 +243,108 @@ main() {
 
     case "$subcommand" in
 
-    compose) stdin_compose ${option_params}
-            exitcode=$?
+    compose) cmd_compose
             ;;
 
-    queue)  stdin_queue ${option_params}
-            exitcode=$?
+    queue)  cmd_queue
             ;;
 
-    fetch) 	fetch ${option_params} && \
-                 update_filters && \
-                 filter_maildir incoming && \
-                 update_notmuch
+    fetch) 	cmd_fetch
 			;;
 
-    send)   send ${option_params}
-            exitcode=$?
+    send)   cmd_send
             ;;
 
-    peek)   peek ${option_params}
-            exitcode=$?
+    peek)   cmd_peek
             ;;
 
-    remember)
-        deliver remember
-        exitcode=$?
+    remember) cmd_remember
         ;;
 
-    replay)
-        replay ${option_params}
-        exitcode=$?
-        ;;
+    replay) cmd_replay ;;
 
-    init)
-        init_inbox
-		nm_setup
-		read_account
-		mblaze_setup
-		if [[ -r "$MAILDIRS/.envrc" ]]; then
-			warning "Cannot overwrite direnv conf: $MAILDIRS/.envrc"
-			warning "Delete it manually if desired."
-		else
-			cat <<EOF > "$MAILDIRS/.envrc"
-export JAROMAILDIR=$MAILDIRS
-export JAROWORKDIR=/usr/local/share/jaromail
-export NOTMUCH_CONFIG=$MAILDIRS/notmuch-config
-export MBLAZE=$MAILDIRS/.mblaze
-EOF
-		fi
-		command -v direnv >/dev/null || {
-			direnv allow
-			act "direnv configuration in .envrc"
-		}
-        notice "Initialization completed in $MAILDIRS"
+    init) cmd_init ;;
 
-        ;;
+    update) cmd_update ;;
 
-    update)
-        [[ "$option_params" = "" ]] || {
-            for p in $option_params; do
-                [[ "$p" = "." ]] && p=$PWD
-                [[ -d $p ]] && MAILDIRS=$p
-            done
-        }
-        # init_inbox
-		read_account
-		mblaze_setup
-        update_filters
-        update_sieve
-        update_notmuch
-        notice "Initialization completed in $MAILDIRS"
-        ;;
+	sieve) cmd_sieve ;;
 
-	sieve)
-		read_account
-		mblaze_setup
-		update_filters
-		update_sieve
-		notice "Sieve filters updated in $MAILDIRS"
-		;;
+    help) cmd_help ;;
 
-    help) usage ;;
+    index) cmd_index ;;
 
-    index) nm_setup
-		   nm_index # more expensive than update_notmuch
-		   # redo tags for all messages in the main folders
-           exitcode=$?
-           ;;
+    search) cmd_search ;;
 
-    # notmuch search with file output
-    search) search ${option_params}
-            [[ $DRYRUN = 1 ]] || {
-                for i in ${search_results=}; do
-                    print - "$i"
-                done
-            } | save_replay $subcommand
-            ;;
+	alot-config) cmd_alot_config ;;
 
-	alot-config)
-		alot_setup
-		cat "$MAILDIRS/alot-config"
-		notice "to set as default do:\nmkdir -p ~/.config/alot && jaro alot-config > ~/.config/alot/config"
-		;;
+    alot) cmd_alot ;;
 
-    alot) alot_search ${option_params} ;;
+	notmuch-config) cmd_notmuch_config ;;
+    notmuch) cmd_notmuch ;;
 
-	notmuch-config)
-		nm_setup
-		cat "$MAILDIRS/notmuch-config"
-		;;
-    notmuch)
-            notice "Command: notmuch ${option_params}"
-            nm ${option_params} | save_replay $subcommand
-            exitcode=$?
-            ;;
+    addr|list) cmd_addr_list ;;
 
-    addr|list) search_addressbook ${option_params}
-               ;;
+    complete) cmd_complete ;;
 
-    complete) complete ${option_params}
-              exitcode=$?
-              ;;
+    isknown) cmd_isknown ;;
 
-    isknown) sender_isknown ${option_params}
-             exitcode=$?
-             ;;
+    learn)  cmd_learn ;;
 
-    learn)  learn ${option_params}
-            exitcode=$?
-            ;;
+    import) cmd_import ;;
 
-    import) import ${option_params}
-            exitcode=$?
-            ;;
+    "export") cmd_export ;;
 
-    "export")
-            export_vcard ${option_params}
-            ;;
+    abook)  cmd_abook ;;
 
-    abook)  edit_abook ${option_params}
-            exitcode=$?
-            ;;
+	new) cmd_new ;;
 
-	new)
-		new_account ${option_params}
-		exitcode=$?
-		;;
+    stat*) cmd_stat ;;
 
-    stat*)  stats ${option_params} | sort -n
-            exitcode=$?
-            ;;
+    edit|vim) cmd_edit_vim ;;
+    open) cmd_open ;;
+    preview) cmd_preview ;;
 
-    edit|vim)   edit_file ${option_params}    ;;
-    open)       x_mutt -f ${option_params}  ;;
-    preview)    preview_file ${option_params} ;;
+    mkdir) cmd_mkdir ;;
 
-    mkdir)
-        DEBUG=1 maildirmake ${option_params}
-        exitcode=$?
-        ;;
+    rmdupes) cmd_rmdupes ;;
 
-    rmdupes)
-		rmdupes ${option_params} ;;
+    filter) cmd_filter ;;
 
-    filter)
-        filter_maildir ${option_params}
-        exitcode=$?
-        ;;
+    deliver) cmd_deliver ;;
 
-    deliver)
-            deliver ${option_params}
-            exitcode=$?
-            ;;
-
-    passwd) read_account $account
-            host=${option_params:-$imap}
-            new_password ;;
+    passwd) cmd_passwd ;;
 
     # cert)    cert ${option_params} ;; # was checking is_online
 
-    isonline) is_online ${option_params}; exitcode=$? ;;
+    isonline) cmd_isonline ;;
 
 
-    publish)
-        md="$1"
-        { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
-        pubdb_update "$md"
-        pubdb_render_maildir "$md"
-        exitcode=$? ;;
+    publish) cmd_publish "$1" ;;
 
     'source')   return 0 ;;
 
-    askpass)
-        read_account $account
-        ask_password
-        # shell escape special chars
-        print - "$password" | sed '
-s/\&/\\&/g
-s/\$/\\$/g
-s/ /\\ /g
-s/;/\\;/g
-s/\?/\\?/g
-s/\*/\\*/g
-' 
-        # TODO: verify if this works with all passwords
-        exitcode=$?
-        ;;
+    askpass) cmd_askpass ;;
 
-    imap)
-        imapcmd="${option_params[(w)1]}"
-        case $imapcmd in
-            console)
-                read_account $account
-                host=${imap:-$host}
-                ask_password
-                func "$login $password"
-                cat <<EOF | run_imap_query
-B00000 CAPABILITY
-B00001 LOGIN "${login}" "${password}"
-EOF
-                ;;
-            getsize)
-                read_account $account
-                host=${imap:-$host}
-                ask_password
-                bytes_total=`imap_get_size "$2"`
-                exitcode=$?
-                notice "Size of account $login on $imap"
-                act "$bytes_total bytes"
-                mib_total=$(( $bytes_total / 1048576 ))
-                act "$mib_total MB (MiB)"
-                ;;
-            listfolders)
-                read_account $account
-                host=${imap:-$host}
-                ask_password
-                folders=(`imap_list_folders`)
-                exitcode=$?
-                notice "List of folders for $login on $imap"
-                for f in $folders; do print - "$f"; done \
-                    | save_replay $subcommand | column
-
-                ;;
-            # interactive)
-            #     read_account
-            #     ask_password
-            #     imap_interactive_shell
-            #     exitcode=$?
-            #     ;;
-            *)
-                error "imap needs a subcommand: getsize or listfolders"
-                ;;
-        esac
-        ;;
+    imap) cmd_imap ;;
 
     # list)
     #     list_abook ${option_params}
     #     exitcode=$?
     #     ;;
 
-    extract|parse)
-        extract_addresses ${option_params} \
-            | save_replay $subcommand
-        exitcode=$?
-        ;;
+    extract|parse) cmd_extract_parse ;;
 
-    header|headers)
-        extract_headers ${option_params}
-        exitcode=$?
-        ;;
+    header|headers) cmd_header_headers ;;
 
-    smtp)
-        smtp_send ${option_params}
-        exitcode=$?
-        ;;
+    smtp) cmd_smtp ;;
 
-    isml)
-        ismailinglist
-        [[ $? = 0 ]] && \
-            notice "Email read from stdin is a mailinglist"
-        exitcode=$?
-        ;;
+    isml) cmd_isml ;;
 
-    ismd)
-        maildircheck ${option_params}
-        [[ $? = 0 ]] && \
-            notice "Directory is a maildir: ${option_params}"
-        exitcode=$?
-        ;;
+    ismd) cmd_ismd ;;
 
-    __empty) # unknown command, pass it to autostart
-        func "no command, autostart"
-        func "subcommand: $subcommand"
-		read_account "$account"
-        if [[ "$subcommand" = "__empty" ]]; then
-			# open folder
-			if [[ "$option_params" = "" ]]; then
-		        x_mutt -Z
-		    else
-		        x_mutt -f "$option_params"
-		    fi
-		fi
-        exitcode=$?
-		;;
+    __empty) cmd_empty ;;
 
-	__unknown:*)
-        # argument passed: determine if an email
-		subcommand=${subcommand[(ws@:@)2]}
-		func "subcommand: $subcommand"
-		read_account "$account"
-        if isemail "$subcommand"; then
-            notice "Composing message to: $*"
-            # its an email, TODO see if we have it in our addressbook
-            x_mutt $*
-            exitcode=0
-            # or a directory of file
-        elif maildircheck "$subcommand"; then
-            # is it a maildir? then open
-            x_mutt -f "$subcommand"
-            exitcode=$?
-        elif maildircheck "$MAILDIRS/$subcommand"; then
-            x_mutt -f "$MAILDIRS/$subcommand"
-            exitcode=$?
-        elif [[ -f "$subcommand" ]]; then
-            # is it a regular file? then ;attach it
-            x_mutt -a $*
-            exitcode=0
-        else
-            # just open; mutt on first unread folder
-            x_mutt
-            exitcode=$?
-
-        fi
-        ;;
+	__unknown:*) cmd_unknown "$@" ;;
     esac
 
     return $exitcode

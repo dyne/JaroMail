@@ -1,0 +1,45 @@
+name: PR Tests
+
+on:
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            zsh make gcc \
+            fetchmail msmtp neomutt notmuch pinentry-curses \
+            abook wipe mblaze gnupg
+
+      - name: Ensure test scripts are executable
+        run: |
+          chmod +x extras/test/run-source.sh
+          chmod +x extras/test/test-addressbook-parse.sh
+          chmod +x extras/test/test-filtering.sh
+          chmod +x extras/test/test-helpers.sh
+
+      - name: Build
+        run: make
+
+      - name: Source smoke test
+        run: extras/test/run-source.sh
+
+      - name: Addressbook and parsing tests
+        run: extras/test/test-addressbook-parse.sh
+
+      - name: Filtering tests
+        run: extras/test/test-filtering.sh
+
+      - name: Helper binary tests
+        run: extras/test/test-helpers.sh
