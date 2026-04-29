@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+export LC_ALL=C
+export LANG=C
+
 test_setup() {
   script_path="${1}"
   repo_root="${script_path:A:h:h:h}"
