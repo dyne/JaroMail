@@ -1,32 +1,5 @@
 #!/usr/bin/env zsh
 
-cmd_compose() {
-    stdin_compose ${option_params}
-    exitcode=$?
-}
-
-cmd_queue() {
-    stdin_queue ${option_params}
-    exitcode=$?
-}
-
-cmd_fetch() {
-    fetch ${option_params} && \
-        update_filters && \
-        filter_maildir incoming && \
-        update_notmuch
-}
-
-cmd_send() {
-    send ${option_params}
-    exitcode=$?
-}
-
-cmd_peek() {
-    peek ${option_params}
-    exitcode=$?
-}
-
 cmd_remember() {
     deliver remember
     exitcode=$?
@@ -124,11 +97,6 @@ cmd_extract_parse() {
 
 cmd_header_headers() {
     extract_headers ${option_params}
-    exitcode=$?
-}
-
-cmd_smtp() {
-    smtp_send ${option_params}
     exitcode=$?
 }
 
