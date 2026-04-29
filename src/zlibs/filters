@@ -396,7 +396,7 @@ filter_maildir() {
 			error "User break requested, interrupting operation"
 			break }
 
-		# X-Spam flag set server-side
+    # X-Spam flag set server-side
     print "$m" | mpick -t '"X-Spam-Flag" =~ "YES"'
     [[ $? = 0 ]] || {
 			target=`realpath "${MAILDIRS}/zz.spam"`
