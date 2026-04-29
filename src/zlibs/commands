@@ -37,52 +37,6 @@ cmd_replay() {
     exitcode=$?
 }
 
-cmd_init() {
-    init_inbox
-    nm_setup
-    read_account
-    mblaze_setup
-    if [[ -r "$MAILDIRS/.envrc" ]]; then
-        warning "Cannot overwrite direnv conf: $MAILDIRS/.envrc"
-        warning "Delete it manually if desired."
-    else
-        cat <<EOF > "$MAILDIRS/.envrc"
-export JAROMAILDIR=$MAILDIRS
-export JAROWORKDIR=/usr/local/share/jaromail
-export NOTMUCH_CONFIG=$MAILDIRS/notmuch-config
-export MBLAZE=$MAILDIRS/.mblaze
-EOF
-    fi
-    command -v direnv >/dev/null || {
-        direnv allow
-        act "direnv configuration in .envrc"
-    }
-    notice "Initialization completed in $MAILDIRS"
-}
-
-cmd_update() {
-    [[ "$option_params" = "" ]] || {
-        for p in $option_params; do
-            [[ "$p" = "." ]] && p=$PWD
-            [[ -d $p ]] && MAILDIRS=$p
-        done
-    }
-    read_account
-    mblaze_setup
-    update_filters
-    update_sieve
-    update_notmuch
-    notice "Initialization completed in $MAILDIRS"
-}
-
-cmd_sieve() {
-    read_account
-    mblaze_setup
-    update_filters
-    update_sieve
-    notice "Sieve filters updated in $MAILDIRS"
-}
-
 cmd_help() {
     usage
 }
