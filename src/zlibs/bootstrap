@@ -1,0 +1,314 @@
+#!/usr/bin/env zsh
+
+# Resolve runtime paths and load the core framework + libraries.
+# use GNU/Linux default in local
+WORKDIR="/usr/local/share/jaromail"
+
+    # check if we are testing from source
+    if [[ -r ../src/jaro ]]; then
+        WORKDIR="../src"
+    # check if we are on OSX
+    elif [[ -r /Applications/JaroMail.app/Contents/Resources/jaro ]]; then
+        WORKDIR="/Applications/JaroMail.app/Contents/Resources/jaro"
+    elif [[ -r /usr/share/jaromail/bin/jaro ]]; then
+        # use GNU/Linux default in usr
+        WORKDIR="/usr/share/jaromail"
+    fi
+
+    # env override
+    WORKDIR=${JAROWORKDIR:-$WORKDIR}
+
+    # load our zuper extension
+    # different load paths from inside source or installed
+    if [[ -r "$WORKDIR/zuper/zuper" ]]; then
+        source $WORKDIR/zuper/zuper
+    else
+        source $WORKDIR/zlibs/zuper
+    fi
+
+    # what operating system are we in? use os_detect()
+    # simplifying modes of operation: GNU or MAC
+    case $(uname -s) in
+        Linux) OS=GNU
+        notice "Jaro Mail v${VERSION} running on GNU/Linux" ;;
+
+        Darwin) OS=MAC
+        notice "Jaro Mail v${VERSION} running on Mac/OSX" ;;
+
+        Cygwin) OS=WIN
+            notice "Jaro Mail v${VERSION} running on MS/Win" ;;
+
+        OpenBSD|FreeBSD|NetBSD) OS=BSD
+        notice "Jaro Mail v${VERSION} running on a BSD System" ;;
+
+        *) OS=GNU # default
+        error "Running on an unknown operating system, assuming GNU" ;;
+    esac
+
+    # global variables
+    vars+=(DEBUG QUIET DRYRUN CALLMUTT MAILDIRS WORKDIR)
+    vars+=(ADDRESSBOOK ACCOUNTS)
+
+    QUIET=${QUIET:-0}
+    DEBUG=${DEBUG:-0}
+    DRYRUN=${DRYRUN:-0}
+    CALLMUTT=${CALLMUTT:-1}
+
+    # use gnome-keyring for passwords on GNU systems
+    vars+=(PASS GNOMEKEY SECRET_TOOL PASSWORD_STORE_DIR)
+    PASS=${PASS:-0}
+    GNOMEKEY=${GNOMEKEY:-0}
+    SECRET_TOOL=${SECRET_TOOL:-0}
+    # PASSWORD_STORE_DIR=${JARO_PASSWORD_STORE_DIR:-$MAILDIRS/.password-store}
+
+    # global variables for binaries called
+    vars+=(rm mkdir mutt SQL OS)
+
+    # load zsh modules
+    zmodload zsh/regex
+    zmodload zsh/mapfile
+    zmodload zsh/system
+    zmodload -F zsh/stat b:zstat
+    zmodload zsh/sched
+
+    # SQL command
+    SQL=sqlite3
+
+    vars+=(PROGRAM global_quit)
+    global_quit=0
+
+    # global variable for account selection
+    vars+=(account account_type)
+    account=default
+    vars+=(list)
+    list=whitelist
+
+    # global variables for accounts
+    vars+=(name login iproto imap imap_port smtp smtp_port protocol password auth accountopt)
+    arrs+=(folders exclude)
+    vars+=(proto host port type)
+    vars+=(my_hdr)
+
+    # global for server fingerprints
+    vars+=(fingerprint)
+
+    # global variables for addressbook
+    vars+=(hostname addressbook addressbook_tmp)
+
+    # global variables for email parsers
+    typeset -A e_addr
+    vars+=(e_parsed)
+
+    # global array for maildirs (filled by list_maildirs)
+    arrs+=(maildirs)
+    vars+=(last_deliver)
+
+    # stdin when read becomes globally accessible
+    vars+=(stdin bytesread)
+    stdin=""
+    bytesread=0
+
+    # global arrays for search results and mailpaths
+    # are all arrays of absolute paths
+    arrs+=(search_results mailpaths)
+    search_results=()
+
+    # global variable for mutt binary
+    vars+=(mutt pgpewrap dotlock)
+
+    # global variable for exit code
+    vars+=(exitcode global_quit)
+
+    # global variable for infos on imap folder
+    # format: name;num_of_messages;size_in_bytes
+    # last entry is grand_total_in_bytes ${imap_info[${#imap_info}]}
+    typeset -alU imap_info
+
+    # global variable for mutt options
+    vars+=(muttflags)
+
+    autoload colors; colors
+
+    # which command to use when creating dirs
+    mkdir="`command -v mkdir` -m 700 -p"
+
+    MAILDIRS="$PWD"
+    # check if we are on OSX
+    if [ -r /Applications/JaroMail.app ]; then
+        MAILDIRS="$HOME/Library/Application Support/JaroMail"
+    # else use GNU/Linux default
+    elif [ -r "$HOME/Mail/Filters.txt" ]; then
+        MAILDIRS="$HOME/Mail"
+    fi
+    # end override
+    MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
+
+    # default addressbook
+    ADDRESSBOOK="whitelist.abook"
+
+    ACCOUNTS="$MAILDIRS/Accounts"
+    ACCOUNTS=${JAROACCOUNT:-$ACCOUNTS}
+
+    act "System in $WORKDIR"
+    act "Mail in $MAILDIRS"
+    act "Accounts in $ACCOUNTS"
+
+    # own mblaze workdir and init empty sequence
+    export MBLAZE="$MAILDIRS/cache/mblaze"
+    mkdir -p "${MBLAZE}"
+    touch ${MBLAZE}/seq
+
+    PATH="$WORKDIR/bin:$PATH"
+
+    # load our ZLibs
+    if [ -d $WORKDIR/zlibs ]; then
+        # if testing from source load uncompiled libs
+        if [[ -r "$WORKDIR/zuper/zuper" ]]; then
+            for z in `find $WORKDIR/zlibs -type f`; do
+                [[ "$z" =~ "zuper" ]] && continue
+                [[ "$z" =~ "bootstrap" ]] && continue
+                func "Loading zlib: ${z}"
+                source ${z}
+            done
+        else
+            fpath+=($WORKDIR/zlibs)
+            for z in `ls $WORKDIR/zlibs`; do
+                [[ "$z" =~ "zuper" ]] && continue
+                [[ "$z" =~ "bootstrap" ]] && continue
+                [[ "$z" =~ ".zwc"  ]] && continue
+                func "Loading zlib: ${z}"
+                source $WORKDIR/zlibs/${z}
+            done
+        fi
+
+        func "full set of auxiliary functions loaded"
+    elif [[ $1 = source ]]; then
+        act "limited set of auxiliary functions sourced"
+    else
+        error "No ZLibs found in $WORKDIR/zlibs"
+        error "This installation of Jaro Mail is broken."
+        exit 1
+    fi
+
+    # complete
+    if [[ -r "$WORKDIR/zuper/zuper.init" ]]; then
+        source $WORKDIR/zuper/zuper.init
+    else
+        source $WORKDIR/zlibs/zuper.init
+    fi
+
+    hostname=$(hostname) # gather the current hostname
+
+[[ "$1" = "source" ]] || { # skip checks if just sourcing
+    [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
+
+        # make sure we have an addressbook
+    [[ -r "$MAILDIRS/$ADDRESSBOOK" ]] ||
+        create_addressbook "$MAILDIRS/$ADDRESSBOOK"
+
+    MUTTDIR="$MAILDIRS/.mutt"
+    { test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
+
+        # make sure we have Filters.txt Applications.txt Mutt.txt
+    { test -r "$MAILDIRS/Filters.txt" } || {
+        cp "$WORKDIR/Filters.txt" "$MAILDIRS/Filters.txt"
+        notice "Default filters created" }
+
+    { test -r "$MAILDIRS/Applications.txt" } || {
+        cp "$WORKDIR/Applications.txt" "$MAILDIRS/Applications.txt"
+        notice "Default helper applications settings created" }
+
+    { test -r "$MAILDIRS/Mutt.txt" } || {
+        cp "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
+        notice "Default Mutt configuration template created" }
+}
+
+# binary programs recognition
+check_bin() {
+    # required programs
+    for req in pinentry fetchmail gpg msmtp; do
+        isfound $req
+        { test $? != 0 } && {
+            error "Cannot find $req. Please install it."
+            exit 1
+        }
+    done
+
+    # make sure a gnupg dir exists
+    { test -r $HOME/.gnupg/pubring.gpg } || {
+        ${=mkdir} $HOME/.gnupg
+        touch $HOME/.gnupg/pubring.gpg
+        touch $HOME/.gnupg/secring.gpg
+    }
+
+    # which find command to use
+    case $OS in
+        GNU) find="find -O3" ;;
+        MAC) find="gfind -O3" ;;
+        *) find="find"
+    esac
+
+    # which wipe command to use
+    if  isfound wipe; then
+        rm="wipe -f -s -q -R /dev/urandom"
+    elif isfound srm; then
+        rm="srm -m"
+    else
+        rm="rm -f"
+    fi
+    func "Rm binary: $rm"
+
+    # which mutt binary to use
+    if isfound mutt; then
+        mutt_exec=mutt
+    elif isfound neomutt; then
+        mutt_exec=neomutt
+    fi
+    pgpewrap="${WORKDIR}/bin/gpgewrap"
+    dotlock="${WORKDIR}/bin/dotlock"
+
+    func "Mutt binary: $mutt_exec"
+    func "Notmuch binary: `command -v notmuch`"
+    func "Keyring set: $JARO_KEYRING"
+    if [[ "$JARO_KEYRING" == "" ]]; then
+        # check for pass, else fallback
+        if isfound pass; then
+            act "keyring in use: pass (auto-detected)"
+            PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
+            [[ -d $PASSWORD_STORE_DIR ]] ||
+                warning "the 'pass' keyring is found but not initialised"
+
+            PASS=1
+
+            # check if secret-tool is present else fallback to gnome-keyring
+        elif isfound secret-tool; then
+            act "keyring in use: secret-tool (auto-detected)"
+            SECRET_TOOL=1
+        else
+            ps ax | grep '[g]nome-keyring-daemon' > /dev/null
+            [[ $? = 0 ]] && {
+                act "keyring in use: gnome-keyring (auto-detected)"
+                GNOMEKEY=1
+            }
+        fi
+    else # JARO_KEYRING defined
+        case $JARO_KEYRING in
+            pass)
+                act "keyring in use: pass (set in JARO_KEYRING)"
+                PASSWORD_STORE_DIR=${PASSWORD_STORE_DIR:-$HOME/.password-store}
+                [[ -d $PASSWORD_STORE_DIR ]] || {
+                    error "the 'pass' keyring is found but not initialised"
+                    error "run 'pass init your-gpg-id'"
+                }
+                PASS=1 ;;
+            secret-tool)
+                act "keyring in use: secret-tool (set in JARO_KEYRING)"
+                SECRET_TOOL=1 ;;
+            gnome-keyring)
+                act "keyring in use: gnome-keyring (set in JARO_KEYRING)"
+                GNOMEKEY=1  ;;
+        esac
+    fi
+
+    return 0
+}
