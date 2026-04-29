@@ -26,11 +26,15 @@
 
 
 # internal use
+notmuch_run() {
+    notmuch --config="$MAILDIRS"/notmuch-config "$@"
+}
+
 nm() {
     fn "notmuch $*"
 
     [[ -r "$MAILDIRS"/notmuch-config ]] || nm_setup
-    notmuch --config="$MAILDIRS"/notmuch-config $*
+    notmuch_run "$@"
     [[ $? = 0 ]] || {
         error "Notmuch error on command: ${@}"
         func "Returning status to caller: $_res"
