@@ -126,6 +126,17 @@ Developer test dependencies (from this README and `.travis.yml`) include:
 `zsh`, `make`, `gcc`, `fetchmail`, `msmtp`, `mutt` or `neomutt`,
 `notmuch`, `pinentry-curses`, `abook`, `wipe`, and `mblaze` (for `maddr`).
 
+Legacy/optional surfaces are documented in:
+
+- `doc/optional-integrations.md`
+- `doc/maintenance-inventory.md`
+
+Current policy for this branch:
+
+- `stats` and `publish` are retained for compatibility but treated as legacy.
+- default maintenance and regression checks focus on the core CLI path:
+  `init`, `update`, `filter`, `search`, `fetch`, `send`, and addressbook flows.
+
 # License
 Jaromail is Copyright (C) 2010-2023 by the Dyne.org foundation
 
