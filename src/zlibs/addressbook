@@ -23,6 +23,39 @@
 
 
 ###################
+
+cmd_addr_list() {
+    search_addressbook ${option_params}
+}
+
+cmd_complete() {
+    complete ${option_params}
+    exitcode=$?
+}
+
+cmd_isknown() {
+    sender_isknown ${option_params}
+    exitcode=$?
+}
+
+cmd_learn() {
+    learn ${option_params}
+    exitcode=$?
+}
+
+cmd_import() {
+    import ${option_params}
+    exitcode=$?
+}
+
+cmd_export() {
+    export_vcard ${option_params}
+}
+
+cmd_abook() {
+    edit_abook ${option_params}
+    exitcode=$?
+}
 # Jaro Brother DB
 create_addressbook() {
     # $ADDRESSBOOK is set in jaro
