@@ -101,3 +101,239 @@ cmd_search() {
         done
     } | save_replay $subcommand
 }
+
+cmd_alot_config() {
+    alot_setup
+    cat "$MAILDIRS/alot-config"
+    notice "to set as default do:\nmkdir -p ~/.config/alot && jaro alot-config > ~/.config/alot/config"
+}
+
+cmd_alot() {
+    alot_search ${option_params}
+}
+
+cmd_notmuch_config() {
+    nm_setup
+    cat "$MAILDIRS/notmuch-config"
+}
+
+cmd_notmuch() {
+    notice "Command: notmuch ${option_params}"
+    nm ${option_params} | save_replay $subcommand
+    exitcode=$?
+}
+
+cmd_addr_list() {
+    search_addressbook ${option_params}
+}
+
+cmd_complete() {
+    complete ${option_params}
+    exitcode=$?
+}
+
+cmd_isknown() {
+    sender_isknown ${option_params}
+    exitcode=$?
+}
+
+cmd_learn() {
+    learn ${option_params}
+    exitcode=$?
+}
+
+cmd_import() {
+    import ${option_params}
+    exitcode=$?
+}
+
+cmd_export() {
+    export_vcard ${option_params}
+}
+
+cmd_abook() {
+    edit_abook ${option_params}
+    exitcode=$?
+}
+
+cmd_new() {
+    new_account ${option_params}
+    exitcode=$?
+}
+
+cmd_stat() {
+    stats ${option_params} | sort -n
+    exitcode=$?
+}
+
+cmd_edit_vim() {
+    edit_file ${option_params}
+}
+
+cmd_open() {
+    x_mutt -f ${option_params}
+}
+
+cmd_preview() {
+    preview_file ${option_params}
+}
+
+cmd_mkdir() {
+    DEBUG=1 maildirmake ${option_params}
+    exitcode=$?
+}
+
+cmd_rmdupes() {
+    rmdupes ${option_params}
+}
+
+cmd_filter() {
+    filter_maildir ${option_params}
+    exitcode=$?
+}
+
+cmd_deliver() {
+    deliver ${option_params}
+    exitcode=$?
+}
+
+cmd_passwd() {
+    read_account $account
+    host=${option_params:-$imap}
+    new_password
+}
+
+cmd_isonline() {
+    is_online ${option_params}
+    exitcode=$?
+}
+
+cmd_publish() {
+    md="$1"
+    { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
+    pubdb_update "$md"
+    pubdb_render_maildir "$md"
+    exitcode=$?
+}
+
+cmd_askpass() {
+    read_account $account
+    ask_password
+    # shell escape special chars
+    print - "$password" | sed '
+s/\&/\\&/g
+s/\$/\\$/g
+s/ /\\ /g
+s/;/\\;/g
+s/\?/\\?/g
+s/\*/\\*/g
+'
+    exitcode=$?
+}
+
+cmd_imap() {
+    imapcmd="${option_params[(w)1]}"
+    case $imapcmd in
+        console)
+            read_account $account
+            host=${imap:-$host}
+            ask_password
+            func "$login $password"
+            cat <<EOF | run_imap_query
+B00000 CAPABILITY
+B00001 LOGIN "${login}" "${password}"
+EOF
+            ;;
+        getsize)
+            read_account $account
+            host=${imap:-$host}
+            ask_password
+            bytes_total=`imap_get_size "$2"`
+            exitcode=$?
+            notice "Size of account $login on $imap"
+            act "$bytes_total bytes"
+            mib_total=$(( $bytes_total / 1048576 ))
+            act "$mib_total MB (MiB)"
+            ;;
+        listfolders)
+            read_account $account
+            host=${imap:-$host}
+            ask_password
+            folders=(`imap_list_folders`)
+            exitcode=$?
+            notice "List of folders for $login on $imap"
+            for f in $folders; do print - "$f"; done \
+                | save_replay $subcommand | column
+            ;;
+        *)
+            error "imap needs a subcommand: getsize or listfolders"
+            ;;
+    esac
+}
+
+cmd_extract_parse() {
+    extract_addresses ${option_params} \
+        | save_replay $subcommand
+    exitcode=$?
+}
+
+cmd_header_headers() {
+    extract_headers ${option_params}
+    exitcode=$?
+}
+
+cmd_smtp() {
+    smtp_send ${option_params}
+    exitcode=$?
+}
+
+cmd_isml() {
+    ismailinglist
+    [[ $? = 0 ]] && \
+        notice "Email read from stdin is a mailinglist"
+    exitcode=$?
+}
+
+cmd_ismd() {
+    maildircheck ${option_params}
+    [[ $? = 0 ]] && \
+        notice "Directory is a maildir: ${option_params}"
+    exitcode=$?
+}
+
+cmd_empty() {
+    func "no command, autostart"
+    func "subcommand: $subcommand"
+    read_account "$account"
+    if [[ "$subcommand" = "__empty" ]]; then
+        if [[ "$option_params" = "" ]]; then
+            x_mutt -Z
+        else
+            x_mutt -f "$option_params"
+        fi
+    fi
+    exitcode=$?
+}
+
+cmd_unknown() {
+    subcommand=${subcommand[(ws@:@)2]}
+    func "subcommand: $subcommand"
+    read_account "$account"
+    if isemail "$subcommand"; then
+        notice "Composing message to: $*"
+        x_mutt $*
+        exitcode=0
+    elif maildircheck "$subcommand"; then
+        x_mutt -f "$subcommand"
+        exitcode=$?
+    elif maildircheck "$MAILDIRS/$subcommand"; then
+        x_mutt -f "$MAILDIRS/$subcommand"
+        exitcode=$?
+    elif [[ -f "$subcommand" ]]; then
+        x_mutt -a $*
+        exitcode=0
+    else
+        x_mutt
+        exitcode=$?
+    fi
+}
