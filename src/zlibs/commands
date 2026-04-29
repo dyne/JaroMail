@@ -41,42 +41,6 @@ cmd_help() {
     usage
 }
 
-cmd_index() {
-    nm_setup
-    nm_index
-    exitcode=$?
-}
-
-cmd_search() {
-    search ${option_params}
-    [[ $DRYRUN = 1 ]] || {
-        for i in ${search_results=}; do
-            print - "$i"
-        done
-    } | save_replay $subcommand
-}
-
-cmd_alot_config() {
-    alot_setup
-    cat "$MAILDIRS/alot-config"
-    notice "to set as default do:\nmkdir -p ~/.config/alot && jaro alot-config > ~/.config/alot/config"
-}
-
-cmd_alot() {
-    alot_search ${option_params}
-}
-
-cmd_notmuch_config() {
-    nm_setup
-    cat "$MAILDIRS/notmuch-config"
-}
-
-cmd_notmuch() {
-    notice "Command: notmuch ${option_params}"
-    nm ${option_params} | save_replay $subcommand
-    exitcode=$?
-}
-
 cmd_addr_list() {
     search_addressbook ${option_params}
 }
