@@ -9,12 +9,31 @@ test_setup() {
   mail_root="${tmp_root}/mail"
   prefix_root="${tmp_root}/prefix"
   work_root="${prefix_root}/share/jaromail"
+  test_bin="${tmp_root}/bin"
 
   mkdir -p "${mail_root}"
+  mkdir -p "${test_bin}"
   cd "${repo_root}"
   make >/dev/null
   PREFIX="${prefix_root}" make install >/dev/null
-  export PATH="${repo_root}/src:${repo_root}/build/gnu:${PATH}"
+  cat > "${test_bin}/mdeliver" <<'EOF'
+#!/usr/bin/env sh
+verbose=0
+if [ "$1" = "-v" ]; then
+  verbose=1
+  shift
+fi
+dest="$1"
+[ -n "$dest" ] || exit 1
+mkdir -p "$dest/new" "$dest/cur" "$dest/tmp"
+base="$(date +%s).M$$P$RANDOMQ1.test"
+path="$dest/new/$base"
+cat > "$path"
+[ $verbose -eq 1 ] && printf '%s\n' "$path"
+EOF
+  chmod +x "${test_bin}/mdeliver"
+
+  export PATH="${test_bin}:${repo_root}/src:${repo_root}/build/gnu:${PATH}"
 }
 
 test_cleanup() {
