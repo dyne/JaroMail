@@ -73,7 +73,7 @@ exported_recipients="$(
         name=$2
         if (email ~ /^[^ @]+@[^ @]+$/) print name " <" email ">"
       }' \
-    | sort | uniq
+    | LC_ALL=C sort -f | uniq
 )"
 if assert_equal "${exported_recipients}" "${exported_recipients_ok}" "extract recipients"; then
   r "EXTRACT OK"
