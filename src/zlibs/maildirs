@@ -197,3 +197,29 @@ deliver() {
     }
     return 0
 }
+
+cmd_remember() {
+    deliver remember
+    exitcode=$?
+}
+
+cmd_mkdir() {
+    DEBUG=1 maildirmake ${option_params}
+    exitcode=$?
+}
+
+cmd_rmdupes() {
+    rmdupes ${option_params}
+}
+
+cmd_deliver() {
+    deliver ${option_params}
+    exitcode=$?
+}
+
+cmd_ismd() {
+    maildircheck ${option_params}
+    [[ $? = 0 ]] && \
+        notice "Directory is a maildir: ${option_params}"
+    exitcode=$?
+}

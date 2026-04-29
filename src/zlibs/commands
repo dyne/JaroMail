@@ -1,10 +1,5 @@
 #!/usr/bin/env zsh
 
-cmd_remember() {
-    deliver remember
-    exitcode=$?
-}
-
 cmd_replay() {
     replay ${option_params}
     exitcode=$?
@@ -34,25 +29,6 @@ cmd_open() {
 
 cmd_preview() {
     preview_file ${option_params}
-}
-
-cmd_mkdir() {
-    DEBUG=1 maildirmake ${option_params}
-    exitcode=$?
-}
-
-cmd_rmdupes() {
-    rmdupes ${option_params}
-}
-
-cmd_filter() {
-    filter_maildir ${option_params}
-    exitcode=$?
-}
-
-cmd_deliver() {
-    deliver ${option_params}
-    exitcode=$?
 }
 
 cmd_passwd() {
@@ -104,13 +80,6 @@ cmd_isml() {
     ismailinglist
     [[ $? = 0 ]] && \
         notice "Email read from stdin is a mailinglist"
-    exitcode=$?
-}
-
-cmd_ismd() {
-    maildircheck ${option_params}
-    [[ $? = 0 ]] && \
-        notice "Directory is a maildir: ${option_params}"
     exitcode=$?
 }
 

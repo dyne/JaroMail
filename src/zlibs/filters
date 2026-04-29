@@ -634,3 +634,8 @@ EOF
 
     return 0
 } # end of update()
+
+cmd_filter() {
+    filter_maildir ${option_params}
+    exitcode=$?
+}
