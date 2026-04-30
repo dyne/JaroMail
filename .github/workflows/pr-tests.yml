@@ -20,7 +20,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             zsh make gcc \
             fetchmail msmtp neomutt notmuch pinentry-curses \
-            abook wipe mblaze gnupg
+            abook wipe mblaze gnupg pandoc
 
       - name: Ensure test scripts are executable
         run: |
