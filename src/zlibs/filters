@@ -635,6 +635,22 @@ EOF
     return 0
 } # end of update()
 
+sieve_import() {
+    fn sieve_import $*
+    local sieve_file="$1"
+    req=(MAILDIRS sieve_file)
+    freq=($sieve_file)
+    ckreq || return 1
+
+    [[ -r "$sieve_file" ]] || {
+        error "Sieve file not readable: $sieve_file"
+        return 1
+    }
+
+    notice "Import Sieve filters from $sieve_file"
+    return 0
+}
+
 cmd_filter() {
     filter_maildir ${option_params}
     exitcode=$?

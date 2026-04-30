@@ -136,6 +136,7 @@ main() {
 
     option_subcommands[update]=""
     option_subcommands[sieve]=""
+    option_subcommands[sieve-import]=""
 
     option_subcommands[stat]=""
 
@@ -268,6 +269,8 @@ main() {
     update) cmd_update ;;
 
 	sieve) cmd_sieve ;;
+
+    sieve-import) cmd_sieve_import ;;
 
     help) cmd_help ;;
 

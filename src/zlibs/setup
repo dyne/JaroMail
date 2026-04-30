@@ -45,3 +45,8 @@ cmd_sieve() {
     update_sieve
     notice "Sieve filters updated in $MAILDIRS"
 }
+
+cmd_sieve_import() {
+    sieve_import ${option_params}
+    exitcode=$?
+}
