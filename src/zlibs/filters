@@ -635,6 +635,52 @@ EOF
     return 0
 } # end of update()
 
+sieve_import_addressbook_entry() {
+    local target_list="$1"
+    local raw_address="$2"
+    local old_list="$list"
+    local old_addressbook="$ADDRESSBOOK"
+
+    list="$target_list"
+    ADDRESSBOOK="${target_list}.abook"
+    [[ -r "$MAILDIRS/$ADDRESSBOOK" ]] || create_addressbook
+
+    e_addr=()
+    print - "From: $raw_address" | e_parse From > /dev/null || {
+        list="$old_list"
+        ADDRESSBOOK="$old_addressbook"
+        return 1
+    }
+
+    local email name
+    for email in ${(k)e_addr}; do
+        name="${e_addr[$email]}"
+        [[ -z "$name" ]] && name="$email"
+        lookup_email "$email"
+        [[ $? = 0 ]] || insert_address "$email" "$name" > /dev/null
+    done
+
+    list="$old_list"
+    ADDRESSBOOK="$old_addressbook"
+    return 0
+}
+
+sieve_import_grouped_values() {
+    local sieve_file="$1"
+    awk '
+/^# / {
+    section=substr($0, 3)
+    next
+}
+/^[[:space:]]*"/ {
+    value=$0
+    sub(/^[[:space:]]*"/, "", value)
+    sub(/".*/, "", value)
+    print section "|" value
+}
+' "$sieve_file"
+}
+
 sieve_import() {
     fn sieve_import $*
     local sieve_file="$1"
@@ -648,6 +694,27 @@ sieve_import() {
     }
 
     notice "Import Sieve filters from $sieve_file"
+    local section value entry
+    local imported_blacklist=0
+    local imported_whitelist=0
+
+    for entry in ${(f)"$(sieve_import_grouped_values "$sieve_file")"}; do
+        section="${entry%%|*}"
+        value="${entry#*|}"
+        case "$section" in
+            zz.blacklist)
+                sieve_import_addressbook_entry blacklist "$value" && \
+                    imported_blacklist=$(( $imported_blacklist + 1 ))
+                ;;
+            INBOX)
+                sieve_import_addressbook_entry whitelist "$value" && \
+                    imported_whitelist=$(( $imported_whitelist + 1 ))
+                ;;
+        esac
+    done
+
+    act "blacklist addresses imported: $imported_blacklist"
+    act "whitelist addresses imported: $imported_whitelist"
     return 0
 }
 
