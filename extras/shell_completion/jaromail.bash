@@ -16,7 +16,7 @@ _jaro() {  #+ starts with an underscore.
 
   case "$cur" in
       *)
-	  COMPREPLY=( $( compgen -W 'fetch send peek compose open' -- $cur ) )
+	  COMPREPLY=( $( compgen -W 'fetch send peek compose open update sieve sieve-import filter' -- $cur ) )
 	  ;;
 
       open)
@@ -39,4 +39,3 @@ echo "current array: ${COMP_WORDS[@]}"
 }
 
 complete -F _jaro -o filenames jaro
-

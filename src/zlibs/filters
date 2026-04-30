@@ -105,12 +105,16 @@ update_filters() {
     newlock "$ff"
     cat <<EOF >> "$ff"
 # generated on `date`
-typeset -Al  filter_from
-typeset -alU filter_own
-typeset -Al  filter_to
+typeset -gAl  filter_from
+typeset -galU filter_own
+typeset -gAl  filter_to
+typeset -galU filter_whitelist
+typeset -galU filter_blacklist
 filter_from=()
 filter_own=()
 filter_to=()
+filter_whitelist=()
+filter_blacklist=()
 
 EOF
 
@@ -587,10 +591,16 @@ if header :contains "Sender" "mailman-bounce" {
 
 EOF
 
-    set -A sieve_filter_map ${(kv)filter_to}
+    sieve_filter_map=()
+    for fil in ${(k)filter_to}; do
+        sieve_filter_map[$fil]="${filter_to[$fil]}"
+    done
     sieve_complex_filter 'if header :contains [ "To","Cc" ] '
 
-    set -A sieve_filter_map ${(kv)filter_from}
+    sieve_filter_map=()
+    for fil in ${(k)filter_from}; do
+        sieve_filter_map[$fil]="${filter_from[$fil]}"
+    done
     sieve_complex_filter 'if header :contains [ "From","Sender" ] '
 
     ##############################################################
@@ -634,6 +644,164 @@ EOF
 
     return 0
 } # end of update()
+
+sieve_import_addressbook_entry() {
+    local target_list="$1"
+    local raw_address="$2"
+    local old_list="$list"
+    local old_addressbook="$ADDRESSBOOK"
+
+    list="$target_list"
+    ADDRESSBOOK="${target_list}.abook"
+    [[ -r "$MAILDIRS/$ADDRESSBOOK" ]] || create_addressbook
+
+    e_addr=()
+    print - "From: $raw_address" | e_parse From > /dev/null || {
+        list="$old_list"
+        ADDRESSBOOK="$old_addressbook"
+        return 1
+    }
+
+    local email name
+    for email in ${(k)e_addr}; do
+        name="${e_addr[$email]}"
+        [[ -z "$name" ]] && name="$email"
+        lookup_email "$email"
+        [[ $? = 0 ]] || insert_address "$email" "$name" > /dev/null
+    done
+
+    list="$old_list"
+    ADDRESSBOOK="$old_addressbook"
+    return 0
+}
+
+sieve_import_grouped_values() {
+    local sieve_file="$1"
+    awk '
+/^# / {
+    section=substr($0, 3)
+    next
+}
+/^[[:space:]]*"/ {
+    value=$0
+    sub(/^[[:space:]]*"/, "", value)
+    sub(/".*/, "", value)
+    print section "|" value
+}
+' "$sieve_file"
+}
+
+sieve_import_route_rules() {
+    local sieve_file="$1"
+    awk '
+/header :contains/ && /fileinto :create/ {
+    destination=$0
+    sub(/^.*fileinto :create "/, "", destination)
+    sub(/".*/, "", destination)
+
+    if (destination == "INBOX" || destination == "priv" ||
+        destination == "Spam" || destination == "unsorted" ||
+        destination == "zz.blacklist" || destination == "zz.bounces") {
+        next
+    }
+
+    if ($0 ~ /\[ "To","Cc" \]/) {
+        header="to"
+    } else if ($0 ~ /\[ "From","Sender" \]/) {
+        header="from"
+    } else {
+        next
+    }
+
+    pattern=$0
+    sub(/^.*\][[:space:]]*"/, "", pattern)
+    sub(/".*/, "", pattern)
+    if (pattern != "") {
+        print header " " pattern " move " destination
+    }
+}
+' "$sieve_file"
+}
+
+sieve_import_append_unique() {
+    local target_file="$1"
+    local line="$2"
+
+    touch "$target_file"
+    grep -Fqx "$line" "$target_file" 2>/dev/null || print - "$line" >> "$target_file"
+}
+
+sieve_import_is_account_address() {
+    local needle="${1:l}"
+
+    [[ -d "$MAILDIRS/Accounts" ]] || return 1
+    find "$MAILDIRS/Accounts" -type f -exec awk '/^email/ { print tolower($2) }' {} \; | \
+        grep -Fqx "$needle"
+}
+
+sieve_import_alias_entry() {
+    local raw_address="$1"
+
+    e_addr=()
+    print - "From: $raw_address" | e_parse From > /dev/null || return 1
+
+    local email
+    for email in ${(k)e_addr}; do
+        sieve_import_is_account_address "$email" && continue
+        sieve_import_append_unique "$MAILDIRS/Aliases.txt" "$email"
+    done
+    return 0
+}
+
+sieve_import() {
+    fn sieve_import $*
+    local sieve_file="$1"
+    req=(MAILDIRS sieve_file)
+    freq=($sieve_file)
+    ckreq || return 1
+
+    [[ -r "$sieve_file" ]] || {
+        error "Sieve file not readable: $sieve_file"
+        return 1
+    }
+
+    notice "Import Sieve filters from $sieve_file"
+    local section value entry
+    local imported_blacklist=0
+    local imported_whitelist=0
+    local imported_filters=0
+    local imported_aliases=0
+
+    for entry in ${(f)"$(sieve_import_grouped_values "$sieve_file")"}; do
+        section="${entry%%|*}"
+        value="${entry#*|}"
+        case "$section" in
+            zz.blacklist)
+                sieve_import_addressbook_entry blacklist "$value" && \
+                    imported_blacklist=$(( $imported_blacklist + 1 ))
+                ;;
+            INBOX)
+                sieve_import_addressbook_entry whitelist "$value" && \
+                    imported_whitelist=$(( $imported_whitelist + 1 ))
+                ;;
+            priv)
+                sieve_import_alias_entry "$value" && \
+                    imported_aliases=$(( $imported_aliases + 1 ))
+                ;;
+        esac
+    done
+
+    for entry in ${(f)"$(sieve_import_route_rules "$sieve_file")"}; do
+        sieve_import_append_unique "$MAILDIRS/Filters.txt" "$entry"
+        imported_filters=$(( $imported_filters + 1 ))
+    done
+
+    act "blacklist addresses imported: $imported_blacklist"
+    act "whitelist addresses imported: $imported_whitelist"
+    act "aliases imported: $imported_aliases"
+    act "filter rules imported: $imported_filters"
+    return 0
+}
 
 cmd_filter() {
     filter_maildir ${option_params}
