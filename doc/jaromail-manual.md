@@ -970,6 +970,37 @@ Will extract all addresses found in unsorted (the maildir collecting all
 non-mailinglist emails in which we are not an explicit recipient) and
 put them into our blacklist.
 
+### Private recipient groups
+
+You can define reusable recipient groups in `Mail/Groups/` and send to
+them by using the pseudo-address `groupname@jaromail.group`.
+
+Create a group file, for example `Mail/Groups/team`:
+
+``` example
+#mode individual
+Alice <alice@example.org>
+Bob <bob@example.org>
+```
+
+Then compose to the group:
+
+``` example
+jaro compose team@jaromail.group
+```
+
+Group delivery modes are controlled by the first line:
+
+- `#mode individual` (default): one message per recipient, recipients do
+  not see each other.
+- `#mode carboncopy` or `#mode cc`: one message with all recipients in
+  `To:` and `Reply-To:` set to sender address.
+- `#mode bcc`: one message with hidden recipients (`To:
+  undisclosed-recipients:;`) and all recipients in `Bcc:`.
+
+This behavior is implemented in the queueing path, so it also applies
+when messages are piped and queued from stdin.
+
 ### Export to VCard and other formats
 
 VCard is an exchange format useful to interface with other addressbook

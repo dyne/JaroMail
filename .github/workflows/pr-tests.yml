@@ -27,6 +27,7 @@ jobs:
           chmod +x extras/test/run-source.sh
           chmod +x extras/test/test-addressbook-parse.sh
           chmod +x extras/test/test-account-wizard.sh
+          chmod +x extras/test/test-group-modes.sh
           chmod +x extras/test/test-filtering.sh
           chmod +x extras/test/test-sieve-import.sh
           chmod +x extras/test/test-helpers.sh
@@ -42,6 +43,9 @@ jobs:
 
       - name: Account wizard tests
         run: extras/test/test-account-wizard.sh
+
+      - name: Group delivery mode tests
+        run: extras/test/test-group-modes.sh
 
       - name: Filtering tests
         run: extras/test/test-filtering.sh

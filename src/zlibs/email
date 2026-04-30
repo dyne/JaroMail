@@ -113,6 +113,36 @@ stdin_queue() {
     maildirmake "$MAILDIRS/outbox"
     # lock "$MAILDIRS/outbox"
 
+    _extract_sender_addr() {
+        awk '/^From:/ { sub(/^From:[[:space:]]*/, "", $0); print $0; exit }' "$tmpqueue" \
+            | getemail | head -n1
+    }
+
+_group_collect_recipients() {
+        _group_path="$1"
+        awk '
+/^#/ { next }
+/^[[:space:]]*$/ { next }
+{
+    line=$0
+    email=""
+    if (match(line, /<[^>]+>/)) {
+        email=substr(line, RSTART+1, RLENGTH-2)
+    } else if (match(line, /[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,63}/)) {
+        email=substr(line, RSTART, RLENGTH)
+    } else {
+        printf("INVALID %s\n", line)
+        next
+    }
+    lower=tolower(email)
+    if (!(lower in seen)) {
+        seen[lower]=1
+        printf("VALID %s\n", line)
+    }
+}
+' "$_group_path"
+    }
+
     # check if recipients are a Group
     if [[ "${=queue_to}" =~ '@jaromail.group' ]]; then
 
@@ -127,8 +157,37 @@ stdin_queue() {
 			sleep 3
             return 1 }
 
-        recipients=`grep -v '^#' $MAILDIRS/Groups/$groupfile`
-        groupnum=`grep -v '^#' $MAILDIRS/Groups/$groupfile | wc -l`
+        recipients=""
+        invalid_entries=""
+        for _entry in ${(f)"$(_group_collect_recipients "$MAILDIRS/Groups/$groupfile")"}; do
+            if [[ "$_entry" == "VALID "* ]]; then
+                _value="${_entry#VALID }"
+                recipients+="${_value}"$'\n'
+            else
+                _value="${_entry#INVALID }"
+                invalid_entries+="${_value}"$'\n'
+            fi
+        done
+
+        if [[ -n "$invalid_entries" ]]; then
+            maildirmake "$MAILDIRS/postponed"
+            mv "$tmpqueue" "$MAILDIRS/postponed/new"
+            error "Invalid addresses in group: $groupfile"
+            for _bad in ${(f)invalid_entries}; do
+                warning "invalid group entry: ${_bad}"
+            done
+            sleep 3
+            return 1
+        fi
+
+        groupnum=`print -n -- "$recipients" | awk 'NF>0 {n+=1} END {print n+0}'`
+        [[ "$groupnum" = "0" ]] && {
+            maildirmake "$MAILDIRS/postponed"
+            mv "$tmpqueue" "$MAILDIRS/postponed/new"
+            error "No valid recipients found in group: $groupfile"
+            sleep 3
+            return 1
+        }
         groupmode=`head -n1 "$MAILDIRS/Groups/$groupfile" | awk '/^#mode/ { print $2 } { next }'`
         [[ "$groupmode" = "" ]] && { groupmode="individual" }
         act "$groupnum recipients in total, sending mode $groupmode"
@@ -155,11 +214,36 @@ stdin_queue() {
                     if [ "$cc" = "" ]; then cc="$i"
                     else cc+=", $i"; fi
                 done
+                reply_to="$(_extract_sender_addr)"
                 ig=${base}-${RANDOM}
                 cat "$tmpqueue" | \
                     awk '
-/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $cc"'"; next }
+/^To:/ { print "'"To: $cc"'"; print "'"Reply-To: $reply_to"'"; next }
        { print $0 }' | deliver outbox
+                ;;
+
+            # bcc group mode keeps a single message and hides recipients.
+            bcc)
+                bcc=""
+                for i in ${(f)recipients}; do
+                    if [ "$bcc" = "" ]; then bcc="$i"
+                    else bcc+=", $i"; fi
+                done
+                reply_to="$(_extract_sender_addr)"
+                [[ -n "$reply_to" ]] || reply_to="undisclosed-recipients:;"
+                ig=${base}-${RANDOM}
+                cat "$tmpqueue" | \
+                    awk '
+/^To:/ { print "To: undisclosed-recipients:;"; print "'"Bcc: $bcc"'"; print "'"Reply-To: $reply_to"'"; next }
+       { print $0 }' | deliver outbox
+                ;;
+
+            *)
+                maildirmake "$MAILDIRS/postponed"
+                mv "$tmpqueue" "$MAILDIRS/postponed/new"
+                error "Unknown group mode '$groupmode' in group: $groupfile"
+                sleep 3
+                return 1
                 ;;
         esac
 
