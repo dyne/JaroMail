@@ -21,6 +21,8 @@ if (( ${#missing_cmds[@]} > 0 )); then
 fi
 
 jaro_source init >/dev/null
+: > "${mail_root}/Filters.txt"
+: > "${mail_root}/Aliases.txt"
 
 sieve_file="${tmp_root}/import.sieve"
 cat > "${sieve_file}" <<'EOF'
@@ -74,8 +76,8 @@ jaro_source sieve-import "${sieve_file}" >/dev/null
 filters="$(grep -v '^#' "${mail_root}/Filters.txt" | grep -v '^$' | sort)"
 assert_equal "${filters}" $'from list@example.org move lists\nto team@example.org move team' "import filters"
 
-aliases="$(grep -v '^#' "${mail_root}/Aliases.txt" | grep -v '^$' | sort)"
-assert_equal "${aliases}" "alias@example.org" "import aliases"
+alias_lines="$(grep -v '^#' "${mail_root}/Aliases.txt" | grep -v '^$' | sort)"
+assert_equal "${alias_lines}" "alias@example.org" "import aliases"
 
 whitelist="$(jaro_source addr 2>/dev/null | sort)"
 assert_equal "${whitelist}" "Known Person <known@example.org>" "import whitelist"

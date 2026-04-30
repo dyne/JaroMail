@@ -681,6 +681,46 @@ sieve_import_grouped_values() {
 ' "$sieve_file"
 }
 
+sieve_import_route_rules() {
+    local sieve_file="$1"
+    awk '
+/header :contains/ && /fileinto :create/ {
+    destination=$0
+    sub(/^.*fileinto :create "/, "", destination)
+    sub(/".*/, "", destination)
+
+    if (destination == "INBOX" || destination == "priv" ||
+        destination == "Spam" || destination == "unsorted" ||
+        destination == "zz.blacklist" || destination == "zz.bounces") {
+        next
+    }
+
+    if ($0 ~ /\[ "To","Cc" \]/) {
+        header="to"
+    } else if ($0 ~ /\[ "From","Sender" \]/) {
+        header="from"
+    } else {
+        next
+    }
+
+    pattern=$0
+    sub(/^.*\][[:space:]]*"/, "", pattern)
+    sub(/".*/, "", pattern)
+    if (pattern != "") {
+        print header " " pattern " move " destination
+    }
+}
+' "$sieve_file"
+}
+
+sieve_import_append_unique() {
+    local target_file="$1"
+    local line="$2"
+
+    touch "$target_file"
+    grep -Fqx "$line" "$target_file" 2>/dev/null || print - "$line" >> "$target_file"
+}
+
 sieve_import() {
     fn sieve_import $*
     local sieve_file="$1"
@@ -697,6 +737,7 @@ sieve_import() {
     local section value entry
     local imported_blacklist=0
     local imported_whitelist=0
+    local imported_filters=0
 
     for entry in ${(f)"$(sieve_import_grouped_values "$sieve_file")"}; do
         section="${entry%%|*}"
@@ -713,8 +754,14 @@ sieve_import() {
         esac
     done
 
+    for entry in ${(f)"$(sieve_import_route_rules "$sieve_file")"}; do
+        sieve_import_append_unique "$MAILDIRS/Filters.txt" "$entry"
+        imported_filters=$(( $imported_filters + 1 ))
+    done
+
     act "blacklist addresses imported: $imported_blacklist"
     act "whitelist addresses imported: $imported_whitelist"
+    act "filter rules imported: $imported_filters"
     return 0
 }
 
