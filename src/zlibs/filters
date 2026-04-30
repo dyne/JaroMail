@@ -105,12 +105,16 @@ update_filters() {
     newlock "$ff"
     cat <<EOF >> "$ff"
 # generated on `date`
-typeset -Al  filter_from
-typeset -alU filter_own
-typeset -Al  filter_to
+typeset -gAl  filter_from
+typeset -galU filter_own
+typeset -gAl  filter_to
+typeset -galU filter_whitelist
+typeset -galU filter_blacklist
 filter_from=()
 filter_own=()
 filter_to=()
+filter_whitelist=()
+filter_blacklist=()
 
 EOF
 
@@ -587,10 +591,16 @@ if header :contains "Sender" "mailman-bounce" {
 
 EOF
 
-    set -A sieve_filter_map ${(kv)filter_to}
+    sieve_filter_map=()
+    for fil in ${(k)filter_to}; do
+        sieve_filter_map[$fil]="${filter_to[$fil]}"
+    done
     sieve_complex_filter 'if header :contains [ "To","Cc" ] '
 
-    set -A sieve_filter_map ${(kv)filter_from}
+    sieve_filter_map=()
+    for fil in ${(k)filter_from}; do
+        sieve_filter_map[$fil]="${filter_from[$fil]}"
+    done
     sieve_complex_filter 'if header :contains [ "From","Sender" ] '
 
     ##############################################################
