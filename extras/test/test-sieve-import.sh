@@ -63,7 +63,7 @@ if header :is "X-Spam-Flag" "YES" {
 # priv
 if header :contains [ "To","Cc" ]  [
 "alias@example.org",
-"USERNAME@gmail.com"
+"unknown@gmail.com"
 ]
 { fileinto :create "priv"; stop; }
 
@@ -83,7 +83,7 @@ whitelist="$(jaro_source addr 2>/dev/null | sort)"
 assert_equal "${whitelist}" "Known Person <known@example.org>" "import whitelist"
 
 blacklist="$(jaro_source -l blacklist addr 2>/dev/null | sort)"
-assert_equal "${blacklist}" "blocked@example.org <blocked@example.org>" "import blacklist"
+assert_equal "${blacklist}" "blocked <blocked@example.org>" "import blacklist"
 
 jaro_source update >/dev/null
 

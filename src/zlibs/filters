@@ -721,6 +721,28 @@ sieve_import_append_unique() {
     grep -Fqx "$line" "$target_file" 2>/dev/null || print - "$line" >> "$target_file"
 }
 
+sieve_import_is_account_address() {
+    local needle="${1:l}"
+
+    [[ -d "$MAILDIRS/Accounts" ]] || return 1
+    find "$MAILDIRS/Accounts" -type f -exec awk '/^email/ { print tolower($2) }' {} \; | \
+        grep -Fqx "$needle"
+}
+
+sieve_import_alias_entry() {
+    local raw_address="$1"
+
+    e_addr=()
+    print - "From: $raw_address" | e_parse From > /dev/null || return 1
+
+    local email
+    for email in ${(k)e_addr}; do
+        sieve_import_is_account_address "$email" && continue
+        sieve_import_append_unique "$MAILDIRS/Aliases.txt" "$email"
+    done
+    return 0
+}
+
 sieve_import() {
     fn sieve_import $*
     local sieve_file="$1"
@@ -738,6 +760,7 @@ sieve_import() {
     local imported_blacklist=0
     local imported_whitelist=0
     local imported_filters=0
+    local imported_aliases=0
 
     for entry in ${(f)"$(sieve_import_grouped_values "$sieve_file")"}; do
         section="${entry%%|*}"
@@ -751,6 +774,10 @@ sieve_import() {
                 sieve_import_addressbook_entry whitelist "$value" && \
                     imported_whitelist=$(( $imported_whitelist + 1 ))
                 ;;
+            priv)
+                sieve_import_alias_entry "$value" && \
+                    imported_aliases=$(( $imported_aliases + 1 ))
+                ;;
         esac
     done
 
@@ -761,6 +788,7 @@ sieve_import() {
 
     act "blacklist addresses imported: $imported_blacklist"
     act "whitelist addresses imported: $imported_whitelist"
+    act "aliases imported: $imported_aliases"
     act "filter rules imported: $imported_filters"
     return 0
 }
