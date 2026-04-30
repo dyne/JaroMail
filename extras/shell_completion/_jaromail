@@ -16,7 +16,7 @@ _jaromail() {
 
     case $state in
 	    commands)
-            _arguments '1:Commands:(open compose fetch send peek search passwd abook extract import backup merge update sieve sieve-import filter)'
+            _arguments '1:Commands:(open compose fetch send peek search passwd wizard abook extract import backup merge update sieve sieve-import filter)'
 	        ;;
 	    *)
             _last=$(( ${#words} - 1 ))

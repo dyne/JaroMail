@@ -55,7 +55,8 @@ getemail() {
 # zmodload zsh/regex
 isemail() {
 	[[ "$1" == "" ]] && return 1
-    [[ "$1" -regex-match '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,9}\b' ]] && return 0
+    # Accept modern TLD lengths up to the DNS maximum label length.
+    [[ "$1" -regex-match '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}\b' ]] && return 0
     return 1
 }
 
