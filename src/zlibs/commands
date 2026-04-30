@@ -9,8 +9,8 @@ cmd_help() {
     usage
 }
 
-cmd_new() {
-    new_account ${option_params}
+cmd_wizard() {
+    account_wizard ${option_params}
     exitcode=$?
 }
 

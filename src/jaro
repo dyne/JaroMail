@@ -90,6 +90,7 @@ a pipe | in front indicate they take an email body from stdin
           (takes folder names as argument, default is INBOX)
 
  passwd   set [account]'s passwords in the OS native keyring
+ wizard   interactive setup for a new account configuration
 
 |queue    read a mail from stdin and queue it in outbox/ for sending
 
@@ -172,7 +173,7 @@ main() {
     option_subcommands[export]=""
     option_subcommands[vcard]=""
     option_subcommands[abook]=""
-	option_subcommands[new]=""
+	option_subcommands[wizard]=""
 
     option_subcommands[vim]=""
     option_subcommands[edit]=""
@@ -306,7 +307,7 @@ main() {
 
     abook)  cmd_abook ;;
 
-	new) cmd_new ;;
+	wizard) cmd_wizard ;;
 
     stat*) cmd_stat ;;
 

@@ -10,6 +10,7 @@ Jaromail is a terminal mail workflow built mostly from Zsh scripts plus small C 
 - `make clean`: removes generated helper binaries and object files from `src/`.
 - `sudo make install`: installs Jaromail under `/usr/local/share/jaromail` and creates `/usr/local/bin/jaro`.
 - `extras/test/run-source.sh`: smoke test for the checked-out code; runs `src/jaro` with a local staged install in a temp path.
+- `extras/test/test-account-wizard.sh`: validates the interactive `wizard` account flow using scripted stdin.
 - `./extras/test/inittest.sh`: runs the installed smoke test using `/tmp/jaromail-test`.
 - `PREFIX=/tmp/jaro make install`: checks install layout without touching `/usr/local`; adjust the smoke test paths if using this.
 
@@ -19,7 +20,7 @@ Prefer minimal, readable changes. Keep Zsh functions lowercase, shell modules gr
 
 ## Testing Guidelines
 
-There is no broad unit-test suite. Use `extras/test/run-source.sh` for checkout-level validation and `extras/test/inittest.sh` for installed-path validation. The tests depend on external mail tools (`fetchmail`, `msmtp`, `mutt`/`neomutt`, `notmuch`, `pinentry-curses`, `abook`, `wipe`, `mblaze`/`maddr`) plus build tools from `.travis.yml`. For narrow C helper changes, rebuild with `make` and add a focused command-line check where practical.
+There is no broad unit-test suite. Use `extras/test/run-source.sh` for checkout-level validation, `extras/test/test-account-wizard.sh` for account onboarding behavior, and `extras/test/inittest.sh` for installed-path validation. The tests depend on external mail tools (`fetchmail`, `msmtp`, `mutt`/`neomutt`, `notmuch`, `pinentry-curses`, `abook`, `wipe`, `mblaze`/`maddr`) plus build tools from `.travis.yml`. For narrow C helper changes, rebuild with `make` and add a focused command-line check where practical.
 
 ## Commit & Pull Request Guidelines
 
