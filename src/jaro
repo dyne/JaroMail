@@ -108,6 +108,13 @@ a pipe | in front indicate they take an email body from stdin
  update   updates all filter engine according to Filters.txt
           (also generates Sieve format rules ready for server use)
 
+ sieve    regenerate $MAILDIRS/Filters.sieve from local filters,
+          aliases, and addressbooks without updating the mail index
+
+ sieve-import FILE
+          import a Jaromail-generated Sieve file into Filters.txt,
+          Aliases.txt, whitelist.abook, and blacklist.abook
+
  filter   process a maildir distributing emails according to Filters.txt
           (if none specified, processes incoming/ - called by fetch)
 
