@@ -245,6 +245,8 @@ main() {
     { option.is_set -R } && { muttflags+=" -R " }
     { option.is_set -f } && { FORCE=1 }
 
+    check_bin "$subcommand"
+
     # clean up options from param
     # PARAM=(${PARAM// -? /})
 
@@ -357,7 +359,6 @@ main() {
 }
 
 
-check_bin
 main $@
 # endgame NOERRORS
 # return $exitcode

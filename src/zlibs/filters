@@ -251,6 +251,7 @@ filter_maildir() {
 
   notice "Filtering maildir: $mdinput ($numm mails)"
   c=0
+  mblaze_ensure
 
   for m in ${(f)mails}; do
 
