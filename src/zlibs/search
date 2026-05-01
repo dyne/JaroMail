@@ -251,11 +251,30 @@ backup() {
     read_account
     nm_setup
 
-    search ${=expr}
+    search_results="$(search ${=expr})"
+    _search_status=$?
+    [[ $_search_status = 0 ]] || {
+        error "Search failed, aborting backup"
+        return 1
+    }
+
+    if [[ -z "${search_results}" ]]; then
+        func "no notmuch hits, trying raw maildir content match"
+        _fallback_hits=()
+        for _md in ${(f)"$(maildir_list_folders "$MAILDIRS")"}; do
+            [[ "$_md" = "$dst" ]] && continue
+            for _msg in ${(f)"$(maildir_list_messages "$_md")"}; do
+                grep -qi -- "$expr" "$_msg" || continue
+                _fallback_hits+=("$_msg")
+            done
+        done
+        search_results="${(F)_fallback_hits}"
+    fi
 
     [[ $DRYRUN = 0 ]] && {
-        for i in ${search_results}; do
-            refile $i $dst
+        for i in ${(f)search_results}; do
+            [[ -z "$i" ]] && continue
+            maildir_refile "$i" "$dst"
             [[ $? = 0 ]] || {
                 # bail out on every single error
                 error "Error refiling emails to destination maildir"
