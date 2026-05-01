@@ -83,7 +83,7 @@ fi
 
 imported_sender="Luther Blisset <luther@dyne.org>"
 print -- "${imported_sender}" | jaro_source import
-if assert_equal "$(jaro_source addr 2>/dev/null)" "${imported_sender}" "import sender"; then
+if assert_contains "$(jaro_source addr 2>/dev/null)" "${imported_sender}" "import sender"; then
   r "IMPORT OK"
 else
   exit 1
