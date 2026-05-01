@@ -24,6 +24,11 @@
 # pass wrapper to set all env
 _pass() {
 	fn pass $*
+	[[ -t 0 ]] && {
+		export GPG_TTY=$(tty)
+		command -v gpg-connect-agent >/dev/null 2>&1 &&
+			gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1
+	}
 	PASSWORD_STORE_DIR=$PASSWORD_STORE_DIR pass $*
 }
 

@@ -142,8 +142,6 @@ bootstrap_root="${bootstrap_file:A:h:h}"
     # global variable for mutt options
     vars+=(muttflags)
 
-    autoload colors; colors
-
     # which command to use when creating dirs
     mkdir="`command -v mkdir` -m 700 -p"
 
@@ -170,8 +168,6 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 
     # own mblaze workdir and init empty sequence
     export MBLAZE="$MAILDIRS/cache/mblaze"
-    mkdir -p "${MBLAZE}"
-    touch ${MBLAZE}/seq
 
     PATH="$WORKDIR/bin:$PATH"
 
@@ -239,51 +235,25 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 }
 
 # binary programs recognition
-check_bin() {
-    # required programs
-    for req in pinentry fetchmail gpg msmtp; do
+check_required_bins() {
+    for req in "$@"; do
         isfound $req
         { test $? != 0 } && {
             error "Cannot find $req. Please install it."
             exit 1
         }
     done
+}
 
-    # make sure a gnupg dir exists
+ensure_gnupg_dir() {
     { test -r $HOME/.gnupg/pubring.gpg } || {
         ${=mkdir} $HOME/.gnupg
         touch $HOME/.gnupg/pubring.gpg
         touch $HOME/.gnupg/secring.gpg
     }
+}
 
-    # which find command to use
-    case $OS in
-        GNU) find="find -O3" ;;
-        MAC) find="gfind -O3" ;;
-        *) find="find"
-    esac
-
-    # which wipe command to use
-    if  isfound wipe; then
-        rm="wipe -f -s -q -R /dev/urandom"
-    elif isfound srm; then
-        rm="srm -m"
-    else
-        rm="rm -f"
-    fi
-    func "Rm binary: $rm"
-
-    # which mutt binary to use
-    if isfound mutt; then
-        mutt_exec=mutt
-    elif isfound neomutt; then
-        mutt_exec=neomutt
-    fi
-    pgpewrap="${WORKDIR}/bin/gpgewrap"
-    dotlock="${WORKDIR}/bin/dotlock"
-
-    func "Mutt binary: $mutt_exec"
-    func "Notmuch binary: `command -v notmuch`"
+check_keyring() {
     func "Keyring set: $JARO_KEYRING"
     if [[ "$JARO_KEYRING" == "" ]]; then
         # check for pass, else fallback
@@ -324,6 +294,79 @@ check_bin() {
                 GNOMEKEY=1  ;;
         esac
     fi
+}
+
+ensure_mutt() {
+    if isfound mutt; then
+        mutt_exec=mutt
+    elif isfound neomutt; then
+        mutt_exec=neomutt
+    else
+        error "Cannot find mutt or neomutt. Please install one."
+        exit 1
+    fi
+    func "Mutt binary: $mutt_exec"
+}
+
+mblaze_ensure() {
+    export MBLAZE=${MBLAZE:-"$MAILDIRS/cache/mblaze"}
+    mkdir -p "${MBLAZE}"
+    touch "${MBLAZE}/seq"
+}
+
+check_bin() {
+    local cmd="${1:-$subcommand}"
+
+    # which find command to use
+    case $OS in
+        GNU) find="find -O3" ;;
+        MAC) find="gfind -O3" ;;
+        *) find="find"
+    esac
+
+    # which wipe command to use
+    if  isfound wipe; then
+        rm="wipe -f -s -q -R /dev/urandom"
+    elif isfound srm; then
+        rm="srm -m"
+    else
+        rm="rm -f"
+    fi
+    func "Rm binary: $rm"
+
+    pgpewrap="${WORKDIR}/bin/gpgewrap"
+    dotlock="${WORKDIR}/bin/dotlock"
+
+    case "$cmd" in
+        fetch)
+            check_required_bins pinentry fetchmail gpg
+            ensure_gnupg_dir
+            check_keyring
+            ;;
+        send|smtp)
+            check_required_bins pinentry gpg msmtp
+            ensure_gnupg_dir
+            check_keyring
+            ;;
+        peek|open|compose|__empty|__unknown:*)
+            ensure_mutt
+            [[ "$cmd" = "peek" ]] && {
+                check_required_bins pinentry gpg
+                ensure_gnupg_dir
+                check_keyring
+            }
+            ;;
+        passwd|askpass)
+            check_required_bins pinentry gpg
+            ensure_gnupg_dir
+            check_keyring
+            ;;
+        init|wizard)
+            check_required_bins pinentry gpg
+            ensure_gnupg_dir
+            check_keyring
+            ;;
+    esac
 
     return 0
 }

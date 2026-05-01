@@ -171,6 +171,7 @@ sender_isknown() {
     local _mail_input="${body:-}"
     [[ -z "${_mail_input}" ]] && _mail_input="$(cat)"
 	if command -v maddr > /dev/null; then
+		mblaze_ensure
 		local email_regex="([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})"
 		e_from=`print - "${_mail_input}" | maddr -h 'from' - | grep -oP "$email_regex"`
 		e_from=${e_from:l}
