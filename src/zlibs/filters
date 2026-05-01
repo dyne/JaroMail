@@ -233,11 +233,7 @@ filter_maildir() {
   [[ -r "$MAILDIRS/cache/filters" ]] &&
     source $MAILDIRS/cache/filters
 
-	if command -v mlist > /dev/null; then
-		mails=`mlist "$srcpath"`
-	else
- 		mails=`${=find} "$srcpath" -maxdepth 2 -type f`
-	fi
+  mails="$(maildir_list_messages "$srcpath")"
   numm=`print $mails | wc -l`
 
   [[ $numm = 0 ]] && {
