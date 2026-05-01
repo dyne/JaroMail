@@ -299,7 +299,7 @@ filter_maildir() {
       act "$c\t/ $numm\t-> $_dest\t(from $femail)"
       # tag mailinglists
       [[ $DRYRUN = 1 ]] || {
-				mrefile "$m" "$target"
+				maildir_refile "$m" "$target"
 				if [[ $? = 0 ]]; then
 					match=1
 					break
@@ -352,7 +352,7 @@ filter_maildir() {
         # tag mailinglists
         [[ $DRYRUN = 1 ]] || {
           [[ -d "${target}" ]] || maildirmake "${target}"
-					mrefile "$m" "$target"
+					maildir_refile "$m" "$target"
 					if [[ $? = 0 ]]; then
 						match=1
 						break
@@ -382,7 +382,7 @@ filter_maildir() {
       }
       act "$c\t/ $numm\t-> known\t(from $femail)"
       [[ $DRYRUN = 1 ]] || {
-				mrefile "$m" "$target"
+				maildir_refile "$m" "$target"
 				if [[ $? = 0 ]]; then
 					func "matched whitelist from: field"
 					continue
@@ -407,7 +407,7 @@ filter_maildir() {
       act "$c\t/ $numm\t-> zz.spam"
       [[ $DRYRUN = 1 ]] || {
 				maildirmake "$target"
-				mrefile "$m" "$target"
+				maildir_refile "$m" "$target"
 				if [[ $? = 0 ]]; then
 					func "matched X-Spam flag"
 					continue
@@ -431,7 +431,7 @@ filter_maildir() {
       act "$c\t/ $numm\t-> zz.blacklist\t(from $femail)"
       [[ $DRYRUN = 1 ]] || {
 				maildirmake "$target"
-				mrefile "$m" "$target"
+				maildir_refile "$m" "$target"
 				if [[ $? = 0 ]]; then
 					func "matched blacklist from: field"
 					continue
@@ -458,7 +458,7 @@ filter_maildir() {
         }
         act "$c\t/ $numm\t-> priv"
         [[ $DRYRUN = 1 ]] || {
-					mrefile "$m" "$target"
+					maildir_refile "$m" "$target"
 					if [[ $? = 0 ]]; then
 						func "matched own address in to/cc: fields"
 						match=1
@@ -482,7 +482,7 @@ filter_maildir() {
     else
       act "$c\t/ $numm\t-> unsorted"
       [[ $DRYRUN = 1 ]] || {
-				mrefile "$m" "$target"
+				maildir_refile "$m" "$target"
 				if [[ $? = 0 ]]; then
 					func "no match found, sent to unsorted"
 				else
