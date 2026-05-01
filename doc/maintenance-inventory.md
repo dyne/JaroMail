@@ -16,11 +16,9 @@
 | `extras/gnupg-mass-recv` | GnuPG helper scripts | No | Not in README/manual | `gpg` | Optional | Keep optional, document with explicit support scope. |
 | `extras/shell_completion` | shell completion snippets | No | Not in README/manual | shell-specific | Optional | Keep and document install-by-choice. |
 | `extras/zaw-jaromail` | Zaw integration helper | No | Not in README/manual | Zaw/zsh ecosystem | Optional/Legacy | Keep optional, low priority maintenance. |
-| `src/zlibs/publish` | publishing/sync helper surface | Installed indirectly via `src/zlibs/*` | Command exposed in `src/jaro` | external network tools | Legacy | Mark as legacy in docs; keep behavior unchanged for now. |
 | `build/*` | build/install/release scripts per platform | N/A (tooling) | Indirect (`README.md` make flow) | platform toolchains | Core (tooling) | Keep; separate default Linux flow from platform-specific scripts in docs. |
 
 ## Evidence Notes
 
 - Default install currently includes both `src/mutt` and `src/stats` plus all `src/zlibs/*` (`Makefile` `install` target).
-- `publish` is still an exposed subcommand in `src/jaro`.
 - Stats is actively documented in `doc/jaromail-manual.md|org|tex`, but most extras are not referenced in top-level docs.

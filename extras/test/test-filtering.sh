@@ -29,7 +29,7 @@ to torule@example.org move tobucket
 EOF
 
 for md in frombucket tobucket zz.bounces zz.blacklist zz.spam known priv unsorted; do
-  mkdir -p "${mail_root}/${md}/cur" "${mail_root}/${md}/new" "${mail_root}/${md}/tmp"
+  maildir_fixture_ensure "${mail_root}/${md}"
 done
 
 print -- "White Person <white@example.org>" | jaro_source import >/dev/null
@@ -40,15 +40,13 @@ deliver_msg() {
   to_addr="${2}"
   subject="${3}"
   spam="${4:-NO}"
-  cat <<EOF | mdeliver "${mail_root}/incoming" >/dev/null
-From: ${from_addr}
-To: ${to_addr}
-Subject: ${subject}
-X-Spam-Flag: ${spam}
-Date: Thu, 01 Jan 1970 00:00:00 +0000
-
-$(lorem_message)
-EOF
+  msg_name="${subject//[^A-Za-z0-9._-]/_}.eml"
+  make_maildir_message "${mail_root}/incoming" "new" "${msg_name}" \
+    "From: ${from_addr}" \
+    "To: ${to_addr}" \
+    "Subject: ${subject}" \
+    "X-Spam-Flag: ${spam}" \
+    "Date: Thu, 01 Jan 1970 00:00:00 +0000" >/dev/null
 }
 
 # Sender-based routing remains environment-sensitive with current maddr/mpick
@@ -63,7 +61,7 @@ deliver_msg "Private Sender <private@example.org>" "USERNAME@gmail.com" "private
 deliver_msg "Unknown Sender <unknown@example.org>" "reader@example.org" "unsorted"
 
 jaro_source update >/dev/null
-jaro_source filter "${mail_root}/incoming" >/dev/null
+filter_log="$(jaro_source filter "${mail_root}/incoming" 2>&1)"
 
 count_new() {
   find "${1}" -maxdepth 2 -type f | wc -l | tr -d ' '
@@ -71,3 +69,5 @@ count_new() {
 
 assert_equal "$(count_new "${mail_root}/tobucket")" "1" "to-rule routed"
 assert_equal "$(count_new "${mail_root}/unsorted")" "6" "fallback to unsorted"
+assert_contains "${filter_log}" "Filtering maildir: ${mail_root}/incoming (7 mails)" "filter summary line"
+assert_contains "${filter_log}" "-> tobucket" "to-rule progress line"

@@ -42,14 +42,6 @@ cmd_isonline() {
     exitcode=$?
 }
 
-cmd_publish() {
-    md="$1"
-    { maildircheck "$md" 2>/dev/null } || { md="${MAILDIRS}/${md}" }
-    pubdb_update "$md"
-    pubdb_render_maildir "$md"
-    exitcode=$?
-}
-
 cmd_askpass() {
     read_account $account
     ask_password

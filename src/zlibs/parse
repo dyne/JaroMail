@@ -25,7 +25,22 @@
 
 # extract all addresses found in a list of email files from stdin
 mblaze_extract_addresses() {
-    maddr
+    _action="${1:-all}"
+    case "${_action}" in
+        sender)
+            print -r -- "${stdin}" | maddr -h from
+            ;;
+        recipient)
+            {
+                print -r -- "${stdin}" | maddr -h to
+                print -r -- "${stdin}" | maddr -h cc
+                print -r -- "${stdin}" | maddr -h bcc
+            } 2>/dev/null
+            ;;
+        *)
+            print -r -- "${stdin}" | maddr
+            ;;
+    esac
 }
 
 extract_mails() {
@@ -33,7 +48,7 @@ extract_mails() {
 
 	# use mblaze
 	command -v maddr > /dev/null && {
-		mblaze_extract_addresses
+		mblaze_extract_addresses "${1:-all}"
 		return $?
 	}
 
@@ -115,10 +130,7 @@ extract_maildir() {
         *) _action="all" ;;
     esac
     
-    # search files
-    _mails=`find $md -type f`
-    # search symlinks
-    _mails+=`find $md -type l`
+    _mails="$(maildir_list_messages "$md")"
 
     stdin="$_mails"; extract_mails "$_action"
 

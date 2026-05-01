@@ -102,7 +102,7 @@ filter/addressbook files.
 
 `rmdupes` remove duplicate messages.
 
-`remember`, `replay`, `preview`, `edit`, `vim`, `publish`, `imap`,
+`remember`, `replay`, `preview`, `edit`, `vim`, `imap`,
 `alot`, `alot-config`, `notmuch`, `notmuch-config`, `isml`, `ismd`.
 
 ## Files
@@ -118,4 +118,3 @@ filter/addressbook files.
 ## See Also
 
 `jaromail(1)`
-

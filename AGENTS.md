@@ -22,10 +22,6 @@ Prefer minimal, readable changes. Keep Zsh functions lowercase, shell modules gr
 
 There is no broad unit-test suite. Use `extras/test/run-source.sh` for checkout-level validation, `extras/test/test-account-wizard.sh` for account onboarding behavior, and `extras/test/inittest.sh` for installed-path validation. The tests depend on external mail tools (`fetchmail`, `msmtp`, `mutt`/`neomutt`, `notmuch`, `pinentry-curses`, `abook`, `wipe`, `mblaze`/`maddr`) plus build tools from `.travis.yml`. For narrow C helper changes, rebuild with `make` and add a focused command-line check where practical.
 
-## Commit & Pull Request Guidelines
-
-Recent history uses short imperative commit messages, for example `fix own accounts filtering for priv` and `update filtering`. Keep commits focused and describe the user-visible behavior changed. Pull requests should include a concise summary, affected commands or modules, test results, and any install or dependency impact. Include screenshots only for UI-facing macOS or documentation changes.
-
 ## Architecture Notes
 
 Respect the existing slice-by-feature organization. Keep IO boundaries explicit: shell modules should call external mail tools clearly, and helpers should do one job well.

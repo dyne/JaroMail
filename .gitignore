@@ -66,3 +66,4 @@ src/nvpscan.report
 src/pgpewrap
 src/parsedate
 gnupg-mass-recv.cache
+*.sieve
