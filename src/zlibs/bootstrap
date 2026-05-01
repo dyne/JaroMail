@@ -3,6 +3,8 @@
 # Resolve runtime paths and load the core framework + libraries.
 # use GNU/Linux default in local
 WORKDIR="/usr/local/share/jaromail"
+bootstrap_file="${(%):-%x}"
+bootstrap_root="${bootstrap_file:A:h:h}"
 
     # check if we are testing from source
     if [[ -r ../src/jaro ]]; then
@@ -17,6 +19,19 @@ WORKDIR="/usr/local/share/jaromail"
 
     # env override
     WORKDIR=${JAROWORKDIR:-$WORKDIR}
+
+    # If WORKDIR is blank or does not contain zlibs, derive it from this file.
+    if [[ -z "$WORKDIR" || ! -d "$WORKDIR/zlibs" ]]; then
+        if [[ -d "$bootstrap_root/zlibs" ]]; then
+            WORKDIR="$bootstrap_root"
+        fi
+    fi
+
+    # Abort early if no valid runtime path can be found.
+    if [[ ! -d "$WORKDIR/zlibs" ]]; then
+        print -u2 "Cannot find Jaro Mail runtime in WORKDIR: ${WORKDIR}"
+        exit 1
+    fi
 
     # load our zuper extension
     # different load paths from inside source or installed

@@ -31,6 +31,7 @@ jobs:
           chmod +x extras/test/test-filtering.sh
           chmod +x extras/test/test-sieve-import.sh
           chmod +x extras/test/test-helpers.sh
+          chmod +x extras/test/test-bootstrap-paths.sh
 
       - name: Build
         run: make
@@ -55,3 +56,6 @@ jobs:
 
       - name: Helper binary tests
         run: extras/test/test-helpers.sh
+
+      - name: Bootstrap path tests
+        run: extras/test/test-bootstrap-paths.sh
