@@ -60,4 +60,4 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
 
 ## Missing test pointers
 
-- `fetch`, `send`, `smtp`, `imap`, `publish`, and optional integrations are not fully covered by focused local tests yet.
+- `fetch`, `send`, `smtp`, `imap`, and optional integrations are not fully covered by focused local tests yet.

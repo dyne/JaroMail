@@ -15,12 +15,6 @@ This file lists integrations that are *not* part of the core CLI workflow (`init
 - Test coverage: **not directly covered by current smoke tests**
 - Status: retained for compatibility, but legacy-oriented surface
 
-### `src/zlibs/publish` and `publish` command
-
-- Installed by default: **yes** (via `src/zlibs/*`)
-- Test coverage: **not covered by `extras/test/run-source.sh`**
-- Status: retained, treated as legacy/advanced workflow
-
 ### `extras/roundcube-majordomo`
 
 - Installed by default: **no**
