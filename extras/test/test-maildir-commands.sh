@@ -25,6 +25,7 @@ jaro_source init >/dev/null
 for md in incoming known unsorted archive; do
   maildir_fixture_ensure "${mail_root}/${md}"
 done
+maildir_fixture_ensure "${mail_root}/incoming/nested"
 
 jaro_source ismd "${mail_root}/incoming" >/dev/null
 
@@ -72,6 +73,22 @@ assert_contains "${listed_messages}" "/incoming/new/a.eml" "maildir_list_message
 assert_contains "${listed_messages}" "/incoming/cur/b.eml:2,S" "maildir_list_messages includes cur"
 if [[ "${listed_messages}" == *"/incoming/tmp/tmp.eml"* ]]; then
   print -- "ASSERT FAIL (maildir_list_messages tmp): tmp file should be ignored"
+  exit 1
+fi
+
+listed_folders="$(
+  zsh -lc '
+    JAROMAILDIR="'"${mail_root}"'" \
+    JAROWORKDIR="'"${work_root}"'" \
+    PROGRAM=test VERSION=6.0 \
+    source "'"${repo_root}"'/src/zlibs/bootstrap" source
+    maildir_list_folders "'"${mail_root}"'"
+  ' 2>/dev/null | sort
+)"
+assert_contains "${listed_folders}" "/incoming" "maildir_list_folders includes direct child"
+assert_contains "${listed_folders}" "/archive" "maildir_list_folders includes archive"
+if [[ "${listed_folders}" == *"/incoming/nested"* ]]; then
+  print -- "ASSERT FAIL (maildir_list_folders nested): nested folder should be excluded"
   exit 1
 fi
 

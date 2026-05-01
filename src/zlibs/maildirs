@@ -97,6 +97,28 @@ maildir_list_messages() {
     ${=find} "$md/new" "$md/cur" -type f
 }
 
+# List top-level folder candidates under a root path.
+# Uses mdirs when present and keeps direct children only.
+maildir_list_folders() {
+    fn maildir_list_folders $*
+    local root="$1"
+    req=(root)
+    ckreq || return 1
+
+    [[ -d "$root" ]] || return 1
+
+    if command -v mdirs >/dev/null; then
+        local folders
+        folders="$(mdirs -a "$root")"
+        for folder in ${(f)folders}; do
+            [[ "${folder:h}" == "$root" ]] && print -- "$folder"
+        done
+        return 0
+    fi
+
+    ${=find} "$root" -mindepth 1 -maxdepth 1 -type d
+}
+
 
 # fills up all maildirs array
 list_maildirs() {
