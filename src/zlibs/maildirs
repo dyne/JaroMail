@@ -153,17 +153,12 @@ maildir_refile() {
 # fills up all maildirs array
 list_maildirs() {
 	fn list_maildirs $*
-
-    maildirs=`${=find} "$MAILDIRS" -maxdepth 1 -type d`
-    for m in ${(f)maildirs}; do
-    func "$m"
-    { maildircheck "$m" } && {
-        # is a maildir
-        { test "`${=find} "$m" -type f`" != "" } && {
-        # and is not empty
-        maildirs+=(`basename "$m"`)
-        }
-    }
+    maildirs=()
+    for m in ${(f)"$(maildir_list_folders "$MAILDIRS")"}; do
+        func "$m"
+        maildircheck "$m" || continue
+        [[ -n "$(maildir_list_messages "$m")" ]] || continue
+        maildirs+=("$(basename "$m")")
     done
     return ${#maildirs}
 }
