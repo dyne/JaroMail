@@ -119,6 +119,36 @@ maildir_list_folders() {
     ${=find} "$root" -mindepth 1 -maxdepth 1 -type d
 }
 
+# Move or copy one message into a destination Maildir.
+# Third argument can be "copy"; default is move.
+maildir_refile() {
+    fn maildir_refile $*
+    local msg="$1"
+    local dest="$2"
+    local mode="${3:-move}"
+    req=(msg dest)
+    ckreq || return 1
+
+    [[ -r "$msg" ]] || return 1
+
+    maildircheck "$dest" || maildirmake "$dest" || return 1
+
+    if command -v mrefile >/dev/null; then
+        if [[ "$mode" == "copy" ]]; then
+            mrefile -k "$msg" "$dest"
+        else
+            mrefile "$msg" "$dest"
+        fi
+        return $?
+    fi
+
+    if [[ "$mode" == "copy" ]]; then
+        cp "$msg" "$dest/cur/" || return 1
+    else
+        mv "$msg" "$dest/cur/" || return 1
+    fi
+}
+
 
 # fills up all maildirs array
 list_maildirs() {

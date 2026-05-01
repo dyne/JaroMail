@@ -92,6 +92,38 @@ if [[ "${listed_folders}" == *"/incoming/nested"* ]]; then
   exit 1
 fi
 
+make_maildir_message "${mail_root}/known" "new" "move-src.eml" \
+  "From: Move <move@example.org>" \
+  "To: Dest <dest@example.org>" \
+  "Subject: move" \
+  "Date: Thu, 01 Jan 1970 00:00:00 +0000" >/dev/null
+
+make_maildir_message "${mail_root}/known" "new" "copy-src.eml" \
+  "From: Copy <copy@example.org>" \
+  "To: Dest <dest@example.org>" \
+  "Subject: copy" \
+  "Date: Thu, 01 Jan 1970 00:00:00 +0000" >/dev/null
+
+zsh -lc '
+  JAROMAILDIR="'"${mail_root}"'" \
+  JAROWORKDIR="'"${work_root}"'" \
+  PROGRAM=test VERSION=6.0 \
+  source "'"${repo_root}"'/src/zlibs/bootstrap" source
+  maildir_refile "'"${mail_root}"'/known/new/move-src.eml" "'"${mail_root}"'/archive"
+  maildir_refile "'"${mail_root}"'/known/new/copy-src.eml" "'"${mail_root}"'/archive" copy
+' >/dev/null 2>&1
+
+if [[ -f "${mail_root}/known/new/move-src.eml" ]]; then
+  print -- "ASSERT FAIL (maildir_refile move): source should be moved"
+  exit 1
+fi
+if [[ ! -f "${mail_root}/known/new/copy-src.eml" ]]; then
+  print -- "ASSERT FAIL (maildir_refile copy): source should remain"
+  exit 1
+fi
+archive_refiled_count="$(find "${mail_root}/archive" -maxdepth 2 -type f | wc -l | tr -d ' ')"
+assert_equal "${archive_refiled_count}" "3" "maildir_refile delivered messages"
+
 sender_stdout="$(jaro_source extract "${mail_root}/incoming" sender 2>/dev/null)"
 recipient_stdout="$(jaro_source extract "${mail_root}/incoming" recipient 2>/dev/null)"
 all_stdout="$(jaro_source extract "${mail_root}/incoming" all 2>/dev/null)"
