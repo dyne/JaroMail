@@ -61,7 +61,7 @@ deliver_msg "Private Sender <private@example.org>" "USERNAME@gmail.com" "private
 deliver_msg "Unknown Sender <unknown@example.org>" "reader@example.org" "unsorted"
 
 jaro_source update >/dev/null
-jaro_source filter "${mail_root}/incoming" >/dev/null
+filter_log="$(jaro_source filter "${mail_root}/incoming" 2>&1)"
 
 count_new() {
   find "${1}" -maxdepth 2 -type f | wc -l | tr -d ' '
@@ -69,3 +69,5 @@ count_new() {
 
 assert_equal "$(count_new "${mail_root}/tobucket")" "1" "to-rule routed"
 assert_equal "$(count_new "${mail_root}/unsorted")" "6" "fallback to unsorted"
+assert_contains "${filter_log}" "Filtering maildir: ${mail_root}/incoming (7 mails)" "filter summary line"
+assert_contains "${filter_log}" "-> tobucket" "to-rule progress line"
