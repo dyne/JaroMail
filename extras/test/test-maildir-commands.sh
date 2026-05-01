@@ -128,9 +128,23 @@ sender_stdout="$(jaro_source extract "${mail_root}/incoming" sender 2>/dev/null)
 recipient_stdout="$(jaro_source extract "${mail_root}/incoming" recipient 2>/dev/null)"
 all_stdout="$(jaro_source extract "${mail_root}/incoming" all 2>/dev/null)"
 
-assert_equal "${sender_stdout}" "" "extract sender mode stdout"
-assert_equal "${recipient_stdout}" "" "extract recipient mode stdout"
-assert_equal "${all_stdout}" "" "extract all mode stdout"
+assert_contains "${sender_stdout}" "alice@example.org" "extract sender mode includes sender"
+assert_contains "${sender_stdout}" "dan@example.org" "extract sender mode includes sender from cur"
+if [[ "${sender_stdout}" == *"bob@example.org"* ]]; then
+  print -- "ASSERT FAIL (extract sender mode): should not include recipient addresses"
+  exit 1
+fi
+
+assert_contains "${recipient_stdout}" "bob@example.org" "extract recipient mode includes To"
+assert_contains "${recipient_stdout}" "carol@example.org" "extract recipient mode includes Cc"
+assert_contains "${recipient_stdout}" "eve@example.org" "extract recipient mode includes recipient from cur"
+if [[ "${recipient_stdout}" == *"alice@example.org"* ]]; then
+  print -- "ASSERT FAIL (extract recipient mode): should not include sender addresses"
+  exit 1
+fi
+
+assert_contains "${all_stdout}" "alice@example.org" "extract all mode includes sender"
+assert_contains "${all_stdout}" "bob@example.org" "extract all mode includes recipient"
 
 help_output="$(jaro_source -h 2>/dev/null)"
 if [[ "${help_output}" == *" publish "* ]]; then
