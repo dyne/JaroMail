@@ -29,7 +29,7 @@ to torule@example.org move tobucket
 EOF
 
 for md in frombucket tobucket zz.bounces zz.blacklist zz.spam known priv unsorted; do
-  mkdir -p "${mail_root}/${md}/cur" "${mail_root}/${md}/new" "${mail_root}/${md}/tmp"
+  maildir_fixture_ensure "${mail_root}/${md}"
 done
 
 print -- "White Person <white@example.org>" | jaro_source import >/dev/null
@@ -40,15 +40,13 @@ deliver_msg() {
   to_addr="${2}"
   subject="${3}"
   spam="${4:-NO}"
-  cat <<EOF | mdeliver "${mail_root}/incoming" >/dev/null
-From: ${from_addr}
-To: ${to_addr}
-Subject: ${subject}
-X-Spam-Flag: ${spam}
-Date: Thu, 01 Jan 1970 00:00:00 +0000
-
-$(lorem_message)
-EOF
+  msg_name="${subject//[^A-Za-z0-9._-]/_}.eml"
+  make_maildir_message "${mail_root}/incoming" "new" "${msg_name}" \
+    "From: ${from_addr}" \
+    "To: ${to_addr}" \
+    "Subject: ${subject}" \
+    "X-Spam-Flag: ${spam}" \
+    "Date: Thu, 01 Jan 1970 00:00:00 +0000" >/dev/null
 }
 
 # Sender-based routing remains environment-sensitive with current maddr/mpick

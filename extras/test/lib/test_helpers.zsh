@@ -65,6 +65,34 @@ culpa qui officia deserunt mollit anim id est laborum.
 EOF
 }
 
+# Ensure a path has a valid Maildir layout.
+maildir_fixture_ensure() {
+  target="${1}"
+  mkdir -p "${target}/cur" "${target}/new" "${target}/tmp"
+}
+
+# Create one synthetic RFC822 message under a Maildir subfolder.
+# Usage:
+#   make_maildir_message "/tmp/mail/incoming" "new" "msg1" \
+#     "From: A <a@example.org>" "To: B <b@example.org>" "Subject: Test"
+make_maildir_message() {
+  md_path="${1}"
+  md_subdir="${2}"
+  md_name="${3}"
+  shift 3
+
+  maildir_fixture_ensure "${md_path}"
+  msg_path="${md_path}/${md_subdir}/${md_name}"
+  {
+    for header_line in "$@"; do
+      print -- "${header_line}"
+    done
+    print
+    lorem_message
+  } > "${msg_path}"
+  print -- "${msg_path}"
+}
+
 assert_equal() {
   got="${1}"
   expected="${2}"
