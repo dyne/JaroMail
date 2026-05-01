@@ -55,6 +55,7 @@ Main commands:
  fetch  download unread emails from [account]
  send   send all mails queued in the outbox
  peek   look into the [account] mailbox without downloading
+ serve  run localhost IMAP over local maildirs (single-user)
  index  build or update the search index for all maildirs
  search search maildirs or addressbook for expressions
 
@@ -138,6 +139,7 @@ main() {
     option_subcommands[fetch]=""
     option_subcommands[send]=""
     option_subcommands[peek]="R -readonly=R"
+    option_subcommands[serve]=""
     option_subcommands[open]="R -readonly=R"
 
     option_subcommands[help]=""
@@ -265,6 +267,8 @@ main() {
             ;;
 
     peek)   cmd_peek
+            ;;
+    serve)  cmd_serve
             ;;
 
     remember) cmd_remember

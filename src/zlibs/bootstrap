@@ -366,6 +366,10 @@ check_bin() {
             ensure_gnupg_dir
             check_keyring
             ;;
+        serve)
+            [[ -n "${JARO_SERVE_CONFIG_ONLY:-}" && "${JARO_SERVE_CONFIG_ONLY}" != "0" ]] \
+                || check_required_bins dovecot
+            ;;
     esac
 
     return 0

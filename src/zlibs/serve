@@ -1,0 +1,260 @@
+#!/usr/bin/env zsh
+#
+# jaro serve: localhost-only IMAP bridge over local maildirs
+# REPR:
+# - Request: environment-driven runtime options
+# - Endpoint: cmd_serve orchestration
+# - Response: stable terminal output with connection details
+
+# Validate and normalize request values for `jaro serve`.
+serve_request() {
+    fn serve_request
+
+    serve_host="${JARO_SERVE_HOST:-127.0.0.1}"
+    case "$serve_host" in
+        localhost|127.0.0.1) serve_host="127.0.0.1" ;;
+        *)
+            error "Invalid JARO_SERVE_HOST '$serve_host' (localhost only)"
+            return 1
+            ;;
+    esac
+
+    serve_port="${JARO_SERVE_PORT:-61443}"
+    [[ "$serve_port" =~ '^[0-9]+$' ]] || {
+        error "Invalid JARO_SERVE_PORT '$serve_port' (must be numeric)"
+        return 1
+    }
+    (( serve_port >= 1024 && serve_port <= 65535 )) || {
+        error "Invalid JARO_SERVE_PORT '$serve_port' (range 1024-65535)"
+        return 1
+    }
+
+    serve_user="${JARO_SERVE_USER:-jaro}"
+    [[ -n "$serve_user" ]] || {
+        error "Invalid JARO_SERVE_USER (empty)"
+        return 1
+    }
+
+    serve_max_connections="${JARO_SERVE_MAX_CONNECTIONS:-4}"
+    [[ "$serve_max_connections" =~ '^[0-9]+$' ]] || {
+        error "Invalid JARO_SERVE_MAX_CONNECTIONS '$serve_max_connections' (must be numeric)"
+        return 1
+    }
+    (( serve_max_connections >= 1 && serve_max_connections <= 16 )) || {
+        error "Invalid JARO_SERVE_MAX_CONNECTIONS '$serve_max_connections' (range 1-16)"
+        return 1
+    }
+
+    if [[ -n "${JARO_SERVE_CONFIG_ONLY:-}" && "${JARO_SERVE_CONFIG_ONLY}" != "0" ]]; then
+        serve_config_only=1
+    else
+        serve_config_only=0
+    fi
+
+    serve_mail_root="${MAILDIRS:A}"
+    serve_runtime="${MAILDIRS}/.imap"
+    serve_runtime="${serve_runtime:A}"
+    serve_conf="${serve_runtime}/dovecot.conf"
+    serve_passwd_file="${serve_runtime}/passwd"
+    serve_log_dir="${serve_runtime}/log"
+    serve_log_file="${serve_log_dir}/dovecot.log"
+    serve_info_log_file="${serve_log_dir}/dovecot-info.log"
+    serve_uid="$(id -u)"
+    serve_gid="$(id -g)"
+
+    return 0
+}
+
+# Keep canonical maildirs present so IMAP exposure is predictable.
+serve_ensure_maildirs() {
+    fn serve_ensure_maildirs
+
+    ${=mkdir} "$MAILDIRS" || return 1
+    for md in incoming known sent priv postponed drafts unsorted remember outbox; do
+        maildirmake "$MAILDIRS/$md" || return 1
+    done
+    ${=mkdir} "$MAILDIRS/cache" || return 1
+    ${=mkdir} "$MAILDIRS/logs" || return 1
+
+    return 0
+}
+
+# Prepare generated runtime directories with private permissions.
+serve_prepare_runtime() {
+    fn serve_prepare_runtime
+
+    ${=mkdir} "$serve_runtime" || return 1
+    ${=mkdir} "$serve_runtime/index" || return 1
+    ${=mkdir} "$serve_runtime/control" || return 1
+    ${=mkdir} "$serve_runtime/run" || return 1
+    ${=mkdir} "$serve_runtime/state" || return 1
+    ${=mkdir} "$serve_log_dir" || return 1
+
+    return 0
+}
+
+# Build one launch password, optionally overridden from env.
+serve_generate_password() {
+    fn serve_generate_password
+
+    if [[ -n "${JARO_SERVE_PASSWORD:-}" ]]; then
+        serve_password="$JARO_SERVE_PASSWORD"
+        return 0
+    fi
+
+    if command -v openssl >/dev/null 2>&1; then
+        serve_password="$(openssl rand -base64 24 | tr -d '\n')"
+    elif [[ -r /dev/urandom ]] && command -v od >/dev/null 2>&1; then
+        serve_password="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
+    else
+        error "Cannot generate password (need openssl or od with /dev/urandom)"
+        return 1
+    fi
+
+    [[ -n "$serve_password" ]] || {
+        error "Cannot generate password (empty result)"
+        return 1
+    }
+
+    return 0
+}
+
+# Render dovecot.conf from request/domain state.
+serve_render_dovecot_conf() {
+    cat <<EOF
+protocols = imap
+listen = ${serve_host}
+ssl = no
+auth_mechanisms = plain
+mail_debug = no
+
+mail_location = maildir:${serve_mail_root}:LAYOUT=fs:INDEX=${serve_runtime}/index:CONTROL=${serve_runtime}/control
+
+base_dir = ${serve_runtime}/run
+state_dir = ${serve_runtime}/state
+log_path = ${serve_log_file}
+info_log_path = ${serve_info_log_file}
+
+passdb {
+  driver = passwd-file
+  args = ${serve_passwd_file}
+}
+
+userdb {
+  driver = static
+  args = uid=${serve_uid} gid=${serve_gid} home=${serve_mail_root}
+}
+
+service imap-login {
+  process_limit = ${serve_max_connections}
+  service_count = 1
+  inet_listener imap {
+    address = ${serve_host}
+    port = ${serve_port}
+  }
+}
+
+service imap {
+  process_limit = ${serve_max_connections}
+}
+EOF
+}
+
+# Write generated runtime files.
+serve_write_runtime_files() {
+    fn serve_write_runtime_files
+
+    cat <<EOF > "$serve_passwd_file"
+${serve_user}:{PLAIN}${serve_password}:${serve_uid}:${serve_gid}::${serve_mail_root}::
+EOF
+    chmod 600 "$serve_passwd_file" || return 1
+
+    serve_render_dovecot_conf > "$serve_conf" || return 1
+    chmod 600 "$serve_conf" || return 1
+
+    return 0
+}
+
+# Validate generated config if doveconf exists.
+serve_validate_config() {
+    fn serve_validate_config
+    command -v doveconf >/dev/null 2>&1 || return 0
+    _doveconf_out="$(doveconf -c "$serve_conf" -n 2>&1)" || {
+        warning "doveconf rejected generated config: ${_doveconf_out[(w)1,12]}"
+        warning "continuing without strict validation"
+        return 0
+    }
+    return 0
+}
+
+# Return 0 when selected port is already listening, 1 when free, 2 when unknown.
+serve_port_in_use() {
+    fn serve_port_in_use
+
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:${serve_port} -sTCP:LISTEN 2>/dev/null \
+            | awk '{print $9}' \
+            | grep -Eq "(^|:)${serve_port}$" && return 0
+        return 1
+    fi
+
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | awk '{print $4}' \
+            | grep -Eq "(^|:)${serve_port}$" && return 0
+        return 1
+    fi
+
+    if command -v netstat >/dev/null 2>&1; then
+        netstat -ltn 2>/dev/null | awk '{print $4}' \
+            | grep -Eq "(^|:)${serve_port}$" && return 0
+        return 1
+    fi
+
+    return 2
+}
+
+# Response payload for users and tests.
+serve_response() {
+    print "Host: ${serve_host}"
+    print "Port: ${serve_port}"
+    print "TLS: none"
+    print "User: ${serve_user}"
+    print "Password: ${serve_password}"
+    print "Config: ${serve_conf}"
+    print "Log: ${serve_log_file}"
+    print "Mail root: ${serve_mail_root}"
+}
+
+# IO adapter to launch dovecot in foreground.
+serve_exec_dovecot() {
+    fn serve_exec_dovecot
+    exec dovecot -F -c "$serve_conf"
+}
+
+cmd_serve() {
+    fn cmd_serve
+
+    serve_request || { exitcode=1; return 1; }
+    serve_ensure_maildirs || { exitcode=1; return 1; }
+    serve_prepare_runtime || { exitcode=1; return 1; }
+    serve_generate_password || { exitcode=1; return 1; }
+    serve_write_runtime_files || { exitcode=1; return 1; }
+    serve_validate_config || { exitcode=1; return 1; }
+    serve_response
+
+    [[ "$serve_config_only" = "1" ]] && { exitcode=0; return 0; }
+
+    serve_port_in_use
+    case $? in
+        0)
+            error "Port busy: ${serve_host}:${serve_port}"
+            exitcode=1
+            return 1
+            ;;
+        2)
+            warning "No port preflight tool found, relying on dovecot bind checks"
+            ;;
+    esac
+
+    serve_exec_dovecot
+}
