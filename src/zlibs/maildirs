@@ -79,6 +79,24 @@ maildirmake() {
     return 0
 }
 
+# List message files from a Maildir.
+# Uses mblaze when present; fallback scans only cur/new.
+maildir_list_messages() {
+    fn maildir_list_messages $*
+    local md="$1"
+    req=(md)
+    ckreq || return 1
+
+    maildircheck "$md" || return 1
+
+    if command -v mlist >/dev/null; then
+        mlist "$md"
+        return $?
+    fi
+
+    ${=find} "$md/new" "$md/cur" -type f
+}
+
 
 # fills up all maildirs array
 list_maildirs() {

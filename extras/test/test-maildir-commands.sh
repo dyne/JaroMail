@@ -59,6 +59,22 @@ make_maildir_message "${mail_root}/incoming" "tmp" "tmp.eml" \
   "Subject: tmp" \
   "Date: Thu, 01 Jan 1970 00:00:00 +0000" >/dev/null
 
+listed_messages="$(
+  zsh -lc '
+    JAROMAILDIR="'"${mail_root}"'" \
+    JAROWORKDIR="'"${work_root}"'" \
+    PROGRAM=test VERSION=6.0 \
+    source "'"${repo_root}"'/src/zlibs/bootstrap" source
+    maildir_list_messages "'"${mail_root}"'/incoming"
+  ' 2>/dev/null | sort
+)"
+assert_contains "${listed_messages}" "/incoming/new/a.eml" "maildir_list_messages includes new"
+assert_contains "${listed_messages}" "/incoming/cur/b.eml:2,S" "maildir_list_messages includes cur"
+if [[ "${listed_messages}" == *"/incoming/tmp/tmp.eml"* ]]; then
+  print -- "ASSERT FAIL (maildir_list_messages tmp): tmp file should be ignored"
+  exit 1
+fi
+
 sender_stdout="$(jaro_source extract "${mail_root}/incoming" sender 2>/dev/null)"
 recipient_stdout="$(jaro_source extract "${mail_root}/incoming" recipient 2>/dev/null)"
 all_stdout="$(jaro_source extract "${mail_root}/incoming" all 2>/dev/null)"
