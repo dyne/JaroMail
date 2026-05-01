@@ -198,8 +198,6 @@ main() {
 
     option_subcommands[init]=""
 
-    option_subcommands[publish]=""
-
     option_subcommands[imap]=""
 
     option_subcommands[smtp]=""
@@ -328,9 +326,6 @@ main() {
     # cert)    cert ${option_params} ;; # was checking is_online
 
     isonline) cmd_isonline ;;
-
-
-    publish) cmd_publish "$1" ;;
 
     'source')   return 0 ;;
 

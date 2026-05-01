@@ -66,3 +66,9 @@ all_stdout="$(jaro_source extract "${mail_root}/incoming" all 2>/dev/null)"
 assert_equal "${sender_stdout}" "" "extract sender mode stdout"
 assert_equal "${recipient_stdout}" "" "extract recipient mode stdout"
 assert_equal "${all_stdout}" "" "extract all mode stdout"
+
+help_output="$(jaro_source -h 2>/dev/null)"
+if [[ "${help_output}" == *" publish "* ]]; then
+  print -- "ASSERT FAIL (publish removed): help still lists publish command"
+  exit 1
+fi
