@@ -8,6 +8,14 @@ set pgp_auto_decode
 set pgp_strict_enc
 set pgp_verify_sig = yes
 
+# JaroMail configures classic PGP commands below.  Avoid mutt's GPGME
+# backend here because it also invokes gpgsm for S/MIME signatures and
+# can block message opening on attached smime.p7s files.
+unset crypt_use_gpgme
+unset crypt_autosmime
+set smime_verify_command="/bin/false"
+set smime_verify_opaque_command="/bin/false"
+
 # # CLEARTEXT INLINE GPG
 # set pgp_create_traditional = no
 # macro compose \cx "Fgpg --clearsign\nyy"
