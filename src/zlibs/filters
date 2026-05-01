@@ -33,8 +33,17 @@
 #  8. All the rest                 -> unsorted
 #
 
-# load zsh filter cache arrays
-test -r  "$MAILDIRS/cache/filters" && {
+# Load zsh filter cache arrays only for commands that need them.
+load_filter_cache() {
+    fn load_filter_cache
+
+    typeset -gAl  filter_from
+    typeset -galU filter_own
+    typeset -gAl  filter_to
+    typeset -galU filter_whitelist
+    typeset -galU filter_blacklist
+
+    [[ -r "$MAILDIRS/cache/filters" ]] || return 1
     source "$MAILDIRS/cache/filters"
 }
 
@@ -230,8 +239,7 @@ filter_maildir() {
   maildirmake "$MAILDIRS/unsorted"
 
   # loads up the filter cache (zsh compiled arrays)
-  [[ -r "$MAILDIRS/cache/filters" ]] &&
-    source $MAILDIRS/cache/filters
+  load_filter_cache
 
   mails="$(maildir_list_messages "$srcpath")"
   numm=`print $mails | wc -l`
@@ -551,6 +559,8 @@ update_sieve() {
 
     #######
     # SIEVE
+    load_filter_cache
+
     act "generate sieve filter rules"
     id=`datestamp`.$RANDOM
     newlock "$MAILDIRS/Filters.sieve"
