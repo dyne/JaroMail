@@ -55,7 +55,18 @@ EOF
 queue_msg "team-individual@jaromail.group" "group-individual"
 assert_equal "$(count_outbox)" "2" "individual sends one envelope per unique recipient"
 
-# 2) cc mode + Reply-To sender
+# 2) no mode defaults to individual, comments are ignored, and mixed entries work
+cat > "${mail_root}/Groups/team-default" <<'EOF'
+# this group intentionally has no #mode
+Alice <alice@myown.foundation>
+# following comments should be ignored
+bob@web3privacy.info
+# another ignored comment
+EOF
+queue_msg "team-default@jaromail.group" "group-default"
+assert_equal "$(count_outbox)" "4" "missing mode defaults to individual"
+
+# 3) cc mode + Reply-To sender
 cat > "${mail_root}/Groups/team-cc" <<'EOF'
 #mode cc
 Alice <alice@myown.foundation>
@@ -68,7 +79,7 @@ assert_contains "${cc_to_line}" "alice@myown.foundation" "cc to contains recipie
 assert_contains "${cc_to_line}" "bob@web3privacy.info" "cc to contains recipient two"
 assert_equal "$(awk '/^Reply-To:/ { print; exit }' "${cc_mail}")" "Reply-To: sender@example.org" "cc reply-to sender"
 
-# 3) bcc mode + hidden To + Reply-To sender
+# 4) bcc mode + hidden To + Reply-To sender
 cat > "${mail_root}/Groups/team-bcc" <<'EOF'
 #mode bcc
 Alice <alice@myown.foundation>
@@ -81,7 +92,7 @@ assert_contains "$(awk '/^Bcc:/ { print; exit }' "${bcc_mail}")" "alice@myown.fo
 assert_contains "$(awk '/^Bcc:/ { print; exit }' "${bcc_mail}")" "bob@web3privacy.info" "bcc contains recipient two"
 assert_equal "$(awk '/^Reply-To:/ { print; exit }' "${bcc_mail}")" "Reply-To: sender@example.org" "bcc reply-to sender"
 
-# 4) validation: invalid entry rejects queue and postpones mail
+# 5) validation: invalid entry rejects queue and postpones mail
 cat > "${mail_root}/Groups/team-invalid" <<'EOF'
 #mode individual
 this-is-not-an-email

@@ -15,7 +15,7 @@
 . ftr VB CB
 . ftr VBI CBI
 .\}
-.TH "jaromail" "1" "2026-05-01" "" ""
+.TH "jaromail" "1" "2026-05-12" "" ""
 .hy
 .SH jaromail(1) \[en] self-sovereign e-mail management
 .PP
@@ -1335,11 +1335,12 @@ non-mailinglist emails in which we are not an explicit recipient) and
 put them into our blacklist.
 .SS Private recipient groups
 .PP
-You can define reusable recipient groups in \f[V]Mail/Groups/\f[R] and
-send to them by using the pseudo-address
+You can define reusable local recipient lists in \f[V]Mail/Groups/\f[R]
+and send to them by using the pseudo-address
 \f[V]groupname\[at]jaromail.group\f[R].
 .PP
-Create a group file, for example \f[V]Mail/Groups/team\f[R]:
+Create a group file, for example \f[V]Mail/Groups/team\f[R], with one
+recipient per line:
 .IP
 .nf
 \f[C]
@@ -1348,6 +1349,13 @@ Alice <alice\[at]example.org>
 Bob <bob\[at]example.org>
 \f[R]
 .fi
+.PP
+Blank lines and comments are ignored.
+Recipients may be written either as bare addresses or as display names
+with addresses in angle brackets.
+Duplicate addresses are removed case-insensitively.
+If any non-comment line does not contain a valid email address, the
+message is not queued and is moved to \f[V]postponed\f[R].
 .PP
 Then compose to the group:
 .IP

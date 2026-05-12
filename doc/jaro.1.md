@@ -51,6 +51,13 @@ indexing and SMTP/IMAP actions.
 
 `open` open a local maildir folder.
 
+### Recipient groups
+
+Local recipient lists live in `$JAROMAILDIR/Groups/` (for example
+`Mail/Groups/team`) and are addressed as `team@jaromail.group`. The
+first line may set `#mode individual`, `#mode cc`/`#mode carboncopy`, or
+`#mode bcc`; when no `#mode` is set, groups use `#mode individual`.
+
 ### Account and secrets
 
 `passwd` set or update account password in the configured keyring.
@@ -110,6 +117,8 @@ filter/addressbook files.
 `$JAROMAILDIR` mail root (default usually `$HOME/Mail`).
 
 `$JAROMAILDIR/Accounts/` account configuration files.
+
+`$JAROMAILDIR/Groups/` local recipient group files.
 
 `$JAROMAILDIR/Filters.txt` filtering rules.
 

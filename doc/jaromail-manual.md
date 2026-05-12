@@ -972,16 +972,23 @@ put them into our blacklist.
 
 ### Private recipient groups
 
-You can define reusable recipient groups in `Mail/Groups/` and send to
-them by using the pseudo-address `groupname@jaromail.group`.
+You can define reusable local recipient lists in `Mail/Groups/` and
+send to them by using the pseudo-address `groupname@jaromail.group`.
 
-Create a group file, for example `Mail/Groups/team`:
+Create a group file, for example `Mail/Groups/team`, with one recipient
+per line:
 
 ``` example
 #mode individual
 Alice <alice@example.org>
 Bob <bob@example.org>
 ```
+
+Blank lines and comments are ignored. Recipients may be written either
+as bare addresses or as display names with addresses in angle brackets.
+Duplicate addresses are removed case-insensitively. If any non-comment
+line does not contain a valid email address, the message is not queued
+and is moved to `postponed`.
 
 Then compose to the group:
 
