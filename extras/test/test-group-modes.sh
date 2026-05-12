@@ -65,6 +65,9 @@ bob@web3privacy.info
 EOF
 queue_msg "team-default@jaromail.group" "group-default"
 assert_equal "$(count_outbox)" "4" "missing mode defaults to individual"
+group_completion="$(jaro_source complete team-default 2>/dev/null)"
+assert_contains "${group_completion}" "team-default@jaromail.group" "completion includes group pseudo-address"
+assert_contains "${group_completion}" "Group team-default (2 recipients)" "completion counts only recipients"
 
 # 3) cc mode + Reply-To sender
 cat > "${mail_root}/Groups/team-cc" <<'EOF'

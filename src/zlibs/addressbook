@@ -132,36 +132,63 @@ lookup_email() {
     return $?
 }
 
+complete_groups() {
+    fn complete_groups $*
+
+    _needle="${1:l}"
+    [[ -d "$MAILDIRS/Groups" ]] || return 1
+
+    find "$MAILDIRS/Groups" -type f | awk -v needle="$_needle" '
+{
+    path=$0
+    name=path
+    sub(/^.*\//, "", name)
+    pseudo=name "@jaromail.group"
+    searchable=tolower(name " " pseudo)
+    if (needle != "" && index(searchable, needle) == 0) {
+        next
+    }
+
+    count=0
+    while ((getline line < path) > 0) {
+        if (line ~ /^#/ || line ~ /^[[:space:]]*$/) {
+            continue
+        }
+        count++
+    }
+    close(path)
+
+    printf "%s\tGroup %s (%d recipients)\n", pseudo, name, count
+    found=1
+}
+END {
+    exit found ? 0 : 1
+}'
+}
+
 complete() {
 	fn complete $*
 	req=(list)
 	ckreq || return 1
 
     # completion on configured groups
-    { test -r "$MAILDIRS/Groups" } && {
+    { test -d "$MAILDIRS/Groups" } && {
         if [[ "$1" =~ "group/" ]]; then
             func "completion will look into groups"
             needle="${1[(ws:/:)2]}"
-            if [ "$needle" = "" ]; then
-                act "Listing all mailout groups"
-                matches=`${=find} "$MAILDIRS/Groups" -type f`
-            else
-                act "Searching for \"$needle\" in mailout groups"
-                matches=`${=find} "$MAILDIRS/Groups" -type f -name \"*$needle*\"`
-            fi
-
-            print "Groups: `print $matches | wc -l` matches"
-            print
-            for i in ${(f)matches}; do
-                gr=`basename $i`
-                print "$gr@jaromail.group\t`wc -l < $i` recipients"
-            done
-            return 0
+            complete_groups "$needle"
+            return $?
         fi
     }
 
     act "Searching for \"$1\" in addressbook $list"
     abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" --mutt-query "$1"
+    abook_res=$?
+
+    complete_groups "$1"
+    groups_res=$?
+
+    [[ $abook_res = 0 || $groups_res = 0 ]]
     return $?
 }
 
