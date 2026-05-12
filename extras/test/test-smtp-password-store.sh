@@ -105,6 +105,72 @@ transport TLS1
 options keep
 EOF
 
+cat > "${test_bin}/pass" <<'EOF'
+#!/usr/bin/env zsh
+set -euo pipefail
+store="${PASSWORD_STORE_DIR:?}"
+cmd="${1:-ls}"
+shift || true
+case "${cmd}" in
+  show)
+    [[ -n "${GPG_TTY:-}" ]] || exit 1
+    print -- "${GPG_TTY}" > "${PASS_GPG_TTY_FILE}"
+    print -- "smtp-secret"
+    ;;
+  insert)
+    key="${@: -1}"
+    file="${store}/${key}.gpg"
+    mkdir -p "${file:h}"
+    cat > "${file}"
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+chmod +x "${test_bin}/pass"
+
+fake_tty="${state_dir}/fake-tty"
+gpg_tty_seen="${state_dir}/gpg-tty-seen"
+touch "${fake_tty}"
+cat > "${state_dir}/stdin-message" <<'EOF'
+stdin is not a tty
+EOF
+
+GPG_TTY="${fake_tty}" \
+PASS_GPG_TTY_FILE="${gpg_tty_seen}" \
+JARO_KEYRING=pass \
+PASSWORD_STORE_DIR="${pass_store}" \
+jaro_source askpass < "${state_dir}/stdin-message" >/dev/null
+
+assert_equal "$(<"${gpg_tty_seen}")" "${fake_tty}" "pass gets gpg tty when stdin is redirected"
+
+cat > "${test_bin}/pass" <<'EOF'
+#!/usr/bin/env zsh
+set -euo pipefail
+store="${PASSWORD_STORE_DIR:?}"
+cmd="${1:-ls}"
+shift || true
+case "${cmd}" in
+  show)
+    key="${1:?}"
+    file="${store}/${key}.gpg"
+    [[ -r "${file}" ]] || exit 1
+    cat "${file}"
+    ;;
+  insert)
+    key="${@: -1}"
+    file="${store}/${key}.gpg"
+    mkdir -p "${file:h}"
+    cat > "${file}"
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+chmod +x "${test_bin}/pass"
+
 SMTP_CAPTURE_DIR="${state_dir}" \
 JARO_KEYRING=pass \
 PASSWORD_STORE_DIR="${pass_store}" \

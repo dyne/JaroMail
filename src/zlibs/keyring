@@ -24,8 +24,18 @@
 # pass wrapper to set all env
 _pass() {
 	fn pass $*
-	[[ -t 0 ]] && {
-		export GPG_TTY=$(tty)
+	_pass_tty=""
+	if [[ -t 0 ]]; then
+		_pass_tty=$(tty)
+	elif [[ -n "$GPG_TTY" ]]; then
+		_pass_tty="$GPG_TTY"
+	elif [[ -n "$TTY" ]]; then
+		_pass_tty="$TTY"
+	else
+		_pass_tty=$( { tty < /dev/tty } 2>/dev/null )
+	fi
+	[[ -n "$_pass_tty" && "$_pass_tty" != "not a tty" ]] && {
+		export GPG_TTY=$_pass_tty
 		command -v gpg-connect-agent >/dev/null 2>&1 &&
 			gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1
 	}
