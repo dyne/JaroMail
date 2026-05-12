@@ -118,3 +118,94 @@ EOF
 
 assert_equal "$(<"${pass_store}/email/person@example.org.gpg")" "smtp-secret" "smtp password saved in pass"
 assert_contains "$(<"${state_dir}/msmtp.conf")" "password smtp-secret" "msmtp uses stored password"
+
+cat > "${test_bin}/pass" <<'EOF'
+#!/usr/bin/env zsh
+set -euo pipefail
+store="${PASSWORD_STORE_DIR:?}"
+cmd="${1:-ls}"
+shift || true
+case "${cmd}" in
+  show)
+    print -u2 -- "gpg: public key decryption failed: No such file or directory"
+    print -u2 -- "gpg: decryption failed: No such file or directory"
+    exit 1
+    ;;
+  insert)
+    key="${@: -1}"
+    file="${store}/${key}.gpg"
+    mkdir -p "${file:h}"
+    cat > "${file}"
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+chmod +x "${test_bin}/pass"
+
+cat > "${test_bin}/pinentry" <<'EOF'
+#!/usr/bin/env zsh
+set -euo pipefail
+cat >/dev/null
+count=0
+[[ -r "${PINENTRY_COUNT_FILE}" ]] && count="$(<"${PINENTRY_COUNT_FILE}")"
+print -- "$((count + 1))" > "${PINENTRY_COUNT_FILE}"
+printf 'D smtp-secret\nOK\n'
+EOF
+chmod +x "${test_bin}/pinentry"
+
+cat > "${test_bin}/msmtp" <<'EOF'
+#!/usr/bin/env zsh
+set -euo pipefail
+cfg=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -C)
+      cfg="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+count=0
+[[ -r "${SMTP_CAPTURE_DIR}/msmtp-count" ]] && count="$(<"${SMTP_CAPTURE_DIR}/msmtp-count")"
+count=$((count + 1))
+print -- "${count}" > "${SMTP_CAPTURE_DIR}/msmtp-count"
+cp "${cfg}" "${SMTP_CAPTURE_DIR}/msmtp-${count}.conf"
+cat > "${SMTP_CAPTURE_DIR}/message-${count}.eml"
+EOF
+chmod +x "${test_bin}/msmtp"
+
+rm -rf "${mail_root}/outbox" "${mail_root}/sent" "${state_dir}/msmtp-count"
+mkdir -p "${mail_root}/outbox/new" "${mail_root}/outbox/cur" "${mail_root}/outbox/tmp"
+pinentry_count="${state_dir}/pinentry-count"
+rm -f "${pinentry_count}"
+
+cat > "${mail_root}/outbox/new/msg1" <<'EOF'
+From: Person <person@example.org>
+To: One <one@example.org>
+Subject: first queued message
+
+Body
+EOF
+
+cat > "${mail_root}/outbox/new/msg2" <<'EOF'
+From: Person <person@example.org>
+To: Two <two@example.org>
+Subject: second queued message
+
+Body
+EOF
+
+SMTP_CAPTURE_DIR="${state_dir}" \
+PINENTRY_COUNT_FILE="${pinentry_count}" \
+JARO_KEYRING=pass \
+PASSWORD_STORE_DIR="${pass_store}" \
+jaro_source send >/dev/null
+
+assert_equal "$(<"${pinentry_count}")" "1" "batch send asks smtp password once"
+assert_equal "$(<"${state_dir}/msmtp-count")" "2" "batch send delivers both queued messages"
+assert_contains "$(<"${state_dir}/msmtp-2.conf")" "password smtp-secret" "second queued send reuses cached password"

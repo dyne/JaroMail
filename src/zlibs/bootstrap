@@ -99,7 +99,7 @@ bootstrap_root="${bootstrap_file:A:h:h}"
     list=whitelist
 
     # global variables for accounts
-    vars+=(name login iproto imap imap_port smtp smtp_port protocol password auth accountopt)
+    vars+=(name login iproto imap imap_port smtp smtp_port protocol password auth accountopt smtp_keep_password)
     arrs+=(folders exclude)
     vars+=(proto host port type)
     vars+=(my_hdr)

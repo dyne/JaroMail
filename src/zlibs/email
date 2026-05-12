@@ -539,7 +539,7 @@ password ${password}
 EOF
 #	logfile "${MAILDIRS}/logs/msmtp.log"
 
-    unset password
+    [[ "$smtp_keep_password" = 1 ]] || unset password
     msmtp -C $msmtpcfg -t
     res=$?
     func "msmtp returns: $res"
@@ -635,7 +635,8 @@ BEGIN { body=0 }
 
             tsize=`zstat +size "$qbody"`
             act "sending `human_size $tsize` over the network ..."
-            jaro -q smtp -a ${account:-default} < "${qbody}"
+            smtp_keep_password=1
+            smtp_send < "${qbody}"
             res=$?
         fi
 
@@ -653,6 +654,8 @@ BEGIN { body=0 }
     done
 
     unlock "$MAILDIRS/outbox"
+    unset password
+    smtp_keep_password=0
 
     return $res
 }
