@@ -145,11 +145,12 @@ new_password() {
             # USE PASS
             if [[ $PASS = 1 ]]; then
                 act "using pass for password-store"
-                print "$password\n" | _pass insert -e email/${email}
+                print -r -- "$password" | _pass insert -e -f email/${email}
                 if [[ $? = 0 ]]; then
                     notice "New password saved in password-store"
                 else
                     error "Error saving password in password-store"
+                    return 1
                 fi
 
             # USE GNOME KEYRING
@@ -164,6 +165,7 @@ new_password() {
                     notice "New password saved in secret-tool"
                 else
                     error "Error saving password in secret-tool"
+                    return 1
                 fi
 
             elif [ "$GNOMEKEY" = "1" ]; then
@@ -180,6 +182,7 @@ EOF
                   notice "New password saved in GNOME keyring"
               else
                   error "Error saving password in GNOME keyring"
+                  return 1
               fi
             fi
             ;;

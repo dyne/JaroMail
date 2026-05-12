@@ -1211,26 +1211,4 @@ notice are preserved on all copies.
     <http://www.mutt.org/doc/manual> or simply typing \'man mutt\' in a
     console terminal.
 
-[^2]: <http://cr.yp.to/proto/maildir.html>
-
-    What this virtuous, sometimes very cryptical man is trying to say
-    here is that the Maildir format in its simplicity of implementation
-    represents an extremely reliable way to retreive and store emails
-    without the risk of losing any if the Internet connection goes down.
-
-    While skipping over the internal details of this storage system,
-    which basically consists in plain text files saved into
-    sub-directories, we will have a look at some very interesting
-    features that Jaro Mail can offer to its users and to the even
-    larger audience of Maildir format users.
-
-[^3]: The keyring is encrypted using weak symmetric encryption via
-    GnuPG, the only protection for the data inside then is the password
-    memorized by the used.
-
-    To explicitly change a password one can operate the default keyring
-    manager or use the command **jaro passwd** (and specify other
-    acconts using **-a accountname**)) which will prompt to set for a
-    new password even if an old one is known.
-
 [^4]: <http://tomb.dyne.org>
