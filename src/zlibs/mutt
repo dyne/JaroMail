@@ -79,6 +79,7 @@ set sendmail = "$WORKDIR/bin/jaro -q queue"
 set header_cache= '$MAILDIRS/.mutt/cache'
 set message_cachedir = '$MAILDIRS/.mutt/cache
 setenv PATH "$PATH"
+setenv JAROMAILDIR "$MAILDIRS"
 set editor = "$WORKDIR/bin/jaro -q edit"
 set mailcap_path = "$MAILDIRS/.mutt/mailcap:$MAILDIRS/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
 
