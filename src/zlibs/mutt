@@ -214,11 +214,11 @@ EOF
             eval `print $t | awk '
     { print "_type=" $1 "; _app=" $2 ";" }'`
             cat <<EOF >> $MAILDIRS/.mutt/mailcap
-${_type}; a="${MAILDIRS}/tmp" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && ${_app} "\$a"/"\$f"
+${_type}; a="\${JAROMAILDIR:-$MAILDIRS}/tmp" && mkdir -p "\$a" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && ${_app} "\$a"/"\$f"
 EOF
         done
         cat <<EOF >> $MAILDIRS/.mutt/mailcap
-application/*; a="${MAILDIRS}/tmp" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
+application/*; a="\${JAROMAILDIR:-$MAILDIRS}/tmp" && mkdir -p "\$a" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
 EOF
     } # Applications.txt
 
@@ -280,6 +280,7 @@ EOF
 
     for i; do _fa+=" $i "; done
     func "exec: ${mutt_exec} -F $MUTTDIR/rc ${=muttflags} ${_fa}"
+    export JAROMAILDIR="$MAILDIRS"
 
 	ztmp
 	_mboxes=$ztmpfile
