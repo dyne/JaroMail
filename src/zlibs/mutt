@@ -44,6 +44,34 @@ use_notmuch() {
 		[[ "$subcommand" != "peek" ]]
 }
 
+# Stage user mailcap attachments, converting paths for Windows executables.
+write_user_mailcap() {
+	local line mime rest command attributes executable converted
+	local -a command_words
+
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		if [[ "$line" != \#* && "$line" == *";"* ]]; then
+			mime="${line%%;*}"
+			rest="${line#*;}"
+			command="${rest%%;*}"
+			attributes="${rest#$command}"
+			command_words=(${(z)command})
+			executable="${command_words[1]}"
+			if [[ -n "$executable" ]]; then
+				if [[ -x /usr/bin/wslpath && "$executable" == *.exe ]]; then
+					converted="${command//\%s/\"\$w\"}"
+					print -r -- "${mime}; a=\"\${JAROMAILDIR:-$MAILDIRS}/Attachments\" && mkdir -p \"\$a\" && f=\`basename %s\` && cp -f %s \"\$a/\$f\" && p=\"\$a/\$f\" && w=\$(/usr/bin/wslpath -w \"\$p\") &&${converted}${attributes}"
+				else
+					converted="${command//\%s/\"\$p\"}"
+					print -r -- "${mime}; a=\"\${JAROMAILDIR:-$MAILDIRS}/Attachments\" && mkdir -p \"\$a\" && f=\`basename %s\` && cp -f %s \"\$a/\$f\" && p=\"\$a/\$f\" &&${converted}${attributes}"
+				fi
+				continue
+			fi
+		fi
+		print -r -- "$line"
+	done
+}
+
 x_mutt() {
 	fn x_mutt $*
 	req=(MAILDIRS WORKDIR mutt_exec)
@@ -81,7 +109,7 @@ set message_cachedir = '$MAILDIRS/.mutt/cache
 setenv PATH "$PATH"
 setenv JAROMAILDIR "$MAILDIRS"
 set editor = "$WORKDIR/bin/jaro -q edit"
-set mailcap_path = "$MAILDIRS/.mutt/mailcap:$MAILDIRS/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
+set mailcap_path = "$MAILDIRS/.mutt/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
 
 # Little Brother Database
 set query_command = "$WORKDIR/bin/jaro -q complete '%s'"
@@ -173,6 +201,9 @@ EOF
 	unset cryptowrap
 
     # MUTT MAILCAP
+	: > "$MAILDIRS/.mutt/mailcap"
+	[[ -r "$MAILDIRS/mailcap" ]] &&
+		write_user_mailcap < "$MAILDIRS/mailcap" >> "$MAILDIRS/.mutt/mailcap"
 
 # 	# charset conversion
 #     cat <<EOF > $MAILDIRS/.mutt/mailcap
@@ -211,15 +242,21 @@ EOF
         # with Mutt without blocking it (fork)
 
         apptypes=`cat "${MAILDIRS}/Applications.txt"`
-        for t in ${(f)apptypes}; do
-            eval `print $t | awk '
-    { print "_type=" $1 "; _app=" $2 ";" }'`
-            cat <<EOF >> $MAILDIRS/.mutt/mailcap
-${_type}; a="\${JAROMAILDIR:-$MAILDIRS}/tmp" && mkdir -p "\$a" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && ${_app} "\$a"/"\$f"
+	        for t in ${(f)apptypes}; do
+	            eval `print $t | awk '
+	    { print "_type=" $1 "; _app=" $2 ";" }'`
+				if [[ -x /usr/bin/wslpath && "$_app" == *.exe ]]; then
+					cat <<EOF >> $MAILDIRS/.mutt/mailcap
+${_type}; a="\${JAROMAILDIR:-$MAILDIRS}/Attachments" && mkdir -p "\$a" && f=\`basename %s\` && cp -f %s "\$a/\$f" && p="\$a/\$f" && w=\$(/usr/bin/wslpath -w "\$p") && ${_app} "\$w"
 EOF
-        done
-        cat <<EOF >> $MAILDIRS/.mutt/mailcap
-application/*; a="\${JAROMAILDIR:-$MAILDIRS}/tmp" && mkdir -p "\$a" && f=\`basename %s\` && rm -f "\$a"/"\$f" && cp %s "\$a"/"\$f" && jaro preview "\$a"/"\$f"
+				else
+					cat <<EOF >> $MAILDIRS/.mutt/mailcap
+${_type}; a="\${JAROMAILDIR:-$MAILDIRS}/Attachments" && mkdir -p "\$a" && f=\`basename %s\` && cp -f %s "\$a/\$f" && ${_app} "\$a/\$f"
+EOF
+				fi
+	        done
+	        cat <<EOF >> $MAILDIRS/.mutt/mailcap
+application/*; a="\${JAROMAILDIR:-$MAILDIRS}/Attachments" && mkdir -p "\$a" && f=\`basename %s\` && cp -f %s "\$a/\$f" && jaro preview "\$a/\$f"
 EOF
     } # Applications.txt
 
