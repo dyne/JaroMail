@@ -23,6 +23,13 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
 - IO: reads account credentials and queue; writes to maildirs and replay logs.
 - Test-safe: partially (`run-source.sh` covers queue/index/filter path; network calls are environment dependent).
 
+## Local IMAP bridge (`serve`)
+
+- `serve`: generates local Dovecot config in `$MAILDIRS/.imap` and serves existing Maildirs over localhost IMAP.
+- IO: reads local Maildir tree; writes `$MAILDIRS/.imap/dovecot.conf`, `$MAILDIRS/.imap/passwd`, and runtime logs/state.
+- Network scope: loopback-only (`127.0.0.1`) with generated local credentials; no POP3/LMTP/submission surfaces.
+- Test-safe: config generation yes (`JARO_SERVE_CONFIG_ONLY=1`), live daemon launch optional (`dovecot` availability dependent).
+
 ## Index/search family (`index`, `search`, `extract`, `headers`)
 
 - `index`: runs notmuch indexing + canonical tag normalization.
@@ -60,4 +67,4 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
 
 ## Missing test pointers
 
-- `fetch`, `send`, `smtp`, `imap`, and optional integrations are not fully covered by focused local tests yet.
+- `fetch`, `send`, `smtp`, `imap`, `serve` live launch path, and optional integrations are not fully covered by focused local tests yet.

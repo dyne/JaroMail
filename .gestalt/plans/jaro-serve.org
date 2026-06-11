@@ -1,0 +1,214 @@
+#+TITLE: jaro serve
+#+SUBTITLE: Local Dovecot IMAP bridge for Jaromail Maildirs
+#+DATE: 2026-05-01
+#+KEYWORDS: jaromail imap dovecot maildir serve vsa repr hex ddd localhost
+
+* TODO [#A] Fix the design contract
+:PROPERTIES:
+:Effort: 1h
+:Goal: Turn the provided analysis into an explicit implementation contract so later code work does not re-open product or architecture decisions.
+:Notes: Choose Dovecot, not Courier, maddy, pymap, or a custom IMAP implementation. The reason is minimal operational risk, not minimal binary size: Dovecot already implements IMAP, Maildir, static/passwd-file auth, localhost binding, and Maildir layout options. Courier is only a fallback idea and must not be implemented. maddy is an all-in-one mail server and is too broad for serving existing Maildirs. pymap and Go IMAP libraries would create a custom IMAP server, which is over-engineering for this use case.
+:END:
+
+** TODO [#A] Record the one-server decision
+:PROPERTIES:
+:Why: The first idea to challenge is "Dovecot is too large, write or embed something smaller." IMAP correctness is the hard part: UIDs, flags, sequence numbers, EXPUNGE, SEARCH, BODYSTRUCTURE, IDLE, folder hierarchy, and MUA quirks make custom code risky.
+:Change: Add a short design note in the implementation comments or =doc/command-contracts.md=: =jaro serve= intentionally shells out to =dovecot= because it is the smallest safe operational choice for local IMAP over existing Maildirs. State that no SMTP, POP3, LMTP, Sieve, ManageSieve, submission, DKIM, SPF, or DMARC components are part of this command.
+:Tests: No code test is needed for this L2 unless a file changes. If a file changes, run a grep check that the note mentions =dovecot= and =localhost=.
+:Done when: The implementation scope is explicitly limited to Dovecot IMAP over local Maildirs and a later agent has no reason to consider another IMAP server.
+:END:
+
+** TODO [#A] Define user-visible command contract
+:PROPERTIES:
+:Why: "Serve only a single MUA as localhost" needs concrete behavior. A literal one TCP connection is brittle because real MUAs often open more than one IMAP connection. The safer default is one local account, bound only to loopback, with tiny connection limits.
+:Change: Define =jaro serve= as a foreground command that generates config on every launch and starts Dovecot on =127.0.0.1=. Default port is =61443=: a Jaromail-specific high port in the IANA dynamic/private range, not the IMAP port =143=, not IMAPS =993=, and not an IMAP-adjacent registered-looking port such as =1143=. A fixed port still cannot be globally guaranteed unused on a host, so the implementation must check whether =127.0.0.1:61443= is already bound before starting Dovecot and fail with a clear message if it is. The command prints: host, port, TLS mode, username, password, config path, log path, and mail root. It does not daemonize itself. Stopping the terminal process stops the local IMAP server. TLS is disabled by default because the listener is loopback-only.
+:Tests: Later tests must assert output contains =127.0.0.1=, =61443= unless overridden, =TLS: none= or equivalent, a non-empty username, and a non-empty password.
+:Done when: A reviewer can configure a local MUA from the command output without reading generated files.
+:END:
+
+** TODO [#B] Define environment knobs and reject extra CLI complexity
+:PROPERTIES:
+:Why: Jaromail's existing option parser is global and simple. Adding many route-specific options would increase risk. Environment knobs are enough for a local integration command.
+:Change: Support these env vars only: =JARO_SERVE_HOST= default =127.0.0.1= and reject anything except loopback values =127.0.0.1= or =localhost=; =JARO_SERVE_PORT= default =61443=; =JARO_SERVE_USER= default =jaro=; =JARO_SERVE_PASSWORD= optional; =JARO_SERVE_MAX_CONNECTIONS= default =4=; =JARO_SERVE_CONFIG_ONLY= for tests and dry validation. Do not add dependencies or a new option parser. Do not accept =0.0.0.0=, LAN IPs, public IPs, or IPv6 wildcard. Accept custom ports from =1024= through =65535=, but keep the default in the dynamic/private range to avoid known daemon ports.
+:Tests: Later tests must verify =JARO_SERVE_HOST= rejects =0.0.0.0= and =192.168.1.10=, accepts =127.0.0.1=, writes =61443= by default, and writes an overridden selected port.
+:Done when: The command surface is small, documented, and safe by default.
+:END:
+
+** TODO [#A] Check the chosen port at launch
+:PROPERTIES:
+:Why: The user explicitly requires a Jaromail port that is not used by any other daemon. A static default can avoid registered service ports, but only a runtime bind/listen check can detect another local process already using that port.
+:Change: Add a small =serve_port_available= adapter in =src/zlibs/serve=. It must check the selected host and port before writing the final config or starting Dovecot. Prefer native shell/dev-tcp or common system tools already likely to exist, in this order: =zsh/net/tcp= if practical, =lsof -iTCP:<port> -sTCP:LISTEN=, =ss -ltn=, then =netstat -ltn=. Do not add a dependency. If no checker exists, rely on Dovecot bind failure but print a warning that preflight availability could not be checked. If the port is in use, fail before launching Dovecot and say which host/port is occupied.
+:Tests: Later tests should avoid requiring =lsof=, =ss=, or =netstat=. If a portable temporary listener can be made with existing shell tools, add a focused test that binds =127.0.0.1:61443= and asserts =jaro serve= fails clearly. Otherwise test only that the function is called in normal non-config-only launch path and document the limitation.
+:Done when: The default port is Jaromail-specific and runtime startup refuses to collide with another daemon.
+:END:
+
+* TODO [#A] Prove the Dovecot Maildir layout
+:PROPERTIES:
+:Effort: 1h
+:Goal: Verify the exact Dovecot =mail_location= and namespace settings for Jaromail's existing sibling Maildirs before writing launch code.
+:Notes: Jaromail stores folders as sibling Maildirs under =$MAILDIRS=, for example =known/=, =priv/=, =sent/=, =incoming/=, =drafts/=, =unsorted/=, and =outbox/=. Dovecot's default Maildir++ layout uses dot-prefixed folders. The expected fit is =maildir:<absolute-mail-root>:LAYOUT=fs=, but this must be validated.
+:END:
+
+** TODO [#A] Validate =maildir:...:LAYOUT=fs=
+:PROPERTIES:
+:Why: Serving the wrong layout would hide Jaromail folders or create unwanted dot folders. The feature must serve existing Maildirs in place.
+:Change: Create a throwaway mail root outside the source tree. Under it create =known/cur=, =known/new=, =known/tmp=, =priv/cur=, =priv/new=, =priv/tmp=, =sent/cur=, =sent/new=, and =sent/tmp=. Write one RFC822 sample message into =known/new=. Create a minimal temporary Dovecot config using =mail_location = maildir:<absolute-temp-mail-root>:LAYOUT=fs=. Run =doveconf -c <tmp-conf> -n= if =doveconf= exists. If =dovecot= exists, run it on a high test port bound to =127.0.0.1= and inspect logs for layout errors.
+:Tests: Manual verification for this L2. If =dovecot= or =doveconf= is missing, record a clear skip in the commit message and continue with documented assumptions from Dovecot Maildir docs.
+:Done when: The implementation can use =maildir:$MAILDIRS_ABS:LAYOUT=fs= confidently, or the plan is updated with the smallest validated alternative.
+:END:
+
+** TODO [#A] Decide INBOX mapping minimally
+:PROPERTIES:
+:Why: MUAs expect INBOX. Jaromail's main local inbox is =known/=, while =incoming/= is a processing area and should not become the user's default MUA inbox unless intentionally chosen.
+:Change: Prefer mapping IMAP INBOX to =$MAILDIRS/known= if Dovecot namespace config allows that cleanly. If this adds too much config or behaves badly, use =$MAILDIRS= as the mail root and allow Dovecot to create root =cur/new/tmp= only after documenting that INBOX is an IMAP compatibility mailbox. Do not move messages. Do not symlink Maildirs unless Dovecot requires it and the symlinks live under generated =$MAILDIRS/.imap= state.
+:Tests: Later config tests must assert =known= remains a normal Jaromail Maildir and that config generation does not move messages out of =known/new= or =known/cur=.
+:Done when: The plan states exactly how INBOX is exposed and does not leave this to the implementation agent.
+:END:
+
+** TODO [#B] Keep Dovecot metadata away from message files where practical
+:PROPERTIES:
+:Why: Other Maildir writers/readers such as mblaze, fetchmail delivery, filters, or mutt may access the same folders. Dovecot metadata should be predictable and not pollute message directories more than necessary.
+:Change: Configure indexes and control state under =$MAILDIRS/.imap/index= and =$MAILDIRS/.imap/control= if supported by the selected =mail_location= keys. If Dovecot still writes standard =dovecot-uidlist= files into Maildirs, document that as normal Dovecot Maildir metadata and ensure tests only reject message movement or remote exposure, not harmless metadata files.
+:Tests: Later tests must snapshot message file paths before and after config-only generation. Optional live Dovecot smoke may allow Dovecot metadata but must confirm message filenames are unchanged.
+:Done when: The implementation distinguishes message safety from expected Dovecot metadata.
+:END:
+
+* TODO [#A] Add the serve VSA slice
+:PROPERTIES:
+:Effort: 2h
+:Goal: Implement =jaro serve= as one vertical slice with REPR and explicit ports/adapters.
+:Notes: Keep the slice in one new module =src/zlibs/serve=. Do not spread Dovecot logic into =mutt=, =imap=, =maildirs=, or =setup= except for calling existing helpers such as =init_inbox= and =maildirmake=.
+:END:
+
+** TODO [#A] Register the route in =src/jaro=
+:PROPERTIES:
+:Why: Jaromail command discovery is centralized in =src/jaro=. The command must be parsed before any endpoint can run.
+:Change: In =usage()= add one line under operational or storage commands: =serve   run localhost-only IMAP over local Jaromail Maildirs=. Add =option_subcommands[serve]=""=. In the main =case "$subcommand"= add =serve) cmd_serve ;;=. Do not change unknown command fallback behavior.
+:Tests: Run =JAROMAILDIR=<tmp> JAROWORKDIR=<installed-test-workdir> src/jaro -h= or the equivalent test helper and assert help contains =serve=. Run an existing unknown-command behavior test if available; otherwise do not invent broad coverage here.
+:Done when: =jaro serve= dispatches to =cmd_serve= and =jaro -h= documents the command.
+:END:
+
+** TODO [#A] Add dependency checks without blocking config-only tests
+:PROPERTIES:
+:Why: Normal serving requires =dovecot=. Config generation tests should not require =dovecot= on every developer machine.
+:Change: In =src/zlibs/bootstrap= extend =check_bin()=. For =serve=, require =dovecot= unless =JARO_SERVE_CONFIG_ONLY= is set. Do not require =doveconf= for normal operation, but use it later when available. Do not require =nc=, =openssl=, =imaptest=, or a MUA.
+:Tests: Add or update focused test coverage so =JARO_SERVE_CONFIG_ONLY= can run without =dovecot=. If =dovecot= is absent, plain =jaro serve= must fail with a clear "Cannot find dovecot" style error.
+:Done when: Development machines without Dovecot can run config tests, while real launch still fails early when Dovecot is missing.
+:END:
+
+** TODO [#A] Implement REPR in =src/zlibs/serve=
+:PROPERTIES:
+:Why: The endpoint should be readable and testable. A lesser agent should not infer architecture from scattered shell code.
+:Change: Create =src/zlibs/serve=. At top, add shell comments naming the slice and REPR parts. Implement =serve_request= to collect env vars and derived paths into globals or printed key-value lines. Implement =cmd_serve= as the endpoint: call request parsing, ensure Maildirs, generate password, render config, write files, validate config, print response, and either exit for config-only or exec Dovecot. Implement =serve_response= to print connection details in a stable format for tests.
+:Tests: Focused test should run =JARO_SERVE_CONFIG_ONLY= and assert response lines exist for =Host:=, =Port:=, =TLS:=, =User:=, =Password:=, =Config:=, and =Log:=.
+:Done when: The endpoint reads top-to-bottom as Request, Endpoint, Response and no existing module owns Dovecot-specific behavior.
+:END:
+
+** TODO [#A] Add Hex-style ports and adapters
+:PROPERTIES:
+:Why: Config rendering is domain logic; writing files and starting Dovecot are IO. Separating them makes the shell testable and reduces accidental side effects.
+:Change: Implement these functions in =src/zlibs/serve=: =serve_mail_root_abs= returns an absolute =$MAILDIRS=; =serve_runtime_dir= returns =$MAILDIRS/.imap=; =serve_ensure_maildirs= calls =init_inbox= or creates only canonical Maildirs; =serve_render_dovecot_conf= prints config to stdout; =serve_write_runtime_files= writes config/passwd/log dirs; =serve_validate_config= runs =doveconf -c "$conf" -n= only when available; =serve_exec_dovecot= runs =dovecot -F -c "$conf"=. Keep functions small and documented.
+:Tests: Test =serve_render_dovecot_conf= indirectly through config-only output and generated files. Optional integration validates =doveconf= output.
+:Done when: Only adapter functions touch disk or execute external commands.
+:END:
+
+* TODO [#A] Generate brutally small Dovecot config
+:PROPERTIES:
+:Effort: 3h
+:Goal: Generate all Dovecot runtime files at launch, like Jaromail generates mutt config, with no dependency on system Dovecot configuration.
+:Notes: Use =$MAILDIRS/.imap= as generated state. It should be safe to delete and regenerate. Create it mode 700. Files containing secrets must be mode 600.
+:END:
+
+** TODO [#A] Render a minimal =dovecot.conf=
+:PROPERTIES:
+:Why: The core feature is Dovecot configured "brutally small." The generated file should be understandable in one screen and should not include system config fragments.
+:Change: Generate =$MAILDIRS/.imap/dovecot.conf= with this shape, adjusting exact syntax only when verified by =doveconf=: =protocols = imap=; =listen = 127.0.0.1=; =ssl = no=; =disable_plaintext_auth = no=; =auth_mechanisms = plain=; =mail_location = maildir:<absolute-mail-root>:LAYOUT=fs:INDEX=<runtime>/index:CONTROL=<runtime>/control= if supported; =base_dir = <runtime>/run=; =state_dir = <runtime>/state=; =log_path = <runtime>/log/dovecot.log=; =info_log_path = <runtime>/log/dovecot-info.log=; =mail_debug = no=. Add a =service imap-login= block with an =inet_listener imap= bound to =127.0.0.1= and chosen port. Disable or omit POP3, LMTP, submission, sieve, managesieve, and all unrelated services.
+:Tests: Focused test greps the generated config for =protocols = imap=, =listen = 127.0.0.1=, =ssl = no=, =disable_plaintext_auth = no=, =auth_mechanisms = plain=, =mail_location = maildir:=, =LAYOUT=fs=, and selected port. It must assert absence of =pop3=, =lmtp=, =submission=, =sieve=, =managesieve=, =include_try=, and =/etc/dovecot=.
+:Done when: The generated config is deterministic, local-only, and independent from system Dovecot includes.
+:END:
+
+** TODO [#A] Use generated passwd-file auth
+:PROPERTIES:
+:Why: The provided analysis recommends static or passwd-file auth. Passwd-file is clearer for one generated user and avoids =nopassword=.
+:Change: Generate =$MAILDIRS/.imap/passwd= containing one user: =<user>:{PLAIN}<password>:<uid>:<gid>::<absolute-mail-root>::=. Configure =passdb { driver = passwd-file; args = <runtime>/passwd }=. Configure =userdb { driver = static; args = uid=<numeric-uid> gid=<numeric-gid> home=<absolute-mail-root> }=. If Dovecot requires username formatting, add the smallest =username_format=%u= or =%n= that works. Do not read Jaromail account passwords. Do not integrate with pass, secret-tool, PAM, or system users.
+:Tests: Focused test asserts passwd exists mode 600, contains exactly one non-comment account line, contains the selected username, and uses numeric current uid/gid. The test must not print the generated password on failure unless already printed by the command response.
+:Done when: A MUA can authenticate with the printed credentials and no external auth backend is used.
+:END:
+
+** TODO [#A] Generate a safe launch password
+:PROPERTIES:
+:Why: Localhost-only does not justify empty auth. A random per-launch password is simple and avoids storing long-lived secrets.
+:Change: If =JARO_SERVE_PASSWORD= is non-empty, use it. Else generate a password from =openssl rand -base64 24= when =openssl= exists; fallback to =od -An -N24 -tx1 /dev/urandom | tr -d ' \n'=. If neither works, fail clearly. Print the password in the response because the user needs it for the MUA. Do not write the password anywhere except the generated passwd-file. The passwd-file is overwritten every launch.
+:Tests: Config-only test without =JARO_SERVE_PASSWORD= asserts the printed password is non-empty. Test with =JARO_SERVE_PASSWORD=testpass= asserts passwd-file contains ={PLAIN}testpass= and response prints =testpass=.
+:Done when: Password behavior is deterministic when overridden and secure enough by default without adding dependencies.
+:END:
+
+** TODO [#B] Bound local MUA concurrency
+:PROPERTIES:
+:Why: The goal is one local MUA, but real MUAs may open several connections. The config should be small without creating client breakage.
+:Change: Set Dovecot service limits conservatively: =default_process_limit= or =service imap-login { process_limit = <JARO_SERVE_MAX_CONNECTIONS>; service_count = 1 }= and =service imap { process_limit = <JARO_SERVE_MAX_CONNECTIONS> }= if accepted by =doveconf=. Default =JARO_SERVE_MAX_CONNECTIONS= to =4=. Reject values below =1= or above =16= to keep the command local and small.
+:Tests: Focused test asserts the generated config contains the selected max connection value. Add request parsing tests for invalid values =0= and =100= returning non-zero.
+:Done when: The config supports one MUA without pretending IMAP clients use exactly one TCP connection.
+:END:
+
+* TODO [#B] Add tests and docs
+:PROPERTIES:
+:Effort: 2h
+:Goal: Make the feature safe to review and safe to run on machines without Dovecot installed.
+:Notes: Follow existing =extras/test= style: tests are Zsh scripts, use =extras/test/lib/test_helpers.zsh=, create temp roots, and skip cleanly for missing optional external commands.
+:END:
+
+** TODO [#A] Add =extras/test/test-serve-config.sh=
+:PROPERTIES:
+:Why: Most security and layout mistakes can be caught by inspecting generated files without launching Dovecot.
+:Change: Create a focused test. Use =test_setup=. Create sample messages in =known= and =priv= using =make_maildir_message=. Run =JARO_SERVE_CONFIG_ONLY=1 JARO_SERVE_PASSWORD=testpass JARO_SERVE_PORT=61444 jaro_source serve=. Assert =$mail_root/.imap/dovecot.conf= exists, =$mail_root/.imap/passwd= exists, runtime dirs exist, file modes are private, response has connection details, config binds only =127.0.0.1=, config has no =/etc/dovecot= includes, and messages remain in their original paths.
+:Tests: Run =extras/test/test-serve-config.sh=.
+:Done when: The focused test passes without requiring =dovecot=.
+:END:
+
+** TODO [#A] Add negative config tests
+:PROPERTIES:
+:Why: The dangerous failure mode is accidental remote exposure. Rejecting bad input is as important as writing good defaults.
+:Change: In =test-serve-config.sh= or a sibling test, assert =JARO_SERVE_HOST=0.0.0.0= and =JARO_SERVE_HOST=192.168.1.10= fail. Assert invalid ports such as =0= and =70000= fail. Assert invalid max connection values such as =0= and =100= fail. Keep assertions simple and command-line based.
+:Tests: Run the focused test file.
+:Done when: Unsafe listener and unbounded connection inputs are rejected before config is written.
+:END:
+
+** TODO [#B] Add optional live Dovecot smoke test
+:PROPERTIES:
+:Why: A config can pass grep assertions and still fail Dovecot parsing.
+:Change: Add =extras/test/test-serve-dovecot.sh= or an optional block in =test-serve-config.sh=. Skip unless both =dovecot= and =doveconf= exist. Generate config with =JARO_SERVE_CONFIG_ONLY=1=. Run =doveconf -c "$mail_root/.imap/dovecot.conf" -n=. If practical and reliable, start =dovecot -F -c "$conf"= on a high random localhost port, wait briefly, confirm logs show startup without fatal errors, then kill the process in a trap. Do not require a full IMAP client.
+:Tests: Run the optional smoke locally; it must skip cleanly where Dovecot is absent.
+:Done when: Dovecot syntax validation is automated for machines that have Dovecot.
+:END:
+
+** TODO [#B] Document command, dependency, and generated files
+:PROPERTIES:
+:Why: Users need to understand that =jaro serve= is a localhost bridge, not a mail server stack.
+:Change: Update =doc/command-contracts.md= with =serve=: reads local Maildirs, writes =$MAILDIRS/.imap/*= generated runtime files, launches Dovecot foreground, exposes IMAP only on loopback. Update =README.md= dependency text to mention optional =dovecot-imap= or =dovecot= package for =jaro serve=. Update shell completion files =extras/shell_completion/jaromail.bash= and =extras/shell_completion/_jaromail= to include =serve=. Update =AGENTS.md= only if repository guidance changes; this feature probably does not require it.
+:Tests: Run grep checks for =serve= in =src/jaro= help text, command contracts, README dependency text, and shell completion files.
+:Done when: A user can discover =jaro serve= and install the required external Dovecot package.
+:END:
+
+* TODO [#C] Verify and prepare reviewer summary
+:PROPERTIES:
+:Effort: 1h
+:Goal: Complete the implementation workflow with per-L2 commits, full available tests, and concise review notes.
+:Notes: When implementing this plan, first create branch =jaro-serve=. For every L2 that changes files, run touched tests and make exactly one conventional commit before marking that L2 DONE. Do not mark L1 DONE until all its L2 headings are DONE and the L1-level test pass is complete.
+:END:
+
+** TODO [#A] Run all available tests after all L2 work
+:PROPERTIES:
+:Why: Command registration and bootstrap dependency changes can break unrelated commands.
+:Change: Run the new focused serve tests. Then run existing broad tests that are practical in the environment: =extras/test/run-source.sh=, =extras/test/test-maildir-commands.sh=, =extras/test/test-filtering.sh=, and any other =extras/test/test-*.sh= scripts that do not require unavailable external mail tools. Respect existing skip behavior.
+:Tests: Record exact pass/skip/fail results.
+:Done when: All runnable tests pass, optional tests skip only for documented missing external tools, and no background Dovecot process remains.
+:END:
+
+** TODO [#B] Print reviewer summary
+:PROPERTIES:
+:Why: Reviewers need security-relevant facts more than a file-by-file changelog.
+:Change: Summarize: =jaro serve= uses Dovecot only; generated config path is =$MAILDIRS/.imap/dovecot.conf=; auth file path is =$MAILDIRS/.imap/passwd=; listener is =127.0.0.1= only; default port is =61443= and is checked for local availability before launch; TLS is disabled because loopback-only; Maildir location uses the validated layout; system =/etc/dovecot= is not included; tests run and skips.
+:Tests: No code test unless this summary is committed to a file.
+:Done when: Final response is brief and reviewer-oriented.
+:END:
