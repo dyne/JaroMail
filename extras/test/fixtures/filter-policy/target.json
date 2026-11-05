@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "authority": "Independently authored from approved policy v1; never derive these decisions from legacy output",
+  "rules": [
+    "from route@example.org move frombucket",
+    "to team@example.org move tobucket",
+    "to duplicate@example.org move oldbucket",
+    "to duplicate@example.org save lastbucket",
+    "to overlap move firstbucket",
+    "to overlap@example.org move secondbucket"
+  ],
+  "known": ["known@example.org", "blocked@example.org"],
+  "blacklist": ["blocked@example.org"],
+  "own": ["own@example.org"],
+  "cases": [
+    {"id":"blacklist", "headers":{"From":"blocked@example.org"}, "rule":"blacklist:blocked@example.org", "local":"zz.blacklist", "sieve":"zz.blacklist"},
+    {"id":"blacklist-known-spam-route", "headers":{"From":"blocked@example.org", "To":"team@example.org", "X-Spam-Flag":"YES"}, "rule":"blacklist:blocked@example.org", "local":"zz.blacklist", "sieve":"zz.blacklist"},
+    {"id":"bounce", "headers":{"Sender":"list-mailman-bounce@example.org"}, "rule":"builtin:bounce", "local":"zz.bounces", "sieve":"zz.bounces"},
+    {"id":"bounce-before-to", "headers":{"Sender":"mailman-bounce@example.org", "To":"team@example.org"}, "rule":"builtin:bounce", "local":"zz.bounces", "sieve":"zz.bounces"},
+    {"id":"from", "headers":{"From":"route@example.org"}, "rule":"filters:1", "local":"frombucket", "sieve":"frombucket"},
+    {"id":"sender", "headers":{"Sender":"route@example.org"}, "rule":"filters:1", "local":"frombucket", "sieve":"frombucket"},
+    {"id":"from-before-to", "headers":{"From":"route@example.org", "To":"team@example.org"}, "rule":"filters:1", "local":"frombucket", "sieve":"frombucket"},
+    {"id":"to", "headers":{"To":"team@example.org"}, "rule":"filters:2", "local":"tobucket", "sieve":"tobucket"},
+    {"id":"cc", "headers":{"Cc":"team@example.org"}, "rule":"filters:2", "local":"tobucket", "sieve":"tobucket"},
+    {"id":"to-before-known", "headers":{"From":"known@example.org", "To":"team@example.org"}, "rule":"filters:2", "local":"tobucket", "sieve":"tobucket"},
+    {"id":"duplicate-last", "headers":{"To":"duplicate@example.org"}, "rule":"filters:4", "local":"lastbucket", "sieve":"lastbucket"},
+    {"id":"overlap-first", "headers":{"To":"overlap@example.org"}, "rule":"filters:5", "local":"firstbucket", "sieve":"firstbucket"},
+    {"id":"known", "headers":{"From":"known@example.org"}, "rule":"known:known@example.org", "local":"known", "sieve":"INBOX"},
+    {"id":"known-before-spam", "headers":{"From":"known@example.org", "X-Spam-Flag":"YES"}, "rule":"known:known@example.org", "local":"known", "sieve":"INBOX"},
+    {"id":"known-sender-only", "headers":{"Sender":"known@example.org"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"display-name-not-address", "headers":{"From":"\"known@example.org\" <stranger@example.net>"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"spam", "headers":{"X-Spam-Flag":"YES"}, "rule":"builtin:spam", "local":"zz.spam", "sieve":"Spam"},
+    {"id":"spam-lowercase", "headers":{"X-Spam-Flag":"yes"}, "rule":"builtin:spam", "local":"zz.spam", "sieve":"Spam"},
+    {"id":"spam-before-own", "headers":{"To":"own@example.org", "X-Spam-Flag":"YES"}, "rule":"builtin:spam", "local":"zz.spam", "sieve":"Spam"},
+    {"id":"own-to", "headers":{"To":"own@example.org"}, "rule":"own:own@example.org", "local":"priv", "sieve":"priv"},
+    {"id":"own-cc", "headers":{"Cc":"own@example.org"}, "rule":"own:own@example.org", "local":"priv", "sieve":"priv"},
+    {"id":"fallback", "headers":{"From":"stranger@example.net", "To":"reader@example.net"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"missing-fields", "headers":{}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"}
+  ],
+  "domain_rules": ["known-domain example.org", "known-domain *.example.org", "from-domain vendor.example move vendors", "to-domain project.example move projects", "from-address exact@vendor.example move exact"],
+  "domain_cases": [
+    {"id":"domain-apex", "headers":{"From":"a@example.org"}, "rule":"domain:1", "local":"known", "sieve":"INBOX"},
+    {"id":"domain-upper", "headers":{"From":"a@EXAMPLE.ORG"}, "rule":"domain:1", "local":"known", "sieve":"INBOX"},
+    {"id":"domain-child", "headers":{"From":"a@child.example.org"}, "rule":"domain:2", "local":"known", "sieve":"INBOX"},
+    {"id":"domain-deep", "headers":{"From":"a@deep.child.example.org"}, "rule":"domain:2", "local":"known", "sieve":"INBOX"},
+    {"id":"domain-prefix-negative", "headers":{"From":"a@badexample.org"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"domain-suffix-negative", "headers":{"From":"a@example.org.attacker.net"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"domain-display-negative", "headers":{"From":"\"example.org\" <a@elsewhere.net>"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"domain-sender-negative", "headers":{"Sender":"a@example.org"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"domain-from", "headers":{"Sender":"a@vendor.example"}, "rule":"domain:3", "local":"vendors", "sieve":"vendors"},
+    {"id":"domain-to-cc", "headers":{"Cc":"a@project.example"}, "rule":"domain:4", "local":"projects", "sieve":"projects"},
+    {"id":"domain-before-exact-by-order", "headers":{"From":"exact@vendor.example"}, "rule":"domain:3", "local":"vendors", "sieve":"vendors"}
+  ],
+  "isolated_domain_cases": [
+    {"id":"wildcard-excludes-apex", "rules":["known-domain *.example.org"], "headers":{"From":"a@example.org"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"apex-excludes-child", "rules":["known-domain example.org"], "headers":{"From":"a@sub.example.org"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"explicit-before-known-domain", "rules":["known-domain example.org", "to-address team@example.net move team"], "headers":{"From":"a@example.org", "To":"team@example.net"}, "rule":"domain:2", "local":"team", "sieve":"team"},
+    {"id":"exact-before-domain-by-order", "rules":["from-address exact@vendor.example move exact", "from-domain vendor.example move vendors"], "headers":{"From":"exact@vendor.example"}, "rule":"domain:1", "local":"exact", "sieve":"exact"}
+  ],
+  "invalid_domains": ["*example.org", "*.*.example.org", ".example.org", "example..org", "-bad.example", "bad-.example", "exämple.org", "example.org."]
+}

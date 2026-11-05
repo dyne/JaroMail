@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "baseline": "165e61e",
+  "meaning": "Actual clean-Zsh/mblaze CLI observations; these are NOT target-policy expectations",
+  "destinations": {
+    "blacklist":"unsorted", "blacklist-known-spam-route":"tobucket", "bounce":"unsorted", "bounce-before-to":"tobucket",
+    "from":"unsorted", "sender":"unsorted", "from-before-to":"tobucket", "to":"tobucket", "cc":"tobucket", "to-before-known":"tobucket",
+    "duplicate-last":"lastbucket", "overlap-first":"firstbucket", "known":"unsorted", "known-before-spam":"unsorted",
+    "known-sender-only":"unsorted", "display-name-not-address":"unsorted", "spam":"unsorted", "spam-lowercase":"unsorted", "spam-before-own":"priv",
+    "own-to":"priv", "own-cc":"priv", "fallback":"unsorted", "missing-fields":"unsorted"
+  },
+  "casing_destinations": {"own-uppercase-to":"unsorted", "own-uppercase-cc":"unsorted"},
+  "sieve_fragments": [
+    "if header :contains \"From\" [",
+    "if header :contains \"Sender\" \"mailman-bounce\"",
+    "if header :contains [ \"To\",\"Cc\" ]  \"team@example.org\"",
+    "if header :contains [ \"From\",\"Sender\" ]  \"route@example.org\"",
+    "if header :contains [ \"From\",\"Sender\" ] [",
+    "if header :is \"X-Spam-Flag\" \"YES\"",
+    "if header :contains [ \"To\",\"Cc\" ]  [",
+    "fileinto :create \"unsorted\";"
+  ],
+  "empty_file": "deleted",
+  "empty_maildir_exit": 0,
+  "overlap_note": "Associative map order is an observation only; policy v1 requires source order. Probe retains both rules; firstbucket is this clean Zsh baseline's winner."
+}

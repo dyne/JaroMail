@@ -1,0 +1,323 @@
+{
+  "schema": 1,
+  "meaning": "Independent interface examples; schema/framing tests are not native engine or Sieve execution",
+  "path_lists": [
+    {
+      "id": "empty-list",
+      "hex": "",
+      "paths": [],
+      "valid": true
+    },
+    {
+      "id": "space",
+      "hex": "2f6d61696c2f6e65772f61206200",
+      "paths": [
+        "2f6d61696c2f6e65772f612062"
+      ],
+      "valid": true
+    },
+    {
+      "id": "newline",
+      "hex": "2f6d61696c2f6e65772f610a6200",
+      "paths": [
+        "2f6d61696c2f6e65772f610a62"
+      ],
+      "valid": true
+    },
+    {
+      "id": "non-utf8",
+      "hex": "2f6d61696c2f6e65772fff00",
+      "paths": [
+        "2f6d61696c2f6e65772fff"
+      ],
+      "valid": true
+    },
+    {
+      "id": "leading-dash-and-empty-preservation",
+      "hex": "2d6d657373616765007365636f6e6400",
+      "paths": [
+        "2d6d657373616765",
+        "7365636f6e64"
+      ],
+      "valid": true
+    },
+    {
+      "id": "empty-path",
+      "hex": "00",
+      "paths": [],
+      "valid": false
+    },
+    {
+      "id": "interior-empty",
+      "hex": "610000",
+      "paths": [],
+      "valid": false
+    },
+    {
+      "id": "unterminated",
+      "hex": "61",
+      "paths": [],
+      "valid": false
+    }
+  ],
+  "decisions": [
+    {
+      "id": "raw-bytes-and-empty-provenance",
+      "hex": "4a46443100303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030300031002f6d61696c2f6e65772f61200aff006275696c74696e3a756e736f72746564006d6f766500756e736f72746564002f6d61696c2f756e736f7274656400756e736f7274656400636c61737369666965640000300000",
+      "generation": "0000000000000000000000000000000000000000000000000000000000000000",
+      "records": [
+        [
+          "31",
+          "2f6d61696c2f6e65772f61200aff",
+          "6275696c74696e3a756e736f72746564",
+          "6d6f7665",
+          "756e736f72746564",
+          "2f6d61696c2f756e736f72746564",
+          "756e736f72746564",
+          "636c6173736966696564",
+          "",
+          "30",
+          ""
+        ]
+      ],
+      "valid": true
+    },
+    {
+      "id": "header-only-empty-batch",
+      "hex": "4a464431003030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303000",
+      "generation": "0000000000000000000000000000000000000000000000000000000000000000",
+      "records": [],
+      "valid": true
+    },
+    {
+      "id": "truncated-record",
+      "hex": "4a46443100303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030300031002f6d61696c2f6e65772f61200aff006275696c74696e3a756e736f72746564006d6f766500756e736f72746564002f6d61696c2f756e736f7274656400756e736f7274656400636c617373696669656400003000",
+      "valid": false
+    },
+    {
+      "id": "bad-magic",
+      "hex": "4a464430003030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303000",
+      "valid": false
+    },
+    {
+      "id": "unknown-generation-shape",
+      "hex": "4a4644310062616400",
+      "valid": false
+    }
+  ],
+  "invocations": [
+    {
+      "id": "empty-root",
+      "argv": [
+        "jaro-filter-compile",
+        "--root",
+        ""
+      ],
+      "expected_exit": 2
+    },
+    {
+      "id": "missing-root-value",
+      "argv": [
+        "jaro-filter-compile",
+        "--root"
+      ],
+      "expected_exit": 2
+    },
+    {
+      "id": "duplicate-root",
+      "argv": [
+        "jaro-filter-compile",
+        "--root",
+        "/a",
+        "--root",
+        "/b"
+      ],
+      "expected_exit": 2
+    },
+    {
+      "id": "empty-path-argument",
+      "argv": [
+        "jaro-filter",
+        "--root",
+        "/mail",
+        "--",
+        ""
+      ],
+      "expected_exit": 2
+    },
+    {
+      "id": "mixed-selection",
+      "argv": [
+        "jaro-filter",
+        "--root",
+        "/mail",
+        "--maildir",
+        "/mail/incoming",
+        "--files0-from",
+        "-"
+      ],
+      "expected_exit": 2
+    },
+    {
+      "id": "leading-dash-path",
+      "argv": [
+        "jaro-filter",
+        "--root",
+        "/mail",
+        "--",
+        "-message"
+      ],
+      "expected_exit": 0,
+      "note": "Assumes valid selected generation and message; invocation grammar only"
+    },
+    {
+      "id": "invalid-rule-action",
+      "rules": [
+        "from x@example.org delete folder"
+      ],
+      "expected_exit": 4
+    },
+    {
+      "id": "unqualified-regex-export",
+      "profile": "core-v1",
+      "rules": [
+        "from ^x@example[.]org$ move folder"
+      ],
+      "expected_exit": 4
+    },
+    {
+      "id": "stale-cache-version",
+      "cache_version": 0,
+      "expected_exit": 5
+    },
+    {
+      "id": "unknown-policy-version",
+      "policy_version": 99,
+      "expected_exit": 5
+    },
+    {
+      "id": "unsupported-import-extension",
+      "script": "require [\"fileinto\",\"include\"]; include \"other\";",
+      "expected_exit": 4
+    },
+    {
+      "id": "missing-native-helper",
+      "engine": "native",
+      "shell_missing_helper": true,
+      "expected_exit": 127
+    }
+  ],
+  "cache_header_examples": [
+    {
+      "id": "v1-header-only",
+      "magic": "JFNCACHE",
+      "cache_version": 1,
+      "policy_version": 1,
+      "compatible_header": true
+    },
+    {
+      "id": "old-version",
+      "magic": "JFNCACHE",
+      "cache_version": 0,
+      "policy_version": 1,
+      "compatible_header": false
+    },
+    {
+      "id": "future-policy",
+      "magic": "JFNCACHE",
+      "cache_version": 1,
+      "policy_version": 2,
+      "compatible_header": false
+    },
+    {
+      "id": "wrong-magic",
+      "magic": "OTHERONE",
+      "cache_version": 1,
+      "policy_version": 1,
+      "compatible_header": false
+    }
+  ],
+  "fingerprint_vectors": [
+  {
+    "id": "chosen-whole-mailbox",
+    "records_hex": [
+      "440500000013000000636f6e6669672e616464726573732d63617365000000000100000031200000008e671bfd5c2ee1f454542e00baf35f52b8e41a2e5975c9c3c0bc5c21f33647d41800000061736369692d6d61696c626f782d636173656d61702d7631",
+      "440500000017000000636f6e6669672e73696576652d636f6d70617261746f7200000000010000003120000000d4bb89e1467cde710a981a4ad9160e7aac87ad54177fb96abff8d063d6a6d1430f000000693b61736369692d636173656d6170"
+    ],
+    "sha256": "d3c4245db78585ddc129732c5edecbbb5909d373c87101e8886ebb5ce29e9d08",
+    "meaning": "Framing/hash vector only, not a complete valid generation"
+  },
+  {
+    "id": "different-case-policy",
+    "records_hex": [
+      "440500000013000000636f6e6669672e616464726573732d63617365000000000100000031200000008682c645cbe23345f5a70969c70710e32ea092391836dc07d60fd0a804f622a3160000006c6f63616c706172742d73656e7369746976652d7630",
+      "440500000017000000636f6e6669672e73696576652d636f6d70617261746f7200000000010000003120000000d4bb89e1467cde710a981a4ad9160e7aac87ad54177fb96abff8d063d6a6d1430f000000693b61736369692d636173656d6170"
+    ],
+    "sha256": "a9b453835d3b34a1e478dd46cc2374e0d4009698bf8b03b40a3b495cec3eb328",
+    "meaning": "Framing/hash vector only, not a complete valid generation"
+  }
+],
+  "cache_contract": {
+    "cache_version": 1,
+    "policy_version": 1,
+    "address_case": "ascii-mailbox-casemap-v1",
+    "sieve_address_comparator": "i;ascii-casemap",
+    "regex_dialect": "posix-ere-c-icase-v1",
+    "metadata_field_count": 7
+  },
+  "import_examples": [
+    {
+      "id": "generated-exact-case-v1",
+      "mode": "v1",
+      "profile": "core-v1",
+      "script": "require [\"fileinto\",\"mailbox\"];\nif true {}\nif true { if header :contains :comparator \"i;ascii-casemap\" \"Sender\" \"mailman-bounce\" { fileinto :create \"zz.bounces\"; stop; } }\nif true { if address :all :is :comparator \"i;ascii-casemap\" [\"From\",\"Sender\"] \"EXACT@EXAMPLE.ORG\" { fileinto :create \"exact\"; stop; } }\nif true {}\nif true {}\nif true { if header :is :comparator \"i;ascii-casemap\" \"X-Spam-Flag\" \"YES\" { fileinto :create \"Spam\"; stop; } }\nif true {}\nfileinto :create \"unsorted\";\n",
+      "expected_exit": 0,
+      "expected_rules": ["from-address exact@example.org move exact"]
+    },
+    {
+      "id": "cross-address-condition-not-supported",
+      "mode": "v1",
+      "script": "if allof (address :localpart :is :comparator \"i;octet\" \"From\" \"Exact\", address :domain :is \"From\" \"example.org\") { fileinto \"exact\"; stop; }",
+      "expected_exit": 4
+    },
+    {
+      "id": "generated-domain-v1",
+      "mode": "v1",
+      "script": "require [\"fileinto\",\"mailbox\"];\nif true {}\nif true { if header :contains :comparator \"i;ascii-casemap\" \"Sender\" \"mailman-bounce\" { fileinto :create \"zz.bounces\"; stop; } }\nif true { if address :domain :is :comparator \"i;ascii-casemap\" [\"From\",\"Sender\"] \"vendor.example\" { fileinto :create \"vendors\"; stop; } }\nif true {}\nif true {}\nif true { if header :is :comparator \"i;ascii-casemap\" \"X-Spam-Flag\" \"YES\" { fileinto :create \"Spam\"; stop; } }\nif true {}\nfileinto :create \"unsorted\";\n",
+      "expected_exit": 0,
+      "expected_rules": [
+        "from-domain vendor.example move vendors"
+      ]
+    },
+    {
+      "id": "legacy-requires-explicit-recovery",
+      "mode": "v1",
+      "script": "if header :contains [\"To\",\"Cc\"] \"team@example.org\" { fileinto :create \"team\"; stop; }",
+      "expected_exit": 4
+    },
+    {
+      "id": "legacy-recovery",
+      "mode": "legacy-generated",
+      "profile": "pigeonhole-2.4.5-posix-ere-v1",
+      "precondition": "The recovered ERE is independently qualified by the selected installed profile; grammar recovery alone does not grant export support",
+      "script": "require [\"fileinto\",\"mailbox\",\"variables\"];\nif header :contains [\"To\",\"Cc\"] \"team@example.org\" { fileinto :create \"team\"; stop; }\nfileinto :create \"unsorted\";",
+      "expected_exit": 0,
+      "expected_rules": [
+        "to team@example.org move team"
+      ],
+      "migration_diagnostic": true
+    },
+    {
+      "id": "redirect-not-supported",
+      "mode": "v1",
+      "script": "redirect \"elsewhere@example.net\";",
+      "expected_exit": 4
+    },
+    {
+      "id": "truncated-block",
+      "mode": "v1",
+      "script": "if true { if address :all :is \"From\" \"x@example.org\" {",
+      "expected_exit": 4
+    }
+  ]
+}
