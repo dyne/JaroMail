@@ -1,0 +1,49 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+repo_root="${0:A:h:h:h}"
+python3 "$repo_root/vendor/verify.py"
+python3 - "$repo_root/vendor" <<'PY'
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+source = Path(sys.argv[1])
+manifest = json.loads((source / 'sources.json').read_text())
+expected = {
+    'AUTHORS', 'COPYING', 'COPYING.LGPL',
+    'src/sieve-tools/sievec.c', 'src/sieve-tools/sieve-test.c',
+    'src/lib-sieve-tool/sieve-tool.c', 'src/lib-sieve-tool/sieve-tool.h',
+    'src/lib-sieve/util/mail-raw.h',
+}
+assert {entry['path'] for entry in manifest['files']} == expected
+with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
+    fixture = Path(temp) / 'vendor'
+    shutil.copytree(source, fixture)
+    def rejects(reason):
+        result = subprocess.run([sys.executable, str(fixture / 'verify.py')],
+                                capture_output=True, text=True)
+        assert result.returncode != 0 and reason in result.stderr, result
+
+    target = fixture / 'pigeonhole/upstream/src/sieve-tools/sievec.c'
+    original = target.read_bytes()
+    target.write_bytes(original + b'\n/* changed fixture */\n')
+    rejects('upstream source differs')
+    target.unlink()
+    rejects('extra or missing')
+    target.write_bytes(original)
+    extra = fixture / 'full-release.tar.gz'
+    extra.write_bytes(b'archive fixture')
+    rejects('extra or missing')
+    extra.unlink()
+    extra = fixture / 'pigeonhole/upstream/extra.c'
+    extra.write_text('/* unneeded source */\n')
+    rejects('extra or missing')
+    extra.unlink()
+    target.unlink()
+    target.symlink_to(source / 'pigeonhole/upstream/src/sieve-tools/sievec.c')
+    rejects('unexpected symlink')
+print('PASS: minimal scope and modified/missing/extra/symlink rejection')
+PY

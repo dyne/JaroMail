@@ -129,12 +129,18 @@ runtime tools produce exit 77 in individual scripts. `make test-strict` requires
 every script to run without skips and is the CI entry point. Module tests use
 local fixtures and never send or fetch real mail.
 
+Only the minimal Pigeonhole `sievec`/`sieve-test` frontend sources, shared helper,
+and required notices are included under [`vendor/`](vendor/README.md). The test
+suite verifies their pinned digests and rejects extra vendor payload. Building
+the validators requires matching external Dovecot/Pigeonhole development
+libraries and remains separate from Jaromail's default build.
+
 `extras/test/run-source.sh` validates the checked-out tree by executing
 `src/jaro` against a temporary local install layout. `inittest.sh`
 validates the installed command (`/usr/local/bin/jaro`).
 
 Developer test dependencies (also listed in `.github/workflows/pr-tests.yml`) include:
-`zsh`, `make`, `gcc`, `fetchmail`, `msmtp`, `mutt` or `neomutt`,
+`zsh`, `make`, `gcc`, `python3`, `fetchmail`, `msmtp`, `mutt` or `neomutt`,
 `notmuch`, `pinentry-curses`, `abook`, `wipe`, and `mblaze` (for `maddr`).
 
 Legacy/optional surfaces are documented in:
