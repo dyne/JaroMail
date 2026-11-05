@@ -1,0 +1,13 @@
+Return-Path: <list@example.org>
+Received: from list.example.org (list.example.org [192.0.2.10])
+	by mx.example.net with ESMTPS id fixture-only; Thu, 5 Nov 2026 12:00:00 +0000
+From: =?UTF-8?Q?Example_Discussion?= <list@example.org>
+Sender: list@example.org (mailman-bounce)
+To: "Example Readers": first@example.net,
+	second@example.net;
+Message-ID: <sanitized-list@fixtures.example>
+Subject: Sanitized synthetic list notification
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+
+This synthetic body mentions blocked@example.org and must not create a match.

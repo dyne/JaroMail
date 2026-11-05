@@ -27,6 +27,19 @@
     {"id":"mailbox-cross-fields", "script":"mailbox.sieve", "headers":[["To","person@elsewhere.net"],["Cc","someone@example.net"]], "mailbox":"unsorted"},
     {"id":"mailbox-display-name", "script":"mailbox.sieve", "headers":[["To","\"person@example.net\" <someone@elsewhere.net>"]], "mailbox":"unsorted"},
     {"id":"mailbox-suffix-boundary", "script":"mailbox.sieve", "headers":[["To","person@example.net.attacker.org"]], "mailbox":"unsorted"},
-    {"id":"create-mailbox-simulation", "script":"create.sieve", "headers":[["From","sender@example.org"]], "mailbox":"created mailbox", "create":true}
+    {"id":"create-mailbox-simulation", "script":"create.sieve", "headers":[["From","sender@example.org"]], "mailbox":"created mailbox", "create":true},
+    {"id":"spam-leading-space", "script":"spam.sieve", "headers":[["X-Spam-Flag"," YES"]], "mailbox":"Spam"},
+    {"id":"spam-trailing-space", "script":"spam.sieve", "headers":[["X-Spam-Flag","YES "]], "mailbox":"Spam"},
+    {"id":"spam-leading-tab", "script":"spam.sieve", "headers":[["X-Spam-Flag","\tYES"]], "mailbox":"Spam"},
+    {"id":"spam-trailing-tab", "script":"spam.sieve", "headers":[["X-Spam-Flag","YES\t"]], "mailbox":"Spam"},
+    {"id":"spam-whitespace-mixed-case", "script":"spam.sieve", "headers":[["X-Spam-Flag"," \t yEs \t "]], "mailbox":"Spam"},
+    {"id":"spam-whitespace-only", "script":"spam.sieve", "headers":[["X-Spam-Flag"," \t "]], "mailbox":"unsorted"},
+    {"id":"spam-internal-space", "script":"spam.sieve", "headers":[["X-Spam-Flag"," Y ES "]], "mailbox":"unsorted"},
+    {"id":"spam-internal-tab", "script":"spam.sieve", "headers":[["X-Spam-Flag"," YE\tS "]], "mailbox":"unsorted"},
+    {"id":"spam-extra-text", "script":"spam.sieve", "headers":[["X-Spam-Flag"," YES extra "]], "mailbox":"unsorted"},
+    {"id":"spam-duplicate-fields", "script":"spam.sieve", "headers":[["X-Spam-Flag","NO"],["X-Spam-Flag"," \tYeS\t "]], "mailbox":"Spam"},
+    {"id":"quoted-local-space", "script":"quoted.sieve", "headers":[["From","\"a b\"@example.org"]], "mailbox":"quoted"},
+    {"id":"quoted-local-escaped-quote", "script":"quoted.sieve", "headers":[["From","\"a\\\"b\"@example.org"]], "mailbox":"quoted"},
+    {"id":"quoted-display-is-not-mailbox", "script":"quoted.sieve", "headers":[["From","\"a b@example.org\" <stranger@elsewhere.net>"]], "mailbox":"unsorted"}
   ]
 }

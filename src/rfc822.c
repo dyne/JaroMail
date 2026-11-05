@@ -109,7 +109,6 @@ parse_comment (const char *s,
   }
   if (level)
   {
-    RFC822Error = ERR_MISMATCH_PAREN;
     return NULL;
   }
   return s;
@@ -130,20 +129,30 @@ parse_quote (const char *s, char *token, size_t *tokenlen, size_t tokenmax)
     {
       if (!*++s)
 	break;
+      if (*tokenlen < tokenmax)
+	token[(*tokenlen)++] = *s;
     }
     s++;
   }
-  RFC822Error = ERR_MISMATCH_QUOTE;
   return NULL;
 }
 
 static const char *
 next_token (const char *s, char *token, size_t *tokenlen, size_t tokenmax)
 {
+  if (!*s) return s;
   if (*s == '(')
-    return (parse_comment (s + 1, token, tokenlen, tokenmax));
+  {
+    const char *next = parse_comment (s + 1, token, tokenlen, tokenmax);
+    if (!next) RFC822Error = ERR_MISMATCH_PAREN;
+    return next;
+  }
   if (*s == '"')
-    return (parse_quote (s + 1, token, tokenlen, tokenmax));
+  {
+    const char *next = parse_quote (s + 1, token, tokenlen, tokenmax);
+    if (!next) RFC822Error = ERR_MISMATCH_QUOTE;
+    return next;
+  }
   if (is_special (*s))
   {
     if (*tokenlen < tokenmax)
@@ -152,7 +161,7 @@ next_token (const char *s, char *token, size_t *tokenlen, size_t tokenmax)
   }
   while (*s)
   {
-    if (isspace (*s) || is_special (*s))
+    if (isspace ((unsigned char)*s) || is_special (*s))
       break;
     if (*tokenlen < tokenmax)
       token[(*tokenlen)++] = *s;
@@ -171,6 +180,7 @@ parse_mailboxdomain (const char *s, const char *nonspecial,
   while (*s)
   {
     SKIPWS (s);
+    if (!*s) break;
     if (strchr (nonspecial, *s) == NULL && is_special (*s))
       return s;
 
@@ -294,7 +304,10 @@ add_addrspec (ADDRESS **top, ADDRESS **last, const char *phrase,
   ADDRESS *cur = rfc822_new_address ();
   
   if (parse_addr_spec (phrase, comment, commentlen, commentmax, cur) == NULL)
+  {
+    rfc822_free_address (&cur);
     return;
+  }
 
   if (*last)
     (*last)->next = cur;
@@ -384,7 +397,7 @@ ADDRESS *rfc822_parse_adrlist (ADDRESS *top, const char *s)
 	phrase[phraselen] = 0;
 	add_addrspec (&top, &last, phrase, comment, &commentlen, sizeof (comment) - 1);
       }
-      else if (commentlen && !last->personal)
+      else if (commentlen && last && !last->personal)
       {
 	comment[commentlen] = 0;
 	last->personal = safe_strdup (comment);
@@ -395,6 +408,11 @@ ADDRESS *rfc822_parse_adrlist (ADDRESS *top, const char *s)
 #endif
 
       /* add group terminator */
+      if (!last)
+      {
+        RFC822Error = ERR_BAD_ADDR_SPEC;
+        return NULL;
+      }
       cur = rfc822_new_address ();
       if (last)
       {
@@ -465,9 +483,204 @@ ADDRESS *rfc822_parse_adrlist (ADDRESS *top, const char *s)
 #ifdef EXACT_ADDRESS
   if (last)
     last->val = mutt_substrdup (begin, s);
+#else
+  (void)begin;
 #endif
 
   return top;
+}
+
+/* The legacy list parser above has fixed STRING-sized buffers and fatal helper
+ * allocation conventions. Keep its public behavior separate from this bounded
+ * extraction entry point, which reuses its quote/comment lexing without their
+ * legacy global-error wrapper. Filter callers supply their own owned scratch.
+ */
+static const char *bounded_cfws(const char *s, char *scratch)
+{
+  size_t ignored = 0;
+  for (;;)
+  {
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s != '(') return s;
+    s = parse_comment(s + 1, scratch, &ignored, 0);
+    if (!s) return NULL;
+  }
+}
+
+static int bounded_atext(unsigned char c)
+{
+  return c >= 128 || (c >= 'a' && c <= 'z') ||
+    (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+    (c && strchr("!#$%&'*+-/=?^_`{|}~", c));
+}
+
+static const char *bounded_boundary(const char *s, char *scratch, size_t capacity)
+{
+  while (*s && !strchr(",;:<>", *s))
+  {
+    if (*s == '(')
+    {
+      s = bounded_cfws(s, scratch);
+      if (!s) return NULL;
+    }
+    else if (*s == '"')
+    {
+      size_t length = 0;
+      s = parse_quote(s + 1, scratch, &length, capacity - 1);
+      if (!s) return NULL;
+    }
+    else s++;
+  }
+  return s;
+}
+
+static int bounded_phrase(const char *s, const char *end, char *scratch, size_t capacity)
+{
+  int tokens = 0;
+  while (s < end)
+  {
+    s = bounded_cfws(s, scratch);
+    if (!s || s > end) return 0;
+    if (s == end) break;
+    if (*s == '"')
+    {
+      size_t length = 0;
+      s = parse_quote(s + 1, scratch, &length, capacity - 1);
+      if (!s || s > end) return 0;
+      tokens++;
+    }
+    else
+    {
+      if (!bounded_atext((unsigned char)*s) && *s != '.') return 0;
+      while (s < end && (bounded_atext((unsigned char)*s) || *s == '.')) s++;
+      tokens++;
+    }
+  }
+  return tokens != 0;
+}
+
+static int bounded_spec(const char *s, const char *end, char *scratch, size_t capacity,
+                        rfc822_mailbox_emit emit, void *context)
+{
+  size_t length = 0;
+  int atom;
+  s = bounded_cfws(s, scratch);
+  if (!s || s >= end) return RFC822_BOUNDED_SYNTAX;
+  if (*s == '"')
+  {
+    s = parse_quote(s + 1, scratch, &length, capacity - 1);
+    if (!s || s > end) return RFC822_BOUNDED_SYNTAX;
+    s = bounded_cfws(s, scratch + length);
+  }
+  else
+  {
+    for (;;)
+    {
+      atom = 0;
+      while (s < end && bounded_atext((unsigned char)*s))
+      {
+        scratch[length++] = *s++; atom = 1;
+      }
+      if (!atom) return RFC822_BOUNDED_SYNTAX;
+      s = bounded_cfws(s, scratch + length);
+      if (!s || s > end) return RFC822_BOUNDED_SYNTAX;
+      if (s == end || *s != '.') break;
+      scratch[length++] = *s++;
+      s = bounded_cfws(s, scratch + length);
+      if (!s || s >= end) return RFC822_BOUNDED_SYNTAX;
+    }
+  }
+  if (!s || s >= end || *s != '@') return RFC822_BOUNDED_SYNTAX;
+  scratch[length++] = *s++;
+  for (;;)
+  {
+    s = bounded_cfws(s, scratch + length);
+    if (!s || s >= end) return RFC822_BOUNDED_SYNTAX;
+    atom = 0;
+    while (s < end && ((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') ||
+           (*s >= '0' && *s <= '9') || *s == '-'))
+    {
+      scratch[length++] = *s++; atom = 1;
+    }
+    if (!atom) return RFC822_BOUNDED_SYNTAX;
+    s = bounded_cfws(s, scratch + length);
+    if (!s || s > end) return RFC822_BOUNDED_SYNTAX;
+    if (s == end || *s != '.') break;
+    scratch[length++] = *s++;
+  }
+  if (s != end) return RFC822_BOUNDED_SYNTAX;
+  scratch[length] = 0;
+  return emit(context, scratch, length) ? RFC822_BOUNDED_EMIT : 0;
+}
+
+static int bounded_mailbox(const char **cursor, char *scratch, size_t capacity,
+                           rfc822_mailbox_emit emit, void *context)
+{
+  const char *s = *cursor, *end = bounded_boundary(s, scratch, capacity);
+  int rc;
+  if (!end || *end == ':' || *end == '>') return RFC822_BOUNDED_SYNTAX;
+  if (*end == '<')
+  {
+    const char *start = bounded_cfws(s, scratch);
+    if (!start || (start != end && !bounded_phrase(start, end, scratch, capacity)))
+      return RFC822_BOUNDED_SYNTAX;
+    s = end + 1;
+    end = bounded_boundary(s, scratch, capacity);
+    if (!end || *end != '>') return RFC822_BOUNDED_SYNTAX;
+    rc = bounded_spec(s, end, scratch, capacity, emit, context);
+    if (rc) return rc;
+    end = bounded_cfws(end + 1, scratch);
+    if (!end || (*end && *end != ',' && *end != ';')) return RFC822_BOUNDED_SYNTAX;
+  }
+  else
+  {
+    rc = bounded_spec(s, end, scratch, capacity, emit, context);
+    if (rc) return rc;
+  }
+  *cursor = end;
+  return 0;
+}
+
+int rfc822_parse_mailboxes(const char *input, size_t length, char *scratch, size_t capacity,
+                          rfc822_mailbox_emit emit, void *context)
+{
+  const char *s = input, *end;
+  int rc;
+  if (!input || !scratch || !emit || length >= capacity) return RFC822_BOUNDED_LIMIT;
+  if (input[length] || memchr(input, 0, length)) return RFC822_BOUNDED_SYNTAX;
+  s = bounded_cfws(s, scratch);
+  if (!s || !*s) return RFC822_BOUNDED_SYNTAX;
+  for (;;)
+  {
+    end = bounded_boundary(s, scratch, capacity);
+    if (!end) return RFC822_BOUNDED_SYNTAX;
+    if (*end == ':')
+    {
+      if (!bounded_phrase(s, end, scratch, capacity)) return RFC822_BOUNDED_SYNTAX;
+      s = bounded_cfws(end + 1, scratch);
+      if (!s) return RFC822_BOUNDED_SYNTAX;
+      if (*s != ';') for (;;)
+      {
+        rc = bounded_mailbox(&s, scratch, capacity, emit, context);
+        if (rc) return rc;
+        if (*s == ';') break;
+        if (*s != ',') return RFC822_BOUNDED_SYNTAX;
+        s = bounded_cfws(s + 1, scratch);
+        if (!s || !*s || *s == ';') return RFC822_BOUNDED_SYNTAX;
+      }
+      s = bounded_cfws(s + 1, scratch);
+      if (!s) return RFC822_BOUNDED_SYNTAX;
+    }
+    else
+    {
+      rc = bounded_mailbox(&s, scratch, capacity, emit, context);
+      if (rc) return rc;
+    }
+    if (!*s) return 0;
+    if (*s != ',') return RFC822_BOUNDED_SYNTAX;
+    s = bounded_cfws(s + 1, scratch);
+    if (!s || !*s) return RFC822_BOUNDED_SYNTAX;
+  }
 }
 
 void rfc822_qualify (ADDRESS *addr, const char *host)

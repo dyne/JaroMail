@@ -4,7 +4,7 @@ JARO_SHARE := ${PREFIX}/share/jaromail
 MAN1DIR := ${PREFIX}/share/man/man1
 srcdir := $(shell pwd)
 
-.PHONY: all man install clean test test-strict sieve-tools
+.PHONY: all man install clean test test-strict sieve-tools filter-core
 
 all:
 	CC="$(CC)" ./build/auto build
@@ -12,6 +12,10 @@ all:
 # Independent test oracles; never part of the application build or installation.
 sieve-tools:
 	CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" LDLIBS="$(LDLIBS)" python3 build/sieve-tools.py
+
+# Shared native objects only; Zsh remains the active filter engine.
+filter-core:
+	$(MAKE) -f build/filter-core.mk filter-core
 
 test: all
 	zsh extras/test/run-tests.sh
@@ -61,4 +65,5 @@ clean:
 	rm -f src/parsedate
 	rm -f src/dotlock
 	rm -f build/gnu/fetchaddr build/gnu/parsedate build/gnu/dotlock build/gnu/gpgewrap
+	rm -f build/gnu/filter/*.o build/gnu/filter/*.d build/gnu/filter/filter-policy-driver
 
