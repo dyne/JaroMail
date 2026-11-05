@@ -1,0 +1,13 @@
+dovecot_config_version = 2.4.5
+dovecot_storage_version = 2.4.5
+base_dir = @RUN@
+state_dir = @STATE@
+log_path = /dev/stderr
+info_log_path = /dev/stderr
+mail_driver = maildir
+mail_path = @MAIL@
+mail_home = @HOME@
+namespace inbox {
+  inbox = yes
+  separator = /
+}

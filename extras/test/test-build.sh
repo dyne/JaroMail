@@ -2,8 +2,18 @@
 source "${0:A:h}/lib/module_helpers.zsh"
 checkout="$tmp_root/checkout with spaces"
 mkdir -p "$checkout"
-cp -R "$repo_root/src" "$repo_root/build" "$repo_root/doc" "$repo_root/Makefile" "$checkout/"
+cp -R "$repo_root/src" "$repo_root/doc" "$repo_root/Makefile" "$checkout/"
+mkdir -p "$checkout/build"
+cp "$repo_root/build/"*(.N) "$checkout/build/"
 cd "$checkout"
+# Application build/install must work with no Sieve prefix or usable system tools.
+unset SIEVE_DEPS_PREFIX SIEVE_TOOLS_OUTPUT
+mkdir -p "$tmp_root/no-sieve-tools"
+for tool in sievec sieve-test doveconf dovecot; do
+  printf '%s\n' '#!/bin/sh' 'echo unexpected-Sieve-runtime >&2' 'exit 90' > "$tmp_root/no-sieve-tools/$tool"
+  chmod +x "$tmp_root/no-sieve-tools/$tool"
+done
+export PATH="$tmp_root/no-sieve-tools:$PATH"
 make clean >/dev/null
 export JARO_BUILD_LOG="$tmp_root/compiler.log" JARO_CACHE_LOG="$tmp_root/cache.log"
 export REAL_CC="$(command -v cc)"
@@ -52,6 +62,7 @@ unset COMPILER_MODE
 # A clean staged installation builds helpers and preserves argument boundaries.
 make -j2 install "PREFIX=$prefix" > "$tmp_root/install.log" 2>&1
 [[ -x "$prefix/share/jaromail/bin/dotlock" ]]
+[[ ! -e build/sieve-tools ]]
 cat > "$prefix/share/jaromail/bin/jaro" <<'EOF'
 #!/usr/bin/env zsh
 print -r -- "$#"

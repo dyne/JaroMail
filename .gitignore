@@ -13,6 +13,7 @@ src/mairix/mairix
 src/gnome-keyring/jaro-gnome-keyring
 build/gnu
 build/osx
+build/sieve-tools/
 src/mairix/datescan.c
 src/mairix/datescan.h
 src/mairix/dfasyn/dfasyn
@@ -67,3 +68,4 @@ src/pgpewrap
 src/parsedate
 gnupg-mass-recv.cache
 *.sieve
+!extras/test/fixtures/sieve-oracle/*.sieve

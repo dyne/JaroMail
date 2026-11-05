@@ -4,10 +4,14 @@ JARO_SHARE := ${PREFIX}/share/jaromail
 MAN1DIR := ${PREFIX}/share/man/man1
 srcdir := $(shell pwd)
 
-.PHONY: all man install clean test test-strict
+.PHONY: all man install clean test test-strict sieve-tools
 
 all:
 	CC="$(CC)" ./build/auto build
+
+# Independent test oracles; never part of the application build or installation.
+sieve-tools:
+	CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" LDLIBS="$(LDLIBS)" python3 build/sieve-tools.py
 
 test: all
 	zsh extras/test/run-tests.sh

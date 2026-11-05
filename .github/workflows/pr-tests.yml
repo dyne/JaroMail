@@ -9,6 +9,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CCACHE_DIR: ${{ runner.temp }}/jaromail-ccache
+      SIEVE_TOOLS_OUTPUT: ${{ runner.temp }}/jaromail-sieve-tools
 
     steps:
       - name: Checkout
@@ -18,9 +21,44 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            zsh make gcc python3 \
+            zsh make gcc python3 perl pkg-config ccache libssl-dev zlib1g-dev binutils \
             fetchmail msmtp neomutt notmuch pinentry-curses \
             abook wipe mblaze gnupg pandoc ca-certificates netcat-traditional
+
+      - name: Identify Sieve build prerequisites
+        id: sieve-cache
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import hashlib
+          from pathlib import Path
+          import subprocess
+          identity = Path('/etc/os-release').read_bytes()
+          for command in (['cc', '--version'], ['make', '--version'],
+                          ['pkg-config', '--modversion', 'openssl', 'zlib']):
+              identity += subprocess.check_output(command)
+          print('identity=' + hashlib.sha256(identity).hexdigest())
+          PY
+
+      - name: Restore private Sieve development cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/jaromail-sieve-deps
+            ${{ runner.temp }}/jaromail-sieve-sources
+            ${{ runner.temp }}/jaromail-ccache
+          key: ${{ runner.os }}-sieve-2.4.5-${{ hashFiles('build/sieve-deps.py', 'vendor/sources.json') }}-${{ steps.sieve-cache.outputs.identity }}
+          restore-keys: ${{ runner.os }}-sieve-2.4.5-
+
+      # Cache hits still verify release signatures, configuration and installed bytes.
+      - name: Provision matched private Sieve development dependencies
+        run: |
+          sieve_prefix="$(python3 build/sieve-deps.py \
+            --source-cache "$RUNNER_TEMP/jaromail-sieve-sources" \
+            --cache-dir "$RUNNER_TEMP/jaromail-sieve-deps" --download)"
+          printf 'SIEVE_DEPS_PREFIX=%s\n' "$sieve_prefix" >> "$GITHUB_ENV"
+
+      - name: Compile extracted Sieve validation frontends
+        run: make sieve-tools
 
       - name: Build and run all regression tests
         run: make test-strict
