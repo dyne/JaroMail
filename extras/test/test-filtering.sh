@@ -17,7 +17,7 @@ for req in pinentry fetchmail gpg msmtp notmuch abook mdeliver maddr mpick; do
 done
 if (( ${#missing_cmds[@]} > 0 )); then
   print -- "SKIP test-filtering.sh: missing runtime commands: ${missing_cmds[*]}"
-  exit 0
+  exit 77
 fi
 
 jaro_source init

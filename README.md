@@ -113,7 +113,7 @@ Developer build/test commands:
 
 ```
 make
-extras/test/run-source.sh
+make test
 sudo make install
 ./extras/test/inittest.sh
 ```
@@ -123,11 +123,17 @@ It uses `ccache` for compilation when available; set `CCACHE=` to disable it.
 `make install` builds the helpers first. Set `PREFIX` for a private installation
 or `DESTDIR` to stage a package while keeping its final runtime paths.
 
+`make test` runs the source smoke test and every `extras/test/test-*.sh`
+regression, reporting passed, failed, and skipped scripts. Missing optional
+runtime tools produce exit 77 in individual scripts. `make test-strict` requires
+every script to run without skips and is the CI entry point. Module tests use
+local fixtures and never send or fetch real mail.
+
 `extras/test/run-source.sh` validates the checked-out tree by executing
 `src/jaro` against a temporary local install layout. `inittest.sh`
 validates the installed command (`/usr/local/bin/jaro`).
 
-Developer test dependencies (from this README and `.travis.yml`) include:
+Developer test dependencies (also listed in `.github/workflows/pr-tests.yml`) include:
 `zsh`, `make`, `gcc`, `fetchmail`, `msmtp`, `mutt` or `neomutt`,
 `notmuch`, `pinentry-curses`, `abook`, `wipe`, and `mblaze` (for `maddr`).
 

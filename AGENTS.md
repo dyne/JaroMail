@@ -8,6 +8,8 @@ Jaromail is a terminal mail workflow built mostly from Zsh scripts plus small C 
 
 - `make`: runs `./build/auto build` and builds the default platform artifacts.
 - `make clean`: removes generated helper binaries and object files from `src/`.
+- `make test`: runs all source and focused regression tests, reporting missing dependencies as skips.
+- `make test-strict`: runs the same suite and fails if any script is skipped; used by CI.
 - `sudo make install`: installs Jaromail under `/usr/local/share/jaromail` and creates `/usr/local/bin/jaro`.
 - `extras/test/run-source.sh`: smoke test for the checked-out code; runs `src/jaro` with a local staged install in a temp path.
 - `extras/test/test-account-wizard.sh`: validates the interactive `wizard` account flow using scripted stdin.
@@ -20,7 +22,7 @@ Prefer minimal, readable changes. Keep Zsh functions lowercase, shell modules gr
 
 ## Testing Guidelines
 
-There is no broad unit-test suite. Use `extras/test/run-source.sh` for checkout-level validation, `extras/test/test-account-wizard.sh` for account onboarding behavior, and `extras/test/inittest.sh` for installed-path validation. The tests depend on external mail tools (`fetchmail`, `msmtp`, `mutt`/`neomutt`, `notmuch`, `pinentry-curses`, `abook`, `wipe`, `mblaze`/`maddr`) plus build tools from `.travis.yml`. For narrow C helper changes, rebuild with `make` and add a focused command-line check where practical.
+Use `make test` for checkout-level validation and `make test-strict` for a complete dependency-equipped run. The runner discovers `extras/test/test-*.sh` automatically; module fixtures require no live mail service. Integration tests depend on external mail tools (`fetchmail`, `msmtp`, `mutt`/`neomutt`, `notmuch`, `pinentry-curses`, `abook`, `wipe`, `mblaze`/`maddr`) plus build tools from `.github/workflows/pr-tests.yml`. Missing prerequisites use exit 77; assertion failures must fail the test. Use `extras/test/inittest.sh` separately for installed-path validation. For narrow C helper changes, rebuild with `make` and add a focused command-line check where practical.
 
 ## Architecture Notes
 

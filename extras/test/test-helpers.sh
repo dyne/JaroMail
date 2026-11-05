@@ -35,16 +35,21 @@ assert_contains "${fetch_out}" "alice@example.org,Alice Example" "fetchaddr from
 assert_contains "${fetch_out}" "bob@example.org,Bob Example" "fetchaddr to"
 assert_contains "${fetch_out}" "carol@example.org,Carol Example" "fetchaddr cc"
 
-set +e
-parsedate_out="$("${parsedate_bin}" "Thu, 01 Jan 1970 00:00:00 +0000" 2>/dev/null)"
-parsedate_ec=$?
-set -e
-if [[ ${parsedate_ec} -eq 0 && "${parsedate_out}" == <-> ]]; then
-  assert_equal "${parsedate_out}" "0" "parsedate epoch"
-else
-  print -- "SKIP parsedate assertion: parsedate returned '${parsedate_out}' (exit ${parsedate_ec})"
+parsedate_out="$(TZ=UTC0 "${parsedate_bin}" "Thu, 01 Jan 1970 00:00:00 +0000")"
+assert_equal "${parsedate_out}" "0" "parsedate epoch in UTC"
+if "${parsedate_bin}" 'invalid date' >/dev/null 2>&1; then
+  print -u2 -- 'ASSERT FAIL: parsedate accepted an invalid date'; exit 1
 fi
 
 lock_target="${tmp_root}/dotlock-target"
 print -- "lock me" > "${lock_target}"
-print -- "SKIP dotlock assertion: standalone lock-file side effects are not stable in current build target"
+"${dotlock_bin}" -r 0 "${lock_target}"
+[[ -f "${lock_target}.lock" ]]
+if "${dotlock_bin}" -r 0 "${lock_target}"; then
+  print -u2 -- 'ASSERT FAIL: contending dotlock succeeded'; exit 1
+else
+  assert_equal "$?" 3 "dotlock contention status"
+fi
+"${dotlock_bin}" -u "${lock_target}"
+[[ ! -e "${lock_target}.lock" ]]
+print -- 'PASS: native address, date and locking helpers'

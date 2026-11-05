@@ -52,7 +52,11 @@ if grep -q '/stale/tmp' "${mailcap_file}"; then
   exit 1
 fi
 assert_equal "$(grep -c '^application/pdf;' "${mailcap_file}")" "1" "mailcap rebuilt once per launch"
-assert_contains "$(cat "${mailcap_file}")" 'w=$(/usr/bin/wslpath -w "$p") && msedge.exe "$w"' "Windows handler converts staged attachment path"
+if [[ -x /usr/bin/wslpath ]]; then
+  assert_contains "$(cat "${mailcap_file}")" 'w=$(/usr/bin/wslpath -w "$p") && msedge.exe "$w"' "Windows handler converts staged attachment path"
+else
+  assert_contains "$(cat "${mailcap_file}")" 'msedge.exe "$p"' "handler receives native staged path"
+fi
 assert_contains "$(cat "${mailcap_file}")" 'text/plain; a="${JAROMAILDIR:-' "Unix handler stages attachment"
 
 attachment="${tmp_root}/invoice.pdf"
@@ -64,7 +68,9 @@ mailcap_command="${mailcap_command//\%s/${attachment}}"
 sh -c "${mailcap_command}"
 staged_attachment="${mail_root}/Attachments/invoice.pdf"
 assert_equal "$(cat "${staged_attachment}")" "invoice" "attachment persists after opening"
-assert_equal "$(cat "${EXE_PATH_CAPTURE}")" "$(/usr/bin/wslpath -w "${staged_attachment}")" "Windows handler receives staged path"
+expected_attachment="${staged_attachment}"
+[[ ! -x /usr/bin/wslpath ]] || expected_attachment="$(/usr/bin/wslpath -w "${staged_attachment}")"
+assert_equal "$(cat "${EXE_PATH_CAPTURE}")" "${expected_attachment}" "handler receives staged path"
 
 print -- 'updated invoice' > "${attachment}"
 sh -c "${mailcap_command}"

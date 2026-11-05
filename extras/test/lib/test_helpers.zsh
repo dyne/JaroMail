@@ -8,7 +8,7 @@ export LANG=C
 test_setup() {
   script_path="${1}"
   repo_root="${script_path:A:h:h:h}"
-  tmp_root="${TMPDIR:-/tmp}/jaromail-source-test.$$"
+  tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/jaromail-source-test.XXXXXXXX")"
   mail_root="${tmp_root}/mail"
   prefix_root="${tmp_root}/prefix"
   work_root="${prefix_root}/share/jaromail"
@@ -108,11 +108,9 @@ assert_equal() {
 }
 
 assert_success() {
+  local command_status=$?
   label="${1:-assert_success}"
-  if [[ $? -ne 0 ]]; then
-    print -- "ASSERT FAIL (${label})"
-    return 1
-  fi
+  assert_equal "$command_status" 0 "$label"
 }
 
 assert_contains() {

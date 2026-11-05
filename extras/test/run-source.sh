@@ -21,7 +21,7 @@ for req in pinentry fetchmail gpg msmtp notmuch; do
 done
 if (( ${#missing_cmds[@]} > 0 )); then
   print -- "SKIP run-source.sh: missing runtime commands: ${missing_cmds[*]}"
-  exit 0
+  exit 77
 fi
 
 queue_lorem() {

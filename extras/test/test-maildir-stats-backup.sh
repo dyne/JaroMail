@@ -17,7 +17,7 @@ for req in pinentry fetchmail gpg msmtp notmuch abook; do
 done
 if (( ${#missing_cmds[@]} > 0 )); then
   print -- "SKIP test-maildir-stats-backup.sh: missing runtime commands: ${missing_cmds[*]}"
-  exit 0
+  exit 77
 fi
 
 jaro_source init >/dev/null
@@ -76,5 +76,6 @@ jaro_source backup "${mail_root}/archive" "subject:backup-token" >/dev/null 2>"$
 backup_status=$?
 set -e
 
-assert_equal "${backup_status}" "0" "backup current exit code"
-assert_equal "$(find "${mail_root}/archive" -maxdepth 2 -type f | wc -l | tr -d ' ')" "0" "backup destination unchanged on failure"
+assert_equal "${backup_status}" "0" "backup exit code"
+assert_equal "$(find "${mail_root}/archive" -maxdepth 2 -type f | wc -l | tr -d ' ')" "2" "backup moves matched messages"
+assert_equal "$(find "${mail_root}/known" -maxdepth 2 -type f | wc -l | tr -d ' ')" "0" "backup removes source messages"

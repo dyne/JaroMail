@@ -4,10 +4,16 @@ JARO_SHARE := ${PREFIX}/share/jaromail
 MAN1DIR := ${PREFIX}/share/man/man1
 srcdir := $(shell pwd)
 
-.PHONY: all man install clean
+.PHONY: all man install clean test test-strict
 
 all:
 	CC="$(CC)" ./build/auto build
+
+test: all
+	zsh extras/test/run-tests.sh
+
+test-strict: all
+	JARO_TEST_REQUIRE_ALL=1 zsh extras/test/run-tests.sh
 
 man:
 	@pandoc -s -t man \
