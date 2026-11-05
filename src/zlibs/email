@@ -472,6 +472,7 @@ fetch() {
 # read an email from stdin and send it via msmtp
 smtp_send() {
     fn smtp-send
+    local msmtpcfg smtp_status=1 trust_file
     req=(account)
     ckreq || return 1
 
@@ -491,41 +492,13 @@ smtp_send() {
     host=$smtp
     port=$smtp_port
 
-    # load known fingerprints
-    typeset -A smtp_fingerprints
-    [[ -s $MAILDIRS/smtp_fingerprints.zkv ]] && {
-        zkv.load $MAILDIRS/smtp_fingerprints.zkv }
-    known_fingerprint=${smtp_fingerprints[$smtp:$port]}
-    # get the server's fingerprint
-    print QUIT \
-        | openssl s_client -starttls smtp \
-        -connect $smtp:$smtp_port \
-        -showcerts 2>/dev/null \
-        | openssl x509 -fingerprint -md5 -noout \
-        | awk -F '=' '/Fingerprint/ {print $2}' | sysread fingerprint
-    fingerprint=$(print $fingerprint | trim)
-    # force printing fingerprint to stderr
-    oldquiet=$QUIET
-    QUIET=0
-    act "known  fingerprint: $known_fingerprint"
-    act "server fingerprint: $fingerprint"
-    [[ "$known_fingerprint" = "$fingerprint" ]] || {
-        warning "fingerprint difference detected"
-        # not the same?
-        if [[ "$known_fingerprint" = "" ]]; then
-            # never knew before, save it
-            act "$smtp:$port new fingerprint acknowledged"
-            smtp_fingerprints[$smtp:$port]="$fingerprint"
-        else
-            error "Server fingerprint mismatch!"
-            warning "The known one was different, this may be a man in the middle!"
-            warning "To override and forget the old one, edit $MAILDIRS/smtp_fingerprints.zkv"
-            return 1
-        fi
+    # Let msmtp verify the certificate and hostname on the sending connection.
+    # A separate probe cannot authenticate the connection carrying credentials.
+    trust_file="${certfile:-system}"
+    [[ "$trust_file" == system || -r "$trust_file" ]] || {
+        error "Cannot read SMTP CA file: $trust_file"
+        return 1
     }
-    QUIET=$oldquiet
-
-    zkv.save smtp_fingerprints $MAILDIRS/smtp_fingerprints.zkv
 
     [[ "$password" = "" ]] && {
         ask_password
@@ -535,9 +508,11 @@ smtp_send() {
             return 1 }
     }
 
-    ztmp
+    ztmp || return 1
     msmtpcfg=$ztmpfile
-    sysread -o 1 <<EOF > $msmtpcfg
+    [[ -n "$msmtpcfg" && -f "$msmtpcfg" ]] || return 1
+    {
+    if cat <<EOF > "$msmtpcfg"
 account default
 from ${email}
 user ${login}
@@ -545,17 +520,22 @@ host ${smtp}
 port ${smtp_port}
 tls on
 tls_starttls on
-tls_certcheck off
+tls_certcheck on
+tls_trust_file "${trust_file}"
 auth ${auth}
 password ${password}
 EOF
-#	logfile "${MAILDIRS}/logs/msmtp.log"
-
-    [[ "$smtp_keep_password" = 1 ]] || unset password
-    msmtp -C $msmtpcfg -t
-    res=$?
-    func "msmtp returns: $res"
-    return $res
+    then
+        [[ "${smtp_keep_password:-0}" = 1 ]] || unset password
+        msmtp -C "$msmtpcfg" -t
+        smtp_status=$?
+    fi
+    } always {
+        [[ "${smtp_keep_password:-0}" = 1 ]] || unset password
+        command rm -f -- "$msmtpcfg" || smtp_status=1
+    }
+    func "msmtp returns: $smtp_status"
+    return $smtp_status
 }
 
 

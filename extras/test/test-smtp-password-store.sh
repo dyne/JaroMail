@@ -184,6 +184,8 @@ EOF
 
 assert_equal "$(<"${pass_store}/email/person@example.org.gpg")" "smtp-secret" "smtp password saved in pass"
 assert_contains "$(<"${state_dir}/msmtp.conf")" "password smtp-secret" "msmtp uses stored password"
+assert_contains "$(<"${state_dir}/msmtp.conf")" "tls_certcheck on" "msmtp verifies sending connection"
+assert_contains "$(<"${state_dir}/msmtp.conf")" 'tls_trust_file "system"' "msmtp uses system CAs"
 
 cat > "${test_bin}/pass" <<'EOF'
 #!/usr/bin/env zsh

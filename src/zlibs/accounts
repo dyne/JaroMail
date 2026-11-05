@@ -262,7 +262,7 @@ EOF
 read_account() {
     typeset -al all
     unset name email imap imap_port smtp smtp_port proto \
-        host login transport auth cert options folders exclude
+        host login transport auth cert certfile options folders exclude
     # parse arguments
 
     [[ "$account" = "" ]] && account="default"
@@ -297,7 +297,7 @@ read_account() {
     /^imap_port/ { printf "imap_port=\"%s\";", $2 }
     /^smtp_port/ { printf "smtp_port=\"%s\";", $2 }
     /^auth/ { printf "auth=\"%s\";", $2 }
-    /^cert/ { printf "cert=\"%s\";", $2 }
+    /^cert[[:space:]]/ { printf "cert=\"%s\";", $2 }
     /^password/ { printf "password=\"%s\";", $2 }
     /^options/ { printf "accountopt=\""; for(i=2;i<=NF;i++) printf "%s ", $i; printf "\";" }
     /^folders/ { printf "folders=("; for(i=2;i<=NF;i++) printf "%s ", $i; printf ");" }

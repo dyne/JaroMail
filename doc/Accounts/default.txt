@@ -22,14 +22,15 @@ imap_port 993
 # Smtp host address
 smtp smtp.gmail.com
 
-# Smtp port: usually 25 or 465
-smtp_port 25
+# Smtp port for STARTTLS: usually 587
+smtp_port 587
 
 
 # Authentication type
 auth plain # or kerberos, etc
 
-# Server certificate: check or ignore
+# Fetchmail server certificate: check or ignore.
+# SMTP always verifies the certificate and hostname using system CAs.
 cert ignore
 
 # Possible values are '', 'SSL2' (not supported on all systems),
@@ -37,7 +38,7 @@ cert ignore
 # be used as a last resort) 'SSL3', and 'TLS1' (default).
 # transport TLS1
 
-# Add a specific certificate file, checked before installed defaults
+# Optional SMTP CA bundle, replacing system trust (for a private CA).
 # certfile /path/to/my/private/cert
 
 # Options when fetching
