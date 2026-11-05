@@ -552,24 +552,29 @@ EOF
 # this function should send all mails in outbox
 send() {
     fn send $*
-
-    # list mails to send
-    queue_outbox=`${=find} "${MAILDIRS}/outbox" -type f`
-    queue_outbox_num=`print $queue_outbox | wc -l`
-    [[ "$queue_outbox" = "" ]] && {
-        notice "Outbox is empty, no mails to send."
-        return 0 }
-
+    setopt localoptions localtraps
+    local -a queue_outbox
+    local qbody res=0 interrupted=0
     [[ $DRYRUN = 1 ]] && { return 0 }
 
-    # from here on we must unlock on error
-    lock "${MAILDIRS}/outbox"
+    lock "${MAILDIRS}/outbox" || return $?
+    # Keep the framework's global signal cleanup from clearing lock ownership
+    # before this function's always block has released the outbox.
+    trap 'interrupted=130; global_quit=1' INT
+    trap 'interrupted=143; global_quit=1' TERM
+    trap 'interrupted=129; global_quit=1' HUP
+    {
+    queue_outbox=("$MAILDIRS"/outbox/{new,cur}/*(.DN))
+    if (( ${#queue_outbox} == 0 )); then
+        notice "Outbox is empty, no mails to send."
+    fi
 
-    for qbody in ${(f)queue_outbox}; do
+    for qbody in "${queue_outbox[@]}"; do
         func "processing outbox queue: $qbody"
         # clean interrupt
         [[ $global_quit = 1 ]] && {
             error "User break requested, interrupting operation"
+            res=130
             break
         }
 
@@ -641,6 +646,7 @@ BEGIN { body=0 }
         fi
 
         # evaluate results
+        (( interrupted == 0 )) || { res=$interrupted; break; }
         if [[ "$res" != "0" ]]; then
             error "Error sending mail, skipped"
         else
@@ -653,10 +659,13 @@ BEGIN { body=0 }
 
     done
 
-    unlock "$MAILDIRS/outbox"
-    unset password
-    smtp_keep_password=0
+    } always {
+        unlock "$MAILDIRS/outbox" || res=1
+        unset password
+        smtp_keep_password=0
+    }
 
+    (( interrupted == 0 )) || return $interrupted
     return $res
 }
 
