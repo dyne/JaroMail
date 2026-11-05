@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "authority": "Independent target expectations from resolved interface policy; no future backend executed",
+  "address_case": "ascii-mailbox-casemap-v1",
+  "sieve_comparator": "i;ascii-casemap",
+  "rules": ["from-address Exact@Example.Org move exact", "to-address Team@Example.Org move team"],
+  "known": ["Known@Example.Org", "Blocked@Example.Org"],
+  "blacklist": ["Blocked@Example.Org"],
+  "own": ["Own@Example.Org"],
+  "cases": [
+    {"id":"typed-from-lower", "headers":{"From":"exact@example.org"}, "rule":"filters:1", "local":"exact", "sieve":"exact"},
+    {"id":"typed-sender-upper", "headers":{"Sender":"EXACT@EXAMPLE.ORG"}, "rule":"filters:1", "local":"exact", "sieve":"exact"},
+    {"id":"typed-to-upper", "headers":{"To":"TEAM@example.org"}, "rule":"filters:2", "local":"team", "sieve":"team"},
+    {"id":"typed-cc-domain-upper", "headers":{"Cc":"team@EXAMPLE.ORG"}, "rule":"filters:2", "local":"team", "sieve":"team"},
+    {"id":"cross-address-from-negative", "headers":{"From":"Exact@other.example, other@example.org"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"cross-address-to-negative", "headers":{"To":"Team@other.example, other@example.org"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"whole-mailbox-among-multiple", "headers":{"From":"other@elsewhere.example, eXaCt@eXaMpLe.OrG"}, "rule":"filters:1", "local":"exact", "sieve":"exact"},
+    {"id":"blacklist-upper-before-known-route", "headers":{"From":"BLOCKED@EXAMPLE.ORG", "To":"TEAM@EXAMPLE.ORG", "X-Spam-Flag":"YES"}, "rule":"blacklist:blocked@example.org", "local":"zz.blacklist", "sieve":"zz.blacklist"},
+    {"id":"known-upper", "headers":{"From":"KNOWN@EXAMPLE.ORG"}, "rule":"known:known@example.org", "local":"known", "sieve":"INBOX"},
+    {"id":"known-upper-sender-negative", "headers":{"Sender":"KNOWN@EXAMPLE.ORG"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"own-upper-to", "headers":{"To":"OWN@EXAMPLE.ORG"}, "rule":"own:own@example.org", "local":"priv", "sieve":"priv"},
+    {"id":"own-upper-cc", "headers":{"Cc":"OWN@EXAMPLE.ORG"}, "rule":"own:own@example.org", "local":"priv", "sieve":"priv"},
+    {"id":"known-display-only-negative", "headers":{"From":"\"KNOWN@EXAMPLE.ORG\" <stranger@elsewhere.example>"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"},
+    {"id":"cross-address-own-negative", "headers":{"To":"Own@other.example, other@example.org"}, "rule":"builtin:unsorted", "local":"unsorted", "sieve":"unsorted"}
+  ]
+}
