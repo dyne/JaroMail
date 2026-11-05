@@ -128,6 +128,7 @@ EOF
 typeset -A subcommands_opts
 
 main() {
+	local exitcode=0 handler_status
 	# zuper option parser
 
     option_main=(a: -account=a l: -list=l q -quiet=q D -debug=D h -help=h v -version=v n -dry-run=n f -force=f)
@@ -319,6 +320,8 @@ main() {
 
     rmdupes) cmd_rmdupes ;;
 
+    backup) backup "${option_params[@]}" ;;
+
     filter) cmd_filter ;;
 
     deliver) cmd_deliver ;;
@@ -355,6 +358,8 @@ main() {
 	__unknown:*) cmd_unknown "$@" ;;
     esac
 
+    handler_status=$?
+    (( handler_status == 0 )) || return $handler_status
     return $exitcode
 }
 

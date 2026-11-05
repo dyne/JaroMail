@@ -32,10 +32,12 @@ notmuch_run() {
 
 nm() {
     fn "notmuch $*"
+    local _res
 
-    [[ -r "$MAILDIRS"/notmuch-config ]] || nm_setup
+    [[ -r "$MAILDIRS"/notmuch-config ]] || nm_setup || return $?
     notmuch_run "$@"
-    [[ $? = 0 ]] || {
+    _res=$?
+    [[ $_res = 0 ]] || {
         error "Notmuch error on command: ${@}"
         func "Returning status to caller: $_res"
     }
@@ -89,32 +91,39 @@ EOF
 
 nm_index() {
     fn nm_index
+    local result=0
 
     # init the environment
-    read_account
+    read_account || return $?
     notice "Indexing all mail archive"
     act "please wait, this may take a while..."
-    lock "$MAILDIRS"/cache/notmuch
-
-    nm new
-    nm tag +inbox +priv -unsorted folder:known
-    nm tag +inbox +priv -unsorted folder:sent
-    nm tag -inbox +priv -unsorted folder:priv
-    nm tag -inbox -priv +unsorted folder:unsorted
-    act "compressing database"
-    nm compact
-    unlock "$MAILDIRS"/cache/notmuch
-    notice "Indexing completed"
+    newlock "$MAILDIRS/cache/notmuch-index" || return $?
+    {
+        nm new &&
+            nm tag +inbox +priv -unsorted folder:known &&
+            nm tag +inbox +priv -unsorted folder:sent &&
+            nm tag -inbox +priv -unsorted folder:priv &&
+            nm tag -inbox -priv +unsorted folder:unsorted &&
+            nm compact
+        result=$?
+    } always {
+        unlock "$MAILDIRS/cache/notmuch-index" || result=1
+    }
+    (( result == 0 )) && notice "Indexing completed"
+    return $result
 }
 
 update_notmuch() {
     fn update_notmuch
+    setopt localoptions pipefail
 
     isfound notmuch && [[ -r $MAILDIRS/.notmuch/xapian ]] && {
         notice "Updating notmuch indexes"
-        nm_setup
-        nm new 2>&1 | grep -v '^Note: Ignoring'
+        nm_setup || return $?
+        nm new 2>&1 | sed '/^Note: Ignoring/d'
+        return $?
     }
+    return 0
 }
 
 search() {
@@ -122,12 +131,7 @@ search() {
     notice "Searching for ${#option_params} terms"
     # launch the search with notmuch
 
-    nm search --output=files $*
-
-    [[ $? = 0 ]] || {
-        error "notmuch search failed with an error"
-        return 1
-    }
+    nm search --output=files "$@"
 }
 
 alot_setup() {
@@ -287,18 +291,15 @@ backup() {
 }
 
 cmd_index() {
-    nm_setup
+    nm_setup || { exitcode=$?; return $exitcode; }
     nm_index
     exitcode=$?
 }
 
 cmd_search() {
-    search ${option_params}
-    [[ $DRYRUN = 1 ]] || {
-        for i in ${search_results=}; do
-            print - "$i"
-        done
-    } | save_replay $subcommand
+    setopt localoptions pipefail
+    search "${option_params[@]}" | save_replay "$subcommand"
+    exitcode=$?
 }
 
 cmd_alot_config() {
@@ -317,6 +318,7 @@ cmd_notmuch_config() {
 }
 
 cmd_notmuch() {
+    setopt localoptions pipefail
     notice "Command: notmuch ${option_params}"
     nm ${option_params} | save_replay $subcommand
     exitcode=$?

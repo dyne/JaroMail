@@ -7,6 +7,9 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
 - Required env: `JAROWORKDIR` (set by wrapper/install), `JAROMAILDIR` (default `$HOME/Mail` when unset).
 - Common side effects: creates/updates `Accounts/`, `Filters.txt`, `notmuch-config`, `.mutt/*`, `cache/*`.
 - Exit behavior: non-zero on missing deps, invalid maildir/account config, or external tool failures.
+- The dispatcher preserves a handler's non-zero return status; handlers that
+  set `exitcode` must capture it immediately after the operation they report.
+  Pipelines that forward tool output must preserve producer failures.
 
 ## Setup family (`init`, `update`)
 
@@ -18,7 +21,10 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
 ## Transport family (`fetch`, `send`, `smtp`, `imap`)
 
 - `fetch`: pulls mail into `incoming/` via fetchmail.
+- A successful poll with no messages returns zero; transport failures return
+  non-zero and stop the subsequent filter/index workflow.
 - `send`/`smtp`: sends queued messages from `outbox/` via msmtp.
+- `send` returns non-zero if any message fails, even if a later message succeeds.
 - `imap`: account-bound IMAP actions.
 - IO: reads account credentials and queue; writes to maildirs and replay logs.
 - Test-safe: partially (`run-source.sh` covers queue/index/filter path; network calls are environment dependent).

@@ -13,3 +13,10 @@ act() { :; }
 warning() { :; }
 error() { print -u2 -r -- "$*"; }
 ckreq() { return 0; }
+
+assert_status() {
+  local expected_status="$1" actual_status=0
+  shift
+  "$@" || actual_status=$?
+  assert_equal "$actual_status" "$expected_status" "exit status of $1"
+}

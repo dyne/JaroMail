@@ -15,6 +15,7 @@ cmd_wizard() {
 }
 
 cmd_stat() {
+    setopt localoptions pipefail
     stats ${option_params} | sort -n
     exitcode=$?
 }
@@ -32,7 +33,7 @@ cmd_preview() {
 }
 
 cmd_passwd() {
-    read_account $account
+    read_account $account || return $?
     host=${option_params:-$imap}
     new_password
 }
@@ -43,8 +44,8 @@ cmd_isonline() {
 }
 
 cmd_askpass() {
-    read_account $account
-    ask_password
+    read_account $account || return $?
+    ask_password || return $?
     # shell escape special chars
     print - "$password" | sed '
 s/\&/\\&/g
@@ -58,6 +59,7 @@ s/\*/\\*/g
 }
 
 cmd_extract_parse() {
+    setopt localoptions pipefail
     extract_addresses ${option_params} \
         | save_replay $subcommand
     exitcode=$?
@@ -78,7 +80,7 @@ cmd_isml() {
 cmd_empty() {
     func "no command, autostart"
     func "subcommand: $subcommand"
-    read_account "$account"
+    read_account "$account" || return $?
     if [[ "$subcommand" = "__empty" ]]; then
         if [[ "$option_params" = "" ]]; then
             x_mutt -Z
@@ -92,11 +94,11 @@ cmd_empty() {
 cmd_unknown() {
     subcommand=${subcommand[(ws@:@)2]}
     func "subcommand: $subcommand"
-    read_account "$account"
+    read_account "$account" || return $?
     if isemail "$subcommand"; then
         notice "Composing message to: $*"
         x_mutt $*
-        exitcode=0
+        exitcode=$?
     elif maildircheck "$subcommand"; then
         x_mutt -f "$subcommand"
         exitcode=$?
@@ -105,7 +107,7 @@ cmd_unknown() {
         exitcode=$?
     elif [[ -f "$subcommand" ]]; then
         x_mutt -a $*
-        exitcode=0
+        exitcode=$?
     else
         x_mutt
         exitcode=$?

@@ -278,22 +278,25 @@ _group_collect_recipients() {
 # FETCHMAIL
 fetchall() {
     fn fetchall
+    local -a accts
+    local i result=0 saved_account="$account"
 
     notice "Fetching all accounts in $MAILDIRS"
-    res=0
-    accts=`${=find} $ACCOUNTS -type f | grep -v README`
-    notice "Fetching mail for all accounts: `print ${accts} | wc -l` found"
-    for i in ${(f)accts}; do
-        account=`basename $i`
-        fetch
-        if [ $? != 0 ]; then res=1; fi
+    accts=("$ACCOUNTS"/**/*(.DN))
+    for i in "${accts[@]}"; do
+        [[ "${i:t}" == README* ]] && continue
+        account="${i:t}"
+        fetch || result=1
         # returns an error if just one of the accounts did
     done
-    return $res
+    account="$saved_account"
+    return $result
 }
 
 fetch() {
     fn fetch $*
+    local -a fmconf flog
+    local res=0 probe_log e f
 
     [[ "$account" = "" ]] && {
         fetchall; return $? }
@@ -307,7 +310,7 @@ fetch() {
     }
 
     # updates the notmuch configuration
-    nm_setup unread
+    nm_setup unread || return $?
     # setup :unread: as default tag
 
 	if [[ "$proto" = "imap" ]]; then
@@ -388,6 +391,9 @@ fetch() {
 		[[ -z $accountopt ]] || { # add option configuration
 			fmconf+=(" ${accountopt} ") }
 
+	else
+        error "Unsupported account protocol: $proto"
+        return 1
 	fi
 
     if [ "$cert" = "check" ]; then
@@ -409,37 +415,43 @@ fetch() {
     fmconf+=(" folder ${=folders} ");
 
     # try login without doing anything
-    flog=("${(f)$(print "$fmconf" | fetchmail -v -c -f -)}")
-
+    probe_log="$(print -r -- "$fmconf" | fetchmail -v -c -f -)"
     res=$?
+    flog=("${(@f)probe_log}")
     # examine result
     case $res in
         1)
             notice "No mails for $name"
             unset fmconf
-            return 1
+            return 0
             ;;
         2)
             error "Invalid or unknown certificate for $imap"
             unset fmconf
-            return 1
+            return $res
             ;;
         3)
             error "Invalid password for user $login at $imap"
             unset fmconf
-            return 1
+            return $res
             ;;
         7)  warning "Mailbox selection failed (${flog[${#flog}]#*\(}"
+            return $res
             ;;
+        0) ;;
         *)
-            func "fetchmail returns $res" ;;
+            error "fetchmail check failed with status $res"
+            return $res ;;
     esac
 
     if [[ $DRYRUN = 0 ]]; then
 
         act "please wait while downloading mails to incoming..."
 
-        print " $fmconf " | fetchmail -f -
+        print -r -- " $fmconf " | fetchmail -f -
+        res=$?
+        # fetchmail uses 1 for a successful poll with no messages.
+        (( res == 1 )) && res=0
 
 #  | awk '
 # /^fetchmail: No mail/ { next }
@@ -453,7 +465,7 @@ fetch() {
 
     unset fmconf
 
-    return 0
+    return $res
 }
 
 ################################################
@@ -552,9 +564,9 @@ EOF
 # this function should send all mails in outbox
 send() {
     fn send $*
-    setopt localoptions localtraps
+    setopt localoptions localtraps pipefail
     local -a queue_outbox
-    local qbody res=0 interrupted=0
+    local qbody res=0 result=0 interrupted=0 recipient_status
     [[ $DRYRUN = 1 ]] && { return 0 }
 
     lock "${MAILDIRS}/outbox" || return $?
@@ -570,6 +582,7 @@ send() {
     fi
 
     for qbody in "${queue_outbox[@]}"; do
+        res=0
         func "processing outbox queue: $qbody"
         # clean interrupt
         [[ $global_quit = 1 ]] && {
@@ -624,8 +637,9 @@ BEGIN { body=0 }
 { if(body==1) print $0 }
 ' "$qbody" \
     | mixmaster --config="$anoncfg" -m --to="$_e" --subject="$anonsubj"
-                res=$?
-                func "mixmaster returns $res"
+                recipient_status=$?
+                func "mixmaster returns $recipient_status"
+                (( recipient_status == 0 )) || res=$recipient_status
             done
 
         else # normal send with msmtp
@@ -648,25 +662,30 @@ BEGIN { body=0 }
         # evaluate results
         (( interrupted == 0 )) || { res=$interrupted; break; }
         if [[ "$res" != "0" ]]; then
+            result=$res
             error "Error sending mail, skipped"
         else
             notice "Mail sent succesfully"
             # whitelist those to whom we send mails
             hdr "$qbody" | learn recipient
-            printfile "$qbody" | deliver sent
-            [[ $? = 0 ]] && { rm "$qbody" }
+            if printfile "$qbody" | deliver sent; then
+                command rm -- "$qbody" || result=1
+            else
+                result=1
+            fi
         fi
 
     done
 
     } always {
-        unlock "$MAILDIRS/outbox" || res=1
+        unlock "$MAILDIRS/outbox" || result=1
         unset password
         smtp_keep_password=0
     }
 
     (( interrupted == 0 )) || return $interrupted
-    return $res
+    (( res == 0 )) || result=$res
+    return $result
 }
 
 ######
@@ -728,6 +747,7 @@ cmd_fetch() {
         update_filters && \
         filter_maildir incoming && \
         update_notmuch
+    exitcode=$?
 }
 
 cmd_send() {
