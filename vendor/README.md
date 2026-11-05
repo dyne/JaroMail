@@ -27,21 +27,23 @@ This is a minimal frontend source slice, **not a standalone Sieve interpreter**.
 It requires matching Dovecot core and Pigeonhole **2.4.5 development headers and
 libraries** supplied as test-build prerequisites outside the vendor tree.
 The shared helper links to `libdovecot-sieve`, `libdovecot-storage`,
-`libdovecot-lda`, and `libdovecot`. The private `mail-raw.h` header is retained
-because it is not among Pigeonhole's installed public headers; its functions
+`libdovecot-lda`, and `libdovecot`. The retained `mail-raw.h` pins the private
+raw-mail interface even when development packages omit that header. Its functions
 come from the matched Sieve library, so their implementation is not duplicated.
 
-Future tool-build integration must check versions and required symbols before
-compiling, use the selected sources and matched generated development headers,
-and supply an isolated configuration/private prefix. If development dependencies
+The opt-in `make sieve-tools` build checks versions and required symbols before
+compiling and uses the selected sources and matched generated development headers.
+See [the private tool build instructions](../doc/sieve-tools.md) for prerequisites,
+fingerprints and private output paths. If development dependencies
 are built from upstream sources, keep those source/build caches outside this
 repository; never expand the vendor tree to a full distribution as a workaround.
 Additional vendored source requires a demonstrated compile/link dependency,
 per-file provenance, a reason, and an updated minimal-scope regression.
 
-The application build does not yet compile these tools. Their build and semantic
-test integration remain planned work. This development dependency does not add
-a Dovecot runtime requirement to ordinary Jaromail mail processing.
+The ordinary application build does not compile these tools. This development
+dependency does not add a Dovecot runtime requirement to ordinary Jaromail mail
+processing. Isolated semantic fixture configuration is covered separately from
+frontend compilation.
 
 ## Verification and maintenance
 

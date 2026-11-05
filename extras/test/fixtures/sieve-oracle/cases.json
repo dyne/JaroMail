@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "note": "Independent expected primitive Sieve actions; no native implementation or expected-action generator.",
+  "cases": [
+    {"id":"apex-exact", "script":"apex.sieve", "headers":[["From","sender@example.org"]], "mailbox":"apex"},
+    {"id":"apex-case", "script":"apex.sieve", "headers":[["From","Sender@EXAMPLE.ORG"]], "mailbox":"apex"},
+    {"id":"apex-excludes-subdomain", "script":"apex.sieve", "headers":[["From","sender@sub.example.org"]], "mailbox":"unsorted"},
+    {"id":"apex-excludes-deep", "script":"apex.sieve", "headers":[["From","sender@deep.sub.example.org"]], "mailbox":"unsorted"},
+    {"id":"apex-prefix-boundary", "script":"apex.sieve", "headers":[["From","sender@badexample.org"]], "mailbox":"unsorted"},
+    {"id":"apex-suffix-boundary", "script":"apex.sieve", "headers":[["From","sender@example.org.attacker.net"]], "mailbox":"unsorted"},
+    {"id":"apex-literal-dot", "script":"apex.sieve", "headers":[["From","sender@exampleXorg"]], "mailbox":"unsorted"},
+    {"id":"apex-display-name", "script":"apex.sieve", "headers":[["From","\"sender@example.org\" <sender@elsewhere.net>"]], "mailbox":"unsorted"},
+    {"id":"apex-sender-only", "script":"apex.sieve", "headers":[["From","sender@elsewhere.net"],["Sender","bounce@example.org"]], "mailbox":"unsorted"},
+    {"id":"wildcard-subdomain", "script":"subdomains.sieve", "headers":[["From","sender@sub.example.org"]], "mailbox":"subdomains"},
+    {"id":"wildcard-deep", "script":"subdomains.sieve", "headers":[["From","sender@deep.sub.example.org"]], "mailbox":"subdomains"},
+    {"id":"wildcard-case", "script":"subdomains.sieve", "headers":[["From","Sender@DEEP.Sub.EXAMPLE.ORG"]], "mailbox":"subdomains"},
+    {"id":"wildcard-excludes-apex", "script":"subdomains.sieve", "headers":[["From","sender@example.org"]], "mailbox":"unsorted"},
+    {"id":"wildcard-prefix-boundary", "script":"subdomains.sieve", "headers":[["From","sender@sub.badexample.org"]], "mailbox":"unsorted"},
+    {"id":"wildcard-suffix-boundary", "script":"subdomains.sieve", "headers":[["From","sender@sub.example.org.attacker.net"]], "mailbox":"unsorted"},
+    {"id":"wildcard-literal-dot", "script":"subdomains.sieve", "headers":[["From","sender@sub.exampleXorg"]], "mailbox":"unsorted"},
+    {"id":"wildcard-sender-only", "script":"subdomains.sieve", "headers":[["From","sender@elsewhere.net"],["Sender","bounce@sub.example.org"]], "mailbox":"unsorted"},
+    {"id":"mailbox-exact-to", "script":"mailbox.sieve", "headers":[["To","person@example.net"]], "mailbox":"exact mailbox"},
+    {"id":"mailbox-localpart-case", "script":"mailbox.sieve", "headers":[["To","PERSON@example.net"]], "mailbox":"exact mailbox"},
+    {"id":"mailbox-whole-case", "script":"mailbox.sieve", "headers":[["To","PeRsOn@EXAMPLE.NET"]], "mailbox":"exact mailbox"},
+    {"id":"mailbox-cc-case", "script":"mailbox.sieve", "headers":[["To","elsewhere@elsewhere.net"],["Cc","PERSON@Example.Net"]], "mailbox":"exact mailbox"},
+    {"id":"mailbox-cross-address", "script":"mailbox.sieve", "headers":[["To","person@elsewhere.net, someone@example.net"]], "mailbox":"unsorted"},
+    {"id":"mailbox-cross-fields", "script":"mailbox.sieve", "headers":[["To","person@elsewhere.net"],["Cc","someone@example.net"]], "mailbox":"unsorted"},
+    {"id":"mailbox-display-name", "script":"mailbox.sieve", "headers":[["To","\"person@example.net\" <someone@elsewhere.net>"]], "mailbox":"unsorted"},
+    {"id":"mailbox-suffix-boundary", "script":"mailbox.sieve", "headers":[["To","person@example.net.attacker.org"]], "mailbox":"unsorted"},
+    {"id":"create-mailbox-simulation", "script":"create.sieve", "headers":[["From","sender@example.org"]], "mailbox":"created mailbox", "create":true}
+  ]
+}
