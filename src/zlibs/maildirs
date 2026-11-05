@@ -73,11 +73,7 @@ maildirmake() {
 
     func "creating maildir: $1"
 
-    ${=mkdir} ${1}/cur
-    ${=mkdir} ${1}/new
-    ${=mkdir} ${1}/tmp
-
-    return 0
+    ${=mkdir} "$1/cur" "$1/new" "$1/tmp"
 }
 
 # List message files from a Maildir.
@@ -146,11 +142,30 @@ maildir_refile() {
         return $?
     fi
 
-    if [[ "$mode" == "copy" ]]; then
-        cp "$msg" "$dest/cur/" || return 1
-    else
-        mv "$msg" "$dest/cur/" || return 1
-    fi
+    # Keep Maildir flags while assigning a fresh, collision-safe basename.
+    local flags=""
+    [[ "${msg:t}" == *:2,* ]] && flags=":2,${${msg:t}#*:2,}"
+    maildir_store "$dest" cur "$flags" < "$msg" || return 1
+    [[ "$mode" == "copy" ]] || command rm -- "$msg" || return 1
+    return 0
+}
+
+# Stage a complete message in tmp, then publish without replacing any file.
+# Hard-link publication is atomic and stays on the destination filesystem.
+maildir_store() {
+    local dest="$1" subdir="${2:-new}" flags="${3:-}"
+    local staged published result=1
+    staged="$(mktemp "$dest/tmp/jaro.XXXXXXXXXX")" || return 1
+    published="$dest/$subdir/${staged:t}${flags}"
+    {
+        if cat > "$staged" && command ln "$staged" "$published"; then
+            last_deliver="$published"
+            result=0
+        fi
+    } always {
+        command rm -f -- "$staged" || result=1
+    }
+    return $result
 }
 
 
@@ -257,9 +272,7 @@ deliver() {
     # no tag specified, plain delivery without indexing
     ## destinations excluded from notmuch indexing
     # for indexing rules see filter_maildir()
-    base="${HOST}_jaro_`date +%Y-%m-%d_%H-%M-%S`_$RANDOM"
-    last_deliver="$MAILDIRS/$dest/new/$base"
-    cat > "$last_deliver"
+    maildir_store "$MAILDIRS/$dest"
     [[ $? = 0 ]] || {
         error "Could not deliver email file into maildir $dest"
         func "Returning error to caller."
