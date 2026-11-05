@@ -78,6 +78,12 @@ fetchmail msmtp neomutt notmuch pinentry-curses abook \
 wipe mblaze vim netcat-traditional
 ```
 
+Optional for `jaro serve` local IMAP bridge:
+
+```
+dovecot-imapd
+```
+
 To compile and install jaromail on your system as root:
 ```
 make install
@@ -136,6 +142,7 @@ validates the installed command (`/usr/local/bin/jaro`).
 Developer test dependencies (also listed in `.github/workflows/pr-tests.yml`) include:
 `zsh`, `make`, `gcc`, `fetchmail`, `msmtp`, `mutt` or `neomutt`,
 `notmuch`, `pinentry-curses`, `abook`, `wipe`, and `mblaze` (for `maddr`).
+`dovecot` is optional and only needed for `jaro serve` live daemon checks.
 
 Legacy/optional surfaces are documented in:
 
