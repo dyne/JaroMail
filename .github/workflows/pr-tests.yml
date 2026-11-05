@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            zsh make gcc \
+            zsh make gcc python3 \
             fetchmail msmtp neomutt notmuch pinentry-curses \
             abook wipe mblaze gnupg pandoc ca-certificates netcat-traditional
 

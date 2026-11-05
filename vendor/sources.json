@@ -1,0 +1,75 @@
+{
+  "schema_version": 2,
+  "upstream": {
+    "repository": "https://github.com/dovecot/pigeonhole",
+    "tag": "2.4.5",
+    "commit": "742bb8923b5aab398f8d962e827fcde7ad4a3f73",
+    "retrieved_on": "2026-11-05",
+    "release_provenance": {
+      "url": "https://pigeonhole.dovecot.org/releases/2.4/dovecot-pigeonhole-2.4.5.tar.gz",
+      "sha256": "ad7c478cb3aaa76c5f81f86727a3e6843645b0a1253f5684fb8a0beec0d22925",
+      "signing_key_fingerprint": "EF0882079FD4ED32BF8B23B2A1B09EF84EDC5219",
+      "note": "Selected files matched both this signed release and the pinned Git commit at extraction. Release archives and signing material are not vendored."
+    }
+  },
+  "directory": "pigeonhole/upstream",
+  "programs": ["sievec", "sieve-test"],
+  "external_build_dependencies": {
+    "dovecot_core_version": "2.4.5",
+    "pigeonhole_version": "2.4.5",
+    "headers": "Matching Dovecot and Pigeonhole development headers, including generated configuration/version headers",
+    "libraries": ["libdovecot-sieve", "libdovecot-storage", "libdovecot-lda", "libdovecot"],
+    "private_symbols": ["mail_raw_user_create", "mail_raw_open_file", "mail_raw_open_data", "mail_raw_close"],
+    "note": "The minimal extraction is a tool frontend source subset, not a standalone Sieve interpreter. Build integration must verify the matched library versions and these symbols."
+  },
+  "files": [
+    {
+      "path": "AUTHORS",
+      "reason": "Copyright-holder attribution referenced by COPYING",
+      "size": 276,
+      "sha256": "34b7068575df289d037ce8f18d7e5158d95adbbbe64643e51645d4a498b4e0f0"
+    },
+    {
+      "path": "COPYING",
+      "reason": "Upstream licensing notice referenced by source-file headers",
+      "size": 234,
+      "sha256": "1fc821d394719d8b5337223c1f4bd898a231f2fb559f2cf3ebeda97be8362d6d"
+    },
+    {
+      "path": "COPYING.LGPL",
+      "reason": "License text required by COPYING",
+      "size": 26530,
+      "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551"
+    },
+    {
+      "path": "src/sieve-tools/sievec.c",
+      "reason": "Sieve compiler command entry point",
+      "size": 3316,
+      "sha256": "f8eded3d4df64cae1d242086a817c630ab769dbcb059093e334dad3428fccfcc"
+    },
+    {
+      "path": "src/sieve-tools/sieve-test.c",
+      "reason": "Sieve fixture evaluator command entry point",
+      "size": 12488,
+      "sha256": "e5477ac5f5fd80183271918283282676edaa765c3a73e9ea875fb50a8d440153"
+    },
+    {
+      "path": "src/lib-sieve-tool/sieve-tool.c",
+      "reason": "Shared initialization, configuration, message input and trace helpers called by both commands",
+      "size": 19510,
+      "sha256": "48fb78d73f0c1faba29189c83c377452442e982953f0b3163222df0a3d2aa04d"
+    },
+    {
+      "path": "src/lib-sieve-tool/sieve-tool.h",
+      "reason": "Shared tool helper declarations included by both commands",
+      "size": 2442,
+      "sha256": "f6a68dc487e427f6e0bd8f4bd5bd8e7a07758b55470e153270a8f01f834378aa"
+    },
+    {
+      "path": "src/lib-sieve/util/mail-raw.h",
+      "reason": "Private raw-message helper declarations required by sieve-tool.c; implementation is linked from the matching Sieve library",
+      "size": 586,
+      "sha256": "b0aeb8a3bc38e8d4d1805edb3b911c5f94d9aa2f9f1682d45f244816e4a4154b"
+    }
+  ]
+}
