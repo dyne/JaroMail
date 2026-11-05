@@ -1,20 +1,24 @@
 #!/usr/bin/env zsh
 
 os=`uname -s`
-action=$1
+action="${1:-build}"
+case "$action" in
+    build|install) ;;
+    *) print -u2 -- "Unknown action: $action"; exit 2 ;;
+esac
 # install is same script for both gnu and win
 [[ "$action" == "install" ]] && {
-	./build/install.sh
+	./build/install.sh || exit $?
 	[[ "$os" == "Cygwin" ]] && {
 		# fix pinentry w32 path
-		ln -sf /usr/sbin/msmtp.exe /usr/bin/msmtp
-		ln -sf /usr/bin/neomutt.exe /usr/bin/mutt
+		ln -sf /usr/sbin/msmtp.exe /usr/bin/msmtp || exit $?
+		ln -sf /usr/bin/neomutt.exe /usr/bin/mutt || exit $?
 	}
-	return 0
+	exit 0
 }
 
 case $os in
-    Cygwin)
+    CYGWIN*|Cygwin)
         print "Windows $action"
         ./build/${action}-win.sh
         ;;
@@ -26,6 +30,6 @@ case $os in
 	print "$os $action"
         ./build/${action}-bsd.sh
 	;;
-
+    *) print -u2 -- "Unsupported build platform: $os"; exit 2 ;;
 esac
 

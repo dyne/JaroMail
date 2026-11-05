@@ -118,6 +118,11 @@ sudo make install
 ./extras/test/inittest.sh
 ```
 
+The GNU/Linux build honors `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, and `LDLIBS`.
+It uses `ccache` for compilation when available; set `CCACHE=` to disable it.
+`make install` builds the helpers first. Set `PREFIX` for a private installation
+or `DESTDIR` to stage a package while keeping its final runtime paths.
+
 `extras/test/run-source.sh` validates the checked-out tree by executing
 `src/jaro` against a temporary local install layout. `inittest.sh`
 validates the installed command (`/usr/local/bin/jaro`).
