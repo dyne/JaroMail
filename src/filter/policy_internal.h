@@ -1,0 +1,25 @@
+#ifndef JARO_FILTER_POLICY_INTERNAL_H
+#define JARO_FILTER_POLICY_INTERNAL_H
+#include "policy.h"
+#include <locale.h>
+#include <regex.h>
+
+struct jf_entry {
+	struct jf_rule rule;
+	regex_t regex;
+	int compiled, discard;
+	size_t order, input_index;
+};
+struct jf_policy {
+	struct jf_allocator allocator;
+	struct jf_entry *entries;
+	size_t count, capacity;
+	locale_t locale;
+	struct jf_entry **index, **legacy;
+	size_t index_count, legacy_count;
+	const struct jf_entry *bounce, *spam, *fallback;
+};
+int jf_policy_build_index(struct jf_policy *, struct jf_error *);
+int jf_valid_utf8(const unsigned char *, size_t);
+int jf_valid_mailbox(const char *);
+#endif

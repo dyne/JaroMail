@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "authority": "Authored parsed mailbox inputs for target/casing fixture cases; this exercises classification only, not header parsing. Original fixtures remain the winner authority.",
+  "groups": {
+    "target": {
+      "blacklist": {"From":["blocked@example.org"]},
+      "blacklist-known-spam-route": {"From":["blocked@example.org"],"To":["team@example.org"],"SpamFlag":["YES"]},
+      "bounce": {"Sender":["list-mailman-bounce@example.org"],"SenderHeader":["list-mailman-bounce@example.org"]},
+      "bounce-before-to": {"Sender":["mailman-bounce@example.org"],"SenderHeader":["mailman-bounce@example.org"],"To":["team@example.org"]},
+      "from": {"From":["route@example.org"]},
+      "sender": {"Sender":["route@example.org"],"SenderHeader":["route@example.org"]},
+      "from-before-to": {"From":["route@example.org"],"To":["team@example.org"]},
+      "to": {"To":["team@example.org"]},
+      "cc": {"Cc":["team@example.org"]},
+      "to-before-known": {"From":["known@example.org"],"To":["team@example.org"]},
+      "duplicate-last": {"To":["duplicate@example.org"]},
+      "overlap-first": {"To":["overlap@example.org"]},
+      "known": {"From":["known@example.org"]},
+      "known-before-spam": {"From":["known@example.org"],"SpamFlag":["YES"]},
+      "known-sender-only": {"Sender":["known@example.org"],"SenderHeader":["known@example.org"]},
+      "display-name-not-address": {"From":["stranger@example.net"]},
+      "spam": {"SpamFlag":["YES"]},
+      "spam-lowercase": {"SpamFlag":["yes"]},
+      "spam-before-own": {"To":["own@example.org"],"SpamFlag":["YES"]},
+      "own-to": {"To":["own@example.org"]},
+      "own-cc": {"Cc":["own@example.org"]},
+      "fallback": {"From":["stranger@example.net"],"To":["reader@example.net"]},
+      "missing-fields": {}
+    },
+    "domain": {
+      "domain-apex": {"From":["a@example.org"]},
+      "domain-upper": {"From":["a@EXAMPLE.ORG"]},
+      "domain-child": {"From":["a@child.example.org"]},
+      "domain-deep": {"From":["a@deep.child.example.org"]},
+      "domain-prefix-negative": {"From":["a@badexample.org"]},
+      "domain-suffix-negative": {"From":["a@example.org.attacker.net"]},
+      "domain-display-negative": {"From":["a@elsewhere.net"]},
+      "domain-sender-negative": {"Sender":["a@example.org"],"SenderHeader":["a@example.org"]},
+      "domain-from": {"Sender":["a@vendor.example"],"SenderHeader":["a@vendor.example"]},
+      "domain-to-cc": {"Cc":["a@project.example"]},
+      "domain-before-exact-by-order": {"From":["exact@vendor.example"]}
+    },
+    "isolated": {
+      "wildcard-excludes-apex": {"From":["a@example.org"]},
+      "apex-excludes-child": {"From":["a@sub.example.org"]},
+      "explicit-before-known-domain": {"From":["a@example.org"],"To":["team@example.net"]},
+      "exact-before-domain-by-order": {"From":["exact@vendor.example"]}
+    },
+    "casing": {
+      "typed-from-lower": {"From":["exact@example.org"]},
+      "typed-sender-upper": {"Sender":["EXACT@EXAMPLE.ORG"],"SenderHeader":["EXACT@EXAMPLE.ORG"]},
+      "typed-to-upper": {"To":["TEAM@example.org"]},
+      "typed-cc-domain-upper": {"Cc":["team@EXAMPLE.ORG"]},
+      "cross-address-from-negative": {"From":["Exact@other.example","other@example.org"]},
+      "cross-address-to-negative": {"To":["Team@other.example","other@example.org"]},
+      "whole-mailbox-among-multiple": {"From":["other@elsewhere.example","eXaCt@eXaMpLe.OrG"]},
+      "blacklist-upper-before-known-route": {"From":["BLOCKED@EXAMPLE.ORG"],"To":["TEAM@EXAMPLE.ORG"],"SpamFlag":["YES"]},
+      "known-upper": {"From":["KNOWN@EXAMPLE.ORG"]},
+      "known-upper-sender-negative": {"Sender":["KNOWN@EXAMPLE.ORG"],"SenderHeader":["KNOWN@EXAMPLE.ORG"]},
+      "own-upper-to": {"To":["OWN@EXAMPLE.ORG"]},
+      "own-upper-cc": {"Cc":["OWN@EXAMPLE.ORG"]},
+      "known-display-only-negative": {"From":["stranger@elsewhere.example"]},
+      "cross-address-own-negative": {"To":["Own@other.example","other@example.org"]}
+    }
+  }
+}

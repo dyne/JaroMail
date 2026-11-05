@@ -21,6 +21,8 @@
 #ifndef rfc822_h
 #define rfc822_h
 
+#include <stddef.h>
+
 /* possible values for RFC822Error */
 enum
 {
@@ -60,5 +62,18 @@ extern const char *RFC822Errors[];
 
 #define rfc822_error(x) RFC822Errors[x]
 #define rfc822_new_address() calloc(1,sizeof(ADDRESS))
+
+/* Strict bounded mailbox extraction for native filtering. The existing ADDRESS
+ * API remains available to legacy helpers. Input is NUL-terminated at length,
+ * with no earlier NUL; scratch_capacity must exceed length. No allocation,
+ * global error state or display-name decoding is used. Quoted local parts and
+ * quoted-pair bytes are preserved. Comments/phrases/groups never emit addresses.
+ * The callback receives tentative mailboxes: discard all outputs on failure.
+ * Return 0, RFC822_BOUNDED_SYNTAX, RFC822_BOUNDED_LIMIT or RFC822_BOUNDED_EMIT.
+ */
+enum { RFC822_BOUNDED_SYNTAX=1, RFC822_BOUNDED_LIMIT, RFC822_BOUNDED_EMIT };
+typedef int (*rfc822_mailbox_emit)(void *, const char *, size_t);
+int rfc822_parse_mailboxes(const char *, size_t, char *, size_t,
+                          rfc822_mailbox_emit, void *);
 
 #endif /* rfc822_h */

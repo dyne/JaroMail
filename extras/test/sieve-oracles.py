@@ -21,7 +21,7 @@ def run(root):
     oracle = SieveOracle(root / "oracle with spaces", os.environ["SIEVE_DEPS_PREFIX"])
     print("PASS matching private configuration versions and no user database", flush=True)
     cases = json.loads((FIXTURES / "cases.json").read_text())["cases"]
-    assert len(cases) == 26 and len({c["id"] for c in cases}) == 26
+    assert len(cases) == 39 and len({c["id"] for c in cases}) == 39
     oracle.compile(FIXTURES / "apex.sieve")
     print("PASS valid fileinto compiled to actual binary", flush=True)
     negative_count = 0

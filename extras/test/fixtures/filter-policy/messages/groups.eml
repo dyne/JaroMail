@@ -1,0 +1,11 @@
+From: "Example, Newsletter" <news@lists.example.org>
+To: Readers: "First Reader" <first@example.net>, second@example.net;
+Cc: Undisclosed recipients:;
+Date: Thu, 05 Nov 2026 12:00:00 +0000
+Message-ID: <sanitized-groups@fixtures.example>
+Subject: Synthetic newsletter with groups
+X-Spam-Flag: NO
+
+From: blocked@example.org
+Sender: mailman-bounce@example.org
+X-Spam-Flag: YES
