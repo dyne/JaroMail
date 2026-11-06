@@ -12,6 +12,19 @@ spellings, including UTF8 locals under the qualified SMTPUTF8 build. This is a
 narrow native policy correction; the retained legacy shell engine and recorded
 baseline observations are unchanged.
 
+Native classify and apply regressions now exercise all original 52 authored
+target winners, stable IDs and provenance against actual immutable generations,
+and the same generation's Sieve against the pinned regex/SMTPUTF8 oracle. The
+table below remains a legacy baseline: native blacklist, bounce, From/Sender,
+spam, own-casing and domain results follow its explicitly approved corrections.
+Native empty or malformed messages remain in place with status 7, and an empty
+batch emits a zero-record success stream. Legacy remains the CLI default;
+explicit `JARO_FILTER_ENGINE=native` enables native filter/fetch application.
+Native `-n`/`--explain` require an up-to-date selected generation and never
+publish. `--compare FILE` compares complete retained actual legacy observations
+without applying either engine. It rejects ambiguous proposal text; see the
+[CLI and observation contract](filter-interfaces.md#rollout-and-bounded-import).
+
 Baseline application revision: `165e61e`; preparation revision `7161a2e` changes
 only the minimal vendor extraction. Observations below use the real `jaro`
 CLI, clean Zsh with POSIX ERE (`RE_MATCH_PCRE` off), and mblaze. The independent

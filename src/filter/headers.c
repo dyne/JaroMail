@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "headers.h"
 #include "policy_internal.h"
+#include "sha256.h"
 #include "../rfc822.h"
 #include <errno.h>
 #include <stdint.h>
@@ -15,6 +16,7 @@ struct jf_headers {
 	struct jf_message message;
 	struct owned_text *texts;
 	size_t address_capacity, sender_capacity, spam_capacity, wire_size;
+	char wire_digest[65];
 };
 struct header_parser {
 	struct jf_headers *headers;
@@ -63,6 +65,7 @@ void jf_headers_free(struct jf_headers *h)
 }
 const struct jf_message *jf_headers_message(const struct jf_headers *h) { return h ? &h->message : NULL; }
 size_t jf_headers_wire_size(const struct jf_headers *h) { return h ? h->wire_size : 0; }
+const char *jf_headers_digest(const struct jf_headers *h) { return h ? h->wire_digest : NULL; }
 
 static unsigned char *own(struct jf_headers *h, const char *s, size_t n)
 {
@@ -202,6 +205,7 @@ static int parse(struct input *in, const struct jf_allocator *allocator,
 	struct jf_allocator a={NULL,heap_allocate,heap_release};
 	struct header_parser p={0};
 	struct jf_headers *h;
+	struct jf_sha256 hash;
 	char *physical=NULL;
 	size_t used=0;
 	unsigned char byte;
@@ -215,6 +219,7 @@ static int parse(struct input *in, const struct jf_allocator *allocator,
 	h=a.allocate(a.context,sizeof *h);
 	if (!h) return fail(&p,"E_MEMORY","message allocation failed",3);
 	memset(h,0,sizeof *h); h->allocator=a; p.headers=h;
+	jf_sha256_init(&hash);
 	physical=allocate(h,JF_LINE_MAX+2); p.value=allocate(h,JF_LINE_MAX+1); p.scratch=allocate(h,JF_LINE_MAX+1);
 	if (!physical || !p.value || !p.scratch) { rc=fail(&p,"E_MEMORY","header scratch allocation failed",3); goto done; }
 	for (;;) {
@@ -222,6 +227,7 @@ static int parse(struct input *in, const struct jf_allocator *allocator,
 		if (got<=0) { p.field_line=p.line+1; rc=fail(&p,got<0 ? "E_MESSAGE_IO" : "E_MESSAGE_TRUNCATED",
 			got<0 ? "message read failed" : "missing header/body separator",got<0 ? 3 : 7); break; }
 		if (++h->wire_size>JF_HEADERS_MAX) { p.field_line=p.line+1; rc=fail(&p,"E_MESSAGE_LIMIT","headers exceed 1 MiB",7); break; }
+		jf_sha256_update(&hash,&byte,1);
 		if (byte=='\n') {
 			if (used && physical[used-1]=='\r') used--;
 			if (used>JF_LINE_MAX) { p.field_line=p.line+1; rc=fail(&p,"E_MESSAGE_LIMIT","physical header line exceeds 64 KiB",7); break; }
@@ -238,7 +244,7 @@ static int parse(struct input *in, const struct jf_allocator *allocator,
 	}
 done:
 	release(h,physical); release(h,p.value); release(h,p.scratch);
-	if (rc) jf_headers_free(h); else *out=h;
+	if (rc) jf_headers_free(h); else { jf_sha256_hex(&hash,h->wire_digest); *out=h; }
 	return rc;
 }
 

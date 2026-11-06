@@ -310,7 +310,7 @@ fetch() {
     }
 
     # updates the notmuch configuration
-    nm_setup unread || return $?
+    nm_setup unread --no-index || return $?
     # setup :unread: as default tag
 
 	if [[ "$proto" = "imap" ]]; then
@@ -723,10 +723,32 @@ cmd_queue() {
 }
 
 cmd_fetch() {
-    fetch ${option_params} && \
-        update_filters && \
-        filter_maildir incoming && \
+    filter_engine || { exitcode=$?; return $exitcode; }
+    if [[ $REPLY == native ]]; then
+        # A dry fetch explains the current incoming batch without transport,
+        # account/keyring setup, cache publication or index writes.
+        if [[ $DRYRUN == 1 ]]; then
+            native_filter_maildir "$MAILDIRS/incoming"
+            exitcode=$?
+            return $exitcode
+        fi
+        fetch "${option_params[@]}" || { exitcode=$?; return $exitcode; }
+        native_filter_compile batch || { exitcode=$?; return $exitcode; }
+        local native_filter_workflow_generation=$filter_native_generation result index_result
+        native_filter_maildir "$MAILDIRS/incoming"
+        result=$?
+        # A partial batch can have delivered intact messages. Index once even
+        # on error; retain the batch failure if indexing also fails.
         update_notmuch
+        index_result=$?
+        (( result == 0 )) && result=$index_result
+        exitcode=$result
+        return $result
+    fi
+    fetch "${option_params[@]}" && \
+        update_filters && \
+        filter_maildir "$MAILDIRS/incoming" && \
+        { [[ $DRYRUN == 1 ]] || update_notmuch; }
     exitcode=$?
 }
 

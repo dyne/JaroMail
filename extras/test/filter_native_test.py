@@ -38,7 +38,7 @@ class PolicyTests(unittest.TestCase):
                 raise ValueError('JARO_FILTER_NATIVE_WORK must be an absolute new directory')
             cls.work.mkdir(mode=0o700, parents=True, exist_ok=False)
         else:
-            cls.temp = tempfile.TemporaryDirectory(prefix='jaro-native-', dir=os.environ.get('TMPDIR'))
+            cls.temp = tempfile.TemporaryDirectory(prefix='jaro-native-', dir=os.environ.get('JARO_FILTER_TEST_TMP') or os.environ.get('TMPDIR'))
             cls.work = Path(cls.temp.name)
         cls.driver = cls.work / 'objects/filter-policy-driver'
         subprocess.run(['make', '-f', 'build/filter-core.mk', '-j2', 'filter-policy-driver',

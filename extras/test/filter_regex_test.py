@@ -25,7 +25,11 @@ PROFILE = ('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileint
 class RegexTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.work = Path(os.environ.get('JARO_FILTER_REGEX_WORK') or tempfile.mkdtemp(prefix='jaro-regex-'))
+        cls.temp = None
+        retained = os.environ.get('JARO_FILTER_REGEX_WORK')
+        if not retained and os.environ.get('JARO_FILTER_TEST_TMP'):
+            cls.temp = tempfile.TemporaryDirectory(prefix='jaro-regex-',dir=os.environ['JARO_FILTER_TEST_TMP'])
+        cls.work = Path(retained or (cls.temp.name if cls.temp else tempfile.mkdtemp(prefix='jaro-regex-')))
         cls.work.mkdir(mode=0o700, parents=True, exist_ok=True)
         cls.objects = cls.work / 'objects'
         subprocess.run(['make', '-f', 'build/filter-core.mk', '-j2', 'filter-compile', 'filter-policy-driver', 'filter-compiler-driver',
@@ -261,4 +265,6 @@ if __name__ == '__main__':
                'qualification': DIGEST, 'observedAt': datetime.now(timezone.utc).isoformat()}
     (RegexTests.work / 'summary.json').write_text(json.dumps(summary, sort_keys=True)+'\n')
     print('Regex qualification: '+json.dumps(summary, sort_keys=True))
+    if RegexTests.temp:
+        RegexTests.temp.cleanup()
     sys.exit(0 if result.wasSuccessful() else 1)

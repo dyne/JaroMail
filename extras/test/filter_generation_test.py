@@ -82,7 +82,7 @@ class GenerationTests(unittest.TestCase):
             cls.work = Path(path)
             cls.work.mkdir(mode=0o700, parents=True, exist_ok=False)
         else:
-            cls.temp = tempfile.TemporaryDirectory(prefix='jaro-generation-', dir=os.environ.get('TMPDIR'))
+            cls.temp = tempfile.TemporaryDirectory(prefix='jaro-generation-', dir=os.environ.get('JARO_FILTER_TEST_TMP') or os.environ.get('TMPDIR'))
             cls.work = Path(cls.temp.name)
         cls.objects = cls.work / 'objects'
         subprocess.run(['make', '-f', 'build/filter-core.mk', '-j2', 'filter-generation-tools', 'filter-compile',

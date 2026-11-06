@@ -218,7 +218,7 @@ static void fold(char *s)
 	for (;*s;s++) if (*s>='A' && *s<='Z') *s=(char)(*s+'a'-'A');
 }
 
-static int domain(const char *s)
+int jf_valid_domain(const char *s)
 {
 	size_t n=strlen(s), label=0, i;
 	if (!n || n>253) return 0;
@@ -260,7 +260,7 @@ int jf_valid_mailbox(const char *s)
 		}
 		if (!component || *p++!='@') return 0;
 	}
-	return domain((const char *)p);
+	return jf_valid_domain((const char *)p);
 }
 
 int jf_normalize_mailbox(char *s)
@@ -399,7 +399,7 @@ static int parse_line(struct parser *p, const struct jf_source *s,
 		if (kind==JF_DOMAIN_APEX) {
 			const char *d=t[1];
 			if (!strncmp(d,"*.",2)) { kind=JF_DOMAIN_SUBDOMAINS; d+=2; }
-			if (!domain(d)) return fail(p,"E_DOMAIN","invalid ASCII domain");
+			if (!jf_valid_domain(d)) return fail(p,"E_DOMAIN","invalid ASCII domain");
 			fold(t[1]);
 		} else if (kind==JF_ADDRESS) {
 			if (!jf_normalize_mailbox(t[1])) return fail(p,"E_ADDRESS","invalid exact mailbox");
@@ -603,5 +603,80 @@ done:
 	release(pol,refs);
 	if (rc) jf_policy_free(pol);
 	else *out=pol;
+	return rc;
+}
+
+static char *copy_text(struct jf_policy *p, struct jf_text text)
+{
+	char *s=allocate(p,text.size+1);
+	if (s) { memcpy(s,text.data,text.size); s[text.size]=0; }
+	return s;
+}
+
+static size_t cached_number(struct jf_text text)
+{
+	size_t i,n=0;
+	for (i=0;i<text.size;i++) n=n*10+(text.data[i]-'0');
+	return n;
+}
+
+int jf_policy_restore(const struct jf_cached_rule *records, size_t count,
+	const struct jf_allocator *allocator, struct jf_policy **out, struct jf_error *error)
+{
+	struct jf_allocator a={NULL,default_allocate,default_release};
+	struct jf_policy *pol;
+	struct parser p={NULL,error,SIZE_MAX,0};
+	size_t i;
+	int rc=3;
+	*out=NULL;
+	if (allocator) a=*allocator;
+	if (!a.allocate || !a.release || count<JF_BUILTIN_RULES || count>JF_RULE_RECORD_MAX)
+		return fail(&p,"E_MEMORY","invalid cache reconstruction allocator/count");
+	pol=a.allocate(a.context,sizeof *pol);
+	if (!pol) return fail(&p,"E_MEMORY","policy allocation failed");
+	memset(pol,0,sizeof *pol); pol->allocator=a; p.policy=pol;
+	pol->locale=newlocale(LC_ALL_MASK,"C",(locale_t)0);
+	if (!pol->locale) goto memory;
+	pol->entries=allocate(pol,count*sizeof *pol->entries);
+	if (!pol->entries) goto memory;
+	memset(pol->entries,0,count*sizeof *pol->entries); pol->count=pol->capacity=count;
+	for (i=0;i<count;i++) {
+		const struct jf_text *f=records[i].fields;
+		struct jf_entry *entry=&pol->entries[i];
+		struct jf_rule *r=&entry->rule;
+		char kind[32];
+		/* All lengths, decimals, kinds and embedded NULs were validated before
+		 * reconstruction. No source-order resolution or ID regeneration here. */
+		memcpy(kind,f[2].data,f[2].size); kind[f[2].size]=0;
+		r->kind=!strcmp(kind,"address") ? JF_ADDRESS : !strcmp(kind,"domain-apex") ? JF_DOMAIN_APEX :
+			!strcmp(kind,"domain-subdomains") ? JF_DOMAIN_SUBDOMAINS : !strcmp(kind,"ere") ? JF_ERE :
+			!strcmp(kind,"sender-contains") ? JF_SENDER_CONTAINS : !strcmp(kind,"spam-is") ? JF_SPAM_IS : JF_ALWAYS;
+		r->stage=(unsigned)cached_number(f[1]); r->fields=(unsigned)cached_number(f[3]);
+		r->line=cached_number(f[10]); r->occurrence=1; entry->order=i;
+		memcpy(r->id,f[4].data,f[4].size); r->id[f[4].size]=0;
+		r->action="move";
+		r->selector=copy(pol,""); r->source_identity=copy(pol,"");
+		r->predicate=copy_text(pol,f[5]); r->logical=copy_text(pol,f[6]);
+		r->local=copy_text(pol,f[7]); r->sieve=copy_text(pol,f[8]); r->source=copy_text(pol,f[9]);
+		if (!r->selector || !r->source_identity || !r->predicate || !r->logical ||
+			!r->local || !r->sieve || !r->source) goto memory;
+		if (r->kind==JF_ERE) {
+			locale_t old=uselocale(pol->locale);
+			if (!old) goto memory;
+			rc=regcomp(&entry->regex,r->predicate,REG_EXTENDED|REG_ICASE|REG_NOSUB);
+			uselocale(old);
+			if (rc) {
+				rc=fail(&p,rc==REG_ESPACE ? "E_MEMORY" : "E_CACHE","cached regex compilation failed");
+				if (rc==4) rc=5;
+				goto done;
+			}
+			entry->compiled=1;
+		}
+	}
+	rc=jf_policy_build_index(pol,error); goto done;
+memory:
+	rc=fail(&p,"E_MEMORY","cache policy allocation failed");
+done:
+	if (rc) jf_policy_free(pol); else *out=pol;
 	return rc;
 }

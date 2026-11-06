@@ -288,6 +288,13 @@ int jf_cache_validate(const unsigned char *data, size_t size, const struct jf_by
 					memcpy(address,f[5].data,f[5].size); address[f[5].size]=0;
 					if (!jf_normalize_mailbox(address) || strlen(address)!=f[5].size || memcmp(address,f[5].data,f[5].size)) goto bad;
 					for (k=0;k<f[5].size;k++) if (address[k]>='A' && address[k]<='Z') goto bad;
+				} else {
+					char domain[JF_LINE_MAX+1]; size_t k,skip=equal(f[2],"domain-subdomains") ? 2 : 0;
+					if (!(stage==3 || stage==4 || stage==5) || f[5].size<=skip ||
+						(skip && memcmp(f[5].data,"*.",2))) goto bad;
+					memcpy(domain,f[5].data+skip,f[5].size-skip); domain[f[5].size-skip]=0;
+					if (!jf_valid_domain(domain)) goto bad;
+					for (k=0;domain[k];k++) if (domain[k]>='A' && domain[k]<='Z') goto bad;
 				}
 			} else if (equal(f[2],"ere")) {
 				char pattern[JF_LINE_MAX+1];
@@ -310,6 +317,40 @@ int jf_cache_validate(const unsigned char *data, size_t size, const struct jf_by
 	return 0;
 bad:
 	jf_product_error(error,"E_CACHE",0,"incompatible, noncanonical or corrupt generation product"); return 5;
+}
+
+int jf_cache_policy(const struct jf_bytes *cache, const struct jf_allocator *allocator,
+	struct jf_policy **out, struct jf_error *error)
+{
+	struct jf_cached_rule *rules=NULL;
+	size_t pos=92,i,j,n=0;
+	int rc;
+	if (!out) return 5;
+	*out=NULL;
+	if (!cache || (cache->size && !cache->data)) {
+		jf_product_error(error,"E_CACHE",0,"missing cache bytes"); return 5;
+	}
+	if ((rc=jf_cache_validate(cache->data,cache->size,NULL,NULL,NULL,error))) return rc;
+	/* Validation established complete framing, record counts and order. Keep
+	 * views into the pinned bytes only until the shared policy owns its copies. */
+	for (i=0;i<read32(cache->data+88);i++) {
+		unsigned tag=cache->data[pos++], fields=read32(cache->data+pos); pos+=4;
+		if (tag=='R') n++;
+		for (j=0;j<fields;j++) { size_t size=read32(cache->data+pos); pos+=4+size; }
+	}
+	rules=malloc(n*sizeof *rules);
+	if (!rules) { jf_product_error(error,"E_MEMORY",0,"cache rule views allocation failed"); return 3; }
+	pos=92; n=0;
+	for (i=0;i<read32(cache->data+88);i++) {
+		unsigned tag=cache->data[pos++], fields=read32(cache->data+pos); pos+=4;
+		for (j=0;j<fields;j++) {
+			size_t size=read32(cache->data+pos); pos+=4;
+			if (tag=='R') { rules[n].fields[j].data=cache->data+pos; rules[n].fields[j].size=size; }
+			pos+=size;
+		}
+		if (tag=='R') n++;
+	}
+	rc=jf_policy_restore(rules,n,allocator,out,error); free(rules); return rc;
 }
 
 int jf_cache_dependencies(const struct jf_bytes *cache, struct jf_dependency **out, size_t *count)

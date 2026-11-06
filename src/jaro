@@ -118,6 +118,9 @@ a pipe | in front indicate they take an email body from stdin
 
  filter   process a maildir distributing emails according to Filters.txt
           (if none specified, processes incoming/ - called by fetch)
+          --explain renders native decisions without moving messages
+          --compare FILE compares retained JLC1 legacy observations
+          JARO_FILTER_ENGINE=legacy|native; default is legacy
 
 For a complete introductory documentation, see the User Manual (PDF)
 Website on <http://dyne.org/software/jaro-mail>
@@ -187,7 +190,7 @@ main() {
     option_subcommands[backup]=""
     option_subcommands[rmdupes]=""
     option_subcommands[merge]=""
-    option_subcommands[filter]=""
+    option_subcommands[filter]="e -explain=e c: -compare:=c"
     option_subcommands[deliver]=""
 
     option_subcommands[passwd]=""
@@ -209,7 +212,13 @@ main() {
     option_subcommands[isml]=""
     option_subcommands[ismd]=""
 
-	option.parse $* || return 1
+	option.parse "$@" || return 2
+    if [[ $subcommand == filter ]]; then
+        local filter_arg
+        for filter_arg in "$@"; do
+            [[ -n $filter_arg ]] || { error "Empty filter argument"; return 2; }
+        done
+    fi
 	func "subcommand: $subcommand"
 
     func "configure accounts in $ACCOUNTS"
@@ -364,6 +373,6 @@ main() {
 }
 
 
-main $@
+main "$@"
 # endgame NOERRORS
 # return $exitcode

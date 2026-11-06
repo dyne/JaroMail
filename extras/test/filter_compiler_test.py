@@ -71,7 +71,7 @@ class CompilerTests(unittest.TestCase):
             assert cls.work.is_absolute()
             cls.work.mkdir(mode=0o700, parents=True, exist_ok=False)
         else:
-            cls.temp = tempfile.TemporaryDirectory(prefix='jaro-compiler-', dir=os.environ.get('TMPDIR'))
+            cls.temp = tempfile.TemporaryDirectory(prefix='jaro-compiler-', dir=os.environ.get('JARO_FILTER_TEST_TMP') or os.environ.get('TMPDIR'))
             cls.work = Path(cls.temp.name)
         cls.objects = cls.work / 'objects'
         cls.driver = cls.objects / 'filter-compiler-driver'

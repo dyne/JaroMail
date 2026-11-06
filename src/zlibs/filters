@@ -43,18 +43,29 @@ filter_engine() {
 }
 
 native_filter_compile() {
+    setopt localoptions extendedglob
     local report fd result
     local -a fields args
     args=(--root "$MAILDIRS" --accounts-dir "$ACCOUNTS" --report0)
-    [[ $DRYRUN == 1 ]] && args+=(--check)
-    report=$("$WORKDIR/bin/jaro-filter-compile" "${args[@]}") || return $?
+    [[ $DRYRUN == 1 || ${native_filter_readonly:-0} == 1 ]] && args+=(--check)
+    # A sentinel prevents command substitution from stripping trailing LF from
+    # this binary protocol. Preserve the compiler's status independently.
+    report=$(
+        local capture_result=0
+        "$WORKDIR/bin/jaro-filter-compile" "${args[@]}" || capture_result=$?
+        print -rn -- $'\1'
+        exit $capture_result
+    )
+    result=$?
+    report=${report%$'\1'}
+    (( result == 0 )) || return $result
     fields=("${(@0)report}")
-    if [[ ${#fields} != 5 || "$fields[1]" != JFC1 || ${#fields[2]} != 64 ||
+    if [[ ${#fields} != 5 || "$fields[1]" != JFC1 || "$fields[2]" != [0-9a-f](#c64) ||
           "$fields[3]" != [01] || -n "$fields[5]" ]]; then
         error "Malformed native compiler report"; return 5
     fi
-    typeset -g filter_native_ready=1 filter_native_directory="$fields[4]"
-    [[ $DRYRUN == 1 ]] && return 0
+    typeset -g filter_native_ready=1 filter_native_directory="$fields[4]" filter_native_generation="$fields[2]"
+    [[ $DRYRUN == 1 || ${native_filter_readonly:-0} == 1 || ${1:-} == batch ]] && return 0
     exec {fd}<"$filter_native_directory/filters.zsh" || return 3
     source /dev/fd/$fd
     result=$?
@@ -284,8 +295,8 @@ EOF
 filter_maildir() {
   filter_engine || return $?
   if [[ "$REPLY" == native ]]; then
-    error "Native batch application awaits the jaro-filter integration (L5); no mail applied"
-    return 127
+    native_filter_maildir "$@"
+    return $?
   fi
   fn filter_maildir
   req=(MAILDIRS)
@@ -880,6 +891,18 @@ sieve_import() {
 }
 
 cmd_filter() {
-    filter_maildir ${option_params}
+    local native_filter_explain=0 native_filter_compare=''
+    option.is_set -e && native_filter_explain=1
+    if option.is_set -c; then
+        native_filter_compare=${option[-c]}
+        [[ -n $native_filter_compare ]] || { print -ru2 -- 'The --compare option requires an observation file'; return 2; }
+    fi
+    filter_engine || return $?
+    if [[ $REPLY == legacy && ( $native_filter_explain == 1 || -n $native_filter_compare ) ]]; then
+        error "Explain/compare requires explicit JARO_FILTER_ENGINE=native"
+        return 2
+    fi
+    (( ${#option_params} <= 1 )) || { error "filter accepts one Maildir"; return 2; }
+    filter_maildir "${option_params[@]}"
     exitcode=$?
 }

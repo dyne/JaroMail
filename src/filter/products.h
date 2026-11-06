@@ -57,4 +57,9 @@ void jf_products_free(struct jf_products *);
  * Does not use manifest.json as an authority. Returns 0 or status 5. */
 int jf_cache_validate(const unsigned char *, size_t, const struct jf_bytes *,
 	const struct jf_bytes *, const unsigned char *, struct jf_error *);
+/* Reconstruct the shared indexed model from canonical R records, preserving
+ * serialized IDs, order, provenance and mapped destinations. Never reads source
+ * inputs. On failure *out is NULL; returns 3 for resources or 5 for bad cache. */
+int jf_cache_policy(const struct jf_bytes *, const struct jf_allocator *,
+	struct jf_policy **out, struct jf_error *);
 #endif
