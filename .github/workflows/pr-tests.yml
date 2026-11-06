@@ -23,10 +23,21 @@ jobs:
 
       - name: Set build and test paths
         run: |
+          cross_fs_dir="$(mktemp -d /dev/shm/jaromail-cross-fs.XXXXXXXX)"
+          python3 - "$cross_fs_dir" <<'PY'
+          from pathlib import Path
+          import sys
+          import tempfile
+          cross = Path(sys.argv[1])
+          for source in (Path.cwd(), Path(tempfile.gettempdir())):
+              if cross.stat().st_dev == source.stat().st_dev:
+                  raise SystemExit(f'Cross-filesystem fixture shares a filesystem with {source}')
+          PY
           printf '%s\n' \
             "CCACHE_DIR=$RUNNER_TEMP/jaromail-ccache" \
             "SIEVE_TOOLS_OUTPUT=$RUNNER_TEMP/jaromail-sieve-tools" \
-            "JARO_TEST_LOG_DIR=$RUNNER_TEMP/jaromail-test-logs" >> "$GITHUB_ENV"
+            "JARO_TEST_LOG_DIR=$RUNNER_TEMP/jaromail-test-logs" \
+            "JARO_FILTER_CROSS_FS_DIR=$cross_fs_dir" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: |

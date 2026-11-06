@@ -48,6 +48,7 @@ touch "$MAILDIRS/Filters.txt"
   assert_equal "$account" "" "account selection restored"
 )
 (
+  DRYRUN=0
   fetch() { return 9; }
   update_filters() { print unexpected > "$tmp_root/updated"; }
   option_params=()
