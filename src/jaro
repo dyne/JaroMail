@@ -148,7 +148,7 @@ main() {
 
     option_subcommands[update]=""
     option_subcommands[sieve]=""
-    option_subcommands[sieve-import]=""
+    option_subcommands[sieve-import]="L -legacy-generated=L"
 
     option_subcommands[stat]=""
 
@@ -212,6 +212,15 @@ main() {
     option_subcommands[isml]=""
     option_subcommands[ismd]=""
 
+	# Import takes exactly one file. The shared option library declares unique
+	# arrays; retain repeated positional arguments so validation can reject them.
+	if (( ${@[(Ie)sieve-import]} )); then
+		typeset +U option_params
+		local import_arg
+		for import_arg in "$@"; do
+			[[ -n $import_arg ]] || { error "Empty sieve-import argument"; return 2; }
+		done
+	fi
 	option.parse "$@" || return 2
     if [[ $subcommand == filter ]]; then
         local filter_arg

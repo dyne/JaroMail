@@ -1,0 +1,18 @@
+# Historical Jaromail layout, including duplicate contact exports and To before From.
+require ["fileinto", "mailbox", "variables"];
+if header :contains "From" ["blocked@example.org", "blocked@example.org"] {
+  fileinto :create "zz.blacklist"; stop;
+}
+if header :contains "Sender" "mailman-bounce" {
+  fileinto :create "zz.bounces"; stop;
+}
+if header :contains ["To", "Cc"] "team@example.org" { fileinto :create "team"; stop; }
+if header :contains ["From", "Sender"] "list@example.org" { fileinto :create "lists"; stop; }
+if header :contains ["From", "Sender"] ["Known Person <known@example.org>", "known@example.org"] {
+  fileinto :create "INBOX"; stop;
+}
+if header :is "X-Spam-Flag" "YES" { fileinto :create "Spam"; stop; }
+if header :contains ["To", "Cc"] ["alias@example.org", "own@example.org"] {
+  fileinto :create "priv"; stop;
+}
+fileinto :create "unsorted";

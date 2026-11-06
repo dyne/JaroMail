@@ -86,9 +86,16 @@ asserts exact IDs and destinations, success exits, byte hashes, duplicate-free
 accounting, empty-file deletion and empty-Maildir status. Target-only domain
 records are counted and validated separately (38 total authored decisions).
 Another 14 independently authored casing/cross-address targets are schema-checked
-by test-filter-contract.sh, for 52 target decisions overall. Native/Sieve semantic
-execution of those targets remains a later gate. The earlier local-part-sensitive
-draft was replaced before implementation by explicit whole-mailbox ASCII folding.
+by test-filter-contract.sh, for 52 original target decisions overall. The
+`test-filter-parity.sh` matrix now executes all 52 against authored winners, pure
+native classification, immutable batch classification and pinned Sieve, before
+and after bounded import. It additionally executes 17 mapping/escaping targets,
+empty-policy/no-create cases and the qualified regex corpus, with wrong-destination
+and wrong-priority mutation controls. The expanded `test-filtering.sh` retains
+the legacy observations and separately asserts nine actual native apply results;
+sender/blacklist/known/private cases must reach their named destinations with
+unchanged bodies. The earlier local-part-sensitive draft was replaced before
+implementation by explicit whole-mailbox ASCII folding.
 The existing filtering regression remains intact. Full suite: `make test-strict`.
 Tests use only disposable directories and synthetic messages; no services,
 provider credentials, live mail or keyrings are needed.

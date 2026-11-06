@@ -208,7 +208,7 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 # Native filtering requires explicit existing policy. In particular, a read-only
 # request must not materialize defaults before the option parser has run.
 [[ "$1" = "source" || ( ${JARO_FILTER_ENGINE-legacy} == native &&
-    ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 ) ) ]] || {
+    ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 || ${@[(Ie)sieve-import]} -gt 0 ) ) ]] || {
     [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
 
         # make sure we have an addressbook

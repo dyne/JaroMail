@@ -14,6 +14,8 @@ int jf_generation_open(const struct jf_generation *, const char *);
 void jf_generation_close(struct jf_generation *);
 int jf_compile(const char *, const char *, const char *, const char *, int,
 	struct jf_compile_result *, struct jf_error *, char **);
+int jf_compile_import(const char *, const char *, const char *, const char *,
+	const char *, int, int, struct jf_compile_result *, struct jf_error *, char **);
 void jf_compile_result_free(struct jf_compile_result *);
 /* Private legacy-export bridge: recover under the same exclusive lock and
  * exec the fixed wrapper command with its lock descriptor still open. */

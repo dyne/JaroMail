@@ -447,3 +447,41 @@ configuration. Stage all changed Filters.txt/books/aliases and a validated new
 generation, then publish under the same recoverable lock/journal boundary.
 On failed import restore every original input and previous generation/export;
 there must be no successful partial import or remote deployment.
+
+Native `jaro sieve-import FILE` now invokes this bounded importer;
+`jaro -n sieve-import FILE` validates the complete prospective generation without
+creating a cache or changing inputs. `--legacy-generated` selects only the
+documented old generated grammar and emits `W_LEGACY_SIEVE`; it does not grant
+regex export capability. Unset/explicit legacy dispatch retains the legacy
+importer. Legacy dry-run is rejected because that importer cannot stage safely.
+
+Stage position determines contacts, own addresses and builtins. Explicit route
+mailboxes must have a unique inverse under the selected profile: a declared
+mapping that also names a distinct destination in the namespace is ambiguous.
+For example, with an empty prefix an explicit route to `INBOX` could mean named
+`INBOX` or logical `known`; import rejects it. A prefix separating named mailboxes
+from explicit mappings avoids that ambiguity. A non-slash namespace separator
+occurring in an unmapped mailbox is likewise ambiguous between a literal
+component and a path boundary; provide an explicit mapping. Builtin-stage
+mailboxes are checked against their stage's configured mapping directly.
+
+Existing equivalent selectors are retained, including their source bytes and
+provenance. New rules append in imported source order; an existing selector with
+a different destination, a reversed existing/imported order, duplicate script
+predicates or a new rule that would need insertion before an existing imported
+rule fails closed. Unrelated rules keep their original priority. Contacts append
+fresh numeric abook records without rewriting existing names/comments; imported
+contacts use the name `Imported Sieve`. Own addresses already supplied by accounts
+remain in those accounts rather than becoming aliases. Original import files are
+never moved or deleted. Mutable input symlinks are refused by import.
+
+Imports take the exclusive publication lock, validate snapshots with prospective
+input bytes in memory, stage/verify every product, and recheck the entire original
+inventory after staging. `import.journal` durably records the four fixed input
+paths' presence/modes before replacement. Its backups and the ordinary generation
+journal share one commit marker. Recovery restores all uncommitted inputs plus
+the prior selector/export, or retains all committed views. Readers and read-only
+checks reject an unfinished input journal; the next mutating compiler invocation
+recovers under the lock. SIGKILL may retain an owner's private `.building-*`
+directory; recovery never sweeps unrelated staging directories. These checks do
+not claim power-loss testing or isolation from arbitrary writers ignoring locks.

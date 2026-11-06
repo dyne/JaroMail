@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "generation.h"
+#include "import.h"
 #include <sys/stat.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -233,11 +234,12 @@ int jf_generation_open(const struct jf_generation *g,const char *name)
 }
 
 static int committed_journal(struct location *,char [65]);
+static int recover_inputs(struct location *,int);
 
 static int unfinished(struct location *l)
 {
 	char id[65];
-	return exists(l->engine,"journal")!=0 && !committed_journal(l,id);
+	return (exists(l->engine,"journal")!=0 || exists(l->engine,"import.journal")!=0) && !committed_journal(l,id);
 }
 
 static int public_status(struct location *l,const struct jf_generation *g)
@@ -251,7 +253,7 @@ static int public_status(struct location *l,const struct jf_generation *g)
 static int pin_locked(struct location *l,const char *requested,struct jf_generation *g,struct jf_error *error)
 {
 	char id[65],committed[65]; int fd,rc,transaction=exists(l->engine,"journal");
-	if (transaction && !committed_journal(l,committed)) return 5;
+	if ((transaction || exists(l->engine,"import.journal")) && !committed_journal(l,committed)) return 5;
 	if (requested) { if (!valid_id(requested)) return 5; strcpy(id,requested); }
 	else { if (selector(l,id) || !*id) return 5; }
 	fd=directory(l->generations,id,0); if (fd<0) return 5;
@@ -338,11 +340,86 @@ done:
 	jf_bytes_free(&marker); return valid;
 }
 
+static void input_name(char name[40],size_t i,const char *suffix)
+{
+	snprintf(name,40,"import-%zu.%s",i,suffix);
+}
+
+static int recover_inputs(struct location *l,int committed)
+{
+	struct jf_bytes journal={0}; size_t i; int rc=3;
+	int changed[4]={0},present[4]={0}; unsigned modes[4]={0};
+	if (exists(l->engine,"import.journal")) {
+		char canonical[160]; size_t offset=0; int pos=0,n;
+		if (load(l->engine,"import.journal",&journal,160) || jf_bytes_add(&journal,"",1)) goto done;
+		for (i=0;i<4;i++) {
+			if (sscanf((char *)journal.data+offset,"%1d %1d %3o%n",&changed[i],&present[i],&modes[i],&pos)!=3 ||
+				changed[i]>1 || present[i]>1 || modes[i]>0777 || journal.data[offset+(size_t)pos]!='\n') goto done;
+			n=snprintf(canonical,sizeof canonical,"%d %d %o\n",changed[i],present[i],modes[i]);
+			if (n!=pos+1 || offset+(size_t)n>=journal.size || memcmp(canonical,journal.data+offset,(size_t)n)) goto done;
+			offset+=(size_t)n;
+		}
+		if (offset+1!=journal.size) goto done;
+		if (!committed) for (i=0;i<4;i++) if (changed[i]) {
+			char backup[40],restore[40]; int fd;
+			input_name(backup,i,"backup"); input_name(restore,i,"restore");
+			if (present[i]) {
+				if (remove_file(l->engine,restore) || copy_file(l->engine,backup,l->engine,restore,"import-restore")) goto done;
+				fd=openat(l->engine,restore,O_RDONLY|O_NOFOLLOW); if (fd<0) goto done;
+				if (fchmod(fd,(mode_t)modes[i]) || fsync(fd)) { close(fd); goto done; } close(fd);
+				if (renameat(l->engine,restore,l->root,jf_import_names[i])) goto done;
+			} else if (remove_file(l->root,jf_import_names[i])) goto done;
+		}
+		if (fsync(l->root) || fsync(l->engine) || remove_file(l->engine,"import.journal") || fsync(l->engine)) goto done;
+	}
+	for (i=0;i<4;i++) {
+		char name[40]; size_t j; const char *suffixes[]={"backup","next","restore"};
+		for (j=0;j<3;j++) { input_name(name,i,suffixes[j]); if (remove_file(l->engine,name)) goto done; }
+	}
+	if (remove_file(l->engine,"import.journal.next") || fsync(l->engine)) goto done;
+	rc=0;
+done:
+	jf_bytes_free(&journal); return rc;
+}
+
+static int prepare_inputs(struct location *l,const struct jf_bytes *original,const struct jf_bytes *output,
+	const int *present,const mode_t *modes,const int *changed)
+{
+	size_t i; struct jf_bytes journal={0}; int rc=3;
+	for (i=0;i<4;i++) {
+		char name[40],line[40];
+		if (changed[i]) {
+			input_name(name,i,"backup");
+			if (present[i] && save(l->engine,name,original[i].data,original[i].size,"import-backup")) goto done;
+			input_name(name,i,"next");
+			if (save(l->engine,name,output[i].data,output[i].size,"import-stage")) goto done;
+		}
+		snprintf(line,sizeof line,"%d %d %o\n",changed[i],present[i],(unsigned)modes[i]);
+		if (jf_bytes_text(&journal,line)) goto done;
+	}
+	if (save(l->engine,"import.journal.next",journal.data,journal.size,"import-journal") ||
+		renameat(l->engine,"import.journal.next",l->engine,"import.journal") || syncfd(l->engine,"import-fsync-journal") ||
+		hook("import-prepared")) goto done;
+	for (i=0;i<4;i++) if (changed[i]) {
+		char name[40]; int fd; input_name(name,i,"next");
+		fd=openat(l->engine,name,O_RDONLY|O_NOFOLLOW); if (fd<0) goto done;
+		if (fchmod(fd,modes[i]) || fsync(fd)) { close(fd); goto done; } close(fd);
+		if (hook("import-rename-input") || renameat(l->engine,name,l->root,jf_import_names[i]) || hook("import-input-renamed")) goto done;
+	}
+	if (syncfd(l->root,"import-fsync-root") || hook("import-inputs-published")) goto done;
+	rc=0;
+done:
+	jf_bytes_free(&journal); return rc;
+}
+
 static int recover(struct location *l)
 {
 	struct jf_bytes marker={0};
 	char old[65],next[65]; int public_present,rc=3; unsigned mode;
-	if (exists(l->engine,"journal")==0) return cleanup_transaction(l);
+	if (exists(l->engine,"journal")==0) {
+		if (recover_inputs(l,0)) return 3;
+		return cleanup_transaction(l);
+	}
 	if (read_journal(l,old,&public_present,&mode,next)) goto done;
 	if (exists(l->engine,"committed")) {
 		struct jf_generation committed={0}; committed.directory=-1;
@@ -362,6 +439,9 @@ static int recover(struct location *l)
 		} else if (remove_file(l->root,"Filters.sieve")) goto done;
 		if (set_selector(l,!strcmp(old,"-") ? "" : old,"current.rollback","recover-selector") || fsync(l->root) || fsync(l->engine)) goto done;
 	}
+	/* The same commit marker covers inputs, public export and selector. Keep
+	 * the main journal until input recovery/cleanup is durable and repeatable. */
+	if ((rc=recover_inputs(l,marker.size==64))) goto done;
 	rc=cleanup_transaction(l);
 done:
 	jf_bytes_free(&marker); return rc;
@@ -452,6 +532,114 @@ int jf_generation_legacy_run(const char *root,char *const argv[])
 	close(held);
 done:
 	location_close(&l); return rc;
+}
+
+int jf_compile_import(const char *root,const char *accounts,const char *profile,const char *compiler,
+	const char *script,int legacy,int check,struct jf_compile_result *result,struct jf_error *error,char **error_path)
+{
+	struct location l={-1,-1,-1,-1}; struct jf_snapshot before={0},after={0},recheck={0};
+	struct jf_policy *imported=NULL; struct jf_products products={0}; struct jf_bytes input={0};
+	struct jf_bytes original[4]={{0}},output[4]={{0}};
+	struct jf_input_override overrides[4]; char *paths[4]={0},*temporary=NULL,*engine=join(root,"cache/filter-engine");
+	int present[4]={0},changed[4]={0},rc=3,fd=-1,prepared=0,stage_ready=0; mode_t modes[4]={0600,0600,0600,0600};
+	unsigned char fingerprint[32],again[32]; char old[65]; size_t i,count=0;
+	struct stat st;
+	memset(result,0,sizeof *result); *error_path=NULL; if (error) memset(error,0,sizeof *error);
+	if (!engine) goto done;
+	/* Snapshot the source descriptor; never modify or remove the import file. */
+	fd=open(script,O_RDONLY|O_NONBLOCK);
+	if (fd<0 || fstat(fd,&st) || !S_ISREG(st.st_mode)) goto script_error;
+	for (;;) {
+		unsigned char bytes[16384]; ssize_t n=read(fd,bytes,sizeof bytes);
+		if (n<0 && errno==EINTR) continue;
+		if (n<0) goto script_error;
+		if (!n) break;
+		if (!jf_bytes_fits(input.size,(size_t)n,JF_INPUT_MAX)) { rc=4; jf_product_error(error,"E_SIEVE_IMPORT",0,"script exceeds 64 MiB"); goto script_error; }
+		if (jf_bytes_add(&input,bytes,(size_t)n)) goto script_error;
+	}
+	if (close(fd)) { fd=-1; goto script_error; } fd=-1;
+	rc=locate(root,!check,&l);
+	if (rc && !(check && rc==5)) goto done;
+	if (!rc && ((rc=lock(&l,!check)) || (check ? unfinished(&l) ? (rc=5) : 0 : (rc=recover(&l))))) goto done;
+	if (l.root>=0 && !same_root(&l,root)) { rc=6; goto done; }
+	if ((rc=jf_snapshot_read(root,accounts,profile,compiler,NULL,&before,error))) goto source_error;
+	if ((rc=jf_sieve_import(&input,legacy,&before.profile,&imported,error))) goto script_error;
+	if (legacy) fputs("W_LEGACY_SIEVE recovered generated header-contains rules; policy-v1 parsed-address/ERE semantics replace legacy substring behavior\n",stderr);
+	/* Read complete originals for byte-preserving merge and rollback. Import
+	 * deliberately refuses to replace input symlinks or nonregular objects. */
+	for (i=0;i<4;i++) {
+		int rootfd=l.root;
+		paths[i]=join(root,jf_import_names[i]); if (!paths[i]) { rc=3; goto done; }
+		if (rootfd<0) { rootfd=open(root,O_RDONLY|O_DIRECTORY); if (rootfd<0) { rc=3; goto done; } }
+		present[i]=exists(rootfd,jf_import_names[i]);
+		rc=present[i]<0 ? 3 : present[i] ? load_mode(rootfd,jf_import_names[i],&original[i],JF_INPUT_MAX,0,&modes[i]) : 0;
+		if (l.root<0) close(rootfd);
+		if (rc) { jf_product_error(error,"E_IMPORT_INPUT",0,"import inputs must be regular files, never replacement symlinks"); goto done; }
+	}
+	if ((rc=jf_import_merge(before.policy,imported,original,output,error))) goto done;
+	for (i=0;i<4;i++) {
+		changed[i]=original[i].size!=output[i].size || (original[i].size && memcmp(original[i].data,output[i].data,original[i].size));
+		if (changed[i]) { overrides[count].path=paths[i]; overrides[count++].bytes=&output[i]; }
+	}
+	if ((rc=jf_snapshot_overlay(root,accounts,profile,compiler,overrides,count,&after,error)) ||
+		(rc=jf_snapshot_parse(&after,error)) ||
+		(rc=jf_products_build(after.policy,&after.profile,after.dependencies,after.dependency_count,&products,error))) goto source_error;
+	if ((rc=jf_dependencies_fingerprint(before.dependencies,before.dependency_count,fingerprint)) ||
+		(rc=jf_snapshot_collect(root,accounts,profile,compiler,&before,&recheck,error)) ||
+		(rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) goto source_error;
+	if (memcmp(fingerprint,again,32)) { rc=6; goto done; }
+	if (check) { strcpy(result->id,products.id); rc=0; goto done; }
+	if ((rc=selector(&l,old)) || (rc=stage(&l,engine,&products,&temporary,error))) goto done;
+	stage_ready=1;
+	if (!same_root(&l,root)) { rc=6; goto done; }
+	if (exists(l.generations,products.id)==0) {
+		if (hook("rename-generation") || renameat(l.engine,temporary,l.generations,products.id)) { rc=3; goto done; }
+		stage_ready=0;
+	} else {
+		struct jf_generation existing={0}; int directory_fd=directory(l.generations,products.id,0); existing.directory=-1;
+		rc=directory_fd<0 ? 5 : validate_directory(directory_fd,products.id,&existing,error);
+		if (directory_fd>=0) close(directory_fd);
+		if (!rc && (existing.cache.size!=products.cache.size || memcmp(existing.cache.data,products.cache.data,products.cache.size))) rc=5;
+		jf_generation_close(&existing); if (rc) goto done;
+	}
+	if (syncfd(l.generations,"fsync-generations")) { rc=3; goto done; }
+	/* Staging/exporter work may take time. Recheck the complete original
+	 * inventory immediately before preparing any input publication. */
+	jf_snapshot_free(&recheck);
+	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,&before,&recheck,error)) ||
+		(rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) goto source_error;
+	if (memcmp(fingerprint,again,32)) { rc=6; goto done; }
+	{
+		char *generations=join(engine,"generations");
+		result->directory=generations ? join(generations,products.id) : NULL; free(generations);
+		if (!result->directory) { rc=3; goto done; }
+	}
+	if (count) {
+		prepared=1;
+		if ((rc=prepare_inputs(&l,original,output,present,modes,changed))) goto done;
+	}
+	if (!strcmp(old,products.id) && !count) {
+		struct jf_generation same={0}; same.sieve=products.sieve;
+		rc=public_status(&l,&same);
+		if (rc==5) { rc=publish(&l,old,&products); if (!rc) result->changed=1; }
+	} else { rc=publish(&l,old,&products); if (!rc) result->changed=1; }
+	if (!rc) strcpy(result->id,products.id);
+	goto done;
+script_error:
+	*error_path=strdup(script); goto done;
+source_error:
+	{
+		const struct jf_rule *r=error && error->code && !strcmp(error->code,"E_REGEX_EXPORT") ? jf_policy_rule(after.policy,error->source) : NULL;
+		*error_path=strdup(r ? r->source : after.error_path ? after.error_path : before.error_path ? before.error_path : root);
+	}
+done:
+	if (rc && prepared && l.engine>=0) { (void)remove_file(l.engine,"committed"); (void)recover(&l); }
+	if (temporary && (stage_ready || exists(l.engine,temporary)==1)) discard_stage(l.engine,temporary);
+	if (rc && error && !error->code) jf_product_error(error,rc==6 ? "E_BUSY_OR_CHANGED" : "E_IMPORT_IO",0,"import failed; no partial configuration is committed");
+	if (fd>=0) close(fd);
+	for (i=0;i<4;i++) { free(paths[i]); jf_bytes_free(&original[i]); jf_bytes_free(&output[i]); }
+	jf_bytes_free(&input); jf_policy_free(imported); jf_snapshot_free(&before); jf_snapshot_free(&after); jf_snapshot_free(&recheck);
+	jf_products_free(&products); free(temporary); free(engine); location_close(&l); return rc;
 }
 
 int jf_compile(const char *root,const char *accounts,const char *profile,const char *compiler,int check,

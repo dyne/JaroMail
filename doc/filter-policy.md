@@ -118,8 +118,24 @@ with rule/source-line migration diagnostics and leave the previous generation
 usable; never omit or weaken a rule. Capabilities and mailbox mappings are
 configurable. No remote provider compatibility is claimed.
 
-The current characterization checks generated Sieve text, not Sieve execution.
-Later milestones must run the same independently expected decisions through
-the native matcher and pinned `sieve-test`; backend agreement alone is not proof.
-Domain fixture integrity checks currently validate coverage/metadata only and
-must not be reported as executed domain classification.
+The legacy characterization checks generated text separately from native
+semantic proof. `zsh extras/test/test-filter-parity.sh` now drives the independently
+authored winners through the pure C policy/header path, immutable-generation
+batch classification, and actual pinned Pigeonhole `sieve-test` simulation.
+It checks all 52 original targets, 17 independently authored mapping/escaping
+targets, four empty-policy cases, and 141 qualified regex cases both before and
+after bounded import; four additional core/no-create decisions give 432 positive
+decisions per backend. Native rule IDs are calculated from the authored winning
+record, never selected from cache/backend output. Sieve actions are compared
+through the authored server mapping, with no implicit keep or delivery.
+
+Two mutation controls require failure: a source destination mutation makes all
+three executable authorities agree on the wrong result, which the authored
+expectation rejects; swapping From/To Sieve stages produces an independently
+detected priority error. Full interpreter traces and exact commands are retained
+with matrix evidence. The old `test-filtering.sh` also applies native policy to
+nine disposable named messages and asserts blacklist, bounce, From/Sender, To,
+known, private, spam and fallback destinations with exact body preservation.
+Set `JARO_FILTER_PARITY_WORK` to a new absolute directory to retain the complete
+matrix, exact command logs, copied oracle inputs and interpreter traces; otherwise
+the suite removes its disposable work after reporting counts.

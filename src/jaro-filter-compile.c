@@ -50,7 +50,7 @@ int main(int argc,char **argv)
 	struct jf_compile_result result={0}; struct jf_error error={0};
 	for (i=1;i<argc;i++) {
 		const char **slot=NULL;
-		if (!strcmp(argv[i],"--help") && argc==2) { puts("jaro-filter-compile --root ROOT [--accounts-dir DIR] [--profile FILE] [--check] [--report0]"); return 0; }
+		if (!strcmp(argv[i],"--help") && argc==2) { puts("jaro-filter-compile --root ROOT [--accounts-dir DIR] [--profile FILE] [--import-sieve FILE [--legacy-generated]] [--check] [--report0]"); return 0; }
 		if (!strcmp(argv[i],"--version") && argc==2) { puts(JF_COMPILER_ID); return 0; }
 		if (!strcmp(argv[i],"--root")) slot=&root;
 		else if (!strcmp(argv[i],"--accounts-dir")) slot=&accounts;
@@ -64,7 +64,6 @@ int main(int argc,char **argv)
 		if (slot) { if (*slot || i+1==argc || !*argv[i+1]) goto usage; *slot=argv[++i]; }
 	}
 	if (!root || !*root || (legacy && !import)) goto usage;
-	if (import) { fputs("E_IMPORT unsupported until bounded native import is available\n",stderr); return 4; }
 	resolved=absolute(root);
 #ifdef __linux__
 	compiler=strdup("/proc/self/exe");
@@ -72,7 +71,8 @@ int main(int argc,char **argv)
 	compiler=executable(argv[0]);
 #endif
 	if (!resolved || !compiler) { rc=3; goto done; }
-	rc=jf_compile(resolved,accounts,profile,compiler,check,&result,&error,&error_path);
+	rc=import ? jf_compile_import(resolved,accounts,profile,compiler,import,legacy,check,&result,&error,&error_path) :
+		jf_compile(resolved,accounts,profile,compiler,check,&result,&error,&error_path);
 	if (!rc && report) {
 		fwrite("JFC1",1,5,stdout); fwrite(result.id,1,65,stdout);
 		fwrite(result.changed ? "1" : "0",1,2,stdout);

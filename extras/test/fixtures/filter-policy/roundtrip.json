@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "authority": "Independently authored policy-v1 import and mapping expectations; never regenerate from either engine",
+  "rules": [
+    "from-domain vendor.example move vendors",
+    "from-address exact@vendor.example move exact",
+    "to-address team@project.example move \"Project People\"",
+    "to-domain project.example move projects",
+    "from-address \"\\\"a b\\\"@escaped.example\" move \"Project \\\"Q\\\"\\\\People\"",
+    "known-domain example.org",
+    "known-domain *.example.org"
+  ],
+  "known": ["known@friend.example"],
+  "blacklist": ["blocked@example.org"],
+  "own": ["own@home.example"],
+  "profile": "version 1\nprofile core-v1\ncapability fileinto\ncapability mailbox\ncreate-mailboxes yes\nnamespace-prefix Box/\nnamespace-separator /\nmailbox known \"Inbox Known\"\nmailbox spam \"Spam Custom\"\nmailbox vendors \"Vendors & Friends\"\n",
+  "cases": [
+    {"id":"rt-blacklist-before-domain", "headers":{"From":"blocked@example.org"}, "rule":"blacklist:blocked@example.org", "action":"move", "local":"zz.blacklist", "sieve":"Box/zz.blacklist"},
+    {"id":"rt-bounce-before-route", "headers":{"From":"exact@vendor.example", "Sender":"mailman-bounce@list.example"}, "rule":"builtin:bounce", "action":"move", "local":"zz.bounces", "sieve":"Box/zz.bounces"},
+    {"id":"rt-domain-before-exact", "headers":{"From":"exact@vendor.example"}, "rule":"filters:1", "action":"move", "local":"vendors", "sieve":"Vendors & Friends"},
+    {"id":"rt-sender-domain", "headers":{"Sender":"sender@VENDOR.EXAMPLE"}, "rule":"filters:1", "action":"move", "local":"vendors", "sieve":"Vendors & Friends"},
+    {"id":"rt-exact-before-domain", "headers":{"Cc":"team@project.example"}, "rule":"filters:3", "action":"move", "local":"Project People", "sieve":"Box/Project People"},
+    {"id":"rt-to-domain", "headers":{"To":"other@project.example"}, "rule":"filters:4", "action":"move", "local":"projects", "sieve":"Box/projects"},
+    {"id":"rt-from-before-to", "headers":{"From":"other@vendor.example", "To":"team@project.example"}, "rule":"filters:1", "action":"move", "local":"vendors", "sieve":"Vendors & Friends"},
+    {"id":"rt-escaped-mailbox", "headers":{"From":"\"a b\"@escaped.example"}, "rule":"filters:5", "action":"move", "local":"Project \"Q\"\\People", "sieve":"Box/Project \"Q\"\\People"},
+    {"id":"rt-known-contact", "headers":{"From":"known@friend.example"}, "rule":"known:known@friend.example", "action":"move", "local":"known", "sieve":"Inbox Known"},
+    {"id":"rt-domain-apex", "headers":{"From":"a@example.org"}, "rule":"filters:6", "action":"move", "local":"known", "sieve":"Inbox Known"},
+    {"id":"rt-domain-deep", "headers":{"From":"a@deep.child.example.org"}, "rule":"filters:7", "action":"move", "local":"known", "sieve":"Inbox Known"},
+    {"id":"rt-domain-boundary", "headers":{"From":"a@badexample.org"}, "rule":"builtin:unsorted", "action":"move", "local":"unsorted", "sieve":"Box/unsorted"},
+    {"id":"rt-domain-suffix", "headers":{"From":"a@example.org.attacker.net"}, "rule":"builtin:unsorted", "action":"move", "local":"unsorted", "sieve":"Box/unsorted"},
+    {"id":"rt-known-before-spam", "headers":{"From":"a@example.org", "X-Spam-Flag":"YES"}, "rule":"filters:6", "action":"move", "local":"known", "sieve":"Inbox Known"},
+    {"id":"rt-spam-before-own", "headers":{"To":"own@home.example", "X-Spam-Flag":"yes"}, "rule":"builtin:spam", "action":"move", "local":"zz.spam", "sieve":"Spam Custom"},
+    {"id":"rt-own-cc", "headers":{"Cc":"OWN@HOME.EXAMPLE"}, "rule":"own:own@home.example", "action":"move", "local":"priv", "sieve":"Box/priv"},
+    {"id":"rt-empty-fields", "headers":{}, "rule":"builtin:unsorted", "action":"move", "local":"unsorted", "sieve":"Box/unsorted"}
+  ]
+}

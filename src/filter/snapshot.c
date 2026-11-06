@@ -145,7 +145,13 @@ static int input(struct jf_snapshot *s, const char *role, const char *path, int 
 {
 	int fd,rc;
 	struct stat st,after;
+	size_t i;
 	if (diagnostic(s,path)) return 3;
+	for (i=0;i<s->override_count;i++) if (!strcmp(path,s->overrides[i].path)) {
+		const struct jf_bytes *b=s->overrides[i].bytes;
+		if (jf_bytes_add(bytes,b->data,b->size)) return 3;
+		return dep(s,role,path,1,b->data,b->size,NULL,0);
+	}
 	if (link_dep(s,role,path)) return 3;
 	fd=open(path,O_RDONLY|O_NONBLOCK);
 	if (fd<0) {
@@ -305,8 +311,9 @@ done:
 	free(name); jf_bytes_free(&result); return rc;
 }
 
-int jf_snapshot_collect(const char *root, const char *accounts_arg, const char *profile_arg,
-	const char *compiler, const struct jf_snapshot *prior, struct jf_snapshot *out, struct jf_error *error)
+static int collect(const char *root, const char *accounts_arg, const char *profile_arg,
+	const char *compiler, const struct jf_snapshot *prior, const struct jf_input_override *overrides,
+	size_t override_count, struct jf_snapshot *out, struct jf_error *error)
 {
 	struct jf_snapshot s={0};
 	struct jf_bytes bytes={0},inventory={0},execbytes={0};
@@ -315,6 +322,7 @@ int jf_snapshot_collect(const char *root, const char *accounts_arg, const char *
 	struct stat st;
 	size_t i;
 	int rc=3;
+	s.overrides=overrides; s.override_count=override_count;
 	memset(out,0,sizeof *out); if (error) memset(error,0,sizeof *error);
 	if (!accounts) goto memory;
 	if (diagnostic(&s,root) || link_dep(&s,"root",root)) goto io;
@@ -409,7 +417,20 @@ io:
 	else rc=jf_product_error(error,"E_IO",0,"cannot snapshot input or export addressbook");
 done:
 	free(accounts); free(path); free(exporter); jf_bytes_free(&bytes); jf_bytes_free(&execbytes); jf_bytes_free(&inventory);
-	*out=s; return rc;
+	s.overrides=NULL; s.override_count=0; *out=s; return rc;
+}
+
+int jf_snapshot_collect(const char *root, const char *accounts, const char *profile,
+	const char *compiler, const struct jf_snapshot *prior, struct jf_snapshot *out, struct jf_error *error)
+{
+	return collect(root,accounts,profile,compiler,prior,NULL,0,out,error);
+}
+
+int jf_snapshot_overlay(const char *root, const char *accounts, const char *profile,
+	const char *compiler, const struct jf_input_override *overrides, size_t count,
+	struct jf_snapshot *out, struct jf_error *error)
+{
+	return collect(root,accounts,profile,compiler,NULL,overrides,count,out,error);
 }
 
 int jf_snapshot_parse(struct jf_snapshot *s, struct jf_error *error)
