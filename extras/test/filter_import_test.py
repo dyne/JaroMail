@@ -353,9 +353,20 @@ class ImportTests(unittest.TestCase):
         self.do_import()
         self.assertEqual(self.snapshot(), before)
 
-    def test_legacy_route_needs_qualified_export_before_any_write(self):
+    def test_legacy_routes_import_without_profile(self):
         self.script.write_bytes((REPO / 'extras/test/fixtures/filter-policy/legacy-generated.txt').read_bytes())
-        (self.root / 'FilterProfile.txt').write_text('')
+        (self.root / 'FilterProfile.txt').unlink()
+        self.do_import(args=('--legacy-generated',))
+        routes = [(row[0], row[3], row[4]) for row in self.policy(self.root) if row[0] in (b'3', b'4')]
+        self.assertEqual(routes, [(b'3', b'list@example.org', b'lists'), (b'4', b'team@example.org', b'team')])
+        before = self.snapshot()
+        self.do_import(args=('--legacy-generated',))
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse((self.root / 'FilterProfile.txt').exists())
+
+    def test_explicit_core_rejects_legacy_export_before_any_write(self):
+        self.script.write_bytes((REPO / 'extras/test/fixtures/filter-policy/legacy-generated.txt').read_bytes())
+        (self.root / 'FilterProfile.txt').write_text('version 1\nprofile core-v1\ncapability fileinto\ncapability mailbox\n')
         before = self.snapshot()
         result = self.do_import(expected=4, args=('--legacy-generated',))
         self.assertIn(b'E_REGEX_EXPORT', result.stderr)

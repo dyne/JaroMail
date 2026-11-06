@@ -23,17 +23,17 @@ test: all
 test-strict: all
 	JARO_TEST_REQUIRE_ALL=1 zsh extras/test/run-tests.sh
 
+# Maintainer-only regeneration. Commit both generated pages with source edits.
+# No wall-clock date: identical sources and Pandoc produce identical pages.
 man:
 	@pandoc -s -t man \
 		--metadata title="jaromail" --metadata section="1" \
-		--metadata date="$$(date +%Y-%m-%d)" \
 		"${srcdir}/doc/jaromail-manual.md" -o "${srcdir}/doc/jaromail.1"
 	@pandoc -s -t man \
 		--metadata title="jaro" --metadata section="1" \
-		--metadata date="$$(date +%Y-%m-%d)" \
 		"${srcdir}/doc/jaro.1.md" -o "${srcdir}/doc/jaro.1"
 
-install: all man
+install: all
 	$(info Installing JaroMail in ${JARO_SHARE})
 	@mkdir -p "$(DESTDIR)${JARO_SHARE}/mutt" "$(DESTDIR)${JARO_SHARE}/stats"
 	@mkdir -p "$(DESTDIR)${JARO_LIBEXEC}/bin" "$(DESTDIR)${JARO_LIBEXEC}/zlibs"

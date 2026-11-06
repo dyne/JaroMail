@@ -21,8 +21,10 @@ jaro-filter --root ROOT [--generation ID] [--mode classify|apply]
 `--root` is required and nonempty. Helpers do not infer roots from cwd/HOME.
 Wrappers resolve JAROMAILDIR, JAROWORKDIR and JAROACCOUNT as today, passing
 explicit arguments. Defaults are ROOT/Accounts and ROOT/FilterProfile.txt.
-An absent profile selects `core-v1`; an explicitly named unreadable profile
-is an error. Repeated singleton options, unknown flags, missing/empty values,
+An absent or empty profile uses built-in `pigeonhole-2.4.5-posix-ere-v1`
+defaults with the compiler's embedded qualification catalogue. No profile file
+is created or required. An explicitly named unreadable profile is an error.
+Repeated singleton options, unknown flags, missing/empty values,
 an empty positional path, or mixed selection forms fail with status 2.
 `--` ends option parsing; `-- -message` is a literal relative path.
 `--help` and `--version` need no root and return 0 without writes.
@@ -195,7 +197,8 @@ This choice and its version enter the cache metadata/fingerprint and survive
 export/import. The whole-string comparator semantics are defined in
 [RFC 5228 sections 2.7.3–2.7.4 and 5.1](https://www.rfc-editor.org/rfc/rfc5228.html#section-2.7.3).
 
-FilterProfile.txt uses the same token lexer, with these records:
+FilterProfile.txt is an optional override using the same token lexer. For
+example, this explicitly restricts exports to typed predicates under `core-v1`:
 
 ```text
 version 1
@@ -222,8 +225,14 @@ The builtin spam record's logical value is `spam`, its local value is `zz.spam`;
 an explicit destination token `zz.spam` is instead a named destination and keeps
 that server name unless explicitly mapped. The strings are not silently aliased.
 
-`core-v1` exports typed exact/address/domain predicates with base address tests
-and fileinto, plus mailbox only when :create is enabled. The optional
+Normal defaults enable fileinto, automatic mailbox creation and qualified regex
+export without any profile configuration. Output declares `regex` only when a
+legacy `from`/`to` rule needs it; a typed-only policy works without that extension.
+Unanchored partial-address patterns remain unanchored, and `save` and `move`
+produce the same move action. No `*` or `.*` suffix is needed.
+
+An explicitly selected `core-v1` exports typed exact/address/domain predicates
+with base address tests and fileinto, plus mailbox only when :create is enabled. The optional
 `pigeonhole-2.4.5-posix-ere-v1` profile additionally declares regex and a
 `regex-qualification SHA256` record identifying independent pinned-oracle
 evidence for its supported ERE subset. An undeclared, unqualified or unsupported
@@ -244,8 +253,10 @@ are admitted. Patterns are emitted unchanged as `address :all :regex`.
 Qualification uses signed 2.4.5 sources configured with PCRE2-32 and
 `--enable-experimental-mail-utf8`, so supported UTF8 mailbox extraction agrees
 too. A backend without that configuration is outside this profile's assurance.
-The profile must explicitly declare regex capability and the exact installed
-catalogue SHA256; unused regex requires are omitted. Runtime never invokes
+An explicit profile override must declare regex capability and the exact installed
+catalogue SHA256; built-in defaults select both internally, and unused regex
+requires are omitted. Maildir is the vendored test environment's storage driver,
+not a Sieve extension. Runtime never invokes
 Dovecot tools. Unsupported syntax reports status 4 with the rule's source line,
 preserving the prior generation/export.
 
