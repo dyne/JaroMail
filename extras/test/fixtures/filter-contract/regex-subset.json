@@ -1,0 +1,1016 @@
+{
+  "cases": [
+    {
+      "address": "bot-GITHUB.COM@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-0-case",
+      "pattern": "github.com"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-0-miss",
+      "pattern": "github.com"
+    },
+    {
+      "address": "bot-LAUNCHPAD@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-1-case",
+      "pattern": "launchpad"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-1-miss",
+      "pattern": "launchpad"
+    },
+    {
+      "address": "bot-IDENTI.CA@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-2-case",
+      "pattern": "identi.ca"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-2-miss",
+      "pattern": "identi.ca"
+    },
+    {
+      "address": "bot-TWITTER.COM@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-3-case",
+      "pattern": "twitter.com"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-3-miss",
+      "pattern": "twitter.com"
+    },
+    {
+      "address": "bot-LINKEDIN.COM@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-4-case",
+      "pattern": "linkedin.com"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-4-miss",
+      "pattern": "linkedin.com"
+    },
+    {
+      "address": "bot-GOOGLEALERTS@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-5-case",
+      "pattern": "googlealerts"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-5-miss",
+      "pattern": "googlealerts"
+    },
+    {
+      "address": "bot-PLUS.GOOGLE.COM@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-6-case",
+      "pattern": "plus.google.com"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-6-miss",
+      "pattern": "plus.google.com"
+    },
+    {
+      "address": "bot-YOUTUBE.COM@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-7-case",
+      "pattern": "youtube.com"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-7-miss",
+      "pattern": "youtube.com"
+    },
+    {
+      "address": "WMT-NOREPLY@GOOGLE.EXAMPLE",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-8-case",
+      "pattern": "wmt-noreply@google"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-8-miss",
+      "pattern": "wmt-noreply@google"
+    },
+    {
+      "address": "bot-FACEBOOK@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-9-case",
+      "pattern": "facebook"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-9-miss",
+      "pattern": "facebook"
+    },
+    {
+      "address": "bot-FRIENDFEED@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-10-case",
+      "pattern": "FriendFeed"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-10-miss",
+      "pattern": "FriendFeed"
+    },
+    {
+      "address": "bot-ACADEMIA-MAIL.COM@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-11-case",
+      "pattern": "academia-mail.com"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-11-miss",
+      "pattern": "academia-mail.com"
+    },
+    {
+      "address": "bot-STATUSNET@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-12-case",
+      "pattern": "statusnet"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-12-miss",
+      "pattern": "statusnet"
+    },
+    {
+      "address": "bot-BASECAMP@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "default-13-case",
+      "pattern": "basecamp"
+    },
+    {
+      "address": "unrelated@elsewhere.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "default-13-miss",
+      "pattern": "basecamp"
+    },
+    {
+      "address": "bot@githubXcom",
+      "expected": "matched",
+      "field": "From",
+      "id": "dot-byte",
+      "pattern": "github.com"
+    },
+    {
+      "address": "bot@githubcom",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "dot-not-empty",
+      "pattern": "github.com"
+    },
+    {
+      "address": "from0000@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-0-hit",
+      "pattern": "^from0000@example[.]org$"
+    },
+    {
+      "address": "FROM0000@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-0-case",
+      "pattern": "^from0000@example[.]org$"
+    },
+    {
+      "address": "xfrom0000@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-0-prefix",
+      "pattern": "^from0000@example[.]org$"
+    },
+    {
+      "address": "from0000@example.org.attacker",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-0-suffix",
+      "pattern": "^from0000@example[.]org$"
+    },
+    {
+      "address": "from0000@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-0-literal-dot",
+      "pattern": "^from0000@example[.]org$"
+    },
+    {
+      "address": "from0001@example.org",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-1-hit",
+      "pattern": "^from0001@example[.]org$"
+    },
+    {
+      "address": "FROM0001@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-1-case",
+      "pattern": "^from0001@example[.]org$"
+    },
+    {
+      "address": "xfrom0001@example.org",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-1-prefix",
+      "pattern": "^from0001@example[.]org$"
+    },
+    {
+      "address": "from0001@example.org.attacker",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-1-suffix",
+      "pattern": "^from0001@example[.]org$"
+    },
+    {
+      "address": "from0001@exampleXorg",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-1-literal-dot",
+      "pattern": "^from0001@example[.]org$"
+    },
+    {
+      "address": "from0002@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-2-hit",
+      "pattern": "^from0002@example[.]org$"
+    },
+    {
+      "address": "FROM0002@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-2-case",
+      "pattern": "^from0002@example[.]org$"
+    },
+    {
+      "address": "xfrom0002@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-2-prefix",
+      "pattern": "^from0002@example[.]org$"
+    },
+    {
+      "address": "from0002@example.org.attacker",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-2-suffix",
+      "pattern": "^from0002@example[.]org$"
+    },
+    {
+      "address": "from0002@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-2-literal-dot",
+      "pattern": "^from0002@example[.]org$"
+    },
+    {
+      "address": "from0003@example.org",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-3-hit",
+      "pattern": "^from0003@example[.]org$"
+    },
+    {
+      "address": "FROM0003@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-3-case",
+      "pattern": "^from0003@example[.]org$"
+    },
+    {
+      "address": "xfrom0003@example.org",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-3-prefix",
+      "pattern": "^from0003@example[.]org$"
+    },
+    {
+      "address": "from0003@example.org.attacker",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-3-suffix",
+      "pattern": "^from0003@example[.]org$"
+    },
+    {
+      "address": "from0003@exampleXorg",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-3-literal-dot",
+      "pattern": "^from0003@example[.]org$"
+    },
+    {
+      "address": "from0004@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-4-hit",
+      "pattern": "^from0004@example[.]org$"
+    },
+    {
+      "address": "FROM0004@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-4-case",
+      "pattern": "^from0004@example[.]org$"
+    },
+    {
+      "address": "xfrom0004@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-4-prefix",
+      "pattern": "^from0004@example[.]org$"
+    },
+    {
+      "address": "from0004@example.org.attacker",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-4-suffix",
+      "pattern": "^from0004@example[.]org$"
+    },
+    {
+      "address": "from0004@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-4-literal-dot",
+      "pattern": "^from0004@example[.]org$"
+    },
+    {
+      "address": "from0005@example.org",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-5-hit",
+      "pattern": "^from0005@example[.]org$"
+    },
+    {
+      "address": "FROM0005@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-5-case",
+      "pattern": "^from0005@example[.]org$"
+    },
+    {
+      "address": "xfrom0005@example.org",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-5-prefix",
+      "pattern": "^from0005@example[.]org$"
+    },
+    {
+      "address": "from0005@example.org.attacker",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-5-suffix",
+      "pattern": "^from0005@example[.]org$"
+    },
+    {
+      "address": "from0005@exampleXorg",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-5-literal-dot",
+      "pattern": "^from0005@example[.]org$"
+    },
+    {
+      "address": "from0006@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-6-hit",
+      "pattern": "^from0006@example[.]org$"
+    },
+    {
+      "address": "FROM0006@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-6-case",
+      "pattern": "^from0006@example[.]org$"
+    },
+    {
+      "address": "xfrom0006@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-6-prefix",
+      "pattern": "^from0006@example[.]org$"
+    },
+    {
+      "address": "from0006@example.org.attacker",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-6-suffix",
+      "pattern": "^from0006@example[.]org$"
+    },
+    {
+      "address": "from0006@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-6-literal-dot",
+      "pattern": "^from0006@example[.]org$"
+    },
+    {
+      "address": "from0007@example.org",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-7-hit",
+      "pattern": "^from0007@example[.]org$"
+    },
+    {
+      "address": "FROM0007@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-7-case",
+      "pattern": "^from0007@example[.]org$"
+    },
+    {
+      "address": "xfrom0007@example.org",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-7-prefix",
+      "pattern": "^from0007@example[.]org$"
+    },
+    {
+      "address": "from0007@example.org.attacker",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-7-suffix",
+      "pattern": "^from0007@example[.]org$"
+    },
+    {
+      "address": "from0007@exampleXorg",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-7-literal-dot",
+      "pattern": "^from0007@example[.]org$"
+    },
+    {
+      "address": "from0008@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-8-hit",
+      "pattern": "^from0008@example[.]org$"
+    },
+    {
+      "address": "FROM0008@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-8-case",
+      "pattern": "^from0008@example[.]org$"
+    },
+    {
+      "address": "xfrom0008@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-8-prefix",
+      "pattern": "^from0008@example[.]org$"
+    },
+    {
+      "address": "from0008@example.org.attacker",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-8-suffix",
+      "pattern": "^from0008@example[.]org$"
+    },
+    {
+      "address": "from0008@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-8-literal-dot",
+      "pattern": "^from0008@example[.]org$"
+    },
+    {
+      "address": "from0009@example.org",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-9-hit",
+      "pattern": "^from0009@example[.]org$"
+    },
+    {
+      "address": "FROM0009@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-9-case",
+      "pattern": "^from0009@example[.]org$"
+    },
+    {
+      "address": "xfrom0009@example.org",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-9-prefix",
+      "pattern": "^from0009@example[.]org$"
+    },
+    {
+      "address": "from0009@example.org.attacker",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-9-suffix",
+      "pattern": "^from0009@example[.]org$"
+    },
+    {
+      "address": "from0009@exampleXorg",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-9-literal-dot",
+      "pattern": "^from0009@example[.]org$"
+    },
+    {
+      "address": "from0010@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-10-hit",
+      "pattern": "^from0010@example[.]org$"
+    },
+    {
+      "address": "FROM0010@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-10-case",
+      "pattern": "^from0010@example[.]org$"
+    },
+    {
+      "address": "xfrom0010@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-10-prefix",
+      "pattern": "^from0010@example[.]org$"
+    },
+    {
+      "address": "from0010@example.org.attacker",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-10-suffix",
+      "pattern": "^from0010@example[.]org$"
+    },
+    {
+      "address": "from0010@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-10-literal-dot",
+      "pattern": "^from0010@example[.]org$"
+    },
+    {
+      "address": "from0011@example.org",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-11-hit",
+      "pattern": "^from0011@example[.]org$"
+    },
+    {
+      "address": "FROM0011@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-11-case",
+      "pattern": "^from0011@example[.]org$"
+    },
+    {
+      "address": "xfrom0011@example.org",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-11-prefix",
+      "pattern": "^from0011@example[.]org$"
+    },
+    {
+      "address": "from0011@example.org.attacker",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-11-suffix",
+      "pattern": "^from0011@example[.]org$"
+    },
+    {
+      "address": "from0011@exampleXorg",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-11-literal-dot",
+      "pattern": "^from0011@example[.]org$"
+    },
+    {
+      "address": "from0012@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-12-hit",
+      "pattern": "^from0012@example[.]org$"
+    },
+    {
+      "address": "FROM0012@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-12-case",
+      "pattern": "^from0012@example[.]org$"
+    },
+    {
+      "address": "xfrom0012@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-12-prefix",
+      "pattern": "^from0012@example[.]org$"
+    },
+    {
+      "address": "from0012@example.org.attacker",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-12-suffix",
+      "pattern": "^from0012@example[.]org$"
+    },
+    {
+      "address": "from0012@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-12-literal-dot",
+      "pattern": "^from0012@example[.]org$"
+    },
+    {
+      "address": "from0013@example.org",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-13-hit",
+      "pattern": "^from0013@example[.]org$"
+    },
+    {
+      "address": "FROM0013@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-13-case",
+      "pattern": "^from0013@example[.]org$"
+    },
+    {
+      "address": "xfrom0013@example.org",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-13-prefix",
+      "pattern": "^from0013@example[.]org$"
+    },
+    {
+      "address": "from0013@example.org.attacker",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-13-suffix",
+      "pattern": "^from0013@example[.]org$"
+    },
+    {
+      "address": "from0013@exampleXorg",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-13-literal-dot",
+      "pattern": "^from0013@example[.]org$"
+    },
+    {
+      "address": "from0014@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-14-hit",
+      "pattern": "^from0014@example[.]org$"
+    },
+    {
+      "address": "FROM0014@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-14-case",
+      "pattern": "^from0014@example[.]org$"
+    },
+    {
+      "address": "xfrom0014@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-14-prefix",
+      "pattern": "^from0014@example[.]org$"
+    },
+    {
+      "address": "from0014@example.org.attacker",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-14-suffix",
+      "pattern": "^from0014@example[.]org$"
+    },
+    {
+      "address": "from0014@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "benchmark-14-literal-dot",
+      "pattern": "^from0014@example[.]org$"
+    },
+    {
+      "address": "from0015@example.org",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-15-hit",
+      "pattern": "^from0015@example[.]org$"
+    },
+    {
+      "address": "FROM0015@EXAMPLE.ORG",
+      "expected": "matched",
+      "field": "Sender",
+      "id": "benchmark-15-case",
+      "pattern": "^from0015@example[.]org$"
+    },
+    {
+      "address": "xfrom0015@example.org",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-15-prefix",
+      "pattern": "^from0015@example[.]org$"
+    },
+    {
+      "address": "from0015@example.org.attacker",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-15-suffix",
+      "pattern": "^from0015@example[.]org$"
+    },
+    {
+      "address": "from0015@exampleXorg",
+      "expected": "unsorted",
+      "field": "Sender",
+      "id": "benchmark-15-literal-dot",
+      "pattern": "^from0015@example[.]org$"
+    },
+    {
+      "address": "list+news@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "plus-hit",
+      "pattern": "^list\\+news@example[.]org$"
+    },
+    {
+      "address": "listnews@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "plus-miss",
+      "pattern": "^list\\+news@example[.]org$"
+    },
+    {
+      "address": "\"a?b\"@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "question-hit",
+      "pattern": "^\"a\\?b\"@example[.]org$"
+    },
+    {
+      "address": "\"ab\"@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "question-miss",
+      "pattern": "^\"a\\?b\"@example[.]org$"
+    },
+    {
+      "address": "a*b@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "star-hit",
+      "pattern": "^a\\*b@example[.]org$"
+    },
+    {
+      "address": "ab@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "star-miss",
+      "pattern": "^a\\*b@example[.]org$"
+    },
+    {
+      "address": "\"a(b)\"@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "parenthesis-hit",
+      "pattern": "^\"a\\(b\\)\"@example[.]org$"
+    },
+    {
+      "address": "\"ab\"@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "parenthesis-miss",
+      "pattern": "^\"a\\(b\\)\"@example[.]org$"
+    },
+    {
+      "address": "a{b}@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "braces-hit",
+      "pattern": "^a\\{b\\}@example[.]org$"
+    },
+    {
+      "address": "ab@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "braces-miss",
+      "pattern": "^a\\{b\\}@example[.]org$"
+    },
+    {
+      "address": "a|b@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "pipe-hit",
+      "pattern": "^a\\|b@example[.]org$"
+    },
+    {
+      "address": "b@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "pipe-miss",
+      "pattern": "^a\\|b@example[.]org$"
+    },
+    {
+      "address": "a$b@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "dollar-hit",
+      "pattern": "^a\\$b@example[.]org$"
+    },
+    {
+      "address": "ab@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "dollar-miss",
+      "pattern": "^a\\$b@example[.]org$"
+    },
+    {
+      "address": "a^b@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "caret-hit",
+      "pattern": "^a\\^b@example[.]org$"
+    },
+    {
+      "address": "ab@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "caret-miss",
+      "pattern": "^a\\^b@example[.]org$"
+    },
+    {
+      "address": "\"a b\"@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "quoted-hit",
+      "pattern": "^\"a b\"@example[.]org$"
+    },
+    {
+      "address": "\"ab\"@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "quoted-miss",
+      "pattern": "^\"a b\"@example[.]org$"
+    },
+    {
+      "address": "\"a\\\"b\"@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "quote-escape-hit",
+      "pattern": "^\"a\\\\\"b\"@example[.]org$"
+    },
+    {
+      "address": "\"ab\"@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "quote-escape-miss",
+      "pattern": "^\"a\\\\\"b\"@example[.]org$"
+    },
+    {
+      "address": "user@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "dot-escaped-hit",
+      "pattern": "^user@example\\.org$"
+    },
+    {
+      "address": "user@exampleXorg",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "dot-escaped-miss",
+      "pattern": "^user@example\\.org$"
+    },
+    {
+      "address": "\"a b\"@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "dot-any-hit",
+      "pattern": "^\"a.b\"@example[.]org$"
+    },
+    {
+      "address": "\"ab\"@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "dot-any-miss",
+      "pattern": "^\"a.b\"@example[.]org$"
+    },
+    {
+      "address": "somebody@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "unanchored",
+      "pattern": "example"
+    },
+    {
+      "address": "xuser@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "start",
+      "pattern": "^user"
+    },
+    {
+      "address": "user@org.example",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "end",
+      "pattern": "org$"
+    },
+    {
+      "address": "a-b@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "hyphen",
+      "pattern": "a-b"
+    },
+    {
+      "address": "\"from0000\"@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "benchmark-redundant-quotes",
+      "pattern": "^from0000@example[.]org$"
+    },
+    {
+      "address": "\"git\\hub.com\"@example.org",
+      "expected": "matched",
+      "field": "From",
+      "id": "shipped-escaped-local",
+      "pattern": "github.com"
+    },
+    {
+      "address": "\"a?b\"@example.org",
+      "expected": "unsorted",
+      "field": "From",
+      "id": "quote-removal-preserves-pattern",
+      "pattern": "^\"a\\?b\"@example[.]org$"
+    }
+  ],
+  "expectation_corrections": {
+    "question-hit": "Previously expected a match over redundant quoted spelling; pinned oracle/case-181 removes redundant quotes. Under authorized canonicalization the original regex containing literal quotes does not match."
+  },
+  "schema": 2,
+  "unsupported": [
+    "a|b",
+    "(a)",
+    "a*",
+    "a+",
+    "a?",
+    "a{2}",
+    "[a-z]",
+    "[^a]",
+    "[[:alpha:]]",
+    "\\d",
+    "\\b",
+    "\\1",
+    "(?i)a",
+    "a^b",
+    "a$b",
+    "\u00e9",
+    "^$",
+    "a\\",
+    "[.]x[abc]"
+  ]
+}

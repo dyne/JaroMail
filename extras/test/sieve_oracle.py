@@ -162,12 +162,14 @@ class SieveOracle:
         self._unchanged(run, before)
         return binary if succeeds else None
 
-    def evaluate(self, script, message):
+    def evaluate(self, script, message, extensions=None):
         run, before = self._inputs(script, message)
         trace = run / "trace.txt"
         # -C compiles current source; deliberately no -e, -u, -s, plugin or delivery options.
         command = [self.tools["sieve-test"], "-c", self.config, "-C", "-t", trace,
                    "-T", "level=matching", run / "policy.sieve", run / "message.eml"]
+        if extensions is not None:
+            command[3:3] = ["-x", extensions]
         result = self._run(command, run / "simulate")
         self._unchanged(run, before)
         trace_text = trace.read_text()
@@ -178,8 +180,8 @@ class SieveOracle:
         (run / "decision.json").write_text(json.dumps(action, sort_keys=True) + "\n")
         return action
 
-    def expect(self, script, message, mailbox, create=False):
-        result = self.evaluate(script, message)
+    def expect(self, script, message, mailbox, create=False, extensions=None):
+        result = self.evaluate(script, message, extensions)
         expected = {"action": "fileinto", "mailbox": mailbox, "create": create}
         if result != expected:
             raise OracleFailure(f"oracle decision {result!r} differs from expected {expected!r}")

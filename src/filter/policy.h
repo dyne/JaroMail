@@ -7,6 +7,8 @@
 #define JF_INPUT_MAX (64u * 1024u * 1024u)
 #define JF_LINE_MAX (64u * 1024u)
 #define JF_RULE_MAX 100000u
+#define JF_BUILTIN_RULES 3u
+#define JF_RULE_RECORD_MAX (JF_RULE_MAX + JF_BUILTIN_RULES)
 #define JF_HEADERS_MAX (1024u * 1024u)
 
 enum jf_source_kind {
@@ -51,6 +53,11 @@ struct jf_error {
 	char detail[160];        /* Bounded human diagnostic; never a partial rule. */
 };
 
+/* Shared policy/profile lexer. buffer has size+1 bytes; at most five tokens.
+ * The input is one physical line without its CR/LF ending. */
+int jf_policy_tokens(const unsigned char *, size_t, char *, char *[5],
+	size_t *, struct jf_error *, size_t);
+
 struct jf_rule {
 	enum jf_kind kind;
 	unsigned stage, fields;
@@ -75,8 +82,9 @@ const struct jf_rule *jf_policy_rule(const struct jf_policy *, size_t);
 
 struct jf_text { const unsigned char *data; size_t size; };
 struct jf_mailbox { unsigned field; struct jf_text value; };
-/* Parsed mailbox strings only: no names/comments/body text. Keep the quoted
- * local-part representation, including quotes and escapes. Values are borrowed
+/* Parsed mailbox strings only: no names/comments/body text. Equivalent quoted
+ * spellings are normalized to minimal quoting, preserving necessary quotes and
+ * re-escaping quote/backslash. Values are borrowed and never mutated
  * for the call, explicitly sized and need no NUL terminator. Sender/spam values
  * are already unfolded raw field values; repeated fields remain separate.
  * Parsed Sender mailboxes and raw Sender values share one content-size budget

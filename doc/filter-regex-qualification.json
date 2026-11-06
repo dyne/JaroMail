@@ -1,0 +1,19 @@
+{
+  "argument": "After minimal mailbox quoting produces identical address bytes, concatenation without repetition, alternatives, captures or locale classes accepts the same fixed-length byte sequences at the same start offsets. Outer anchors restrict offsets identically. Patterns remain unchanged. This is not general ERE equivalence.",
+  "compiler_id": "jaromail-filter-compiler-v2",
+  "fixture_sha256": "01a79e103a7cfbb5a022c9cc27643a8aa5dfee1d4f871976b9edbc70e4b8f79f",
+  "grammar": "ascii-concatenation-v1: nonempty printable ASCII concatenation; optional leading ^ and trailing $; dot matches one byte; [.] and escaped . \\ + ? * ( ) { } | ^ $ [ are literal; all other metacharacters, classes, groups, repetitions, backreferences and escapes rejected",
+  "independent_cases": 141,
+  "native": "REG_EXTENDED|REG_ICASE; LC_ALL=C; match existence only",
+  "normalization": "mailbox-minimal-quoting-v2",
+  "normalization_fixture_sha256": "c62cf95ec0c4a97d55f71301e26903f6b0644710403608391e10849b651204e1",
+  "oracle_required": "Actual generated output sievec compilation and sieve-test simulation plus shared native classifier against every authored winner; unsupported grammar fails publication.",
+  "profile": "pigeonhole-2.4.5-posix-ere-v1",
+  "required_build_configuration": [
+    "--with-pcre2",
+    "--enable-experimental-mail-utf8"
+  ],
+  "schema": 2,
+  "sieve": "Pigeonhole 2.4.5 address :all :regex comparator i;ascii-casemap; DREGEX_ICASE|DREGEX_ASCII_ONLY; PCRE2_NEVER_UTF; unsigned byte conversion",
+  "upstream": "Signed Dovecot/Pigeonhole 2.4.5 releases pinned by vendor/sources.json; optional PCRE2-32 development dependency, never application runtime"
+}

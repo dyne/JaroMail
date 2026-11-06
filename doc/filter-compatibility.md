@@ -1,5 +1,17 @@
 # Legacy filter compatibility baseline
 
+Native compiler v2 corrects a representation assumption from the initial shared
+core: equivalent quoted locals now use minimal quoting before matching and
+identity generation. Necessary quotes/escapes survive. Thus the anchored
+benchmark pattern matches `"from0000"@example.org`, and `github.com` matches
+`"git\hub.com"@example.org`, as the pinned Sieve parser does. Regex patterns
+themselves are unchanged; one newly authored probe whose pattern explicitly
+requires redundant quotes now correctly misses. The original 52 target winners
+are unchanged. The independent normalization fixture records the equivalent
+spellings, including UTF8 locals under the qualified SMTPUTF8 build. This is a
+narrow native policy correction; the retained legacy shell engine and recorded
+baseline observations are unchanged.
+
 Baseline application revision: `165e61e`; preparation revision `7161a2e` changes
 only the minimal vendor extraction. Observations below use the real `jaro`
 CLI, clean Zsh with POSIX ERE (`RE_MATCH_PCRE` off), and mblaze. The independent

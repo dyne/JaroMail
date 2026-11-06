@@ -25,28 +25,34 @@ EOF
 
 cmd_update() {
     [[ "$option_params" = "" ]] || {
-        for p in $option_params; do
+        for p in "${option_params[@]}"; do
             [[ "$p" = "." ]] && p=$PWD
             [[ -d $p ]] && MAILDIRS=$p
         done
     }
-    read_account
-    mblaze_setup
-    update_filters
-    update_sieve
-    update_notmuch
+    ACCOUNTS=${JAROACCOUNT:-"$MAILDIRS/Accounts"}
+    read_account || return $?
+    mblaze_setup || return $?
+    update_filters || return $?
+    update_sieve || return $?
+    [[ $DRYRUN == 1 ]] || update_notmuch || return $?
     notice "Initialization completed in $MAILDIRS"
 }
 
 cmd_sieve() {
-    read_account
-    mblaze_setup
-    update_filters
-    update_sieve
+    read_account || return $?
+    mblaze_setup || return $?
+    update_filters || return $?
+    update_sieve || return $?
     notice "Sieve filters updated in $MAILDIRS"
 }
 
 cmd_sieve_import() {
+    filter_engine || return $?
+    if [[ "$REPLY" == native ]]; then
+        "$WORKDIR/bin/jaro-filter-compile" --root "$MAILDIRS" --accounts-dir "$ACCOUNTS" --import-sieve "${option_params[1]}"
+        return $?
+    fi
     sieve_import ${option_params}
     exitcode=$?
 }

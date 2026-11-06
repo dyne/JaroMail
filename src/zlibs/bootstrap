@@ -175,20 +175,15 @@ bootstrap_root="${bootstrap_file:A:h:h}"
     if [ -d $WORKDIR/zlibs ]; then
         # if testing from source load uncompiled libs
         if [[ -r "$WORKDIR/zuper/zuper" ]]; then
-            for z in `find $WORKDIR/zlibs -type f`; do
-                [[ "$z" =~ "zuper" ]] && continue
-                [[ "$z" =~ "bootstrap" ]] && continue
-                func "Loading zlib: ${z}"
-                source ${z}
+            for z in "$WORKDIR"/zlibs/*(.N); do
+                [[ "${z:t}" == *zuper* || "${z:t}" == bootstrap || "${z:t}" == *.zwc ]] && continue
+                source "$z"
             done
         else
-            fpath+=($WORKDIR/zlibs)
-            for z in `ls $WORKDIR/zlibs`; do
-                [[ "$z" =~ "zuper" ]] && continue
-                [[ "$z" =~ "bootstrap" ]] && continue
-                [[ "$z" =~ ".zwc"  ]] && continue
-                func "Loading zlib: ${z}"
-                source $WORKDIR/zlibs/${z}
+            fpath+=("$WORKDIR/zlibs")
+            for z in "$WORKDIR"/zlibs/*(.N); do
+                [[ "${z:t}" == *zuper* || "${z:t}" == bootstrap || "${z:t}" == *.zwc ]] && continue
+                source "$z"
             done
         fi
 
@@ -316,6 +311,17 @@ mblaze_ensure() {
 
 check_bin() {
     local cmd="${1:-$subcommand}"
+    case "$cmd" in
+        update|sieve|fetch|filter|sieve-import)
+            filter_engine || return $?
+            if [[ "$REPLY" == native ]]; then
+                [[ -x "$WORKDIR/bin/jaro-filter-compile" ]] || {
+                    error "Missing native compiler: $WORKDIR/bin/jaro-filter-compile"
+                    return 127
+                }
+            fi
+            ;;
+    esac
 
     # which find command to use
     case $OS in

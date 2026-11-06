@@ -72,6 +72,20 @@ input is not partially IDNA-converted. Do not put wildcard domains in abook.
 Typed exact-address, known, blacklist and own-address predicates compare the
 whole parsed mailbox ASCII case-insensitively. Canonicalize ASCII A-Z to a-z in
 both local-part and domain; preserve other bytes without Unicode case folding.
+Before case mapping, `mailbox-minimal-quoting-v2` decodes a quoted local part
+and its quoted pairs, then serializes it with minimum necessary quoting.
+Dot-atoms lose redundant quotes/escapes; spaces, embedded quotes/backslashes,
+leading/trailing dots and repeated dots retain quotes, with quote/backslash
+re-escaped. Empty local parts and invalid/control bytes are unsupported.
+Typed predicates, contacts/own inputs, raw-header parsing and direct parsed
+mailbox inputs all use this operation. ERE pattern bytes remain unchanged and
+match the canonical mailbox. Supported UTF8 local bytes remain unchanged;
+domains retain the ASCII restrictions above. This corrects the earlier native
+assumption that redundant quotes/escapes were meaningful mailbox bytes.
+It follows minimum-quoting equivalence in
+[RFC 5321 section 4.1.2](https://datatracker.ietf.org/doc/html/rfc5321#section-4.1.2)
+and pinned Pigeonhole's `smtp_address_encode` serialization. It does not change
+the separately retained legacy shell engine's spelling behavior.
 An exact address is not an address glob. This refines the earlier draft's
 local-part-sensitive choice so core Sieve can use one equivalent whole-address
 predicate: `address :all :is :comparator "i;ascii-casemap"`. Never combine

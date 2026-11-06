@@ -97,6 +97,8 @@ def main():
     parser.add_argument("--download", action="store_true")
     parser.add_argument("--verify-only", action="store_true", help="require a complete matching cached prefix")
     parser.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 1))
+    parser.add_argument("--regex-prefix", help="private PCRE2 development prefix with include/pcre2.h and libpcre2-32.so; enable required regex support")
+    parser.add_argument("--mail-utf8", action="store_true", help="enable pinned upstream SMTPUTF8 support for mailbox-normalization qualification")
     args = parser.parse_args()
     if not 1 <= args.jobs <= 64:
         raise ValueError("--jobs must be between 1 and 64")
@@ -144,6 +146,28 @@ def main():
     linker = compiler[1:] if Path(compiler[0]).name == "ccache" else compiler
     flags = {name:os.environ.get(name, "-O2 -g" if name == "CFLAGS" else "")
              for name in ("CPPFLAGS", "CFLAGS", "LDFLAGS", "LIBS")}
+    core_options = list(CORE_OPTIONS)
+    if args.mail_utf8:
+        core_options.append("--enable-experimental-mail-utf8")
+    regex_dependency = None
+    regex_environment = {}
+    if args.regex_prefix:
+        regex_prefix = external(args.regex_prefix)
+        header = regex_prefix / "include/pcre2.h"
+        libraries = {p.resolve() for pattern in ("lib/libpcre2-32.so", "lib/*/libpcre2-32.so")
+                     for p in regex_prefix.glob(pattern) if p.is_file()}
+        if not header.is_file() or len(libraries) != 1:
+            raise ValueError("regex prefix requires pcre2.h and one linked PCRE2-32 library")
+        library = libraries.pop()
+        if not library.is_relative_to(regex_prefix):
+            raise ValueError("PCRE2 library must remain inside its private prefix")
+        regex_dependency = {"prefix": str(regex_prefix), "header": str(header), "header_sha256": digest(header),
+                            "library": str(library), "library_sha256": digest(library)}
+        regex_environment = {"LIBPCRE_CFLAGS": shlex.join(["-I" + str(header.parent)]),
+                             "LIBPCRE_LIBS": shlex.join(["-L" + str(library.parent), "-lpcre2-32"])}
+        flags["LDFLAGS"] = shlex.join(["-Wl,-rpath," + str(library.parent)]) + " " + flags["LDFLAGS"]
+        core_options.remove("--without-pcre2")
+        core_options.append("--with-pcre2")
     tools = {name:subprocess.check_output(command, text=True).strip() for name, command in (
         ("compiler", linker + ["--version"]), ("make", ["make", "--version"]),
         ("openssl", ["pkg-config", "--modversion", "openssl"]), ("zlib", ["pkg-config", "--modversion", "zlib"]))}
@@ -155,7 +179,8 @@ def main():
                 "environment":{name:os.environ.get(name) for name in (
                     "CPATH", "C_INCLUDE_PATH", "LIBRARY_PATH", "COMPILER_PATH", "GCC_EXEC_PREFIX",
                     "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR")},
-                "core_options":CORE_OPTIONS,"pigeonhole_options":SIEVE_OPTIONS}
+                "core_options":core_options,"pigeonhole_options":SIEVE_OPTIONS,
+                "regex_dependency":regex_dependency,"regex_environment":regex_environment}
     fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     generation = cache / fingerprint
     prefix = generation / "prefix"
@@ -176,6 +201,7 @@ def main():
     logs.mkdir()
     commands = []
     env = dict(os.environ, **flags, CC=shlex.join(linker))
+    env.update(regex_environment)
     env.setdefault("CCACHE_DIR", str(cache / "ccache"))
     for key_name in ("LD_LIBRARY_PATH", "DOVECONF_PATH", "CONFIG_MODULES", "DOVECOT_CONFIG_FD"):
         env.pop(key_name, None)
@@ -204,7 +230,7 @@ def main():
     core = source_dir / "dovecot-2.4.5"
     sieve = source_dir / "dovecot-pigeonhole-2.4.5"
     make_options = ["CC=" + shlex.join(launcher + compiler), "CCLD=" + shlex.join(linker)]
-    execute(["./configure", "--prefix=" + str(prefix)] + CORE_OPTIONS, core, "core-configure")
+    execute(["./configure", "--prefix=" + str(prefix)] + core_options, core, "core-configure")
     execute(["make", "-j" + str(args.jobs)] + make_options, core, "core-build")
     execute(["make", "install"] + make_options, core, "core-install")
     execute(["./configure", "--prefix=" + str(prefix), "--with-dovecot=" + str(prefix / "lib/dovecot")]

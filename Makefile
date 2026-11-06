@@ -46,9 +46,11 @@ install: all man
 	@cp "${srcdir}/doc/jaro.1" "$(DESTDIR)${MAN1DIR}/jaro.1"
 	@cp "${srcdir}/src/jaro" "$(DESTDIR)${JARO_LIBEXEC}/bin"
 	@cp "${srcdir}/build/gnu/fetchaddr" "${srcdir}/build/gnu/parsedate" \
-		"${srcdir}/build/gnu/dotlock" "${srcdir}/build/gnu/gpgewrap" "$(DESTDIR)${JARO_LIBEXEC}/bin"
+		"${srcdir}/build/gnu/dotlock" "${srcdir}/build/gnu/gpgewrap" \
+		"${srcdir}/build/gnu/jaro-filter-compile" "${srcdir}/build/gnu/jaro-filter-legacy" "$(DESTDIR)${JARO_LIBEXEC}/bin"
 	@cp -r "${srcdir}/src/zlibs/"* "$(DESTDIR)${JARO_LIBEXEC}/zlibs/"
 	@cp -r "${srcdir}/src/zuper/"zuper* "$(DESTDIR)${JARO_LIBEXEC}/zlibs/"
+	@rm -f -- "$(DESTDIR)${JARO_LIBEXEC}/zlibs/"*.zwc
 	@mkdir -p "$(DESTDIR)${PREFIX}/bin"
 	@printf '%s\n' '#!/usr/bin/env zsh' \
 		'export JAROWORKDIR="${JARO_SHARE}"' \
@@ -66,4 +68,6 @@ clean:
 	rm -f src/dotlock
 	rm -f build/gnu/fetchaddr build/gnu/parsedate build/gnu/dotlock build/gnu/gpgewrap
 	rm -f build/gnu/filter/*.o build/gnu/filter/*.d build/gnu/filter/filter-policy-driver
+	rm -f build/gnu/jaro-filter-compile build/gnu/jaro-filter-legacy build/gnu/filter/jaro-filter-compile build/gnu/filter/jaro-filter-legacy
+	rm -f build/gnu/filter/jaro-filter-compile-test build/gnu/filter/filter-generation-pin build/gnu/filter/filter-compiler-driver
 

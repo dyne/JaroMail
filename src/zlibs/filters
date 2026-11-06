@@ -34,7 +34,70 @@
 #
 
 # Load zsh filter cache arrays only for commands that need them.
+filter_engine() {
+    REPLY=${JARO_FILTER_ENGINE-legacy}
+    case "$REPLY" in
+        legacy|native) return 0 ;;
+        *) error "Invalid JARO_FILTER_ENGINE: ${(qqq)REPLY}; expected legacy or native"; return 2 ;;
+    esac
+}
+
+native_filter_compile() {
+    local report fd result
+    local -a fields args
+    args=(--root "$MAILDIRS" --accounts-dir "$ACCOUNTS" --report0)
+    [[ $DRYRUN == 1 ]] && args+=(--check)
+    report=$("$WORKDIR/bin/jaro-filter-compile" "${args[@]}") || return $?
+    fields=("${(@0)report}")
+    if [[ ${#fields} != 5 || "$fields[1]" != JFC1 || ${#fields[2]} != 64 ||
+          "$fields[3]" != [01] || -n "$fields[5]" ]]; then
+        error "Malformed native compiler report"; return 5
+    fi
+    typeset -g filter_native_ready=1 filter_native_directory="$fields[4]"
+    [[ $DRYRUN == 1 ]] && return 0
+    exec {fd}<"$filter_native_directory/filters.zsh" || return 3
+    source /dev/fd/$fd
+    result=$?
+    exec {fd}<&-
+    return $result
+}
+
+update_filters() {
+    filter_engine || return $?
+    if [[ "$REPLY" == native ]]; then
+        native_filter_compile
+    else
+        "$WORKDIR/bin/jaro-filter-legacy" --root "$MAILDIRS" --check || return $?
+        legacy_update_filters
+    fi
+}
+
 load_filter_cache() {
+    filter_engine || return $?
+    if [[ "$REPLY" == native ]]; then
+        native_filter_compile
+    else
+        "$WORKDIR/bin/jaro-filter-legacy" --root "$MAILDIRS" --check || return $?
+        if (( ${+JARO_FILTER_ENGINE} )); then
+            legacy_update_filters
+        else
+            legacy_load_filter_cache
+        fi
+    fi
+}
+
+update_sieve() {
+    filter_engine || return $?
+    if [[ "$REPLY" == native ]]; then
+        [[ ${filter_native_ready:-0} == 1 ]] || native_filter_compile
+        return $?
+    fi
+    JAROMAILDIR="$MAILDIRS" JAROWORKDIR="$WORKDIR" JAROACCOUNT="$ACCOUNTS" \
+        "$WORKDIR/bin/jaro-filter-legacy" --root "$MAILDIRS" -- \
+        zsh -f -c 'source "$1" source || exit $?; legacy_update_sieve' zsh "${JAROMAILEXEC:-$WORKDIR/bin/jaro}"
+}
+
+legacy_load_filter_cache() {
     fn load_filter_cache
 
     typeset -gAl  filter_from
@@ -99,10 +162,11 @@ init_inbox() {
 
 # reads all configurations and creates a cache of what is read
 # the cache consists of array and maps declarations for zsh
-update_filters() {
+legacy_update_filters() {
     fn update_filters
     req=(MAILDIRS)
-    freq=($MAILDIRS/Filters.txt)
+    # Empty Filters.txt is valid; the shared guard checked readability.
+    freq=()
     ckreq || return 1
 
     notice "Updating filters..."
@@ -171,11 +235,12 @@ EOF
     #
     act "generate the list of own addresses and aliases"
 	  print "\n# own accounts" >> "$ff"
-    for i in `find ${MAILDIRS}/Accounts/ -type f -exec awk '/^email/ { print $2 }' {} \;`; do
+    local account_file
+    for account_file in "$ACCOUNTS"/**/*(.N); do
+      for i in ${(f)"$(awk '/^email[[:space:]]/ { print $2 }' "$account_file")"}; do
 	  func "own account: $i"
-      cat <<EOF >> "$ff"
-filter_own+=($i)
-EOF
+      print -r -- "filter_own+=(${(q)i})" >> "$ff"
+      done
     done
 	print "\n# own aliases" >> "$ff"
     test -r $MAILDIRS/Aliases.txt && {
@@ -217,6 +282,11 @@ EOF
 
 
 filter_maildir() {
+  filter_engine || return $?
+  if [[ "$REPLY" == native ]]; then
+    error "Native batch application awaits the jaro-filter integration (L5); no mail applied"
+    return 127
+  fi
   fn filter_maildir
   req=(MAILDIRS)
   ckreq || return 1
@@ -239,7 +309,7 @@ filter_maildir() {
   maildirmake "$MAILDIRS/unsorted"
 
   # loads up the filter cache (zsh compiled arrays)
-  load_filter_cache
+  load_filter_cache || return $?
 
   mails="$(maildir_list_messages "$srcpath")"
   numm=`print $mails | wc -l`
@@ -516,20 +586,20 @@ sieve_filter() {
     condition="$1"
     fileinto="$2"
 
-    cat <<EOF >> "$MAILDIRS/Filters.sieve"
+    cat <<EOF >> "$sieve_output"
 
 # $fileinto
 $condition [
 EOF
     c=${#sieve_filter_array}
     for i in $sieve_filter_array; do
-    print -n "\"$i\"" >> "$MAILDIRS/Filters.sieve"
+    print -n "\"$i\"" >> "$sieve_output"
     c=$(( $c - 1 ))
-    { test $c != 0 } && { print -n "," >> "$MAILDIRS/Filters.sieve" }
-    print >> "$MAILDIRS/Filters.sieve"
+    { test $c != 0 } && { print -n "," >> "$sieve_output" }
+    print >> "$sieve_output"
     done
 
-    cat <<EOF >> "$MAILDIRS/Filters.sieve"
+    cat <<EOF >> "$sieve_output"
 ]
 { fileinto :create "$fileinto"; stop; }
 
@@ -550,25 +620,24 @@ sieve_complex_filter() {
 
     for fil in ${(k)sieve_filter_map}; do
         print "$condition \"${fil}\" { fileinto :create \"${sieve_filter_map[$fil]}\"; stop; }" \
-            >> "$MAILDIRS/Filters.sieve"
+            >> "$sieve_output"
     done
 
     return 0
 }
 
-update_sieve() {
+legacy_update_sieve() {
 
     #######
     # SIEVE
-    load_filter_cache
+    load_filter_cache || return $?
 
     act "generate sieve filter rules"
     id=`datestamp`.$RANDOM
-    newlock "$MAILDIRS/Filters.sieve"
-    rm -f "$MAILDIRS/Filters.sieve"
-    touch "$MAILDIRS/Filters.sieve"
-    chmod 600 "$MAILDIRS/Filters.sieve"
-    cat <<EOF >> "$MAILDIRS/Filters.sieve"
+    local sieve_output
+    sieve_output=$(mktemp "$MAILDIRS/.Filters.sieve.XXXXXXXX") || return 3
+    chmod 600 "$sieve_output" || return 3
+    cat <<EOF >> "$sieve_output"
 # mailbox supports fileinto :create
 require ["fileinto","mailbox","variables"];
 
@@ -586,7 +655,7 @@ EOF
     }
 
     # bounces
-    cat <<EOF >> "$MAILDIRS/Filters.sieve"
+    cat <<EOF >> "$sieve_output"
 # bounces
 if header :contains "Sender" "mailman-bounce" {
     fileinto :create "zz.bounces";
@@ -626,7 +695,7 @@ EOF
 		}
     }
 
-    cat <<EOF >> "$MAILDIRS/Filters.sieve"
+    cat <<EOF >> "$sieve_output"
 # spam
 if header :is "X-Spam-Flag" "YES" {
     fileinto :create "Spam"; stop;
@@ -641,13 +710,13 @@ EOF
     priv
 
     # unsorted
-    cat <<EOF >> "$MAILDIRS/Filters.sieve"
+    cat <<EOF >> "$sieve_output"
 
 fileinto :create "unsorted";
 
 EOF
 
-    unlock "$MAILDIRS/Filters.sieve"
+    mv -f -- "$sieve_output" "$MAILDIRS/Filters.sieve" || return 3
 
     return 0
 } # end of update()

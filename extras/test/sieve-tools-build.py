@@ -23,7 +23,7 @@ def passed(name):
     print("PASS " + name, flush=True)
 
 
-with tempfile.TemporaryDirectory(prefix="jaro-sieve-build-") as temp:
+with tempfile.TemporaryDirectory(prefix="jaro-sieve-build-", dir=os.environ.get("SIEVE_BUILD_TEST_TMP")) as temp:
     root = Path(temp)
     output = root / "output with spaces"
     env = dict(os.environ, SIEVE_TOOLS_OUTPUT=str(output),

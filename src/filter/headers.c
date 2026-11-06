@@ -103,9 +103,11 @@ static int emit_address(void *context, const char *mailbox, size_t length)
 	h->message.addresses=array;
 	text=own(h,mailbox,length);
 	if (!text) return p->callback_status=fail(p,"E_MEMORY","mailbox allocation failed",3);
+	if (!jf_normalize_mailbox((char *)text))
+		return p->callback_status=fail(p,"E_MESSAGE_ADDRESS","unsupported/empty local part",7);
 	array[h->message.address_count].field=p->field;
 	array[h->message.address_count].value.data=text;
-	array[h->message.address_count++].value.size=length;
+	array[h->message.address_count++].value.size=strlen((char *)text);
 	return 0;
 }
 
