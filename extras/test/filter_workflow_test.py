@@ -108,7 +108,7 @@ class WorkflowTests(unittest.TestCase):
                         JARO_WORKFLOW_TRANSPORT_LOG=str(self.transportlog))
         self.env.pop('JARO_FILTER_ENGINE', None)
 
-    def run_cli(self, *args, code=0, engine='native'):
+    def run_cli(self, *args, code=0, engine=None):
         env = dict(self.env)
         if engine is not None:
             env['JARO_FILTER_ENGINE'] = engine
@@ -130,7 +130,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn(b'own@example.org', first[1])
         self.assertFalse(self.indexlog.exists())
         self.assertFalse((self.root / 'cache/filters').exists())
-        self.run_cli('sieve')
+        self.run_cli('sieve', engine='native')
         self.assertEqual(self.snapshot(), first)
         (self.root / '.notmuch/xapian').mkdir(parents=True)
         self.run_cli('update')
@@ -138,7 +138,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), first)
 
     def test_engine_selection_legacy_guard_and_missing_helper(self):
-        for engine in ('legacy', None):
+        for engine in ('legacy',):
             self.run_cli('sieve', engine=engine, code=4)
             self.assertFalse((self.root / 'Filters.sieve').exists())
         for engine in ('', 'unknown'):
@@ -152,12 +152,12 @@ class WorkflowTests(unittest.TestCase):
         finally:
             hidden.rename(helper)
         (self.root / 'Filters.txt').write_text('from route@example.org move First\n')
-        self.run_cli('sieve', engine=None)
+        self.run_cli('sieve', engine='legacy')
         self.assertIn(b'header :contains', (self.root / 'Filters.sieve').read_bytes())
         self.assertFalse((self.root / 'cache/filter-engine/current').exists())
         self.run_cli('sieve', engine='legacy')
         self.message.write_bytes(b'From: route@example.org\n\nDefault engine probe.\n')
-        self.run_cli('filter', engine=None)
+        self.run_cli('filter', engine='legacy')
         survivors = [p.read_bytes() for p in (self.root / 'unsorted').rglob('*') if p.is_file() and p.parent.name in ('cur','new')]
         self.assertEqual(survivors, [b'From: route@example.org\n\nDefault engine probe.\n'])
 
@@ -220,7 +220,7 @@ class WorkflowTests(unittest.TestCase):
                    'zsh', '-f', '-c', 'source "$1" source || exit $?; '
                    'print -n -u "$2" 1; read -rk 1 -u "$3"; legacy_update_sieve',
                    'zsh', str(self.runtime / 'bin/jaro'), str(write), str(read)]
-        child = subprocess.Popen(command, env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        child = subprocess.Popen(command, env=dict(self.env, JARO_FILTER_ENGINE='legacy'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                  pass_fds=(write, read))
         os.close(write)
         os.close(read)
@@ -333,7 +333,7 @@ class WorkflowTests(unittest.TestCase):
         self.run_cli('filter')
         self.assertIn(b'0 processed, 0 errors', bytes.fromhex(self.events[-1]['stderr_hex']))
         result = subprocess.run([str(self.source / 'src/jaro'), 'filter', '--explain', str(self.root / 'First')],
-                                cwd=self.root.parent, env=dict(self.env, JARO_FILTER_ENGINE='native'), capture_output=True)
+                                cwd=self.root.parent, env=self.env, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(b'[noop]', result.stdout)
 
@@ -367,7 +367,7 @@ class WorkflowTests(unittest.TestCase):
         for engine in ('', 'unknown'):
             self.run_cli('filter', code=2, engine=engine)
             self.run_cli('fetch', code=2, engine=engine)
-        for engine in ('legacy', None):
+        for engine in ('legacy',):
             self.run_cli('filter', code=4, engine=engine)
         self.assertTrue(self.message.exists())
         self.assertFalse((self.root / 'cache/filters').exists())
@@ -505,6 +505,131 @@ class WorkflowTests(unittest.TestCase):
         self.run_cli('filter', '--compare', code=2)
         self.run_cli('filter', '--explain', engine='legacy', code=2)
 
+    def test_default_and_explicit_native_readonly_setup_never_materializes_inputs(self):
+        before = self.tree_snapshot()
+        for engine in (None, 'native'):
+            for command in ('sieve', 'update'):
+                self.run_cli('-n', command, engine=engine)
+                self.assertEqual(self.tree_snapshot(), before)
+            for args in [('filter', '--explain'), ('-n', 'filter'), ('-n', 'fetch')]:
+                self.run_cli(*args, code=5, engine=engine)
+                self.assertEqual(self.tree_snapshot(), before)
+        self.assertFalse(self.transportlog.exists())
+        self.assertFalse(self.indexlog.exists())
+        (self.root / 'Filters.txt').unlink()
+        before = self.tree_snapshot()
+        self.run_cli('-n', 'sieve', code=3)
+        self.assertEqual(self.tree_snapshot(), before)
+        for engine in ('', 'unknown'):
+            self.run_cli('sieve', engine=engine, code=2)
+            self.assertEqual(self.tree_snapshot(), before)
+
+    def test_default_cache_version_corruption_never_sources_legacy_cache(self):
+        self.run_cli('sieve')
+        selected = (self.root / 'cache/filter-engine/current').resolve()
+        marker = self.root / 'legacy-cache-was-sourced'
+        (self.root / 'cache/filters').write_text('print unsafe > "'+str(marker)+'"\n')
+        for name, mutation in [('policy.bin', lambda b: b[:8]+b'\0\0\0\0'+b[12:]),
+                               ('manifest.json', lambda b: b+b'corrupt')]:
+            path = selected / name
+            original = path.read_bytes()
+            try:
+                path.write_bytes(mutation(original))
+                before = self.tree_snapshot()
+                self.run_cli('filter', '--explain', code=5)
+                self.run_cli('filter', code=5)
+                self.assertEqual(self.tree_snapshot(), before)
+                self.assertFalse(marker.exists())
+            finally:
+                path.write_bytes(original)
+        (self.root / 'Filters.txt').write_text('from-address route@example.org move Updated\n')
+        before = self.tree_snapshot()
+        self.run_cli('filter', '--explain', code=5)
+        self.assertEqual(self.tree_snapshot(), before)
+        self.run_cli('filter')
+        self.assertEqual((self.root / 'Updated/cur/disposable').read_bytes(), b'From: route@example.org\nTo: own@example.org\n\nBody retained.\n')
+        self.assertFalse(marker.exists())
+
+    def test_default_root_environment_overrides_home_from_detached_cwd(self):
+        home = self.root.parent / 'unselected home'
+        (home / 'Mail').mkdir(parents=True)
+        (home / 'Mail/Filters.txt').write_text('invalid unselected policy\n')
+        self.env['HOME'] = str(home)
+        self.run_cli('sieve')
+        self.run_cli('filter', '--explain')
+        self.assertEqual(list((home / 'Mail').iterdir()), [home / 'Mail/Filters.txt'])
+        self.assertFalse((self.root / 'Applications.txt').exists())
+        self.assertFalse((self.root / 'whitelist.abook').exists())
+        self.assertTrue(self.message.exists())
+
+    def test_fresh_init_templates_source_prefix_destdir_all_selectors(self):
+        stage=self.root.parent/'fresh staged install';prefix='/opt/jaro fresh prefix'
+        command=['make','install','PREFIX='+prefix,'DESTDIR='+str(stage)]
+        with (self.root.parent/'fresh-install.log').open('wb') as log:
+            result=subprocess.run(command,cwd=self.source,env=self.build_env,stdout=log,stderr=subprocess.STDOUT)
+        self.assertEqual(result.returncode,0)
+        staged=stage/prefix.lstrip('/')/'share/jaromail'
+        for location,cli,runtime in [('source',self.source/'src/jaro',self.runtime),
+                                     ('prefix',self.cli,self.runtime),('destdir',staged/'bin/jaro',staged)]:
+            for engine in (None,'native','legacy'):
+                with self.subTest(location=location,engine=engine):
+                    root=self.root.parent/('fresh-'+location+'-'+str(engine));home=root.parent/(root.name+'-home');home.mkdir()
+                    env=dict(self.env,JAROMAILDIR=str(root),JAROWORKDIR=str(runtime),HOME=str(home),JARO_KEYRING='fixture-unused')
+                    env.pop('JAROACCOUNT',None)
+                    if engine is not None:env['JARO_FILTER_ENGINE']=engine
+                    def run(*args,code=0):
+                        r=subprocess.run([str(cli),*args],cwd=self.root.parent,env=env,capture_output=True,timeout=40)
+                        self.events.append(dict(command=[str(cli),*args],cwd=str(self.root.parent),engine=engine,root=str(root),exit=r.returncode,stdout_hex=r.stdout.hex(),stderr_hex=r.stderr.hex()))
+                        self.assertEqual(r.returncode,code,r.stderr+r.stdout);return r
+                    run('init')
+                    expected=REPO/'doc'/('Filters.txt' if engine=='legacy' else 'Filters.native.txt')
+                    self.assertEqual((root/'Filters.txt').read_bytes(),expected.read_bytes())
+                    self.assertFalse((root/'FilterProfile.txt').exists())
+                    run('sieve')
+                    bodies={}
+                    for name,headers in [('fallback','From: stranger@other.invalid\n'),('bounce','Sender: mailman-bounce@list.invalid\n'),('spam','X-Spam-Flag: YES\n')]:
+                        body=(headers+'Subject: fresh '+name+'\n\nIndependent fresh body '+name+'\n').encode();bodies[name]=body
+                        (root/'incoming/new'/name).write_bytes(body)
+                    before={str(p.relative_to(root)):p.read_bytes() for p in root.rglob('*') if p.is_file() and not p.is_symlink()}
+                    run('-n','filter');run('filter','--explain',code=2 if engine=='legacy' else 0)
+                    after={str(p.relative_to(root)):p.read_bytes() for p in root.rglob('*') if p.is_file() and not p.is_symlink()}
+                    if engine!='legacy':self.assertEqual(after,before)
+                    self.assertTrue(all((root/'incoming/new'/name).read_bytes()==body for name,body in bodies.items()))
+                    run('filter')
+                    files=[p for p in root.glob('*/cur/*') if p.is_file()]
+                    self.assertEqual(len(files),3)
+                    found={p.read_bytes():p.parent.parent.name for p in files}
+                    expected_dest={'fallback':'unsorted','bounce':'unsorted' if engine=='legacy' else 'zz.bounces','spam':'unsorted' if engine=='legacy' else 'zz.spam'}
+                    self.assertEqual(found,{bodies[name]:dest for name,dest in expected_dest.items()})
+                    self.assertEqual(list((root/'incoming/new').iterdir()),[])
+
+    def test_fresh_init_invalid_selector_or_missing_template_has_no_writes(self):
+        for engine in ('','unknown'):
+            root=self.root.parent/('invalid-init-'+(engine or 'empty'))
+            env=dict(self.env,JAROMAILDIR=str(root),JARO_FILTER_ENGINE=engine)
+            r=subprocess.run([str(self.cli),'init'],cwd=self.root.parent,env=env,capture_output=True,timeout=30)
+            self.assertEqual(r.returncode,2,r.stderr);self.assertFalse(root.exists())
+        for engine in (None,'native','legacy'):
+            template=self.runtime/('Filters.txt' if engine=='legacy' else 'Filters.native.txt');hidden=template.with_suffix('.hidden')
+            root=self.root.parent/('missing-init-'+str(engine));template.rename(hidden)
+            try:
+                env=dict(self.env,JAROMAILDIR=str(root))
+                if engine is not None:env['JARO_FILTER_ENGINE']=engine
+                r=subprocess.run([str(self.cli),'init'],cwd=self.root.parent,env=env,capture_output=True,timeout=30)
+                self.assertEqual(r.returncode,3,r.stderr);self.assertFalse(root.exists())
+            finally:hidden.rename(template)
+
+    def test_existing_legacy_policy_is_never_rewritten_or_autoqualified(self):
+        original=(REPO/'doc/Filters.txt').read_bytes();(self.root/'Filters.txt').write_bytes(original)
+        aliases=(self.root/'Aliases.txt').read_bytes();account=(self.accounts/'default.txt').read_bytes()
+        self.env['HOME']=str(self.root.parent/'migration-home');self.env['JARO_KEYRING']='fixture-unused'
+        self.run_cli('init');result=self.run_cli('sieve',code=4)
+        self.assertIn(b'E_REGEX_EXPORT',result.stderr)
+        self.assertEqual((self.root/'Filters.txt').read_bytes(),original)
+        self.assertEqual((self.root/'Aliases.txt').read_bytes(),aliases)
+        self.assertEqual((self.accounts/'default.txt').read_bytes(),account)
+        self.assertFalse((self.root/'FilterProfile.txt').exists())
+
     def test_destdir_install_custom_prefix_and_fetch_account_flag(self):
         stage = self.root.parent / 'staged install'
         prefix = '/opt/jaro test prefix'
@@ -516,7 +641,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         runtime = stage / prefix.lstrip('/') / 'share/jaromail'
         self.assertTrue((runtime / 'bin/jaro-filter').is_file())
-        env = dict(self.env, JAROWORKDIR=str(runtime), JARO_FILTER_ENGINE='native')
+        env = dict(self.env, JAROWORKDIR=str(runtime))
         body = self.message.read_bytes()
         result = subprocess.run([str(runtime / 'bin/jaro'), 'filter'], cwd=self.root.parent, env=env, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -10,13 +10,23 @@ FILTER_DRIVER := $(FILTER_BUILD_DIR)/filter-policy-driver
 FILTER_PRODUCT_OBJECTS := $(addprefix $(FILTER_BUILD_DIR)/,$(addsuffix .o,product_util profile regex_subset emit cache snapshot import))
 FILTER_COMPILER_DRIVER := $(FILTER_BUILD_DIR)/filter-compiler-driver
 
+
+$(FILTER_BUILD_DIR)/pool.o $(FILTER_BUILD_DIR)/jaro-filter.o $(FILTER_BUILD_DIR)/jaro-filter-test.o $(FILTER_BUILD_DIR)/generation-hooks.o $(FILTER_BUILD_DIR)/generation-pin.o: override CFLAGS += -pthread
+$(FILTER_BUILD_DIR)/jaro-filter $(FILTER_BUILD_DIR)/jaro-filter-test $(FILTER_BUILD_DIR)/jaro-filter-compile-test $(FILTER_BUILD_DIR)/filter-generation-pin: override LDLIBS += -pthread
+
 .PHONY: filter-core filter-policy-driver filter-compiler-driver filter-compile filter-generation-tools filter-batch-tools
 filter-core: $(FILTER_OBJECTS)
 filter-policy-driver: $(FILTER_DRIVER)
 filter-compiler-driver: $(FILTER_COMPILER_DRIVER)
 filter-compile: $(FILTER_BUILD_DIR)/jaro-filter-compile $(FILTER_BUILD_DIR)/jaro-filter-legacy $(FILTER_BUILD_DIR)/jaro-filter
 filter-generation-tools: $(FILTER_BUILD_DIR)/jaro-filter-compile-test $(FILTER_BUILD_DIR)/filter-generation-pin
-filter-batch-tools: $(FILTER_BUILD_DIR)/jaro-filter-test
+filter-batch-tools: $(FILTER_BUILD_DIR)/jaro-filter-test $(FILTER_BUILD_DIR)/jaro-filter-signal-test
+
+$(FILTER_BUILD_DIR)/signal-schedule.o: extras/test/filter-signal-schedule.c | $(FILTER_BUILD_DIR)
+	$(if $(filter ccache sccache distcc,$(notdir $(firstword $(CC)))),,$(CCACHE)) $(CC) $(CPPFLAGS) $(CFLAGS) -pthread -std=c11 -MMD -MP -c "$<" -o "$@"
+
+$(FILTER_BUILD_DIR)/jaro-filter-signal-test: $(FILTER_BUILD_DIR)/jaro-filter-test.o $(FILTER_BUILD_DIR)/storage-test.o $(FILTER_BUILD_DIR)/pool.o $(FILTER_BUILD_DIR)/generation.o $(FILTER_BUILD_DIR)/generation-hooks.o $(FILTER_OBJECTS) $(FILTER_PRODUCT_OBJECTS) $(FILTER_BUILD_DIR)/signal-schedule.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o "$@" $^ $(LDLIBS) -pthread -Wl,--wrap=sigtimedwait -Wl,--wrap=nanosleep -Wl,--wrap=pthread_mutex_lock
 
 $(FILTER_BUILD_DIR)/jaro-filter-test.o: src/jaro-filter.c | $(FILTER_BUILD_DIR)
 	$(if $(filter ccache sccache distcc,$(notdir $(firstword $(CC)))),,$(CCACHE)) $(CC) $(CPPFLAGS) $(CFLAGS) -DJF_TESTING -std=c99 -MMD -MP -c "$<" -o "$@"
@@ -24,7 +34,7 @@ $(FILTER_BUILD_DIR)/jaro-filter-test.o: src/jaro-filter.c | $(FILTER_BUILD_DIR)
 $(FILTER_BUILD_DIR)/storage-test.o: src/filter/storage.c | $(FILTER_BUILD_DIR)
 	$(if $(filter ccache sccache distcc,$(notdir $(firstword $(CC)))),,$(CCACHE)) $(CC) $(CPPFLAGS) $(CFLAGS) -DJF_TESTING -std=c99 -MMD -MP -c "$<" -o "$@"
 
-$(FILTER_BUILD_DIR)/jaro-filter-test: $(FILTER_BUILD_DIR)/jaro-filter-test.o $(FILTER_BUILD_DIR)/storage-test.o $(FILTER_BUILD_DIR)/generation.o $(FILTER_BUILD_DIR)/generation-hooks.o $(FILTER_OBJECTS) $(FILTER_PRODUCT_OBJECTS)
+$(FILTER_BUILD_DIR)/jaro-filter-test: $(FILTER_BUILD_DIR)/jaro-filter-test.o $(FILTER_BUILD_DIR)/storage-test.o $(FILTER_BUILD_DIR)/pool.o $(FILTER_BUILD_DIR)/generation.o $(FILTER_BUILD_DIR)/generation-hooks.o $(FILTER_OBJECTS) $(FILTER_PRODUCT_OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o "$@" $^ $(LDLIBS)
 
 $(FILTER_BUILD_DIR)/generation-test.o: src/filter/generation.c | $(FILTER_BUILD_DIR)
@@ -39,7 +49,7 @@ $(FILTER_BUILD_DIR)/jaro-filter-legacy.o: src/jaro-filter-legacy.c | $(FILTER_BU
 $(FILTER_BUILD_DIR)/jaro-filter.o: src/jaro-filter.c | $(FILTER_BUILD_DIR)
 	$(if $(filter ccache sccache distcc,$(notdir $(firstword $(CC)))),,$(CCACHE)) $(CC) $(CPPFLAGS) $(CFLAGS) -std=c99 -MMD -MP -c "$<" -o "$@"
 
-$(FILTER_BUILD_DIR)/jaro-filter: $(FILTER_BUILD_DIR)/jaro-filter.o $(FILTER_BUILD_DIR)/storage.o $(FILTER_BUILD_DIR)/generation.o $(FILTER_OBJECTS) $(FILTER_PRODUCT_OBJECTS)
+$(FILTER_BUILD_DIR)/jaro-filter: $(FILTER_BUILD_DIR)/jaro-filter.o $(FILTER_BUILD_DIR)/storage.o $(FILTER_BUILD_DIR)/pool.o $(FILTER_BUILD_DIR)/generation.o $(FILTER_OBJECTS) $(FILTER_PRODUCT_OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o "$@" $^ $(LDLIBS)
 
 $(FILTER_BUILD_DIR)/jaro-filter-legacy: $(FILTER_BUILD_DIR)/jaro-filter-legacy.o $(FILTER_BUILD_DIR)/generation.o $(FILTER_OBJECTS) $(FILTER_PRODUCT_OBJECTS)
@@ -85,4 +95,4 @@ $(FILTER_COMPILER_DRIVER): $(FILTER_BUILD_DIR)/filter-compiler-driver.o $(FILTER
 	$(CC) $(CFLAGS) $(LDFLAGS) -o "$@" $^ $(LDLIBS)
 
 -include $(FILTER_OBJECTS:.o=.d) $(FILTER_PRODUCT_OBJECTS:.o=.d) $(FILTER_BUILD_DIR)/filter-policy-driver.d $(FILTER_BUILD_DIR)/filter-compiler-driver.d
--include $(addprefix $(FILTER_BUILD_DIR)/,generation.d generation-test.d jaro-filter-compile.d jaro-filter-legacy.d jaro-filter.d jaro-filter-test.d storage.d storage-test.d generation-hooks.d generation-pin.d)
+-include $(addprefix $(FILTER_BUILD_DIR)/,pool.d signal-schedule.d generation.d generation-test.d jaro-filter-compile.d jaro-filter-legacy.d jaro-filter.d jaro-filter-test.d storage.d storage-test.d generation-hooks.d generation-pin.d)

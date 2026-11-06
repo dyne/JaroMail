@@ -36,7 +36,7 @@ indexing and SMTP/IMAP actions.
 ## Filter engine selection
 
 `JARO_FILTER_ENGINE=legacy|native` selects compilation and filter/fetch dispatch;
-unset retains legacy.
+unset selects native. Explicit `JARO_FILTER_ENGINE=legacy` selects rollback.
 Empty/unknown values fail. Native `update`/`sieve` invoke the installed compiler
 with explicit mail/account roots and return its failures without fallback.
 An absent profile selects `core-v1`; unsupported ERE exports fail with a
@@ -47,7 +47,13 @@ Native `filter [MAILDIR]` compiles/verifies once and applies one pinned batch.
 The default Maildir is `$JAROMAILDIR/incoming`. Native `fetch` uses the same
 batch after transport and refreshes the index once, even after partial failure;
 batch errors remain nonzero. Filter itself does not index. Native Sieve import
-is unsupported (4) until its implementation milestone.
+accepts the bounded Jaromail-generated grammar described below.
+
+Fresh `init` under unset/explicit native installs a comment-only typed-example
+policy with builtins active. Explicit legacy keeps the original 14 ERE defaults.
+Existing policies are never replaced or translated; unsupported legacy EREs need
+an explicit qualified profile or deliberate typed rewrite. Invalid selectors or
+missing required templates fail before bootstrap configuration writes.
 
 Native `filter --explain [MAILDIR]` and `-n filter [MAILDIR]` classify only,
 checking the selected generation against current policy without publishing.

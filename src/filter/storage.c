@@ -69,11 +69,12 @@ static int syncfd(int fd,const char *phase)
 
 static int stopped(const struct jf_storage *s)
 {
-	return s->interrupted && *s->interrupted;
+	return s->should_stop ? s->should_stop(s->context) : s->interrupted && *s->interrupted;
 }
 
 void jf_storage_close(struct jf_storage *s)
 {
+	if (s->borrowed) { s->root=s->engine=s->lock=s->random=-1; return; }
 	if (s->random>=0) close(s->random);
 	if (s->lock>=0) close(s->lock);
 	if (s->engine>=0) close(s->engine);
@@ -185,6 +186,7 @@ static int create_owned(struct jf_storage *s,int parent,struct owned_directory *
 	d->fd=-1; d->parent=parent; d->created=0; d->name[0]=0;
 	for (i=0;i<16;i++) snprintf(hex+i*2,3,"%02x",s->nonce[i]);
 	for (attempt=0;attempt<RETRIES;attempt++) {
+		if (s->sequence==SIZE_MAX) { errno=EOVERFLOW; return -1; }
 		snprintf(d->name,sizeof d->name,".jaro-filter.%s.%zx",hex,++s->sequence);
 		if (mkdirat(parent,d->name,0700)) { if (errno==EEXIST) continue; return -1; }
 		d->created=1;
@@ -367,6 +369,9 @@ int jf_storage_move(struct jf_storage *s,int parent,const char *name,int source,
 	if (!lock_current(s)) { *detail="E_BATCH_LOCK_CHANGED"; goto done; }
 	if (!source_current(parent,name,source,expected)) { *detail="E_SOURCE_CHANGED"; goto done; }
 	if (destination(s,relative,&cur,&new,&tmp)) goto done;
+	if (s->destination_allowed && !s->destination_allowed(s->context,cur,new)) {
+		*detail="E_DESTINATION_CHANGED"; goto done;
+	}
 	if (fstat(parent,&a) || fstat(cur,&b)) goto done;
 	if (inode(&a,&b)) { rc=1; goto done; }
 	if (fstat(new,&b)) goto done;
@@ -489,6 +494,7 @@ done:
 		recovery->source=claim_path; claim_path=NULL;
 	}
 	if (rc==7 && published) { recovery->destination=final_path; final_path=NULL; }
+	if (!rc && published) { recovery->published=final_path; final_path=NULL; }
 	if (stage.fd>=0) close(stage.fd);
 	if (claim.fd>=0) close(claim.fd);
 	if (cur>=0) close(cur);

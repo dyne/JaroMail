@@ -120,7 +120,7 @@ a pipe | in front indicate they take an email body from stdin
           (if none specified, processes incoming/ - called by fetch)
           --explain renders native decisions without moving messages
           --compare FILE compares retained JLC1 legacy observations
-          JARO_FILTER_ENGINE=legacy|native; default is legacy
+          JARO_FILTER_ENGINE=legacy|native; default is native
 
 For a complete introductory documentation, see the User Manual (PDF)
 Website on <http://dyne.org/software/jaro-mail>

@@ -15,3 +15,9 @@ trap test_cleanup EXIT
 python3 "$repo_root/extras/bench/filter_baseline.py" --repo "$repo_root" \
   --work "$work_root" --scratch "$tmp_root/bench-smoke" --output "$tmp_root/report" \
   --sizes 10 --messages 8 --runs 1
+# Deterministic correctness/process-growth gate, never a wall-time baseline.
+# Vary rules and batch cardinality independently; native mode checks identical
+# bounded executable counts per phase across every workload and repetition.
+python3 "$repo_root/extras/bench/filter_baseline.py" --repo "$repo_root" \
+  --work "$work_root" --scratch "$tmp_root/native-smoke" --output "$tmp_root/native-report" \
+  --engine native --sizes 10 20 --messages 8 12 --runs 1

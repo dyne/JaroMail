@@ -11,6 +11,10 @@ import stat
 import subprocess
 import sys
 import tempfile
+import select
+import time
+import resource
+import re
 import unittest
 sys.dont_write_bytecode = True
 import filter_batch_test as fixtures
@@ -86,8 +90,8 @@ class StorageTests(unittest.TestCase):
         return self.decode(result)
 
     def event(self,args,code,out,err,env):
-        self.capture(args,subprocess.CompletedProcess(args,code,out,err),extra=dict(
-            environment={k:v for k,v in env.items() if k.startswith('JF_TEST_')}))
+        self.capture(args,subprocess.CompletedProcess(args,code,out or b'',err),extra=dict(
+            stdout_not_captured=out is None,environment={k:v for k,v in env.items() if k.startswith('JF_TEST_')}))
 
     @contextmanager
     def held(self,phase,paths,command=None):
@@ -678,6 +682,74 @@ class StorageTests(unittest.TestCase):
             self.inventory([(data,1 if phase=='store-staging-created' else 2)])
             self.clean_private()
 
+    def signal_schedule(self,mode,signum):
+        self.fresh_root('%s-%d'%(mode,signum))
+        path=self.message('new/source');data=path.read_bytes();original_mode=stat.S_IMODE(path.stat().st_mode)
+        notify,writer=os.pipe();reader,release=os.pipe()
+        io_notify,io_writer=os.pipe();io_reader,io_release=os.pipe()
+        command=list(map(str,[self.objects/'jaro-filter-signal-test','--root',self.root,'--mode','apply','--',path]))
+        env=dict(os.environ,JF_SIGNAL_SCHEDULE=mode,JF_SIGNAL_NOTIFY_FD=str(writer),JF_SIGNAL_RELEASE_FD=str(reader),
+                 JF_TEST_HOLD='store-before-unlink,store-before-restore,store-unlink',
+                 JF_TEST_NOTIFY_FD=str(io_writer),JF_TEST_RELEASE_FD=str(io_reader),JF_TEST_TRACE='1')
+        process=subprocess.Popen(command,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                 pass_fds=(writer,reader,io_writer,io_reader))
+        for fd in (writer,reader,io_writer,io_reader):os.close(fd)
+        controls=[];out=err=b''
+        def ready(fd,wanted):
+            self.assertTrue(select.select([fd],[],[],10)[0],'signal schedule precondition not reached')
+            self.assertEqual(os.read(fd,1),wanted);controls.append(wanted.decode())
+        try:
+            ready(notify,b'M');ready(io_notify,b'1')
+            self.assertGreaterEqual(len(list(Path('/proc/%d/task'%process.pid).iterdir())),18)
+            process.send_signal(signum)
+            if mode=='consumed':
+                os.write(release,b'1');ready(notify,b'C')
+                os.write(io_release,b'1');ready(notify,b'W')
+                # The real wait returned, but publication is deliberately held.
+                # The worker has attempted its stop lock; releasing the consumer
+                # must publish stop before that check can return.
+                os.write(release,b'1')
+                ready(io_notify,b'1')
+            else:
+                os.write(io_release,b'1');ready(io_notify,b'1')
+                # The worker has reached restore while the manager remains held
+                # before consumption: its own pending-signal check must suffice.
+                os.write(release,b'1')
+            os.write(io_release,b'1')
+            out,err=process.communicate(timeout=15)
+        finally:
+            if process.poll() is None:
+                for fd in (release,io_release):
+                    try:os.write(fd,b'1'*64)
+                    except BrokenPipeError:pass
+                try:out,err=process.communicate(timeout=15)
+                except subprocess.TimeoutExpired:
+                    process.kill();out,err=process.communicate(timeout=5)
+            for fd in (notify,release,io_notify,io_release):os.close(fd)
+            self.capture(command,subprocess.CompletedProcess(command,process.returncode,out,err),extra=dict(
+                environment={k:v for k,v in env.items() if k.startswith(('JF_TEST_','JF_SIGNAL_'))},
+                schedule_controls=controls,settled=process.poll() is not None))
+            self.counts['controlled_children']+=1
+            self.counts['unsettled_children']+=process.poll() is None
+        self.assertEqual(process.returncode,128+signum,err)
+        rows=self.decode(subprocess.CompletedProcess(command,process.returncode,out,err))
+        self.assertEqual(len(rows),1);self.assertEqual(rows[0]['status'],b'error')
+        self.assertEqual(rows[0]['detail'],b'E_INTERRUPTED')
+        self.assertEqual(path.read_bytes(),data);self.assertEqual(stat.S_IMODE(path.stat().st_mode),original_mode)
+        inventory=self.inventory([(data,2)])
+        self.assertEqual({bytes.fromhex(r['path_hex']) for r in inventory},
+                         {os.fsencode(path),os.fsencode(self.root/'unsorted/cur/source')})
+        self.assertEqual(stat.S_IMODE((self.root/'unsorted/cur/source').stat().st_mode),0o600)
+        self.clean_private()
+
+    def test_pool_pending_signals_stop_at_boundary_before_manager_runs(self):
+        for signum in [signal.SIGINT,signal.SIGTERM,signal.SIGHUP,signal.SIGPIPE]:
+            with self.subTest(signum=signum):self.signal_schedule('pending',signum)
+
+    def test_pool_consumed_signals_publish_stop_under_same_boundary_lock(self):
+        for signum in [signal.SIGINT,signal.SIGTERM,signal.SIGHUP,signal.SIGPIPE]:
+            with self.subTest(signum=signum):self.signal_schedule('consumed',signum)
+
     def test_kill_after_claim_retains_owned_copy_and_releases_lock(self):
         self.compile()
         path = self.message('new/source:2,FS')
@@ -696,6 +768,502 @@ class StorageTests(unittest.TestCase):
         self.apply([another])
         self.assertEqual((self.root/'cache/filter-engine/batch.lock').stat().st_ino,lock_inode)
         self.assertEqual(claimed[0].read_bytes(),data,'next batch must not adopt another process claim')
+
+    def pool_messages(self,count=40,large=False):
+        self.compile()
+        paths=[]
+        for i in range(count):
+            raw=b'From: pool@example.org\r\nSubject: pool\r\n\r\n'+bytes([i%251])* (180000 if large and not i else 128)
+            paths.append(self.message('new/pool-%03d:2,S'%i,raw=raw))
+        self.pool_modes={p:stat.S_IMODE(p.stat().st_mode) for p in paths}
+        bodies=[p.read_bytes() for p in paths]
+        self.pool_names=dict(zip(bodies,[p.name for p in paths]))
+        return paths,bodies
+
+    @contextmanager
+    def pool_held(self,phase,paths,extra=None):
+        self.env=dict(os.environ);self.held=[]
+        handle=Held(self,phase,command=self.argv(paths,True),extra=dict(JF_TEST_JOB='1',**(extra or {})))
+        try:
+            handle.ready();yield handle
+        finally:
+            if not handle.finished:
+                try:os.write(handle.release,b'1'*64)
+                except BrokenPipeError:pass
+            handle.close()
+            self.counts['controlled_children']+=1
+            self.counts['unsettled_children']+=handle.process.poll() is None
+            del self.held
+
+    def wait_removed(self,path,handle):
+        deadline=time.monotonic()+10
+        while path.exists() and time.monotonic()<deadline:
+            self.assertIsNone(handle.process.poll())
+            time.sleep(.01)
+        self.assertFalse(path.exists(),'independent job did not complete while job 1 was held')
+
+    def pool_rows(self,handle,code=0):
+        handle.resume();rc,out,err=handle.finish()
+        self.assertEqual(rc,code,err)
+        return self.decode(subprocess.CompletedProcess([],rc,out,err)),err
+
+    def pool_sources(self,paths,bodies):
+        return {p:(body,self.pool_modes[p]) for p,body in zip(paths,bodies)}
+
+    def assert_pool_bodies(self,bodies,extra=(),*,copies=None,sources=None,foreign=None,destinations=None,fixed=None,alternatives=(),private_directories=()):
+        # Every message entry is accounted, including private/foreign copies.
+        # Fault callers supply finite bounds justified by their phase/rows;
+        # success defaults to exactly one survivor per selected input.
+        sources=sources or {};foreign=foreign or {};fixed=fixed or {}
+        destinations=destinations or [self.root/'unsorted/cur']
+        expected=collections.Counter(bodies)+collections.Counter(extra)
+        bounds={body:(count,count) for body,count in expected.items()}
+        bounds.update(copies or {})
+        actual=collections.Counter();inventory=body_files(self.root);seen=set()
+        for row in inventory:
+            path=Path(os.fsdecode(bytes.fromhex(row['path_hex'])));data=path.read_bytes();seen.add(path)
+            self.assertTrue(stat.S_ISREG(path.lstat().st_mode))
+            if path in fixed:
+                wanted,mode=fixed[path];self.assertEqual((data,row['mode']),(wanted,mode));continue
+            actual[data]+=1
+            if path in sources:
+                wanted,mode=sources[path];self.assertEqual((data,row['mode']),(wanted,mode))
+                if path.parent.name.startswith('.jaro-filter.'):
+                    self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode),0o700)
+            elif path in foreign:
+                wanted,mode=foreign[path];self.assertEqual((data,row['mode']),(wanted,mode))
+            else:
+                self.assertIn(path.parent,destinations,'unexpected message/stage/private/foreign path')
+                self.assertEqual(row['mode'],0o600)
+                self.assertTrue(path.name.endswith(':2,S') or path.name.startswith('jaro.'))
+                wanted_name=getattr(self,'pool_names',{}).get(data)
+                if data not in alternatives:self.assertEqual(path.name,wanted_name,'body/input filename mismatch')
+                else:
+                    self.assertTrue(path.name==wanted_name or re.fullmatch(r'(?:jaro\.[0-9a-f]{8}\.[0-9a-f]+\.[0-9]+|[0-9A-Za-z]{1,79}):2,S',path.name))
+        for body in [*bodies,*extra]:self.assertIn(body,actual)
+        self.assertEqual(set(actual),set(bounds),'foreign, partial or missing body')
+        for body,(minimum,maximum) in bounds.items():
+            self.assertGreaterEqual(actual[body],minimum)
+            self.assertLessEqual(actual[body],maximum,'unexpected duplicate')
+        self.assertTrue(set(sources)|set(foreign)|set(fixed)<=seen)
+        allowed_private=set(private_directories)|{p.parent for p in [*sources,*fixed] if p.parent.name.startswith('.jaro-filter.')}
+        for parent,dirs,files in os.walk(self.root,followlinks=False):
+            if 'cache' in dirs:dirs.remove('cache')
+            relative=Path(parent).relative_to(self.root).parts
+            if not any(part in ('cur','new','tmp') for part in relative):continue
+            for name in dirs:
+                entry=Path(parent)/name
+                self.assertFalse(entry.is_symlink());self.assertIn(entry,allowed_private,'unexpected private/foreign directory')
+                self.assertEqual(stat.S_IMODE(entry.stat().st_mode),0o700)
+            for name in files:
+                entry=Path(parent)/name
+                self.assertFalse(entry.is_symlink());self.assertIn(entry,seen,'unexpected nonregular/foreign entry')
+        (self.case/('pool-inventory-%04d.json'%self.counts['body_inventories'])).write_text(json.dumps(dict(
+            files=inventory,bounds=[dict(sha256=digest(body),bytes=len(body),minimum=lo,maximum=hi) for body,(lo,hi) in bounds.items()],
+            sources=[str(p) for p in sources],foreign=[str(p) for p in foreign],fixed=[str(p) for p in fixed],
+            destinations=list(map(str,destinations))),sort_keys=True,indent=2)+'\n')
+        self.counts['body_inventories']+=1
+
+    def pool_interrupted_bounds(self,paths,bodies,rows):
+        sources={};bounds={}
+        for index,(path,body) in enumerate(zip(paths,bodies)):
+            if index>=len(rows):
+                self.assertTrue(path.exists());sources.update(self.pool_sources([path],[body]));continue
+            row=rows[index]
+            if row['status']==b'moved':self.assertFalse(path.exists())
+            else:
+                self.assertEqual(row['status'],b'error');self.assertTrue(path.exists())
+                sources.update(self.pool_sources([path],[body]))
+                # A cooperative singleton can stop before or after publication;
+                # at most one complete public duplicate may remain.
+                bounds[body]=(1,2)
+        return sources,bounds
+
+    def test_pool_overlaps_singletons_and_bounds_window_threads_descriptors(self):
+        paths,bodies=self.pool_messages(65)
+        with self.pool_held('store-before-claim',paths) as h:
+            self.wait_removed(paths[1],h)
+            self.assertTrue(paths[0].exists())
+            self.assertTrue(all(p.exists() for p in paths[32:]),'next window admitted before ordered output')
+            tasks=list(Path('/proc/%s/task'%h.process.pid).iterdir())
+            self.assertIn(len(tasks),(18,19)) # TSan may own one runtime helper.
+            self.assertLessEqual(len(list(Path('/proc/%s/fd'%h.process.pid).iterdir())),240)
+            self.events.append(dict(control='pool-resource-observation',tasks=len(tasks),fds=len(list(Path('/proc/%s/fd'%h.process.pid).iterdir())),prepared_bound=32,later_sources_intact=all(p.exists() for p in paths[32:])))
+            # Only the flushed header is observable before the window settles.
+            self.assertTrue(select.select([h.process.stdout],[],[],1)[0])
+            header=os.read(h.process.stdout.fileno(),4096)
+            self.assertEqual(header,b'JFD1\0'+self.generation+b'\0')
+            h.resume();rc,out,err=h.finish()
+            self.assertEqual(rc,0,err)
+            rows=self.decode(subprocess.CompletedProcess([],rc,header+out,err))
+        self.assertEqual([r['status'] for r in rows],[b'moved']*65)
+        self.assert_pool_bodies(bodies)
+
+    def test_pool_fault_order_preserves_first_error_next_moved(self):
+        paths,bodies=self.pool_messages(8,True)
+        rows=self.apply(paths,7,dict(JF_TEST_FAIL='store-write',JF_TEST_FAIL_AT='2',JF_TEST_TRACE='1'))
+        self.assertEqual([r['status'] for r in rows],[b'error']+[b'moved']*7)
+        self.assertEqual(rows[0]['detail'],b'E_COPY_WRITE')
+        self.assertEqual(paths[0].read_bytes(),bodies[0])
+        self.assert_pool_bodies(bodies,sources=self.pool_sources(paths[:1],bodies[:1]))
+
+    def test_pool_ungated_error_does_not_cancel_other_singletons(self):
+        paths,bodies=self.pool_messages(16)
+        rows=self.apply(paths,7,dict(JF_TEST_FAIL='store-sync-published',JF_TEST_JOB='2'))
+        self.assertEqual([r['status'] for r in rows],[b'moved',b'error']+[b'moved']*14)
+        self.assertEqual(rows[1]['detail'],b'E_DESTINATION_FSYNC')
+        self.assertEqual(paths[1].read_bytes(),bodies[1])
+        self.assert_pool_bodies(bodies,copies={bodies[1]:(2,2)},sources=self.pool_sources(paths[1:2],bodies[1:2]))
+
+    def test_pool_ungated_source_mutation_retains_new_body(self):
+        paths,bodies=self.pool_messages()
+        changed=bodies[0]+b'concurrent body edit'
+        with self.pool_held('store-before-claim',paths) as h:
+            self.wait_removed(paths[1],h);paths[0].write_bytes(changed)
+            rows,_=self.pool_rows(h,7)
+        self.assertEqual(rows[0]['status'],b'error')
+        self.assertEqual(paths[0].read_bytes(),changed)
+        self.assert_pool_bodies(bodies,[changed],sources=self.pool_sources(paths[:1],[changed]))
+
+    def test_pool_ungated_destination_corruption_preserves_source(self):
+        paths,bodies=self.pool_messages()
+        with self.pool_held('store-before-claim',paths) as h:
+            self.wait_removed(paths[1],h)
+            target=next(self.root.rglob(paths[0].name))
+            targets=[p for p in self.root.rglob(paths[0].name) if p!=paths[0]]
+            self.assertEqual(len(targets),1);targets[0].write_bytes(b'corrupted destination')
+            rows,_=self.pool_rows(h,7)
+        self.assertEqual(rows[0]['status'],b'error')
+        self.assertEqual(paths[0].read_bytes(),bodies[0])
+        self.assert_pool_bodies(bodies,[b'corrupted destination'],sources=self.pool_sources(paths[:1],bodies[:1]),foreign={targets[0]:(b'corrupted destination',0o600)})
+
+    def test_pool_ungated_destination_rename_preserves_pinned_copies(self):
+        paths,bodies=self.pool_messages(16)
+        with self.pool_held('store-before-claim',paths) as h:
+            self.wait_removed(paths[1],h)
+            target=next(p for p in self.root.rglob(paths[0].name) if p!=paths[0])
+            leaf=target.parent.parent;renamed=leaf.with_name('renamed-destination')
+            leaf.rename(renamed);self.maildir(leaf)
+            rows,_=self.pool_rows(h,7)
+        self.assertEqual(rows[0]['status'],b'error');self.assertTrue(paths[0].exists())
+        sources,bounds=self.pool_interrupted_bounds(paths,bodies,rows);bounds[bodies[0]]=(2,2)
+        self.assert_pool_bodies(bodies,copies=bounds,sources=sources,destinations=[leaf/'cur',renamed/'cur'])
+
+    def test_pool_publication_pin_survives_parallel_old_generation(self):
+        paths,bodies=self.pool_messages(40)
+        generation=self.generation
+        with self.pool_held('store-before-claim',paths) as h:
+            self.wait_removed(paths[1],h)
+            (self.root/'Filters.txt').write_text('from-address pool@example.org move Other\n')
+            published=self.command([self.compiler,'--root',self.root,'--report0']).stdout.split(b'\0')
+            self.assertNotEqual(published[1],generation)
+            rows,_=self.pool_rows(h)
+        self.assertEqual(len(rows),40)
+        self.assertTrue(all(r['logical']==b'unsorted' for r in rows))
+        self.assert_pool_bodies(bodies)
+
+    def test_pool_managed_signals_restore_claim_and_settle_workers(self):
+        for signum in [signal.SIGINT,signal.SIGTERM,signal.SIGHUP]:
+            self.fresh_root('signal-%d'%signum);paths,bodies=self.pool_messages(40)
+            with self.pool_held('store-source-claimed',paths) as h:
+                self.wait_removed(paths[1],h)
+                h.process.send_signal(signum)
+                # Observe cancellation before releasing the held singleton.
+                time.sleep(.05)
+                rows,err=self.pool_rows(h,128+signum)
+            self.assertTrue(paths[0].exists());self.assertTrue(all(p.exists() for p in paths[32:]))
+            self.assertEqual(rows[0]['status'],b'error');self.assertEqual(rows[0]['detail'],b'E_INTERRUPTED')
+            sources,bounds=self.pool_interrupted_bounds(paths,bodies,rows);bounds[bodies[0]]=(2,2)
+            self.assert_pool_bodies(bodies,copies=bounds,sources=sources)
+
+    def test_pool_signal_restore_never_clobbers_new_arrival(self):
+        paths,bodies=self.pool_messages(40)
+        with self.pool_held('store-source-claimed',paths) as h:
+            self.wait_removed(paths[1],h);paths[0].write_bytes(b'new arrival')
+            h.process.send_signal(signal.SIGTERM);time.sleep(.05)
+            rows,err=self.pool_rows(h,143)
+        self.assertEqual(paths[0].read_bytes(),b'new arrival')
+        self.assertEqual(rows[0]['status'],b'error');self.assertIn(b'E_RETAINED_PATH',err)
+        claims=list(self.incoming.glob('new/.jaro-filter.*/'+paths[0].name));self.assertEqual(len(claims),1)
+        sources,bounds=self.pool_interrupted_bounds(paths[1:],bodies[1:],rows[1:])
+        sources[claims[0]]=(bodies[0],self.pool_modes[paths[0]]);bounds[bodies[0]]=(2,2)
+        self.assert_pool_bodies(bodies,[b'new arrival'],copies=bounds,sources=sources,foreign={paths[0]:(b'new arrival',self.pool_modes[paths[0]])})
+
+    def pool_killed_inventory(self,paths,bodies):
+        # SIGKILL may leave one original/claim, one published copy and one
+        # incomplete stage per active job. Each stage is assigned injectively
+        # to a still-original admitted input whose bytes it prefixes.
+        inventory=body_files(self.root);orig=[0]*len(paths);claimed=[0]*len(paths);published=[0]*len(paths)
+        indexes={body:i for i,body in enumerate(bodies)};names={p.name:i for i,p in enumerate(paths)}
+        stages=[];fixed={};private_dirs=list(self.root.rglob('.jaro-filter.*'))
+        self.assertLessEqual(len(private_dirs),32)
+        for directory in private_dirs:
+            self.assertTrue(directory.is_dir());self.assertFalse(directory.is_symlink())
+            self.assertIn(directory.parent,[self.incoming/'new',self.root/'unsorted/tmp'])
+            self.assertEqual(stat.S_IMODE(directory.stat().st_mode),0o700)
+            self.assertLessEqual(len(list(directory.iterdir())),1)
+        for row in inventory:
+            path=Path(os.fsdecode(bytes.fromhex(row['path_hex'])));data=path.read_bytes()
+            if path in paths:
+                i=paths.index(path);orig[i]+=1;self.assertEqual(data,bodies[i]);self.assertEqual(row['mode'],self.pool_modes[path])
+            elif path.parent.parent==self.incoming/'new' and path.parent.name.startswith('.jaro-filter.'):
+                self.assertIn(path.name,names);i=names[path.name];claimed[i]+=1
+                self.assertEqual(data,bodies[i]);self.assertEqual(row['mode'],self.pool_modes[paths[i]])
+                fixed[path]=(data,row['mode'],path.stat().st_dev,path.stat().st_ino)
+            elif path.parent==self.root/'unsorted/cur':
+                self.assertIn(data,indexes);i=indexes[data];published[i]+=1
+                self.assertEqual(path.name,paths[i].name);self.assertEqual(row['mode'],0o600)
+            else:
+                self.assertEqual(path.parent.parent,self.root/'unsorted/tmp');self.assertTrue(path.parent.name.startswith('.jaro-filter.'))
+                self.assertEqual(path.name,'message');self.assertEqual(row['mode'],0o600)
+                stages.append((path,data));fixed[path]=(data,row['mode'],path.stat().st_dev,path.stat().st_ino)
+        for i in range(len(paths)):
+            self.assertLessEqual(orig[i]+claimed[i],1);self.assertLessEqual(published[i],1)
+            self.assertIn(orig[i]+claimed[i]+published[i],(1,2))
+            if claimed[i]:self.assertEqual(published[i],1,'claim requires a complete durable publication')
+            if i>=32:self.assertEqual((orig[i],claimed[i],published[i]),(1,0,0))
+        self.assertEqual((orig[0],claimed[0],published[0]),(0,1,1))
+        self.assertLessEqual(len(stages),15) # Held claim consumes one of16workers.
+        assigned={}
+        def assign(stage,seen):
+            data=stages[stage][1]
+            for i,body in enumerate(bodies[:32]):
+                if i in seen or not orig[i] or not body.startswith(data) or (published[i] and data!=body):continue
+                seen.add(i)
+                if i not in assigned or assign(assigned[i],seen):assigned[i]=stage;return True
+            return False
+        for stage in range(len(stages)):self.assertTrue(assign(stage,set()),'partial/foreign/duplicate stage has no distinct eligible input')
+        (self.case/'pool-killed-inventory.json').write_text(json.dumps(dict(files=inventory,
+            originals=orig,claims=claimed,published=published,stage_assignments=assigned,
+            private_directories=list(map(str,private_dirs))),sort_keys=True,indent=2)+'\n')
+        self.counts['body_inventories']+=1
+        return orig,published,fixed,set(private_dirs)
+
+    def test_pool_kill_retains_private_claim_without_adopting_it_on_retry(self):
+        paths,bodies=self.pool_messages(40)
+        with self.pool_held('store-source-claimed',paths) as h:
+            self.wait_removed(paths[1],h);h.process.kill()
+            rc,out,err=h.finish();self.assertEqual(rc,-signal.SIGKILL)
+            self.assertEqual(out,b'JFD1\0'+self.generation+b'\0')
+        self.assertFalse(paths[0].exists())
+        original,published,fixed,private_dirs=self.pool_killed_inventory(paths,bodies)
+        claims=list(self.incoming.glob('new/.jaro-filter.*/'+paths[0].name));self.assertEqual(len(claims),1)
+        rows=self.apply([p for p in paths if p.exists()]);self.assertTrue(all(r['status']==b'moved' for r in rows))
+        self.assertEqual(claims[0].read_bytes(),bodies[0])
+        self.assertEqual(set(self.root.rglob('.jaro-filter.*')),private_dirs)
+        for path,(data,mode,dev,ino) in fixed.items():
+            self.assertEqual((path.read_bytes(),stat.S_IMODE(path.stat().st_mode),path.stat().st_dev,path.stat().st_ino),(data,mode,dev,ino))
+        copies={body:(published[i]+original[i],published[i]+original[i]) for i,body in enumerate(bodies)}
+        self.assert_pool_bodies(bodies,copies=copies,fixed={p:(v[0],v[1]) for p,v in fixed.items()},alternatives={body for i,body in enumerate(bodies) if original[i] and published[i]},private_directories=private_dirs)
+
+    def test_pool_header_output_failure_precedes_message_effects(self):
+        paths,bodies=self.pool_messages()
+        with open('/dev/full','wb') as output:
+            r=subprocess.run(self.argv(paths),stdout=output,stderr=subprocess.PIPE,timeout=20)
+        self.assertEqual(r.returncode,3,r.stderr)
+        self.assertTrue(all(p.exists() for p in paths));self.assert_pool_bodies(bodies,sources=self.pool_sources(paths,bodies))
+
+    def test_pool_real_sigpipe_header_failure_precedes_message_effects(self):
+        paths,bodies=self.pool_messages();read,write=os.pipe();os.close(read)
+        try:r=subprocess.run(self.argv(paths),stdout=write,stderr=subprocess.PIPE,timeout=20)
+        finally:os.close(write)
+        self.assertEqual(r.returncode,141,r.stderr)
+        self.assertTrue(all(p.exists() for p in paths));self.assert_pool_bodies(bodies,sources=self.pool_sources(paths,bodies))
+
+    def test_pool_midrecord_pipe_failure_closes_admission_and_reports_unreceived_moves(self):
+        paths,bodies=self.pool_messages(100)
+        # A closed reader after a complete header forces a record/flush error.
+        # One window may finish durably; no later window may start.
+        with self.pool_held('store-before-claim',paths) as h:
+            header=os.read(h.process.stdout.fileno(),len(self.generation)+6)
+            self.assertEqual(header,b'JFD1\0'+self.generation+b'\0')
+            h.process.stdout.close();h.process.stdout=None
+            h.resume();rc,out,err=h.finish()
+        self.assertEqual(rc,141,err)
+        self.assertTrue(all(p.exists() for p in paths[32:]))
+        self.assertFalse(any(p.exists() for p in paths[:32]))
+        self.assertGreaterEqual(err.count(b'E_RETAINED_PATH'),32)
+        self.assert_pool_bodies(bodies,sources=self.pool_sources(paths[32:],bodies[32:]))
+
+    def test_pool_resource_limit_falls_back_before_effects(self):
+        paths,bodies=self.pool_messages(3)
+        # Start with the production generic FD fallback, then hold the first
+        # real singleton operation to observe that later jobs remain untouched.
+        read,writer=os.pipe();reader,release=os.pipe()
+        env=dict(os.environ,JF_TEST_HOLD='store-before-claim',JF_TEST_JOB='1',JF_TEST_NOTIFY_FD=str(writer),JF_TEST_RELEASE_FD=str(reader))
+        def limit():resource.setrlimit(resource.RLIMIT_NOFILE,(64,64))
+        child=subprocess.Popen(self.argv(paths,True),env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,pass_fds=(writer,reader),preexec_fn=limit)
+        os.close(writer);os.close(reader)
+        try:
+            self.assertTrue(select.select([read],[],[],20)[0]);self.assertEqual(os.read(read,1),b'1')
+            self.assertLessEqual(len(list(Path('/proc/%s/task'%child.pid).iterdir())),2) # Includes a possible TSan helper.
+            self.assertTrue(all(p.exists() for p in paths))
+            os.write(release,b'1');out,err=child.communicate(timeout=20)
+            self.assertEqual(child.returncode,0,err);self.assertEqual(len(self.decode(subprocess.CompletedProcess([],0,out,err))),3)
+        finally:
+            if child.poll() is None:child.kill();child.communicate()
+            os.close(read);os.close(release)
+            self.counts['controlled_children']+=1;self.counts['unsettled_children']+=child.poll() is None
+        self.assert_pool_bodies(bodies)
+
+    def test_pool_same_basename_dependency_falls_back_preserving_collision_order(self):
+        self.compile();other=self.root/'other';other.mkdir()
+        a=self.message('same:2,S',raw=b'From: one@example.org\n\nfirst')
+        b=self.message('same:2,S',raw=b'From: two@example.org\n\nsecond',folder=other)
+        with self.pool_held('store-before-claim',[a,b]) as h:
+            self.assertLessEqual(len(list(Path('/proc/%s/task'%h.process.pid).iterdir())),2)
+            self.assertTrue(b.exists());rows,_=self.pool_rows(h)
+        self.assertEqual([r['status'] for r in rows],[b'moved',b'moved'])
+        self.assertFalse(a.exists() or b.exists())
+        dest=next(p for p in self.root.rglob('same:2,S'))
+        self.assertEqual(dest.read_bytes(),b'From: one@example.org\n\nfirst')
+        first=b'From: one@example.org\n\nfirst';second=b'From: two@example.org\n\nsecond'
+        self.pool_names={first:a.name,second:b.name}
+        self.assert_pool_bodies([first,second],alternatives={second})
+
+
+    def test_pool_real_cross_filesystem_keeps_complete_singleton_protocol(self):
+        paths,bodies=self.pool_messages(8)
+        cross=EVIDENCE/('pool-cross-'+self.case.name);cross.mkdir(parents=True)
+        self.assertNotEqual(cross.stat().st_dev,self.root.stat().st_dev,'real cross-filesystem prerequisite')
+        external=[]
+        for p in paths:
+            target=cross/p.name;target.write_bytes(p.read_bytes());p.unlink();external.append(target)
+        rows=self.apply(external)
+        self.assertEqual([r['status'] for r in rows],[b'moved']*8)
+        self.assertTrue(all(not p.exists() for p in external));self.assertEqual(list(cross.iterdir()),[]);self.assert_pool_bodies(bodies)
+        self.counts['real_cross_filesystem']+=1
+
+    def test_pool_inode_alias_and_noop_dependencies_keep_singleton_attempt_semantics(self):
+        self.compile();self.maildir(self.root/'unsorted')
+        noop=self.message('cur/noop:2,S',folder=self.root/'unsorted')
+        alias=self.root/'unsorted/cur/alias:2,S';os.link(noop,alias)
+        data=noop.read_bytes();mode=stat.S_IMODE(noop.stat().st_mode);identity=(noop.stat().st_dev,noop.stat().st_ino)
+        rows=self.apply([noop,alias])
+        self.assertEqual([r['status'] for r in rows],[b'noop',b'noop'])
+        self.assertTrue(noop.exists() and alias.exists())
+        self.assertEqual((noop.stat().st_dev,noop.stat().st_ino),identity)
+        self.assertEqual((alias.stat().st_dev,alias.stat().st_ino),identity)
+        self.assert_pool_bodies([data,data],sources={noop:(data,mode),alias:(data,mode)})
+
+
+    def test_pool_post_open_lock_alias_is_quarantined_until_join(self):
+        paths,bodies=self.pool_messages(8)
+        lock=self.root/'cache/filter-engine/batch.lock'
+        with self.held('message-before-open,message-lock-alias',paths) as h:
+            backup=self.incoming/'tmp/original';paths[0].rename(backup);os.link(lock,paths[0])
+            h.resume();h.ready()
+            probe=['python3','-c',"import fcntl,sys; f=open(sys.argv[1],'r+'); fcntl.lockf(f,fcntl.LOCK_EX|fcntl.LOCK_NB)",str(lock)]
+            r=subprocess.run(probe,capture_output=True)
+            self.assertNotEqual(r.returncode,0,'post-open alias released the coordinator batch lock')
+            h.resume();rc,out,err=h.finish()
+        self.assertEqual(rc,3,err);self.assertEqual(backup.read_bytes(),bodies[0])
+        self.assertTrue(all(p.exists() for p in paths[1:]));self.assertIn(b'E_BATCH_LOCK_CHANGED',err)
+        r=subprocess.run(probe,capture_output=True);self.assertEqual(r.returncode,0,r.stderr)
+        sources=self.pool_sources(paths[1:],bodies[1:]);sources[backup]=(bodies[0],self.pool_modes[paths[0]])
+        self.assertEqual(paths[0].stat().st_ino,lock.stat().st_ino)
+        self.assert_pool_bodies(bodies,[b''],sources=sources,foreign={paths[0]:(b'',0o600)})
+
+
+    def test_pool_signal_during_preflight_prevents_message_effects(self):
+        paths,bodies=self.pool_messages(40)
+        with self.held('batch-preflight',paths) as h:
+            h.process.send_signal(signal.SIGTERM);h.resume();rc,out,err=h.finish()
+        self.assertEqual(rc,143,err);self.assertTrue(all(p.exists() for p in paths))
+        self.assert_pool_bodies(bodies,sources=self.pool_sources(paths,bodies))
+
+
+    def pool_file_output_error(self,count,limit):
+        paths,bodies=self.pool_messages(count);output=self.case/'limited-output'
+        def bounds():
+            signal.signal(signal.SIGXFSZ,signal.SIG_IGN)
+            resource.setrlimit(resource.RLIMIT_FSIZE,(limit,limit))
+        with output.open('wb') as stream:
+            r=subprocess.run(self.argv(paths),stdout=stream,stderr=subprocess.PIPE,preexec_fn=bounds,restore_signals=False,timeout=30)
+        self.assertEqual(r.returncode,3,r.stderr)
+        raw=output.read_bytes();self.assertTrue(raw.startswith(b'JFD1\0'+self.generation+b'\0'))
+        values=raw.split(b'\0')[2:-1]
+        for i in range(len(values)//11):
+            row=dict(zip(fixtures.FIELDS,values[i*11:(i+1)*11]))
+            self.assertEqual(row['status'],b'moved')
+            self.assertFalse(paths[int(row['index'])-1].exists())
+        completed=min(count,32)
+        self.assertFalse(any(p.exists() for p in paths[:completed]))
+        self.assertTrue(all(p.exists() for p in paths[completed:]))
+        self.assertGreaterEqual(r.stderr.count(b'E_RETAINED_PATH'),completed)
+        self.assert_pool_bodies(bodies,sources=self.pool_sources(paths[completed:],bodies[completed:]))
+        self.capture(self.argv(paths),subprocess.CompletedProcess([],r.returncode,raw,r.stderr),extra=dict(RLIMIT_FSIZE=limit,SIGXFSZ='ignored',output_path=str(output)))
+
+    def test_pool_final_flush_failure_keeps_truthful_durable_outcome_and_nonzero_exit(self):
+        self.pool_file_output_error(1,256)
+
+    def test_pool_midrecord_regular_output_failure_never_admits_next_window(self):
+        self.pool_file_output_error(65,5000)
+
+
+    def test_pool_global_resource_error_cancels_queued_and_settles_active_jobs(self):
+        paths,bodies=self.pool_messages(65)
+        r=subprocess.run(self.argv(paths,True),env=dict(os.environ,JF_TEST_FAIL='store-job-start'),capture_output=True,timeout=30)
+        self.capture(self.argv(paths,True),r,extra=dict(JF_TEST_FAIL='store-job-start'))
+        self.assertEqual(r.returncode,3,r.stderr);self.assertIn(b'E_MEMORY',r.stderr)
+        self.assertTrue(all(p.exists() for p in paths),'phase-gated first resource error must cancel all later jobs')
+        self.assertEqual(r.stdout,b'JFD1\0'+self.generation+b'\0');self.assert_pool_bodies(bodies,sources=self.pool_sources(paths,bodies))
+
+
+    def pool_name_limit(self,response):
+        paths,bodies=self.pool_messages(2);self.maildir(self.root/'unsorted')
+        existing=self.root/'unsorted/cur'/paths[0].name;existing.write_bytes(b'prior delivery');existing.chmod(0o640)
+        source=self.case/'name-limit.c';library=self.case/'name-limit.so'
+        source.write_text('#define _POSIX_C_SOURCE 200809L\n#include <unistd.h>\n#include <errno.h>\nlong fpathconf(int fd,int name) { (void)fd; if (name==_PC_NAME_MAX) { '+response+' } errno=EINVAL; return -1; }\n')
+        self.command(['gcc','-O2','-shared','-fPIC','-Wall','-Wextra','-Werror','-o',library,source])
+        preload=str(library)
+        for marker,runtime in [('ASAN_OPTIONS','libasan.so'),('TSAN_OPTIONS','libtsan.so')]:
+            if marker in os.environ:
+                runtime_path=self.command(['gcc','-print-file-name='+runtime]).stdout.decode().strip()
+                preload=runtime_path+':'+preload
+        with self.pool_held('store-before-claim',paths,dict(LD_PRELOAD=preload)) as h:
+            self.assertLessEqual(len(list(Path('/proc/%s/task'%h.process.pid).iterdir())),2)
+            self.assertTrue(paths[1].exists());rows,_=self.pool_rows(h)
+        self.assertEqual([r['status'] for r in rows],[b'moved',b'moved'])
+        self.assertEqual(existing.read_bytes(),b'prior delivery')
+        self.assert_pool_bodies(bodies,[b'prior delivery'],foreign={existing:(b'prior delivery',0o640)},alternatives={bodies[0]})
+
+    def test_pool_short_destination_name_limit_uses_serial_collision_semantics(self):
+        self.pool_name_limit('return 14;')
+
+    def test_pool_indeterminate_destination_name_limit_uses_serial_collision_semantics(self):
+        self.pool_name_limit('errno=0; return -1;')
+
+    def test_pool_inventory_rejects_duplicate_partial_foreign_and_wrong_identity(self):
+        paths,bodies=self.pool_messages(2);self.apply(paths)
+        first=self.root/'unsorted/cur'/paths[0].name;second=self.root/'unsorted/cur'/paths[1].name
+        self.assert_pool_bodies(bodies)
+        duplicate=first.with_name('duplicate:2,S');duplicate.write_bytes(bodies[0]);duplicate.chmod(0o600)
+        try:
+            with self.assertRaises(AssertionError):self.assert_pool_bodies(bodies)
+        finally:duplicate.unlink()
+        stage=self.root/'unsorted/tmp/.jaro-filter.foreign';stage.mkdir(mode=0o700);partial=stage/'message';partial.write_bytes(bodies[0][:20]);partial.chmod(0o600)
+        try:
+            with self.assertRaises(AssertionError):self.assert_pool_bodies(bodies)
+        finally:partial.unlink();stage.rmdir()
+        foreign=first.with_name('foreign:2,S');foreign.write_bytes(b'foreign message');foreign.chmod(0o600)
+        try:
+            with self.assertRaises(AssertionError):self.assert_pool_bodies(bodies)
+        finally:foreign.unlink()
+        first.write_bytes(bodies[1]);second.write_bytes(bodies[0])
+        try:
+            with self.assertRaises(AssertionError):self.assert_pool_bodies(bodies)
+        finally:first.write_bytes(bodies[0]);second.write_bytes(bodies[1])
+        first.chmod(0o640)
+        try:
+            with self.assertRaises(AssertionError):self.assert_pool_bodies(bodies)
+        finally:first.chmod(0o600)
+        link=self.root/'unsorted/new/foreign-link';link.symlink_to(first)
+        try:
+            with self.assertRaises(AssertionError):self.assert_pool_bodies(bodies)
+        finally:link.unlink()
+        self.assert_pool_bodies(bodies)
+
 
 
 if __name__=='__main__':

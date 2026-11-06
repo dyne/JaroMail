@@ -11,8 +11,12 @@ struct jf_storage {
 	size_t sequence;
 	volatile sig_atomic_t *interrupted;
 	const char *root_path; /* Borrowed until close. */
+	int (*should_stop)(void *);
+	int (*destination_allowed)(void *,int,int);
+	void *context;
+	int borrowed; /* Worker views never own/close the shared descriptors. */
 };
-struct jf_storage_recovery { char *source,*destination,*temporary; };
+struct jf_storage_recovery { char *source,*destination,*temporary,*published; };
 /* Opens the same root/generation as the pinned reader, then obtains a persistent
  * batch lock. No lock inode is unlinked. Returns global 3/5/6 before mail writes. */
 int jf_storage_begin(const char *,const struct jf_generation *,volatile sig_atomic_t *,

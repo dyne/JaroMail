@@ -6,14 +6,58 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <stdint.h>
 
+/* Phase-gated fault controls preserve input-job order, while unconfigured
+ * phases and the production algorithm remain concurrent. Never hold this
+ * mutex during external pipe I/O or storage work. */
+static pthread_mutex_t control=PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t advanced=PTHREAD_COND_INITIALIZER;
+static pthread_key_t job_key;
+static pthread_once_t job_once=PTHREAD_ONCE_INIT;
+static size_t completed;
+static unsigned char settled[32];
+static int parallel_controls,failed;
+static unsigned matches;
+static void make_key(void) { if (pthread_key_create(&job_key,NULL)) abort(); }
+void jf_generation_test_parallel(int enabled)
+{
+	pthread_mutex_lock(&control); parallel_controls=enabled; pthread_mutex_unlock(&control);
+}
+void jf_generation_test_job(size_t index)
+{
+	pthread_once(&job_once,make_key);
+	if (pthread_setspecific(job_key,(void *)(uintptr_t)index)) abort();
+}
+void jf_generation_test_done(size_t index)
+{
+	pthread_mutex_lock(&control);
+	settled[index%32]=1;
+	while (settled[(completed+1)%32]) { settled[(completed+1)%32]=0; completed++; }
+	pthread_cond_broadcast(&advanced); pthread_mutex_unlock(&control);
+	pthread_setspecific(job_key,NULL);
+}
 int jf_generation_test_hook(const char *phase)
 {
-	static int failed=0; static unsigned matches=0;
 	const char *hold=getenv("JF_TEST_HOLD"),*fail=getenv("JF_TEST_FAIL"),*crash=getenv("JF_TEST_CRASH");
 	const char *at=getenv("JF_TEST_FAIL_AT"),*match=hold ? strstr(hold,phase) : NULL;
-	if (getenv("JF_TEST_TRACE")) fprintf(stderr,"TRACE:%s\n",phase);
-	if (match && (match==hold || match[-1]==',') && (match[strlen(phase)]==0 || match[strlen(phase)]==',')) {
+	const char *target=getenv("JF_TEST_JOB");
+	int holding=match && (match==hold || match[-1]==',') && (match[strlen(phase)]==0 || match[strlen(phase)]==',');
+	int failing=fail && !strcmp(fail,phase),crashing=crash && !strcmp(crash,phase),inject=0;
+	size_t job;
+	pthread_once(&job_once,make_key); job=(size_t)(uintptr_t)pthread_getspecific(job_key);
+	pthread_mutex_lock(&control);
+	if (target && job!=(size_t)strtoull(target,NULL,10)) holding=failing=crashing=0;
+	while (job && parallel_controls && !target && (holding || failing || crashing) && completed+1<job)
+		pthread_cond_wait(&advanced,&control);
+	if (getenv("JF_TEST_TRACE")) {
+		fprintf(stderr,"TRACE:%s\n",phase);
+		if (job) fprintf(stderr,"TRACE_JOB:%zu:%s\n",job,phase);
+	}
+	if (!failed && failing && ++matches==(at ? strtoul(at,NULL,10) : 1)) { failed=1; inject=1; }
+	pthread_mutex_unlock(&control);
+	if (holding) {
 		const char *a=getenv("JF_TEST_NOTIFY_FD"),*b=getenv("JF_TEST_RELEASE_FD"); char byte='1'; ssize_t n;
 		if (!a || !b) return -1;
 		do { n=write(atoi(a),&byte,1); } while (n<0 && errno==EINTR);
@@ -21,11 +65,8 @@ int jf_generation_test_hook(const char *phase)
 		do { n=read(atoi(b),&byte,1); } while (n<0 && errno==EINTR);
 		if (n!=1) return -1;
 	}
-	if (crash && !strcmp(crash,phase)) raise(SIGKILL);
-	if (!failed && fail && !strcmp(fail,phase) && ++matches==(at ? strtoul(at,NULL,10) : 1)) {
-		fprintf(stderr,"INJECTED:%s\n",phase);
-		failed=1; errno=EIO; return -1;
-	}
+	if (crashing) raise(SIGKILL);
+	if (inject) { fprintf(stderr,"INJECTED:%s\n",phase); errno=EIO; return -1; }
 	return 0;
 }
 

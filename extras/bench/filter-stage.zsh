@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Execute actual legacy functions with their original logging and lock helpers.
+# Execute the selected engine's actual functions with logging and lock helpers.
 # No replacement of fn/act/newlock/addressbook functions is allowed here.
 setopt NO_RCS
 bench_repo=$1

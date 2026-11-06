@@ -41,6 +41,7 @@ cp -r ../src/mutt/*     $WORKDIR/mutt/
 cp -r ../src/stats/*    $WORKDIR/.stats/
 cp ../doc/Applications.txt $WORKDIR/
 cp ../doc/Filters.txt      $WORKDIR/
+cp ../doc/Filters.native.txt $WORKDIR/
 cp ../doc/Aliases.txt      $WORKDIR/
 cp ../doc/jaromail-manual.pdf     $WORKDIR/jaromail-manual.pdf
 cp ../doc/JaroMail.icns	   $appdst/Contents/Resources

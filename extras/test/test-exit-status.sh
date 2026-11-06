@@ -6,6 +6,9 @@ source "$repo_root/src/zlibs/filters"
 MAILDIRS="$tmp_root/mail"
 mkdir -p "$MAILDIRS"
 touch "$MAILDIRS/notmuch-config"
+# This fixture exercises dispatcher errors with an existing explicit policy;
+# fresh-template validation has separate installed-workflow coverage.
+touch "$MAILDIRS/Filters.txt"
 
 (
   account=fixture DRYRUN=0
