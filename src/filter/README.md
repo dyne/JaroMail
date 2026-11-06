@@ -101,6 +101,23 @@ only into separate test executables, never the production compiler.
 Installation removes stale compiled Zsh module caches before dispatching the
 new wrappers; compatibility arrays are still read through an open text fd.
 
+`import.h` parses the generated Sieve subset as bounded strings, tags, lists and
+fixed stage blocks. Comments do not carry policy meaning. The pure merge uses
+canonical selector keys, preserves imported source order and rejects collisions.
+`jf_snapshot_overlay` validates prospective inputs through the real policy,
+profile and abook paths without publishing them. The importer extends the
+generation transaction with a fixed four-input backup journal covered by the
+same commit marker; failure/crash recovery restores the previous complete view.
+It never interprets general Sieve or deploys remotely. The migration and mapping
+limits are in `doc/filter-interfaces.md`. `test-filter-import.sh` covers
+round trips, malformed input, idempotency and controlled publication recovery.
+`test-filter-parity.sh` checks 432 positive decisions per backend against authored
+winners: source-parsed pure C, cache-loaded batch C and actual pinned Sieve. The
+matrix includes original/imported policies and qualified regexes, configured
+mailboxes, empty rules and core/no-create behavior. A shared wrong destination
+and Sieve-only reversed stage priority must both be rejected by the independent
+expectations. Every simulation uses private copies and retains its matching trace.
+
 `make -f build/filter-core.mk filter-compile` also builds
 `build/gnu/filter/jaro-filter`. It selects an immutable generation without
 compiling inputs, reconstructs its validated canonical R records into the same

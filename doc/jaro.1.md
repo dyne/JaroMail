@@ -125,7 +125,12 @@ first line may set `#mode individual`, `#mode cc`/`#mode carboncopy`, or
 `sieve` regenerate `Filters.sieve` only.
 
 `sieve-import FILE` import a Jaromail-generated Sieve file into local
-filter/addressbook files.
+filter/addressbook files. With `JARO_FILTER_ENGINE=native`, the bounded token
+parser validates and stages the complete import before publication. `-n`
+validates without writes; `--legacy-generated` explicitly recovers older generated
+header-contains scripts with a migration diagnostic. Arbitrary provider scripts
+are unsupported. See [the import contract](filter-interfaces.md#rollout-and-bounded-import)
+for supported grammar, profile/mapping requirements and recovery behavior.
 
 ### Maildir and utility commands
 

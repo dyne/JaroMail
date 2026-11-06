@@ -245,7 +245,7 @@ class WorkflowTests(unittest.TestCase):
                                 'observedAt': datetime.now(timezone.utc).isoformat()})
         self.assertEqual(child.returncode, 0, err)
 
-    def test_native_readonly_requires_current_generation_and_import_stays_unavailable(self):
+    def test_native_readonly_requires_current_generation_and_import_rejects_non_sieve(self):
         before = self.message.read_bytes()
         self.run_cli('-n', 'filter', str(self.root / 'incoming'), code=5)
         self.assertEqual(self.message.read_bytes(), before)
@@ -263,6 +263,45 @@ class WorkflowTests(unittest.TestCase):
         self.run_cli('filter', '--explain', code=5)
         self.assertEqual(self.tree_snapshot(), snapshot)
         self.run_cli('sieve-import', str(self.root / 'Filters.txt'), code=4)
+
+    def test_native_import_validates_without_bootstrap_writes_then_publishes(self):
+        donor = self.root.parent / 'import donor'
+        donor.mkdir()
+        (donor / 'Filters.txt').write_text('from-domain imported.example move NativeImport\nknown-domain *.known.example\n')
+        (donor / 'Aliases.txt').write_text('imported-alias@example.org\n')
+        result = subprocess.run([str(self.runtime / 'bin/jaro-filter-compile'), '--root', str(donor)],
+                                env=self.env, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        script = donor / 'Filters.sieve'
+        before = self.tree_snapshot()
+        self.run_cli('-n', 'sieve-import', str(script))
+        self.assertEqual(self.tree_snapshot(), before)
+        self.assertFalse((self.root / 'cache').exists())
+        self.run_cli('sieve-import', code=2)
+        self.run_cli('sieve-import', str(script), str(script), code=2)
+        self.assertEqual(self.tree_snapshot(), before)
+        self.run_cli('sieve-import', str(script))
+        self.assertIn('NativeImport', (self.root / 'Filters.txt').read_text())
+        self.assertIn('known-domain', (self.root / 'Filters.txt').read_text())
+        self.assertIn('imported-alias@example.org', (self.root / 'Aliases.txt').read_text())
+        self.run_cli('sieve-import', str(script))  # complete committed-journal cleanup
+        before = self.tree_snapshot()
+        self.run_cli('sieve-import', str(script))
+        self.assertEqual(self.tree_snapshot(), before)
+        self.assertFalse(self.indexlog.exists())
+        self.assertFalse(self.transportlog.exists())
+        self.assertTrue(self.message.exists())
+
+    def test_native_import_legacy_option_and_invalid_script_do_not_change_inputs(self):
+        script = self.root.parent / 'old generated.sieve'
+        script.write_text('require ["fileinto","mailbox","variables"]; fileinto :create "unsorted";\n')
+        before = self.tree_snapshot()
+        self.run_cli('-n', 'sieve-import', '--legacy-generated', str(script))
+        self.assertEqual(self.tree_snapshot(), before)
+        self.run_cli('sieve-import', str(script), code=4)
+        self.assertEqual({k:v for k,v in self.tree_snapshot().items() if k != 'cache' and not k.startswith('cache/')}, before)
+        self.run_cli('sieve-import', '--legacy-generated', str(script))
+        self.assertIn(b'W_LEGACY_SIEVE', self.run_cli('sieve-import', '--legacy-generated', str(script)).stderr)
 
     def tree_snapshot(self):
         import hashlib

@@ -48,11 +48,18 @@ cmd_sieve() {
 }
 
 cmd_sieve_import() {
+    (( ${#option_params} == 1 )) || { error "sieve-import requires one generated Sieve file"; return 2; }
     filter_engine || return $?
     if [[ "$REPLY" == native ]]; then
-        "$WORKDIR/bin/jaro-filter-compile" --root "$MAILDIRS" --accounts-dir "$ACCOUNTS" --import-sieve "${option_params[1]}"
+        local -a import_args
+        import_args=()
+        option.is_set -L && import_args+=(--legacy-generated)
+        [[ $DRYRUN == 1 ]] && import_args+=(--check)
+        "$WORKDIR/bin/jaro-filter-compile" --root "$MAILDIRS" --accounts-dir "$ACCOUNTS" --import-sieve "${option_params[1]}" "${import_args[@]}"
         return $?
     fi
+    option.is_set -L && { error "--legacy-generated requires JARO_FILTER_ENGINE=native"; return 2; }
+    [[ $DRYRUN == 1 ]] && { error "Legacy sieve-import has no dry-run; select native bounded import"; return 2; }
     sieve_import ${option_params}
     exitcode=$?
 }
