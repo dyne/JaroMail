@@ -1,6 +1,7 @@
 # Native filter interface contract v1
 
-This specifies future helpers; it does not claim that they exist yet. Policy
+The compiler, batch helper and explicit CLI engine dispatch implement the
+contracts below; changing the default remains a later milestone. Policy
 order and independent target decisions are in [filter-policy.md](filter-policy.md).
 The first implementation remains two executables sharing `src/filter/` modules,
 with Zsh retaining command routing, account setup, transports and indexing.
@@ -90,13 +91,23 @@ There is no newline delimiter and no JSON conversion of path bytes. Split only
 on NUL, retain empty fields, and require a complete multiple of eleven fields
 after the two-field header. Generation IDs are 64 lowercase hex digits. A
 consumer must also check process exit status; it cannot infer success from a
-valid prefix. `noop` means source already equals destination, with bytes and
-flags unchanged. Applying an error record never authorizes deletion. Native
+valid prefix. `noop` uses action `none` and means source already equals destination,
+with bytes and flags unchanged. Applying an error record never authorizes deletion. Native
 human explain/dry-run output is rendered by the Zsh wrapper from these records;
 helper stdout contains no progress, message body, Sieve text or diagnostics.
 
+Apply failures after classification retain the winning rule ID and provenance,
+use action `none`, and leave logical/local/Sieve fields empty. Stderr may name
+retained copies with `E_RETAINED_PATH` and a complete byte-escaped quoted path.
+Publication is no-clobber through destination tmp; source removal uses an owned
+private claim after destination durability. See the storage and concurrency
+contract in [src/filter/README.md](../src/filter/README.md). A nonzero apply can
+retain complete duplicates; it never authorizes treating the whole batch as
+delivered or removing those copies blindly.
+
 Limits: 64 MiB per policy input/export, 64 KiB per rule line/predicate, 100000
-effective rules/contact predicates, 100000 selected paths, 128 MiB cache payload,
+effective rules/contact predicates, 100000 selected paths/64 MiB of path bytes
+including NUL terminators, 128 MiB cache payload,
 and 1 MiB total message headers/64 KiB individual header line. Reject excess
 before publication; a per-message header limit failure retains that message.
 Do not truncate a selector, mailbox, path or message to fit a limit. The OS's
@@ -344,6 +355,49 @@ fingerprint to equal the selected generation, and otherwise return status 5
 requesting an explicit update. They never publish a cache or modify mail/books.
 Direct jaro-filter uses the selected immutable snapshot without compiling;
 `--generation ID` deliberately pins a prior compatible snapshot for reproduction.
+
+The existing `jaro filter [MAILDIR]` and `jaro fetch` dispatch native batches
+only with explicit `JARO_FILTER_ENGINE=native`. Filter defaults to
+`$JAROMAILDIR/incoming`; fetch uses that absolute path regardless of cwd.
+Each native apply workflow invokes the compiler once, then passes its generation
+ID to one batch invocation. Filter does not index. Fetch indexes once after a
+batch attempt, including partial failure because intact messages may have moved;
+it preserves the batch's failure if indexing also fails. Missing helpers,
+transport failure and compilation failure stop before a batch/index attempt.
+Notmuch setup can write its configuration without refreshing the index first.
+`jaro -n fetch` explains the local incoming batch without transport, keyring,
+publication or indexing. These native filtering commands require an existing
+policy/root; bootstrap never creates default inputs for them.
+
+`jaro filter --explain [MAILDIR]` and `jaro -n filter [MAILDIR]` render the same
+native classification records. All selected bytes and the complete helper exit
+status are checked before successful human records are rendered. Human output
+quotes raw paths with Zsh ANSI quoting under the C locale; it is display text,
+never evaluated as shell. Native global/message failures propagate without
+fallback. A malformed stream with zero helper status fails with status 2;
+otherwise the helper's nonzero status is retained. Summaries include that status.
+
+`jaro filter --compare OBSERVATIONS [MAILDIR]` is also native and read-only.
+It compares retained **actual final legacy observations**, not legacy dry-run
+proposal lines. No production legacy apply or guessed matcher runs. General
+automatic legacy classification is unsupported because its dry-run proposals
+are ambiguous; supplying those proposals fails clearly. The observation producer
+must retain provenance and exact message hashes for the unchanged synthetic or
+archived corpus it observed. The CLI checks the policy fingerprint and complete
+path/order/cardinality, but does not authenticate the producer or hash message
+bodies. A caller must not reuse observations after changing that corpus.
+
+The bounded observation file is `JLC1 NUL native-fingerprint NUL`, followed by
+three NUL-terminated fields per occurrence: raw original path, final relative
+local legacy Maildir destination, and literal `observed`. Native destinations
+are also displayed relative to the resolved mail root. Its rows must cover the
+selected byte-sorted batch in order. Empty destinations, ambiguous rows, wrong
+fingerprints, native errors, mismatched paths and incomplete framing fail with
+status 4; unreadable files return 3. Differences are reported as observations,
+with status 0 when both decision sets are complete. They do not authorize moves
+or assert equivalence. The regression producer actually applies legacy only to
+disposable copies, checks all 23 retained baseline winners and complete body
+bytes, then verifies the separately authored native targets and no mutation.
 
 Generated v1 Sieve is an optional require declaration, seven top-level
 `if true { STAGE-RULES }` blocks in fixed policy stage order, then one fallback

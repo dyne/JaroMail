@@ -86,7 +86,7 @@ primary_email=$email
 $other_email
 EOF
 
-	notmuch --config "$nm_conf" new
+    [[ ${2:-} == --no-index ]] || notmuch --config "$nm_conf" new
 }
 
 nm_index() {
@@ -119,7 +119,7 @@ update_notmuch() {
 
     isfound notmuch && [[ -r $MAILDIRS/.notmuch/xapian ]] && {
         notice "Updating notmuch indexes"
-        nm_setup || return $?
+        nm_setup '' --no-index || return $?
         nm new 2>&1 | sed '/^Note: Ignoring/d'
         return $?
     }

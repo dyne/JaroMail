@@ -1,0 +1,158 @@
+#!/usr/bin/env zsh
+
+# Decode complete JFD1 output before rendering any successful record. Zsh
+# preserves NUL bytes; LC_ALL=C keeps raw path bytes out of locale conversion.
+native_filter_records() {
+    setopt localoptions extendedglob
+    local LC_ALL=C
+    local stream=$1 helper_result=$2 generation=$3 mode=$4 i j count errors=0
+    local -a fields row
+    fields=("${(@0)stream}")
+    if [[ ${#fields} -lt 3 || $fields[1] != JFD1 ||
+          $fields[2] != "$generation" || -n $fields[-1] ]] ||
+          (( (${#fields} - 3) % 11 != 0 || (${#fields} - 3) / 11 > 100000 )); then
+        print -ru2 -- 'Malformed or incomplete native decision stream'
+        (( helper_result != 0 )) && return $helper_result
+        return 2
+    fi
+    count=$(( (${#fields} - 3) / 11 ))
+    for (( i=1; i<=count; ++i )); do
+        j=$((3+(i-1)*11))
+        row=("${(@)fields[j,j+10]}")
+        if [[ $row[1] != "$i" || -z $row[2] || $row[10] != (0|[1-9][0-9]#) ||
+              $row[4] != (move|none) || $row[8] != (classified|moved|noop|error) ||
+              ( -n $row[3] && $row[3] != (r|known|blacklist|own):[0-9a-f](#c64) &&
+                $row[3] != builtin:(bounce|spam|unsorted) ) ]]; then
+            print -ru2 -- "Invalid native decision record $i"
+            (( helper_result != 0 )) && return $helper_result
+            return 2
+        fi
+        if [[ $row[8] == error ]]; then
+            if [[ $row[4] != none || -n $row[5]$row[6]$row[7] || $row[11] != [A-Z][A-Z0-9_]# ]]; then
+                print -ru2 -- "Invalid native error record $i"
+                (( helper_result != 0 )) && return $helper_result
+                return 2
+            fi
+            (( ++errors ))
+        elif [[ -z $row[3] || -z $row[5] || $row[6] != /* || -z $row[7] || -n $row[11] ||
+                ( $row[8] == noop && $row[4] != none ) ||
+                ( $row[8] != noop && $row[4] != move ) ||
+                ( $mode == classify && $row[8] == moved ) ||
+                ( $mode == apply && $row[8] == classified ) ]]; then
+            print -ru2 -- "Invalid native success record $i"
+            (( helper_result != 0 )) && return $helper_result
+            return 2
+        fi
+    done
+    if [[ -n ${native_filter_compare:-} ]]; then
+        native_filter_observations "$stream" "$generation"
+        local compare_result=$?
+        if (( compare_result != 0 )); then
+            (( helper_result != 0 )) && return $helper_result
+            return $compare_result
+        fi
+    fi
+    print -ru2 -- "Filtering maildir: ${(qqqq)native_filter_input} ($count mails)"
+    for (( i=1; i<=count; ++i )); do
+        j=$((3+(i-1)*11))
+        row=("${(@)fields[j,j+10]}")
+        if [[ $row[8] == error ]]; then
+            print -ru2 -- "$i / $count error $row[11] path=${(qqqq)row[2]} rule=$row[3]"
+        else
+            print -r -- "$i / $count -> ${(qqqq)row[5]} [$row[8]] path=${(qqqq)row[2]} rule=$row[3] source=${(qqqq)row[9]}:$row[10]"
+        fi
+    done
+    print -ru2 -- "Native filter: $count processed, $errors errors, helper status $helper_result (generation $generation)"
+    (( helper_result != 0 )) && return $helper_result
+    (( errors == 0 )) || return 7
+    return 0
+}
+
+# Comparisons consume retained actual legacy observations, never dry-run
+# proposal text or an approximation of the legacy matcher. The producer owns
+# their provenance and must record the exact unchanged message/policy corpus.
+native_filter_observations() {
+    setopt localoptions extendedglob
+    local LC_ALL=C report generation=$2 i j k native_destination native_root=${MAILDIRS:A}
+    local -a current observed
+    [[ -f $native_filter_compare && -r $native_filter_compare ]] || {
+        print -ru2 -- 'Legacy observation file is unreadable'; return 3
+    }
+    local observation_size
+    observation_size=$(zstat +size -- "$native_filter_compare") || return 3
+    (( observation_size <= 67108864 )) || {
+        print -ru2 -- 'Legacy observation file exceeds 64 MiB'; return 4
+    }
+    report=$(
+        local capture_result=0
+        cat -- "$native_filter_compare" || capture_result=$?
+        print -rn -- $'\1'
+        exit $capture_result
+    )
+    local capture_result=$?
+    report=${report%$'\1'}
+    (( capture_result == 0 )) || return $capture_result
+    (( ${#report} <= 67108864 )) || {
+        print -ru2 -- 'Legacy observation file exceeds 64 MiB'; return 4
+    }
+    current=("${(@0)1}")
+    observed=("${(@0)report}")
+    if [[ ${#observed} -lt 3 || $observed[1] != JLC1 || $observed[2] != "$generation" ||
+          -n $observed[-1] ]] || (( (${#observed}-3)%3 != 0 ||
+          (${#observed}-3)/3 != (${#current}-3)/11 )); then
+        print -ru2 -- 'Unsupported/incomplete legacy observations; expected fingerprint-bound JLC1'
+        return 4
+    fi
+    # Validate the entire corpus before reporting any comparison.
+    for (( i=1; i<=(${#observed}-3)/3; ++i )); do
+        j=$((3+(i-1)*3)); k=$((3+(i-1)*11))
+        if [[ $observed[j] != "$current[k+1]" || -z $observed[j+1] ||
+              $observed[j+2] != observed || $current[k+7] == error ]]; then
+            print -ru2 -- "Unsupported/ambiguous legacy observation $i"
+            return 4
+        fi
+    done
+    for (( i=1; i<=(${#observed}-3)/3; ++i )); do
+        j=$((3+(i-1)*3)); k=$((3+(i-1)*11))
+        native_destination=${current[k+5]#"${native_root%/}/"}
+        print -r -- "compare path=${(qqqq)observed[j]} legacy=${(qqqq)observed[j+1]} native=${(qqqq)native_destination}"
+    done
+}
+
+native_filter_maildir() {
+    setopt localoptions extendedglob
+    local LC_ALL=C native_filter_input=${1:-$MAILDIRS/incoming}
+    local native_filter_readonly=0 mode=apply selected stream result
+    [[ $DRYRUN == 1 || ${native_filter_explain:-0} == 1 || -n ${native_filter_compare:-} ]] && {
+        native_filter_readonly=1; mode=classify
+    }
+    if [[ -n ${native_filter_workflow_generation:-} && $mode == apply ]]; then
+        selected=$native_filter_workflow_generation
+    else
+        native_filter_compile batch || return $?
+        selected=$filter_native_generation
+    fi
+    if [[ $native_filter_readonly == 1 ]]; then
+        local -a target
+        zstat -L -A target +link -- "$MAILDIRS/cache/filter-engine/current" || {
+            print -ru2 -- 'Native generation missing; run jaro update explicitly'; return 5
+        }
+        [[ ${#target} == 1 && $target[1] == "generations/$selected" ]] || {
+            print -ru2 -- 'Native generation stale; run jaro update explicitly'; return 5
+        }
+    fi
+    # Keep all helper bytes, including invalid trailing LF. Removing only our
+    # final sentinel also preserves NUL fields and paths ending in LF/SOH.
+    stream=$(
+        local capture_result=0
+        "$WORKDIR/bin/jaro-filter" --root "$MAILDIRS" --generation "$selected" \
+             --mode "$mode" --maildir "$native_filter_input" || capture_result=$?
+        print -rn -- $'\1'
+        exit $capture_result
+    )
+    result=$?
+    stream=${stream%$'\1'}
+    # Global errors may intentionally have no stdout. Preserve their status.
+    [[ -z $stream && $result != 0 ]] && return $result
+    native_filter_records "$stream" "$result" "$selected" "$mode"
+}

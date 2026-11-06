@@ -9,10 +9,11 @@
 
 int jf_generation_test_hook(const char *phase)
 {
-	static int failed=0;
+	static int failed=0; static unsigned matches=0;
 	const char *hold=getenv("JF_TEST_HOLD"),*fail=getenv("JF_TEST_FAIL"),*crash=getenv("JF_TEST_CRASH");
+	const char *at=getenv("JF_TEST_FAIL_AT"),*match=hold ? strstr(hold,phase) : NULL;
 	if (getenv("JF_TEST_TRACE")) fprintf(stderr,"TRACE:%s\n",phase);
-	if (hold && !strcmp(hold,phase)) {
+	if (match && (match==hold || match[-1]==',') && (match[strlen(phase)]==0 || match[strlen(phase)]==',')) {
 		const char *a=getenv("JF_TEST_NOTIFY_FD"),*b=getenv("JF_TEST_RELEASE_FD"); char byte='1'; ssize_t n;
 		if (!a || !b) return -1;
 		do { n=write(atoi(a),&byte,1); } while (n<0 && errno==EINTR);
@@ -21,7 +22,7 @@ int jf_generation_test_hook(const char *phase)
 		if (n!=1) return -1;
 	}
 	if (crash && !strcmp(crash,phase)) raise(SIGKILL);
-	if (!failed && fail && !strcmp(fail,phase)) {
+	if (!failed && fail && !strcmp(fail,phase) && ++matches==(at ? strtoul(at,NULL,10) : 1)) {
 		fprintf(stderr,"INJECTED:%s\n",phase);
 		failed=1; errno=EIO; return -1;
 	}

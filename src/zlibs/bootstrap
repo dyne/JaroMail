@@ -205,7 +205,10 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 
     hostname=$(hostname) # gather the current hostname
 
-[[ "$1" = "source" ]] || { # skip checks if just sourcing
+# Native filtering requires explicit existing policy. In particular, a read-only
+# request must not materialize defaults before the option parser has run.
+[[ "$1" = "source" || ( ${JARO_FILTER_ENGINE-legacy} == native &&
+    ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 ) ) ]] || {
     [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
 
         # make sure we have an addressbook
@@ -319,6 +322,12 @@ check_bin() {
                     error "Missing native compiler: $WORKDIR/bin/jaro-filter-compile"
                     return 127
                 }
+                if [[ $cmd == filter || $cmd == fetch ]]; then
+                    [[ -x "$WORKDIR/bin/jaro-filter" ]] || {
+                        error "Missing native batch helper: $WORKDIR/bin/jaro-filter"
+                        return 127
+                    }
+                fi
             fi
             ;;
     esac
@@ -345,6 +354,7 @@ check_bin() {
 
     case "$cmd" in
         fetch)
+            [[ $DRYRUN == 1 && ${JARO_FILTER_ENGINE-legacy} == native ]] && return 0
             check_required_bins pinentry fetchmail gpg
             ensure_gnupg_dir
             check_keyring

@@ -92,7 +92,7 @@ mkdir -p build/win
 print
 if [[ "$target" == all || "$target" == jaro-filter-compile ]]; then
     make -f build/filter-core.mk filter-compile "CC=${CC:-gcc}" || exit $?
-    cp build/gnu/filter/jaro-filter-compile build/gnu/filter/jaro-filter-legacy build/win/ || exit $?
+    cp build/gnu/filter/jaro-filter-compile build/gnu/filter/jaro-filter-legacy build/gnu/filter/jaro-filter build/win/ || exit $?
 fi
 print "Done building JaroMail!"
 print "Now run 'make install' as root to install jaromail in /usr/local"

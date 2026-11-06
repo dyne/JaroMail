@@ -1,5 +1,6 @@
 #!/usr/bin/env zsh
 set -euo pipefail
+export JARO_FILTER_ENGINE=legacy # baseline harness, not native performance gates
 script_dir="${0:A:h}"
 source "$script_dir/lib/test_helpers.zsh"
 for req in python3 pinentry fetchmail gpg msmtp notmuch abook mdeliver maddr mpick; do

@@ -100,3 +100,115 @@ generations are never removed by routine compilation. Test hooks are compiled
 only into separate test executables, never the production compiler.
 Installation removes stale compiled Zsh module caches before dispatching the
 new wrappers; compatibility arrays are still read through an open text fd.
+
+`make -f build/filter-core.mk filter-compile` also builds
+`build/gnu/filter/jaro-filter`. It selects an immutable generation without
+compiling inputs, reconstructs its validated canonical R records into the same
+opaque indexed policy, and compiles each ERE once under a per-thread C locale.
+Stored IDs, resolved order, provenance and local/Sieve destinations survive
+reconstruction. No raw policy source is reparsed. Allocation failure destroys
+the entire reconstructed model; no partial policy escapes.
+
+The helper defaults to classification and emits the byte-framed JFD1 stream
+specified in `doc/filter-interfaces.md`. Maildir selection snapshots regular
+files from cur/new only, sorts raw absolute paths and excludes tmp, directories,
+symlinks and special files. Explicit paths preserve their original bytes and
+occurrences; relative paths retain the invocation's cwd. Selection is bounded
+to 100000 paths and 64 MiB including their NUL terminators. A complete path list
+and generation are validated before any decision output. An empty selection
+emits only the header. Empty/malformed or unreadable messages produce error
+records and aggregate status 7, while later selected messages are still read.
+Source identity and size/mtime/ctime are rechecked around the single header
+read. New names after selection are deferred; replaced, renamed or changed
+selected files become errors. A source in its destination's cur/new is `noop`
+with action `none`, retaining the winning rule and destination metadata.
+
+Classification opens messages read-only and never changes mail, books or cache
+products. Reads may update filesystem access times. Explicit `--generation ID`
+allows prior compatible snapshots, even when input sources have changed. Current
+source fingerprint checks are performed by the read-only CLI workflows. Explicit
+`--mode apply` uses the storage adapter described below. The existing shell
+engine remains the application default; explicit `JARO_FILTER_ENGINE=native`
+dispatches filter/fetch to this helper, with one compile and pinned batch.
+`zsh extras/test/test-filter-batch.sh` exercises independent target/Sieve winners,
+raw byte paths, complete snapshots, framing/cache failures, allocator cleanup
+and deterministic pinned-generation/source-change barriers in disposable mail.
+Native test suites accept `JARO_FILTER_TEST_TMP` as an explicit parent for their
+temporary fixtures, without changing inherited TMPDIR/TMP/TEMP. Without a suite's
+retained `*_WORK` override, these owned fixtures use automatic cleanup; test IDs,
+counts and failures remain in the outer runner's retained logs. A retained work
+override continues to preserve complete fixture data and command logs.
+
+`storage.h` owns mutating Maildir IO. After complete list/generation validation,
+apply snapshots identities for every explicit occurrence and takes a nonblocking
+exclusive POSIX lock on persistent `cache/filter-engine/batch.lock` (0600, owned
+regular file, one link). It never unlinks that inode; closing its own descriptor
+releases its lock, including after a crash. Classification takes no batch lock.
+Different roots serialize independently; source claiming still prevents a
+second batch from unlinking a replacement. New names after selection are deferred.
+Each initially selected inode gets at most one apply attempt per batch, including
+explicit aliases/repeated paths; later occurrences are errors after that attempt.
+Successful no-ops can repeat. This prevents a later occurrence consuming a new
+arrival even if the filesystem recycles an inode number and timestamps.
+The root, source parent/file, and destination directories are descriptor-pinned.
+Destination components are traversed without symlinks or `..`; missing relative
+Maildirs are created privately with fsync of each immediate parent.
+
+Same- and cross-filesystem transfers follow the same bounded copy path:
+
+1. Create an exclusively owned 0700 directory under destination tmp and a 0600
+   message inside it. Copy through a 64 KiB buffer from the already-open source
+   descriptor. Verify the copied header prefix against the parser's exact wire
+   header digest, fsync the copy, and read it back to verify its full SHA256.
+2. Hard-link that complete file into destination cur, never replacing a name.
+   Try the original basename first; collision alternatives preserve the entire
+   raw `:2,` suffix. Creation/publication each stop after 64 attempts. No original
+   path, flag suffix or predicate is truncated. Fsync the published file and cur,
+   then remove only this invocation's private staging entry and sync its parents.
+3. Atomically rename the current source entry into a newly created, owned 0700
+   directory in its original parent. Verify the claimed entry against the pinned
+   source descriptor. Only this process writes that private namespace; ordinary
+   Maildir clients continue operating on cur/new names. The mutable original
+   source name is never passed to unlink. A replacement captured by the rename
+   fails verification and is restored without overwriting a later arrival.
+4. Sync the source claim and parent; recheck the destination and both full byte
+   digests before unlinking the owned claim. Sync the source directory changes
+   and remove the empty owned directory. Success leaves one intact destination
+   copy and no owned tmp/claim entry. A source already in the destination's
+   actual cur/new directory is an inode-preserving no-op.
+
+Linux rollback uses `renameat2(RENAME_NOREPLACE)` for every entry type. The
+portable fallback uses no-clobber hard links for nondirectories; an unexpected
+directory replacement is retained in recovery when that rollback is unavailable.
+This fallback has not been qualified on non-Linux hosts. Published entries are
+never removed during rollback: an independent Maildir client may already have
+renamed them. On a source replacement/flag rename before claiming, or an observed
+byte edit, return error/status 7 and retain recoverable bytes. A new entry placed
+at the original name after a verified claim is independent and stays untouched.
+
+Maildir delivery requires immutable message contents after publication. Full
+checksums detect edits at the tested boundaries, including same-size writes
+that timestamp checks miss; arbitrary pre-opened writers or actors entering this
+process's private directories are outside that ownership protocol. This is not
+filesystem transaction isolation against such writers. Source content, mode,
+owner, ACLs and xattrs are never modified in place; the destination is a new
+0600 file with unchanged message bytes and flags.
+
+Any read/write/verify/fsync/unlink/cleanup failure remains nonzero. Error records
+retain a known winning rule ID/provenance, use action none, and leave destination
+fields empty. Stderr emits exact byte-escaped `E_RETAINED_PATH` locations for
+retained published, claimed or staging entries. A failed operation can leave a
+complete duplicate, including when source unlink succeeded but a later fsync
+failed. Reruns cannot overwrite messages and never adopt another invocation's
+tmp/claim entries. They do not deduplicate retained copies automatically.
+INT/TERM/HUP/PIPE request owned cleanup and conventional 128+signal status.
+SIGKILL can leave partial tmp files (never published), or a source claim plus an
+already durable destination. Those paths remain recoverable; later batches
+leave them alone. No garbage collection or power-loss validation is claimed.
+
+`zsh extras/test/test-filter-storage.sh` checks all 52 authored target IDs and
+actual Sieve winners in apply mode, real same/cross-filesystem full-body hashes,
+flags/collisions, exact survivor/duplicate counts, injected failures, private
+claim and rollback boundaries, persistent locks, source/destination replacements,
+observed edits, graceful interruption and SIGKILL recovery. It uses only owned
+synthetic fixtures and settles every controlled child.

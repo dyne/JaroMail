@@ -66,7 +66,7 @@ build_gpgewrap() {
 build_jaro-filter-compile() {
     make -f build/filter-core.mk filter-compile "CC=${CC:-gcc}" "CCACHE=${CCACHE-${cache[*]}}" \
         "CPPFLAGS=${CPPFLAGS-}" "CFLAGS=${cflags[*]}" "LDFLAGS=${ldflags[*]}" "LDLIBS=${LDLIBS-}" &&
-        cp build/gnu/filter/jaro-filter-compile build/gnu/filter/jaro-filter-legacy build/gnu/
+        cp build/gnu/filter/jaro-filter-compile build/gnu/filter/jaro-filter-legacy build/gnu/filter/jaro-filter build/gnu/
 }
 
 build_mutt-kz() {

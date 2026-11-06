@@ -2,6 +2,7 @@
 source "${0:A:h}/lib/module_helpers.zsh"
 source "$repo_root/src/zlibs/email"
 source "$repo_root/src/zlibs/search"
+source "$repo_root/src/zlibs/filters"
 MAILDIRS="$tmp_root/mail"
 mkdir -p "$MAILDIRS"
 touch "$MAILDIRS/notmuch-config"
@@ -48,7 +49,7 @@ touch "$MAILDIRS/notmuch-config"
   update_filters() { print unexpected > "$tmp_root/updated"; }
   option_params=()
   exitcode=0
-  cmd_fetch
+  cmd_fetch || true
   assert_equal "$exitcode" 9 "fetch command reports transport failure"
   [[ ! -e "$tmp_root/updated" ]]
 )

@@ -35,15 +35,31 @@ indexing and SMTP/IMAP actions.
 
 ## Filter engine selection
 
-`JARO_FILTER_ENGINE=legacy|native` selects the compiler; unset retains legacy.
+`JARO_FILTER_ENGINE=legacy|native` selects compilation and filter/fetch dispatch;
+unset retains legacy.
 Empty/unknown values fail. Native `update`/`sieve` invoke the installed compiler
 with explicit mail/account roots and return its failures without fallback.
 An absent profile selects `core-v1`; unsupported ERE exports fail with a
 migration diagnostic. Explicit legacy rejects typed/domain records. Sieve
 generation writes the local export only, without remote deployment.
 
-At the compiler milestone native batch filtering is unavailable (127) and
-native Sieve import is unsupported (4); incoming messages are retained.
+Native `filter [MAILDIR]` compiles/verifies once and applies one pinned batch.
+The default Maildir is `$JAROMAILDIR/incoming`. Native `fetch` uses the same
+batch after transport and refreshes the index once, even after partial failure;
+batch errors remain nonzero. Filter itself does not index. Native Sieve import
+is unsupported (4) until its implementation milestone.
+
+Native `filter --explain [MAILDIR]` and `-n filter [MAILDIR]` classify only,
+checking the selected generation against current policy without publishing.
+Missing/stale generations return 5 and request an explicit `jaro update`.
+Native `-n fetch` explains local incoming mail without transport or indexing.
+
+Native `filter --compare FILE [MAILDIR]` compares retained actual final legacy
+observations against native classification. It never applies either engine.
+FILE uses complete fingerprint-bound JLC1 NUL framing described in
+`filter-interfaces.md`. Its producer must retain unchanged-corpus hashes and
+actual legacy provenance. Ambiguous dry-run proposals and unsupported files
+fail; this command does not infer a legacy winner from proposal text.
 
 ## Commands
 

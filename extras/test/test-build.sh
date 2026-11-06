@@ -37,7 +37,7 @@ export CC="$tmp_root/compiler" CCACHE="$tmp_root/cache"
 export CFLAGS='-O0 -DJARO_CFLAGS_CHECK=1' CPPFLAGS='-DJARO_CPPFLAGS_CHECK=1'
 export LDFLAGS='-Wl,--as-needed' LDLIBS='-lm'
 make > "$tmp_root/build.log" 2>&1
-for helper in fetchaddr parsedate dotlock gpgewrap; do
+for helper in fetchaddr parsedate dotlock gpgewrap jaro-filter jaro-filter-compile jaro-filter-legacy; do
   [[ -x "build/gnu/$helper" ]]
 done
 compiler_log="$(cat "$JARO_BUILD_LOG")"
@@ -62,6 +62,7 @@ unset COMPILER_MODE
 # A clean staged installation builds helpers and preserves argument boundaries.
 make -j2 install "PREFIX=$prefix" > "$tmp_root/install.log" 2>&1
 [[ -x "$prefix/share/jaromail/bin/dotlock" ]]
+[[ -x "$prefix/share/jaromail/bin/jaro-filter" ]]
 [[ ! -e build/sieve-tools ]]
 cat > "$prefix/share/jaromail/bin/jaro" <<'EOF'
 #!/usr/bin/env zsh

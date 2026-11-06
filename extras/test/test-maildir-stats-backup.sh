@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 
 set -euo pipefail
+export JARO_FILTER_ENGINE=legacy # unrelated legacy default-policy setup
 
 script_dir="${0:A:h}"
 source "${script_dir}/lib/test_helpers.zsh"

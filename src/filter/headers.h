@@ -22,5 +22,7 @@ int jf_headers_read(int fd, const struct jf_allocator *, struct jf_headers **,
 	struct jf_error *);
 const struct jf_message *jf_headers_message(const struct jf_headers *);
 size_t jf_headers_wire_size(const struct jf_headers *);
+/* SHA256 of exact consumed wire header bytes, including the separator. */
+const char *jf_headers_digest(const struct jf_headers *);
 void jf_headers_free(struct jf_headers *);
 #endif

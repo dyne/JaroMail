@@ -7,8 +7,13 @@ if (( $# )); then
 else
   tests=("$test_dir/run-source.sh" "$test_dir"/test-*.sh(N))
 fi
-logs="$(mktemp -d "${TMPDIR:-/tmp}/jaromail-test-logs.XXXXXXXX")" || exit 1
-trap 'rm -rf -- "$logs"' EXIT
+if [[ -n ${JARO_TEST_LOG_DIR:-} ]]; then
+  [[ $JARO_TEST_LOG_DIR == /* && -d $JARO_TEST_LOG_DIR ]] || exit 1
+  logs=$(mktemp -d "$JARO_TEST_LOG_DIR/run.XXXXXXXX") || exit 1
+else
+  logs="$(mktemp -d "${TMPDIR:-/tmp}/jaromail-test-logs.XXXXXXXX")" || exit 1
+  trap 'rm -rf -- "$logs"' EXIT
+fi
 trap 'exit 130' INT
 trap 'exit 143' TERM
 passed=0 failed=0 skipped=0
