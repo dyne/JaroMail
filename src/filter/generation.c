@@ -516,7 +516,7 @@ done:
 
 void jf_compile_result_free(struct jf_compile_result *r)
 {
-	free(r->directory); memset(r,0,sizeof *r);
+	free(r->directory); jf_bytes_free(&r->warnings); memset(r,0,sizeof *r);
 }
 
 int jf_generation_legacy_run(const char *root,char *const argv[])
@@ -634,6 +634,7 @@ source_error:
 	}
 done:
 	if (rc && prepared && l.engine>=0) { (void)remove_file(l.engine,"committed"); (void)recover(&l); }
+	if (!rc) { result->warnings=after.warnings; memset(&after.warnings,0,sizeof after.warnings); }
 	if (temporary && (stage_ready || exists(l.engine,temporary)==1)) discard_stage(l.engine,temporary);
 	if (rc && error && !error->code) jf_product_error(error,rc==6 ? "E_BUSY_OR_CHANGED" : "E_IMPORT_IO",0,"import failed; no partial configuration is committed");
 	if (fd>=0) close(fd);
@@ -772,6 +773,7 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 			prior.dependencies=latest->dependencies; prior.dependency_count=latest->dependency_count;
 			latest->dependencies=NULL; latest->dependency_count=0;
 		}
+		if (!rc) { result->warnings=snapshot.warnings; memset(&snapshot.warnings,0,sizeof snapshot.warnings); }
 		free(temporary); jf_snapshot_free(&snapshot); jf_snapshot_free(&recheck); jf_products_free(&products);
 		if (rc!=6 || !retry || attempt==2) break;
 		free(*error_path); *error_path=NULL;

@@ -57,6 +57,7 @@ void chop(struct header *cur)
 }
 
 char print_email_only = 0;
+char print_nul_pairs = 0;
 
 int writeout(struct header *h, const char *datefmt, 
              unsigned char create_real_name)
@@ -81,7 +82,7 @@ int writeout(struct header *h, const char *datefmt,
          && p->mailbox)
         {
           if(p->personal)
-            FREE(p->personal);
+            FREE(&p->personal);
           p->personal = safe_strdup(p->mailbox);
           c=strchr(p->personal, '@');
           if (c)
@@ -89,16 +90,17 @@ int writeout(struct header *h, const char *datefmt,
         }
       if(!p->group && p->mailbox && *p->mailbox && p->personal)
         {
-          if(p->personal && strlen(p->personal) > 30)
-            strcpy(p->personal + 27, "...");
-
           if ((c=strchr(p->mailbox,'@')))
             for(c++; *c; c++)
               *c=tolower(*c);
 
           strftime(timebuf, sizeof(timebuf), datefmt, localtime(&timep));
 
-          if(print_email_only == 1) {
+          if(print_nul_pairs == 1) {
+            fputs(p->mailbox, stdout); fputc(0, stdout);
+            fputs(p->personal && *p->personal ? p->personal : "", stdout);
+            fputc(0, stdout);
+          } else if(print_email_only == 1) {
             printf("%s\n", p->mailbox);
           } else {
             printf("%s,%s\n", p->mailbox,
@@ -144,6 +146,8 @@ int main(int argc, char* argv[])
         create_real_name = 1;
       } else if (!strcmp (argv[i], "-e")) {
         print_email_only = 1;
+      } else if (!strcmp (argv[i], "-0")) {
+        print_nul_pairs = 1;
       } else {
         fprintf (stderr, "%s: `%s' wrong parameter\n", argv[0], argv[i]);
       }
@@ -228,6 +232,7 @@ int main(int argc, char* argv[])
         rv = writeout(&hdr[i], datefmt, create_real_name) || rv;
     }
 
+  if (fflush(stdout) || ferror(stdout)) return 3;
   return (rv ? 0 : 1);
   
 }

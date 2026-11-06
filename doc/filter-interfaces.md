@@ -36,6 +36,26 @@ compiler stdout is empty, including on error. Diagnostics go to stderr and
 identify a stable error code, source path (byte-escaped for display), physical
 line where available, and offending selector/profile. Never execute input text.
 
+Invalid mailboxes returned successfully by the abook exporter produce
+`W_ADDRESS` warnings on stderr, including the source book and **exported address
+row**, and are omitted from known/blacklist rules. These rows are not physical
+lines in the `.abook` file. At most eight examples per book are printed, followed
+by the total omitted count. Every original addressbook byte remains unchanged;
+raw exports are retained in generation dependencies. Warm compilation and
+`--check` also warn. Exporter failures and invalid policy, aliases or account
+addresses remain errors.
+
+Contact learning uses `fetchaddr -0` mailbox/name pairs and
+`jaro-filter-compile --add-contact BOOK ADDRESS NAME [--check]`. This appends a
+native abook record, preserving complete fields and all existing bytes; it
+avoids abook's header importer. Status 1 means the normalized mailbox already
+exists; `--check` validates without writing. New books use mode 0600; existing
+permissions are retained. Control bytes and comma-containing mailboxes are
+rejected because they cannot be represented safely by this writer. Jaromail
+writers take an advisory POSIX file lock; finish any interactive abook edit
+before importing. A failed/short append is reported, leaving original records
+and any partial append available for inspection before retrying.
+
 The batch default is `--mode classify`. Only explicit `apply` changes messages.
 `--maildir` selects regular message files from cur/new only, snapshotting their
 names in byte-sorted order. `--files0-from -` reads stdin; other values name a

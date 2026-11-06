@@ -88,23 +88,26 @@ e_parse() {
     [[ "$1" = "" ]] || [[ "$1" = "all" ]] || _arg="-x $1"
 
     # use RFC822 parser in fetchaddr
-    e_parsed=`${WORKDIR}/bin/fetchaddr ${=_arg} -a`
-
-    for _p in ${(f)e_parsed}; do
-        _e="${(Q)_p[(ws:,:)1]:l}"
-		# this error of parsed '@' occurs sometimes
-		[[ "$_e" = "@" ]] && continue
-        # check if an email address was found
-        isemail "$_e" || continue
+    # Mailbox/name pairs are machine data, not comma-separated display text.
+    # Zsh preserves NULs in command substitution; each pair ends with NUL.
+    e_parsed="$("${WORKDIR}/bin/fetchaddr" ${=_arg} -a -0)" || return $?
+    local _e _n _rc LC_ALL=C
+    while IFS= read -r -d $'\0' _e && IFS= read -r -d $'\0' _n; do
+        _e="${_e:l}"
+        if "${WORKDIR}/bin/jaro-filter-compile" --check-address "$_e"; then
+            :
+        else
+            _rc=$?
+            if [[ $_rc != 4 ]]; then return $_rc; fi
+            print -u2 -r -- "W_ADDRESS: ignored invalid extracted mailbox: ${(qqq)_e}"
+            continue
+        fi
         # avoid duplicates
         [[ "${(v)e_addr[$_e]}" = "" ]] || continue
 
-        # extract also the name using comma separator
-        _n="${(Q)_p[(ws:,:)2]}"
-
         e_addr+=("$_e" "$_n")
         func "parsed: $_n <$_e>"
-    done
+    done <<< "$e_parsed"
 
     # no emails found
     [[ ${#e_addr} = 0 ]] && return 1
