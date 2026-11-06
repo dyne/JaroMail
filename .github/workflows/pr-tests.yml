@@ -1,21 +1,32 @@
-name: PR Tests
+name: PR Build and Tests
 
 on:
   pull_request:
     branches:
       - "**"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      CCACHE_DIR: ${{ runner.temp }}/jaromail-ccache
-      SIEVE_TOOLS_OUTPUT: ${{ runner.temp }}/jaromail-sieve-tools
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set build and test paths
+        run: |
+          printf '%s\n' \
+            "CCACHE_DIR=$RUNNER_TEMP/jaromail-ccache" \
+            "SIEVE_TOOLS_OUTPUT=$RUNNER_TEMP/jaromail-sieve-tools" \
+            "JARO_TEST_LOG_DIR=$RUNNER_TEMP/jaromail-test-logs" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: |
@@ -60,5 +71,19 @@ jobs:
       - name: Compile extracted Sieve validation frontends
         run: make sieve-tools
 
-      - name: Build and run all regression tests
-        run: make test-strict
+      - name: Build application
+        run: make
+
+      - name: Run all regression tests (no skips)
+        run: |
+          mkdir -p "$JARO_TEST_LOG_DIR"
+          make test-strict
+
+      - name: Upload regression test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-test-logs-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/jaromail-test-logs
+          if-no-files-found: ignore
+          retention-days: 7
