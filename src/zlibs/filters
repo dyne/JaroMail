@@ -35,11 +35,28 @@
 
 # Load zsh filter cache arrays only for commands that need them.
 filter_engine() {
-    REPLY=${JARO_FILTER_ENGINE-legacy}
+    REPLY=${JARO_FILTER_ENGINE-native}
     case "$REPLY" in
         legacy|native) return 0 ;;
         *) error "Invalid JARO_FILTER_ENGINE: ${(qqq)REPLY}; expected legacy or native"; return 2 ;;
     esac
+}
+
+filter_policy_template() {
+    filter_engine || return $?
+    local engine=$REPLY
+    REPLY=''
+    if [[ -e "$MAILDIRS/Filters.txt" || -L "$MAILDIRS/Filters.txt" ]]; then
+        [[ -f "$MAILDIRS/Filters.txt" && -r "$MAILDIRS/Filters.txt" ]] || {
+            error "Unreadable policy: $MAILDIRS/Filters.txt"; return 3
+        }
+        return 0
+    fi
+    REPLY="$WORKDIR/Filters.txt"
+    [[ $engine == native ]] && REPLY="$WORKDIR/Filters.native.txt"
+    [[ -f $REPLY && -r $REPLY ]] || {
+        error "Missing filter template: $REPLY"; return 3
+    }
 }
 
 native_filter_compile() {
@@ -125,6 +142,8 @@ init_inbox() {
     fn init_inbox
     req=(MAILDIRS)
     ckreq || return 1
+    filter_policy_template || return $?
+    local init_filter_template=$REPLY
 
     # make sure maildirs where to put mails exist
     ${=mkdir} "$MAILDIRS"
@@ -156,8 +175,8 @@ init_inbox() {
     { test -r "$MAILDIRS"/Manual.pdf } || {
     cp "$WORKDIR"/jaromail-manual.pdf "$MAILDIRS"/Manual.pdf }
 
-    { test -r "$MAILDIRS"/Filters.txt } || {
-    cp "$WORKDIR"/Filters.txt "$MAILDIRS"/Filters.txt }
+    [[ -z $init_filter_template ]] ||
+        cp -n -- "$init_filter_template" "$MAILDIRS/Filters.txt" || return 3
 
     { test -r "$MAILDIRS"/Aliases.txt } || {
     cp "$WORKDIR"/Aliases.txt "$MAILDIRS"/Aliases.txt }

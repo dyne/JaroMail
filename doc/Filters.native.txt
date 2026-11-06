@@ -1,0 +1,8 @@
+# Native fresh policy: no explicit routes are enabled.
+# Builtins retain blacklist, bounce, known-contact, spam, own-address and
+# unsorted routing. Customize typed rules deliberately; source order matters.
+# Existing policies are never replaced or translated by initialization.
+# Examples (uncomment only after choosing destinations):
+# from-address sender@example.org move Senders
+# from-domain example.org move DomainApex
+# from-domain *.example.org move DomainDescendants

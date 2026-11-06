@@ -207,8 +207,12 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 
 # Native filtering requires explicit existing policy. In particular, a read-only
 # request must not materialize defaults before the option parser has run.
-[[ "$1" = "source" || ( ${JARO_FILTER_ENGINE-legacy} == native &&
-    ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 || ${@[(Ie)sieve-import]} -gt 0 ) ) ]] || {
+[[ "$1" = "source" || ( ${JARO_FILTER_ENGINE-native} != legacy &&
+    ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 || ${@[(Ie)sieve-import]} -gt 0 ||
+      ${@[(Ie)sieve]} -gt 0 || ${@[(Ie)update]} -gt 0 ) ) ]] || {
+    # Validate selector/template before any bootstrap configuration write.
+    filter_policy_template || exit $?
+    filter_bootstrap_template=$REPLY
     [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
 
         # make sure we have an addressbook
@@ -219,8 +223,8 @@ bootstrap_root="${bootstrap_file:A:h:h}"
     { test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
 
         # make sure we have Filters.txt Applications.txt Mutt.txt
-    { test -r "$MAILDIRS/Filters.txt" } || {
-        cp "$WORKDIR/Filters.txt" "$MAILDIRS/Filters.txt"
+    [[ -z $filter_bootstrap_template ]] || {
+        cp -n -- "$filter_bootstrap_template" "$MAILDIRS/Filters.txt" || exit 3
         notice "Default filters created" }
 
     { test -r "$MAILDIRS/Applications.txt" } || {
@@ -354,7 +358,7 @@ check_bin() {
 
     case "$cmd" in
         fetch)
-            [[ $DRYRUN == 1 && ${JARO_FILTER_ENGINE-legacy} == native ]] && return 0
+            [[ $DRYRUN == 1 && ${JARO_FILTER_ENGINE-native} == native ]] && return 0
             check_required_bins pinentry fetchmail gpg
             ensure_gnupg_dir
             check_keyring

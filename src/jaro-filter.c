@@ -2,6 +2,7 @@
 #include "filter/generation.h"
 #include "filter/headers.h"
 #include "filter/storage.h"
+#include "filter/pool.h"
 #include <sys/stat.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -16,6 +17,7 @@ struct selected {
 	char *path;
 	struct stat identity;
 	int snapshotted,attempted;
+	struct stat parent_identity;
 	const char *error;
 	struct selected *first;
 };
@@ -245,71 +247,299 @@ static void recovery_diagnostic(const char *path)
 	fputs("\"\n",stderr);
 }
 
-static int classify(const char *cwd,const char *root,const struct selected *item,
-	const struct jf_policy *policy,struct jf_storage *storage,size_t index,struct jf_error *global)
+/* Preparation and output are coordinator-only. Workers borrow the pinned
+ * source/parent descriptors and run only the unchanged singleton move. */
+struct decision {
+	const struct selected *item;
+	const struct jf_rule *winner;
+	struct stat opened;
+	char *source,*local,*parent,*name;
+	const char *detail;
+	char digest[65];
+	size_t header_size,index;
+	int fd,parentfd,rc,noop,quarantine;
+	struct jf_storage_recovery recovery;
+};
+
+static void prepare(struct decision *d,const char *cwd,const char *root,
+	const struct selected *item,const struct jf_policy *policy,struct jf_storage *storage,
+	size_t index)
 {
 	struct jf_headers *headers=NULL;
 	struct jf_error error={0};
-	const struct jf_rule *winner=NULL;
-	const char *detail=NULL;
-	struct stat before,opened,after,current;
-	char *source=absolute(cwd,item->path),*local=NULL,*parent=NULL,*name=NULL;
-	struct jf_storage_recovery recovery={0};
-	int fd=-1,parentfd=-1,rc=7,noop=0;
-	if (!source) { global->code="E_MEMORY"; return 3; }
-	if (item->error) { detail=item->error; goto done; }
-	/* A selected inode gets one apply attempt. Do not trust a later name merely
-	 * because an inode number/timestamp was recycled after the first attempt. */
+	struct stat before,after,current;
+	memset(d,0,sizeof *d); d->fd=d->parentfd=-1; d->rc=7; d->item=item; d->index=index;
+	d->source=absolute(cwd,item->path);
+	if (!d->source) { d->rc=3; d->detail="E_MEMORY"; return; }
+	if (item->error) { d->detail=item->error; return; }
 	if (storage && item->first) {
-		if (item->first->attempted) { detail="E_MESSAGE_CHANGED"; goto done; }
+		if (item->first->attempted) { d->detail="E_MESSAGE_CHANGED"; return; }
 		item->first->attempted=1;
 	}
-	parentfd=open_parent(source,&parent,&name);
-	if (parentfd<0) { if (errno==ENOMEM) { rc=3; detail="E_MEMORY"; } else detail="E_MESSAGE_OPEN"; goto done; }
-	if (fstatat(parentfd,name,&before,AT_SYMLINK_NOFOLLOW)) { detail="E_MESSAGE_OPEN"; goto done; }
-	if (!S_ISREG(before.st_mode)) { detail="E_MESSAGE_TYPE"; goto done; }
-	/* Closing any descriptor for a POSIX record-lock inode releases this
-	 * process's locks. Explicit input must never open our batch lock as mail. */
+	d->parentfd=open_parent(d->source,&d->parent,&d->name);
+	if (d->parentfd<0) { d->rc=errno==ENOMEM ? 3 : 7; d->detail=d->rc==3 ? "E_MEMORY" : "E_MESSAGE_OPEN"; return; }
+	if (fstatat(d->parentfd,d->name,&before,AT_SYMLINK_NOFOLLOW)) { d->detail="E_MESSAGE_OPEN"; return; }
+	if (!S_ISREG(before.st_mode)) { d->detail="E_MESSAGE_TYPE"; return; }
 	if (storage && before.st_dev==storage->lock_identity.st_dev && before.st_ino==storage->lock_identity.st_ino) {
-		detail="E_MESSAGE_TYPE"; goto done;
+		d->detail="E_MESSAGE_TYPE"; return;
 	}
-	if (item->snapshotted && !jf_storage_same(&before,&item->identity)) { detail="E_MESSAGE_CHANGED"; goto done; }
-	fd=openat(parentfd,name,O_RDONLY|O_NOFOLLOW|O_NONBLOCK);
-	if (fd<0) { detail="E_MESSAGE_OPEN"; goto done; }
-	if (fstat(fd,&opened) || !S_ISREG(opened.st_mode) || !jf_storage_same(&before,&opened)) {
-		detail="E_MESSAGE_CHANGED"; goto done;
+	if (item->snapshotted && !jf_storage_same(&before,&item->identity)) { d->detail="E_MESSAGE_CHANGED"; return; }
+	if (hook("message-before-open")) { d->rc=3; return; }
+	d->fd=openat(d->parentfd,d->name,O_RDONLY|O_NOFOLLOW|O_NONBLOCK);
+	if (d->fd<0) { d->detail="E_MESSAGE_OPEN"; return; }
+	/* The inode can change between the name check and open. Closing any alias
+	 * of the lock drops POSIX process locks, so defer uncertain/lock FDs. */
+	if (fstat(d->fd,&d->opened)) { d->quarantine=storage!=NULL; d->detail="E_MESSAGE_CHANGED"; return; }
+	if (storage && d->opened.st_dev==storage->lock_identity.st_dev && d->opened.st_ino==storage->lock_identity.st_ino) {
+		d->quarantine=1; d->detail="E_MESSAGE_CHANGED"; (void)hook("message-lock-alias"); return;
 	}
-	if (hook("message-opened")) { rc=3; goto done; }
-	rc=jf_headers_read(fd,NULL,&headers,&error);
-	if (rc) {
-		if (rc==3 && (!error.code || strcmp(error.code,"E_MESSAGE_IO"))) goto done;
-		detail=error.code; rc=7; goto done;
+	if (!S_ISREG(d->opened.st_mode) || !jf_storage_same(&before,&d->opened)) { d->detail="E_MESSAGE_CHANGED"; return; }
+	if (hook("message-opened")) { d->rc=3; return; }
+	d->rc=jf_headers_read(d->fd,NULL,&headers,&error);
+	if (d->rc) {
+		d->detail=error.code;
+		if (d->rc!=3 || (error.code && !strcmp(error.code,"E_MESSAGE_IO"))) d->rc=7;
+		goto done;
 	}
-	if (hook("headers-read")) { rc=3; goto done; }
-	if (fstat(fd,&after) || fstatat(parentfd,name,&current,AT_SYMLINK_NOFOLLOW) || !jf_storage_same(&opened,&after) || !jf_storage_same(&opened,&current)) {
-		detail="E_MESSAGE_CHANGED"; rc=7; goto done;
+	if (hook("headers-read")) { d->rc=3; goto done; }
+	if (fstat(d->fd,&after) || fstatat(d->parentfd,d->name,&current,AT_SYMLINK_NOFOLLOW) ||
+		!jf_storage_same(&d->opened,&after) || !jf_storage_same(&d->opened,&current)) {
+		d->detail="E_MESSAGE_CHANGED"; d->rc=7; goto done;
 	}
-	rc=jf_policy_classify(policy,jf_headers_message(headers),&winner,&error,NULL);
-	if (rc) { detail=error.code; goto done; }
-	local=join(root,winner->local);
-	if (!local) { rc=3; goto done; }
-	if (storage) {
-		rc=jf_storage_move(storage,parentfd,name,fd,&opened,jf_headers_wire_size(headers),
-			jf_headers_digest(headers),winner->local,source,&recovery,&detail);
-		if (rc==1) { rc=0; noop=1; }
-	} else if ((noop=already_there(parentfd,local))<0) rc=3;
+	d->rc=jf_policy_classify(policy,jf_headers_message(headers),&d->winner,&error,NULL);
+	if (d->rc) { d->detail=error.code; goto done; }
+	d->local=join(root,d->winner->local);
+	if (!d->local) { d->rc=3; goto done; }
+	d->header_size=jf_headers_wire_size(headers);
+	memcpy(d->digest,jf_headers_digest(headers),sizeof d->digest);
 done:
-	if (fd>=0 && close(fd) && !rc) { rc=7; detail="E_MESSAGE_IO"; }
-	if (parentfd>=0) close(parentfd);
-	if (storage && noop && !rc && item->first) item->first->attempted=0;
-	if (rc!=3 && record(index,item->path,winner,rc ? NULL : local,
-		rc ? "error" : noop ? "noop" : storage ? "moved" : "classified",rc ? detail : NULL)) { rc=3; detail="E_OUTPUT"; }
-	if (rc==3) global->code=detail ? detail : error.code ? error.code : "E_MEMORY";
-	if (recovery.source) recovery_diagnostic(recovery.source);
-	if (recovery.destination) recovery_diagnostic(recovery.destination);
-	if (recovery.temporary) recovery_diagnostic(recovery.temporary);
-	jf_headers_free(headers); free(source); free(local); free(parent);
-	free(recovery.source); free(recovery.destination); free(recovery.temporary); return rc;
+	jf_headers_free(headers);
+}
+
+static void move_decision(void *context,struct jf_storage *storage)
+{
+	struct decision *d=context;
+#ifdef JF_TESTING
+	jf_generation_test_job(d->index);
+#endif
+	if (!d->rc && hook("store-job-start")) { d->rc=3; d->detail="E_MEMORY"; }
+	if (!d->rc) {
+		if (storage->should_stop && storage->should_stop(storage->context)) {
+			d->rc=7; d->detail="E_INTERRUPTED";
+		} else {
+			d->rc=jf_storage_move(storage,d->parentfd,d->name,d->fd,&d->opened,
+				d->header_size,d->digest,d->winner->local,d->source,&d->recovery,&d->detail);
+			if (d->rc==1) { d->rc=0; d->noop=1; }
+		}
+	}
+#ifdef JF_TESTING
+	/* Complete deterministic phase gates only after publishing global stop. */
+#endif
+	if (d->rc==3 && storage->borrowed) jf_pool_stop(storage->context);
+#ifdef JF_TESTING
+	jf_generation_test_done(d->index);
+#endif
+}
+
+static void close_decision(struct decision *d,struct jf_storage *storage)
+{
+	if (d->fd>=0 && !d->quarantine) {
+		if (close(d->fd) && !d->rc) { d->rc=7; d->detail="E_MESSAGE_IO"; }
+		d->fd=-1;
+	}
+	if (d->parentfd>=0) { close(d->parentfd); d->parentfd=-1; }
+	if (storage && d->noop && !d->rc && d->item->first) d->item->first->attempted=0;
+}
+
+static int emit_decision(struct decision *d,struct jf_storage *storage,struct jf_error *global)
+{
+	int rc=d->rc;
+	if (rc!=3 && record(d->index,d->item->path,d->winner,rc ? NULL : d->local,
+		rc ? "error" : d->noop ? "noop" : storage ? "moved" : "classified",rc ? d->detail : NULL)) {
+		rc=3; d->detail="E_OUTPUT";
+	}
+	if (rc==3) global->code=d->detail ? d->detail : "E_MEMORY";
+	if (d->recovery.source) recovery_diagnostic(d->recovery.source);
+	if (d->recovery.destination) recovery_diagnostic(d->recovery.destination);
+	if (d->recovery.temporary) recovery_diagnostic(d->recovery.temporary);
+	return rc;
+}
+
+static void free_decision(struct decision *d)
+{
+	/* Quarantined source FDs are released only after all pool threads join. */
+	if (d->fd>=0) close(d->fd);
+	free(d->source); free(d->local); free(d->parent);
+	free(d->recovery.source); free(d->recovery.destination); free(d->recovery.temporary); free(d->recovery.published);
+}
+
+static int classify(const char *cwd,const char *root,const struct selected *item,
+	const struct jf_policy *policy,struct jf_storage *storage,size_t index,struct jf_error *global)
+{
+	struct decision d; int rc;
+	prepare(&d,cwd,root,item,policy,storage,index);
+	if (!d.rc) {
+		if (storage) move_decision(&d,storage);
+		else if ((d.noop=already_there(d.parentfd,d.local))<0) d.rc=3;
+	}
+	close_decision(&d,storage); rc=emit_decision(&d,storage,global);
+	/* In the singleton path a post-open lock alias stops admission before its
+	 * deferred close, preserving lock ownership for every prior operation. */
+	if (d.quarantine) { global->code="E_BATCH_LOCK_CHANGED"; rc=3; }
+	free_decision(&d); return rc;
+}
+
+struct dependencies { struct stat *parents; size_t count; };
+static int compare_inode(const void *left,const void *right)
+{
+	const struct stat *a=left,*b=right;
+	if (a->st_dev!=b->st_dev) return a->st_dev<b->st_dev ? -1 : 1;
+	return a->st_ino<b->st_ino ? -1 : a->st_ino>b->st_ino;
+}
+static int compare_strings(const void *a,const void *b)
+{
+	return strcmp(*(const char *const *)a,*(const char *const *)b);
+}
+static int name_capacity(int fd)
+{
+	long maximum;
+	errno=0; maximum=fpathconf(fd,_PC_NAME_MAX);
+	return maximum>=255;
+}
+static int ancestor_capacity(char *path,size_t root_length)
+{
+	int fd;
+	for (;;) {
+		char *slash;
+		fd=jf_storage_directory(path);
+		if (fd>=0) { int ok=name_capacity(fd); close(fd); return ok; }
+		if (errno!=ENOENT) return 0;
+		slash=strrchr(path,'/'); if (!slash || (size_t)(slash-path)<root_length) return 0;
+		*slash=0;
+	}
+}
+static int independent_destination(void *context,int cur,int newfd)
+{
+	struct dependencies *deps=context; struct stat st;
+	/* The reserved jaro. namespace proof requires room for the full prefix.
+	 * A smaller/unknown limit retains singleton collision semantics. */
+	if (!name_capacity(cur) || !name_capacity(newfd)) return 0;
+	if (fstat(cur,&st) || bsearch(&st,deps->parents,deps->count,sizeof st,compare_inode)) return 0;
+	if (fstat(newfd,&st) || bsearch(&st,deps->parents,deps->count,sizeof st,compare_inode)) return 0;
+	return 1;
+}
+
+/* Generic conservative fallback: never overlap inode aliases, original-name
+ * collision winners, noops, or any policy destination in a selected source
+ * directory. Public alternative names begin jaro.; a long flag suffix can
+ * truncate that prefix, so those inputs also retain singleton ordering. */
+static int independent(const char *cwd,const char *root,struct selection *s,
+	const struct jf_policy *policy,struct dependencies *deps)
+{
+	const char **names=NULL,**locals=NULL; size_t i,n=jf_policy_count(policy); int safe=0;
+	deps->parents=calloc(s->count,sizeof *deps->parents);
+	names=malloc(s->count*sizeof *names); locals=malloc(n*sizeof *locals);
+	if (!deps->parents || !names || !locals) goto done;
+	for (i=0;i<s->count;i++) {
+		struct selected *item=&s->items[i]; char *source,*parent=NULL,*name=NULL; int fd;
+		const char *base=strrchr(item->path,'/'),*flags;
+		base=base ? base+1 : item->path; names[i]=base; flags=strstr(base,":2,");
+		if (strlen(item->path)>32768 || !strncmp(base,"jaro.",5) || (flags && strlen(flags)>175) ||
+			(item->first && item->first!=item)) goto done;
+		source=absolute(cwd,item->path); if (!source) goto done;
+		fd=open_parent(source,&parent,&name); free(source); free(parent);
+		if (fd<0) goto done;
+		if (fstat(fd,&item->parent_identity)) { close(fd); goto done; }
+		close(fd); deps->parents[i]=item->parent_identity;
+	}
+	qsort(names,s->count,sizeof *names,compare_strings);
+	for (i=1;i<s->count;i++) if (!strcmp(names[i-1],names[i])) goto done;
+	qsort(deps->parents,s->count,sizeof *deps->parents,compare_inode); deps->count=s->count;
+	for (i=0;i<n;i++) locals[i]=jf_policy_rule(policy,i)->local;
+	qsort(locals,n,sizeof *locals,compare_strings);
+	for (i=0;i<n;i++) {
+		char *path; int fd,cur,newfd,unknown=0;
+		if (i && !strcmp(locals[i],locals[i-1])) continue;
+		if (strlen(locals[i])>32768) goto done;
+		path=join(root,locals[i]); if (!path) goto done;
+		fd=jf_storage_directory(path);
+		if (fd<0) {
+			int missing=errno==ENOENT,capacity=missing && ancestor_capacity(path,strlen(root));
+			free(path); if (capacity) continue; goto done;
+		}
+		free(path);
+		if (!name_capacity(fd)) { close(fd); goto done; }
+		cur=openat(fd,"cur",O_RDONLY|O_DIRECTORY|O_NOFOLLOW); if (cur<0 && errno!=ENOENT) unknown=1;
+		newfd=openat(fd,"new",O_RDONLY|O_DIRECTORY|O_NOFOLLOW); if (newfd<0 && errno!=ENOENT) unknown=1;
+		if (unknown) { if (cur>=0) close(cur); if (newfd>=0) close(newfd); close(fd); goto done; }
+		if ((cur>=0 && !independent_destination(deps,cur,cur)) || (newfd>=0 && !independent_destination(deps,newfd,newfd))) {
+			if (cur>=0) close(cur);
+			if (newfd>=0) close(newfd);
+			close(fd); goto done;
+		}
+		if (cur>=0) close(cur);
+		if (newfd>=0) close(newfd);
+		close(fd);
+	}
+	safe=1;
+done:
+	free(names); free(locals);
+	if (!safe) { free(deps->parents); memset(deps,0,sizeof *deps); }
+	return safe;
+}
+
+static int parallel(const char *cwd,const char *root,struct selection *selected,
+	const struct jf_policy *policy,struct jf_storage *storage,struct jf_pool **pool,
+	struct jf_error *error)
+{
+	struct decision decisions[JF_POOL_WINDOW]; void *jobs[JF_POOL_WINDOW];
+	size_t start=0,i,count=0; int rc=0,aggregate=0,quarantine=0;
+#ifdef JF_TESTING
+	jf_generation_test_parallel(1);
+#endif
+	while (start<selected->count && !jf_pool_stopped(*pool)) {
+		count=0;
+		while (count<JF_POOL_WINDOW && start+count<selected->count && !jf_pool_stopped(*pool)) {
+			struct decision *d=&decisions[count]; struct stat parent;
+			prepare(d,cwd,root,&selected->items[start+count],policy,storage,start+count+1);
+			if (!d->rc && (fstat(d->parentfd,&parent) || compare_inode(&parent,&d->item->parent_identity))) {
+				d->rc=7; d->detail="E_MESSAGE_CHANGED";
+			}
+			jobs[count]=d; count++;
+			if (d->rc==3 || d->quarantine) { quarantine=d->quarantine; jf_pool_stop(*pool); break; }
+		}
+		jf_pool_window(*pool,jobs,count,move_decision);
+		for (i=0;i<count;i++) close_decision(&decisions[i],storage);
+		for (i=0;i<count;i++) {
+			rc=emit_decision(&decisions[i],storage,error);
+			if (rc==3) { jf_pool_stop(*pool); break; }
+			if (rc) aggregate=7;
+		}
+		if (fflush(stdout) || ferror(stdout)) { error->code="E_OUTPUT"; rc=3; jf_pool_stop(*pool); }
+		/* All operations in this bounded window are settled before output. On
+		 * output failure diagnostics conservatively name every durable outcome,
+		 * including rows that may already have reached the consumer. */
+		if (rc==3) for (i=0;i<count;i++) {
+			struct jf_storage_recovery *r=&decisions[i].recovery;
+			if (r->published) recovery_diagnostic(r->published);
+			if (r->source) recovery_diagnostic(r->source);
+			if (r->destination) recovery_diagnostic(r->destination);
+			if (r->temporary) recovery_diagnostic(r->temporary);
+		}
+		if (rc==3 || quarantine || jf_pool_stopped(*pool)) {
+			int signal=jf_pool_finish(*pool); *pool=NULL;
+			if (signal) { interrupted=signal; error->code="E_INTERRUPTED"; }
+			if (quarantine) { rc=3; error->code="E_BATCH_LOCK_CHANGED"; }
+			for (i=0;i<count;i++) free_decision(&decisions[i]);
+			break;
+		}
+		for (i=0;i<count;i++) free_decision(&decisions[i]);
+		start+=count;
+	}
+#ifdef JF_TESTING
+	jf_generation_test_parallel(0);
+#endif
+	return rc==3 ? 3 : aggregate;
 }
 
 int main(int argc,char **argv)
@@ -321,6 +551,8 @@ int main(int argc,char **argv)
 	struct jf_error error={0};
 	struct jf_storage storage={0};
 	struct jf_storage *apply=NULL;
+	struct jf_pool *pool=NULL;
+	struct dependencies dependencies={0};
 	char *cwd=NULL,*resolved=NULL;
 	int i,selection=0,rc=2,aggregate=0;
 	size_t n;
@@ -361,11 +593,15 @@ int main(int argc,char **argv)
 		memset(&action,0,sizeof action); action.sa_handler=on_signal; sigemptyset(&action.sa_mask);
 		if (sigaction(SIGINT,&action,NULL) || sigaction(SIGTERM,&action,NULL) || sigaction(SIGHUP,&action,NULL) || sigaction(SIGPIPE,&action,NULL)) { rc=3; goto done; }
 		if ((rc=snapshot_paths(cwd,&selected))) goto done;
+		if (hook("batch-preflight")) { rc=3; goto done; }
+		if (independent(cwd,resolved,&selected,policy,&dependencies)) pool=jf_pool_start();
 		if ((rc=jf_storage_begin(resolved,&pinned,&interrupted,&storage,&error.code))) goto done;
+		if (pool) { storage.destination_allowed=independent_destination; storage.context=&dependencies; jf_pool_bind(pool,&storage); }
 		apply=&storage;
 		if (hook("batch-locked")) { rc=3; goto done; }
 	}
-	if (field("JFD1") || field(pinned.id)) { rc=3; goto done; }
+	if (field("JFD1") || field(pinned.id) || (apply && fflush(stdout))) { error.code="E_OUTPUT"; rc=3; goto done; }
+	if (pool) { rc=parallel(cwd,resolved,&selected,policy,apply,&pool,&error); goto done; }
 	for (n=0;n<selected.count;n++) {
 		if (interrupted) break;
 		rc=classify(cwd,resolved,&selected.items[n],policy,apply,n+1,&error);
@@ -379,6 +615,8 @@ usage:
 	if (rc!=3) rc=2;
 	error.code=rc==2 ? "E_USAGE" : "E_MEMORY";
 done:
+	if (pool) { int signal=jf_pool_finish(pool); if (signal) interrupted=signal; }
+	free(dependencies.parents);
 	if (interrupted) { rc=128+interrupted; error.code="E_INTERRUPTED"; }
 	if (rc && rc!=7) fprintf(stderr,"%s native batch classification failed\n",error.code ? error.code :
 		rc==5 ? "E_GENERATION" : rc==6 ? "E_BUSY" : "E_IO");

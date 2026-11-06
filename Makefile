@@ -71,6 +71,6 @@ clean:
 	rm -f build/gnu/filter/*.o build/gnu/filter/*.d build/gnu/filter/filter-policy-driver
 	rm -f build/gnu/jaro-filter-compile build/gnu/jaro-filter-legacy build/gnu/filter/jaro-filter-compile build/gnu/filter/jaro-filter-legacy
 	rm -f build/gnu/filter/jaro-filter-compile-test build/gnu/filter/filter-generation-pin build/gnu/filter/filter-compiler-driver
-	rm -f build/gnu/filter/jaro-filter build/gnu/filter/jaro-filter-test
+	rm -f build/gnu/filter/jaro-filter build/gnu/filter/jaro-filter-test build/gnu/filter/jaro-filter-signal-test
 	rm -f build/gnu/jaro-filter
 

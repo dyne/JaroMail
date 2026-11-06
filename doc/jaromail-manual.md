@@ -1066,6 +1066,17 @@ identify
 
 ## Filters
 
+Native is the default engine. Fresh `jaro init` installs a policy with commented
+typed examples and no active explicit routes; blacklist, bounce, known-contact,
+spam, own-address and unsorted builtins remain active. Use `jaro sieve` to publish,
+then `jaro -n filter` or `jaro filter --explain` to inspect without moving mail.
+Existing policies are retained unchanged. Legacy `from`/`to` ERE exports require
+an explicitly qualified profile or a deliberate typed rewrite; they are not
+translated automatically. `JARO_FILTER_ENGINE=legacy` retains the transition
+rollback and original legacy fresh template. See
+[migration and compatibility](filter-compatibility.md) for domain examples,
+known corrections, compare observations and tested platform limits.
+
 In the mail directory a file named `Filters.txt` is filled in with
 filtering rules referencing the contents of the **From:** or **To:**
 fields.

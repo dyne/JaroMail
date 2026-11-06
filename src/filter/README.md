@@ -145,8 +145,9 @@ products. Reads may update filesystem access times. Explicit `--generation ID`
 allows prior compatible snapshots, even when input sources have changed. Current
 source fingerprint checks are performed by the read-only CLI workflows. Explicit
 `--mode apply` uses the storage adapter described below. The existing shell
-engine remains the application default; explicit `JARO_FILTER_ENGINE=native`
-dispatches filter/fetch to this helper, with one compile and pinned batch.
+engine remains available through `JARO_FILTER_ENGINE=legacy` for rollback.
+Unset or explicit `JARO_FILTER_ENGINE=native` dispatches filter/fetch to this
+helper, with one compile and pinned batch.
 `zsh extras/test/test-filter-batch.sh` exercises independent target/Sieve winners,
 raw byte paths, complete snapshots, framing/cache failures, allocator cleanup
 and deterministic pinned-generation/source-change barriers in disposable mail.
@@ -229,3 +230,47 @@ flags/collisions, exact survivor/duplicate counts, injected failures, private
 claim and rollback boundaries, persistent locks, source/destination replacements,
 observed edits, graceful interruption and SIGKILL recovery. It uses only owned
 synthetic fixtures and settles every controlled child.
+
+
+The native apply coordinator can overlap at most sixteen independent singleton
+moves. Each move retains its own copy, full-body verification, private claim,
+no-clobber publication and every file/directory durability barrier. There is no
+shared durability acknowledgment. The coordinator pins the generation, owns the
+batch lock and all selected source descriptors, prepares at most 32 decisions,
+waits for that entire window to settle, then emits results in input order and
+flushes output before admitting another window. Headers are flushed before any
+message operation. A moved row describes only a completed durable singleton.
+An output failure returns nonzero and names durable destinations conservatively
+on stderr: delivered stdout is not a complete inventory of physical mutations.
+
+The serial path is selected before message effects when aliases, repeated
+basenames, reserved collision names, long Maildir flag suffixes, source/destination
+directory dependencies, short/unknown destination NAME_MAX limits, unknown
+preflight identities or resource limits prevent
+independence proof. Destinations are rechecked against selected parent identities
+at runtime; namespace races fail safely rather than weakening that proof. A
+post-open alias of the batch lock is quarantined until worker shutdown because
+closing any descriptor for that inode would release POSIX process locks.
+
+Linux uses a fixed worker pool and one synchronous signal-wait thread; other
+platforms retain singleton execution. Thread creation failure joins all started
+threads and restores the signal mask before fallback. The pool reserves 17 MiB
+of thread stacks, at most 32 source/parent pairs and at most eight private
+storage descriptors per worker, plus a 32-FD reserve checked against the current
+open descriptor count and RLIMIT_NOFILE. Prepared paths and destinations are
+bounded to 32 KiB each; larger inputs use singleton execution. The existing
+100,000-path/64-MiB selection bounds also bound the preflight identity/name tables
+(less than 17 MiB on the measured 64-bit build). Header parsing remains sequential
+and releases each parsed header before admission. No worker closes shared root,
+lock, generation or source descriptors. The pool uses mutex-protected stop state,
+blocked managed signals and cooperative singleton cleanup; no asynchronous
+cancellation or signal-handler locking is used. Every owned thread is joined
+before source descriptor quarantine or generation/root ownership is released.
+Worker stop boundaries and the signal thread consume pending signals with bounded
+zero-time waits under the same mutex that publishes stop. Thus a pending signal
+does not depend on the signal thread being scheduled, and a consumed signal
+cannot escape a boundary before stop is published. The signal thread sleeps
+outside that mutex. Final coordinator draining also retains thread-directed
+SIGPIPE handling before the original mask is restored. Link-only schedule tests
+hold both observation gaps with real signals and exact source/destination body
+inventories; production helpers do not link their wrappers.

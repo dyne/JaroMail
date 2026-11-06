@@ -1,7 +1,7 @@
 # Native filter interface contract v1
 
-The compiler, batch helper and explicit CLI engine dispatch implement the
-contracts below; changing the default remains a later milestone. Policy
+The compiler, batch helper and native-default CLI dispatch implement the
+contracts below. Explicit legacy selection remains available for rollback. Policy
 order and independent target decisions are in [filter-policy.md](filter-policy.md).
 The first implementation remains two executables sharing `src/filter/` modules,
 with Zsh retaining command routing, account setup, transports and indexing.
@@ -346,8 +346,7 @@ also serialize with that lock and never overwrite native policy.bin/selector.
 ## Rollout and bounded import
 
 `JARO_FILTER_ENGINE=legacy|native` selects both compilation and batch dispatch.
-Unset means legacy until the final release milestone explicitly changes it to
-native; an empty/unknown value is an error. Missing native helpers, bad caches,
+Unset means native; an empty/unknown value is an error. Missing native helpers, bad caches,
 unqualified regex export and partial batch failures remain nonzero. No implicit
 fallback follows an export failure. Explicit legacy uses fresh legacy cache
 only; typed/domain records must fail with migration diagnostics before calling
@@ -365,7 +364,7 @@ Direct jaro-filter uses the selected immutable snapshot without compiling;
 `--generation ID` deliberately pins a prior compatible snapshot for reproduction.
 
 The existing `jaro filter [MAILDIR]` and `jaro fetch` dispatch native batches
-only with explicit `JARO_FILTER_ENGINE=native`. Filter defaults to
+when unset or with explicit `JARO_FILTER_ENGINE=native`. Filter defaults to
 `$JAROMAILDIR/incoming`; fetch uses that absolute path regardless of cwd.
 Each native apply workflow invokes the compiler once, then passes its generation
 ID to one batch invocation. Filter does not index. Fetch indexes once after a
@@ -375,7 +374,9 @@ transport failure and compilation failure stop before a batch/index attempt.
 Notmuch setup can write its configuration without refreshing the index first.
 `jaro -n fetch` explains the local incoming batch without transport, keyring,
 publication or indexing. These native filtering commands require an existing
-policy/root; bootstrap never creates default inputs for them.
+policy/root; bootstrap never creates default inputs for them, `sieve`, `update`
+or `sieve-import`. Native `-n sieve` and `-n update` validate without publishing
+or writing mblaze setup. Normal explicit `init` remains the initialization path.
 
 `jaro filter --explain [MAILDIR]` and `jaro -n filter [MAILDIR]` render the same
 native classification records. All selected bytes and the complete helper exit

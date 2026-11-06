@@ -22,5 +22,8 @@ void jf_compile_result_free(struct jf_compile_result *);
 int jf_generation_legacy_run(const char *, char *const []);
 #ifdef JF_TESTING
 int jf_generation_test_hook(const char *);
+void jf_generation_test_parallel(int);
+void jf_generation_test_job(size_t);
+void jf_generation_test_done(size_t);
 #endif
 #endif

@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
 cmd_init() {
-    init_inbox
+    init_inbox || return $?
     nm_setup
     read_account
     mblaze_setup
@@ -32,7 +32,8 @@ cmd_update() {
     }
     ACCOUNTS=${JAROACCOUNT:-"$MAILDIRS/Accounts"}
     read_account || return $?
-    mblaze_setup || return $?
+    filter_engine || return $?
+    [[ $DRYRUN == 1 && $REPLY == native ]] || mblaze_setup || return $?
     update_filters || return $?
     update_sieve || return $?
     [[ $DRYRUN == 1 ]] || update_notmuch || return $?
@@ -41,7 +42,8 @@ cmd_update() {
 
 cmd_sieve() {
     read_account || return $?
-    mblaze_setup || return $?
+    filter_engine || return $?
+    [[ $DRYRUN == 1 && $REPLY == native ]] || mblaze_setup || return $?
     update_filters || return $?
     update_sieve || return $?
     notice "Sieve filters updated in $MAILDIRS"
