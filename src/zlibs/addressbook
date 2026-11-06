@@ -85,21 +85,12 @@ create_addressbook() {
 }
 
 insert_address() {
-    _email="${1}"; _name="${2}";
+    local _email="${1}" _name="${2}"
+    local -a contact_args
     func "insert address: $_name <$_email>"
-
-    lookup_email "$_email"
-
-    [[ $? = 0 ]] && {
-        func "address already present in $list"
-        return 1
-    }
-
-    print "From: $_name <$_email>" | \
-        abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" \
-        --add-email-quiet > /dev/null
-
-    return 0
+    contact_args=(--add-contact "${MAILDIRS}/${ADDRESSBOOK}" "$_email" "$_name")
+    [[ $DRYRUN == 1 ]] && contact_args+=(--check)
+    "${WORKDIR}/bin/jaro-filter-compile" "${contact_args[@]}"
 }
 
 search_addressbook() {
@@ -217,68 +208,26 @@ sender_isknown() {
 learn() {
 	fn learn $*
     [[ $DRYRUN == 1 ]] && func "running in dryrun mode, no entries added to addressbook"
-
-    what=${1:-sender}
-    func "learning from $what"
-
-    # zero e_addr map before using e_parse
+    local what=${1:-sender} fields _e _n result=0 rc
     e_addr=()
-
     case ${what} in
-        
-        sender|from) # simple: one address only on From:
-            
-            # now e_name e_mail and e_parsed are filled in
-            
-            awk '{ print $0 } /^$/ { exit }' | e_parse From
-            
-            # no need to cycle, From is always only one field
-            [[ $DRYRUN == 0 ]] && {
-                _e="${(k)e_addr}"
-                _n="${(v)e_addr}"
-                insert_address "$_e" "$_n"
-                [[ $? = 0 ]] && { act "$list <- $_n <$_e>" }
-            }
-            return 0
-            ;;
-
-        all)
-
-            awk '{ print $0 } /^$/ { exit }' | e_parse
-
-            [[ $DRYRUN == 0 ]] && {
-                # complex: more addresses in To: and Cc:
-                for _e in ${(k)e_addr}; do
-                    _n="${e_addr[$_e]}"
-                    insert_address "$_e" "$_n"
-                    [[ $? = 0 ]] && { act "$list <- $_n <${_e}>" }
-                done
-            }
-            return 0
-            ;;
-        
-        recipient|to)
-
-            awk '{ print $0 } /^$/ { exit }' | e_parse To
-
-            awk '{ print $0 } /^$/ { exit }' | e_parse Cc
-
-            [[ $DRYRUN == 0 ]] && {
-                # complex: more addresses in To: and Cc:
-                for _e in ${(k)e_addr}; do
-                    _n="${e_addr[$_e]}"
-                    insert_address "$_e" "$_n"
-                    [[ $? = 0 ]] && { act "$list <- $_n <${_e}>" }
-                done
-            }
-
-            return 0
-            ;;
-        
-        *)
-            error "Unknown learning function: $what" ;;
+        sender|from) fields=From ;;
+        all) fields=all ;;
+        recipient|to) fields=To:Cc ;;
+        *) error "Unknown learning function: $what"; return 2 ;;
     esac
-    return 1
+    # Read the header once, including both To and Cc for recipient learning.
+    awk '{ print $0 } /^$/ { exit }' | e_parse "$fields" || return $?
+    for _e in "${(@k)e_addr}"; do
+        _n="${e_addr[$_e]}"
+        if insert_address "$_e" "$_n"; then
+            [[ $DRYRUN == 1 ]] || act "$list <- $_n <$_e>"
+        else
+            rc=$?
+            [[ $rc == 1 ]] || result=$rc
+        fi
+    done
+    return $result
 
 }
 
@@ -392,7 +341,7 @@ import() {
 	# assume target is an addressbook
     notice "Import address list from stdin into addressbook $list"
 
-    _new=0
+    local _new=0 result=0 rc _e _n
     act "imported new entries will be printed on stdout"
 
     local parsed=0
@@ -405,28 +354,30 @@ import() {
         [[ "$i[1]" = "#" ]] && continue
 
 		e_addr=()
-        print - "From: $i" | e_parse From
-        [[ $? = 0 ]] || continue
+        if print -r -- "From: $i" | e_parse From; then
+            :
+        else
+            rc=$?
+            [[ $rc == 1 ]] && continue
+            return $rc
+        fi
 
 		parsed=$(( $parsed + 1 ))
 
-        # check if the email is not already known
-        lookup_email "${(k)e_addr}"
-        [[ $? = 0 ]] && {
-            func "email already known: ${(k)e_addr}"
-            continue
-        }
-
-        # _n="${e_parsed[(ws:,:)2]}"
-
-        print - "${e_addr} <${(k)e_addr}>"
-        [[ $DRYRUN = 0 ]] && insert_address "${(k)e_addr}" "$e_addr"
-
-        _new=$(( $_new + 1 ))
+        for _e in "${(@k)e_addr}"; do
+            _n="${e_addr[$_e]}"
+            if insert_address "$_e" "$_n"; then
+                print -r -- "$_n <$_e>"
+                _new=$(( _new + 1 ))
+            else
+                rc=$?
+                [[ $rc == 1 ]] || result=$rc
+            fi
+        done
     done
     notice "Valid unique entries parsed: $parsed"
     act "new addresses found: ${_new}"
-    return 0
+    return $result
 }
 
 

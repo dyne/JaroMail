@@ -40,7 +40,7 @@ void jf_snapshot_free(struct jf_snapshot *s)
 	for (i=0;i<s->dependency_count;i++) {
 		free(s->dependencies[i].role); free(s->dependencies[i].path); jf_bytes_free(&s->dependencies[i].auxiliary);
 	}
-	free(s->sources); free(s->dependencies); free(s->profile_path); free(s->error_path); memset(s,0,sizeof *s);
+	free(s->sources); free(s->dependencies); free(s->profile_path); free(s->error_path); jf_bytes_free(&s->warnings); memset(s,0,sizeof *s);
 }
 
 static int diagnostic(struct jf_snapshot *s, const char *path)
@@ -87,7 +87,7 @@ static int reusable_export(const struct jf_snapshot *now, const struct jf_snapsh
 {
 	static const char *config_roles[]={"config.exporter-flags","config.exporter-locale",
 		"config.compiler-build","config.cache-version","config.policy-version","config.parser",
-		"config.address-case","config.address-normalization","config.locale","config.regex-dialect","config.sieve-comparator"};
+		"config.address-case","config.address-normalization","config.contact-validation","config.locale","config.regex-dialect","config.sieve-comparator"};
 	const struct jf_dependency *book=jf_snapshot_dependency(prior,role,path);
 	const struct jf_dependency *exported=jf_snapshot_dependency(prior,export_role,path);
 	unsigned char digest[32];
@@ -114,6 +114,64 @@ static int source(struct jf_snapshot *s, enum jf_source_kind kind, const char *i
 	p->kind=kind; p->identity=strdup(identity); p->path=strdup(path); p->data=bytes->data; p->size=bytes->size;
 	memset(bytes,0,sizeof *bytes);
 	return !p->identity || !p->path ? 3 : 0;
+}
+
+static int warning_quote(struct jf_bytes *out,const unsigned char *data,size_t n)
+{
+	size_t i; char hex[5];
+	if (jf_bytes_text(out,"\"")) return 3;
+	for (i=0;i<n;i++) {
+		unsigned char c=data[i];
+		if (c<32 || c>=127 || c=='"' || c=='\\') {
+			snprintf(hex,sizeof hex,"\\x%02x",c);
+			if (jf_bytes_text(out,hex)) return 3;
+		} else if (jf_bytes_add(out,&c,1)) return 3;
+	}
+	return jf_bytes_text(out,"\"");
+}
+
+static int contact_source(struct jf_snapshot *s,enum jf_source_kind kind,const char *book,
+	const char *path,struct jf_bytes *exported)
+{
+	struct jf_bytes valid={0}; size_t pos=0,line=0,bad=0; int rc=3;
+	while (pos<exported->size) {
+		size_t start=pos,end,n; char *copy; int acceptable;
+		while (pos<exported->size && exported->data[pos]!='\n') pos++;
+		end=pos; if (pos<exported->size) pos++;
+		line++;
+		while (start<end && (exported->data[start]==' ' || exported->data[start]=='\t')) start++;
+		while (end>start && (exported->data[end-1]==' ' || exported->data[end-1]=='\t' || exported->data[end-1]=='\r')) end--;
+		n=end-start;
+		if (!n) { if (jf_bytes_text(&valid,"\n")) goto done; continue; }
+		copy=malloc(n+1); if (!copy) goto done;
+		memcpy(copy,exported->data+start,n); copy[n]=0;
+		acceptable=n<=JF_LINE_MAX && jf_valid_utf8(exported->data+start,n) && jf_normalize_mailbox(copy);
+		free(copy);
+		if (acceptable) {
+			if (jf_bytes_add(&valid,exported->data+start,n)) goto done;
+		} else {
+			char detail[128]; bad++;
+			if (bad<=8) {
+				if (jf_bytes_text(&s->warnings,"W_ADDRESS ") ||
+					warning_quote(&s->warnings,(const unsigned char *)path,strlen(path))) goto done;
+				snprintf(detail,sizeof detail," exported address row %zu: ignored invalid mailbox ",line);
+				if (jf_bytes_text(&s->warnings,detail) || warning_quote(&s->warnings,exported->data+start,n>96 ? 96 : n) ||
+					jf_bytes_text(&s->warnings,n>96 ? " (first 96 bytes shown)\n" : "\n")) goto done;
+			}
+		}
+		/* Keep exported row numbers stable, even when a bad row is omitted. */
+		if (jf_bytes_text(&valid,"\n")) goto done;
+	}
+	if (bad) {
+		char detail[160];
+		if (jf_bytes_text(&s->warnings,"W_ADDRESS ") || warning_quote(&s->warnings,(const unsigned char *)path,strlen(path))) goto done;
+		snprintf(detail,sizeof detail," ignored %zu invalid contact%s%s; original addressbook unchanged\n",
+			bad,bad==1 ? "" : "s",bad>8 ? " (first 8 listed)" : "");
+		if (jf_bytes_text(&s->warnings,detail)) goto done;
+	}
+	rc=source(s,kind,book,path,&valid);
+done:
+	jf_bytes_free(&valid); return rc;
 }
 
 static int readfd(int fd, struct jf_bytes *b)
@@ -355,6 +413,7 @@ static int collect(const char *root, const char *accounts_arg, const char *profi
 		config(&s,"config.policy-version","1") || config(&s,"config.regex-dialect","posix-ere-c-icase-v1") ||
 		config(&s,"config.locale","C") || config(&s,"config.parser","bounded-rfc822-v2") ||
 		config(&s,"config.address-normalization",JF_ADDRESS_NORMALIZATION) ||
+		config(&s,"config.contact-validation","warn-skip-invalid-export-v1") ||
 		config(&s,"config.address-case","ascii-mailbox-casemap-v1") || config(&s,"config.sieve-comparator","i;ascii-casemap") ||
 		config(&s,"config.exporter-locale","C") || config(&s,"config.regex-catalogue",jf_regex_catalogue()) ||
 		config(&s,"config.regex-qualification",jf_regex_qualification())) goto memory;
@@ -428,9 +487,10 @@ static int collect(const char *root, const char *accounts_arg, const char *profi
 			if (rc) { jf_bytes_free(&exported_bytes); goto io; }
 		}
 		if (dep(&s,erole,path,current->present,exported_bytes.data,exported_bytes.size,exported_bytes.data,exported_bytes.size) ||
-			source(&s,i ? JF_BLACKLIST : JF_KNOWN,book,path,&exported_bytes)) {
+			contact_source(&s,i ? JF_BLACKLIST : JF_KNOWN,book,path,&exported_bytes)) {
 			jf_bytes_free(&exported_bytes); goto memory;
 		}
+		jf_bytes_free(&exported_bytes);
 		jf_bytes_free(&bytes); free(path); path=NULL;
 	}
 	rc=0;

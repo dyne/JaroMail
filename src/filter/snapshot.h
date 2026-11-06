@@ -10,6 +10,7 @@ struct jf_snapshot {
 	size_t dependency_count;
 	struct jf_profile profile;
 	struct jf_policy *policy;
+	struct jf_bytes warnings;
 	/* Owned exact input paths for byte-preserving diagnostics. */
 	char *profile_path;
 	char *error_path;

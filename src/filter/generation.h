@@ -6,7 +6,7 @@ struct jf_generation {
 	char id[65];
 	struct jf_bytes cache,zsh,sieve;
 };
-struct jf_compile_result { char id[65]; char *directory; int changed; };
+struct jf_compile_result { char id[65]; char *directory; int changed; struct jf_bytes warnings; };
 /* Read-only; takes shared lock, rejects unfinished journals and pins a verified
  * immutable directory. Every subsequent open is relative to directory. */
 int jf_generation_pin(const char *, const char *, struct jf_generation *, struct jf_error *);

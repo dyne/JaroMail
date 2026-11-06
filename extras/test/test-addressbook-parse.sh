@@ -67,6 +67,38 @@ assert_contains "$(jaro_source addr 2>/dev/null)" "${import_line}" "import into 
 print -- "Blocked Person <blocked@example.org>" | jaro_source -l blacklist import >/dev/null
 assert_contains "$(jaro_source -l blacklist addr 2>/dev/null)" "Blocked Person <blocked@example.org>" "import into blacklist"
 
+# Mutt's A binding invokes this exact learning path. An email-shaped display
+# name must never replace the full mailbox with a shortened display string.
+long_email='contact.person@department.example.org'
+longer_email="$(printf 'a%.0s' {1..50})@$(printf 'b%.0s' {1..50}).example.org"
+cat <<EOF | jaro_source -l whitelist -q learn all
+From: "$long_email" <$long_email>
+To: "Previous Owner <old@example.org>" <new.owner@example.org>
+Cc: "Doe, Alex" <comma.name@example.org>, Long Contact <$longer_email>
+Subject: Lossless learning
+
+Learning must use complete header addresses.
+EOF
+learned="$(jaro_source addr 2>/dev/null)"
+assert_contains "$learned" "$long_email" "learn preserves email-shaped long display name mailbox"
+assert_contains "$learned" "$longer_email" "learn preserves mailbox beyond abook header import limit"
+assert_contains "$learned" 'new.owner@example.org' "learn uses actual mailbox rather than email in display name"
+assert_contains "$learned" 'Doe, Alex' "learn preserves comma in display name"
+if grep -q '^email=.*\.\.\.$' "$mail_root/whitelist.abook"; then
+  print -u2 -- 'ASSERT FAIL: learning stored an abbreviated email address'
+  exit 1
+fi
+
+before_learn="$(sha256sum "$mail_root/whitelist.abook")"
+print -r -- $'From: Dry Run <dry.run@example.org>\n\nBody' | jaro_source -n -q learn all
+assert_equal "$(sha256sum "$mail_root/whitelist.abook")" "$before_learn" "dry-run learning preserves addressbook"
+if print -r -- $'From: Broken <broken@example...>\n\nBody' | jaro_source -q learn all 2> "$tmp_root/invalid-learn.log"; then
+  print -u2 -- 'ASSERT FAIL: invalid-only learning succeeded'
+  exit 1
+fi
+assert_contains "$(cat "$tmp_root/invalid-learn.log")" 'W_ADDRESS' "invalid learning warns even in quiet mode"
+assert_equal "$(sha256sum "$mail_root/whitelist.abook")" "$before_learn" "invalid learning preserves addressbook"
+
 maddr_shim="${test_bin}/maddr"
 cat > "${maddr_shim}" <<'EOF'
 #!/usr/bin/env sh

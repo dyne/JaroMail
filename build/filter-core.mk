@@ -7,7 +7,7 @@ FILTER_SOURCES := policy sha256 classify headers
 FILTER_OBJECTS := $(addprefix $(FILTER_BUILD_DIR)/,$(addsuffix .o,$(FILTER_SOURCES)))
 FILTER_OBJECTS += $(FILTER_BUILD_DIR)/rfc822.o $(FILTER_BUILD_DIR)/helpers.o
 FILTER_DRIVER := $(FILTER_BUILD_DIR)/filter-policy-driver
-FILTER_PRODUCT_OBJECTS := $(addprefix $(FILTER_BUILD_DIR)/,$(addsuffix .o,product_util profile regex_subset emit cache snapshot import))
+FILTER_PRODUCT_OBJECTS := $(addprefix $(FILTER_BUILD_DIR)/,$(addsuffix .o,product_util profile regex_subset emit cache snapshot import contact))
 FILTER_COMPILER_DRIVER := $(FILTER_BUILD_DIR)/filter-compiler-driver
 
 

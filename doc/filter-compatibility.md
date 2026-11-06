@@ -105,6 +105,45 @@ Tests use only disposable directories and synthetic messages; no services,
 provider credentials, live mail or keyrings are needed.
 
 
+## Recovering abbreviated addressbook contacts
+
+Older `fetchaddr` versions shortened display names longer than 30 bytes to
+27 bytes plus `...`. Learning via Mutt's `A` binding then passed the name and
+mailbox through abook's header importer. With an email-shaped display name,
+that importer can select the display name instead of the actual mailbox and
+store the abbreviated address. The importer also has fixed field-length limits.
+The corrected learning path preserves full mailbox/name pairs and appends
+native records without this importer; abook does not need to be vendored.
+
+Back up the books before attempting recovery. For example:
+
+```sh
+root=/home/jrml/Mail/jaromil
+backup=$(mktemp -d "$root/addressbook-recovery.XXXXXXXX")
+cp -p -- "$root/"*.abook "$backup/"
+grep -n '^email=.*\.\.\.$' "$root/whitelist.abook"
+```
+
+The grep finds a common damage signature, not every possible invalid address.
+After installing the corrected build, reselect original messages in Mutt and
+press `A`, or learn from a saved original message:
+
+```sh
+JAROMAILDIR="$root" jaro -l whitelist learn all < /path/to/original.eml
+```
+
+Original message headers may still contain the complete addresses. Relearning
+adds complete contacts while preserving old records. Check the recovered
+addresses against those headers before removing damaged entries through abook.
+Finish interactive abook edits before learning/importing. Do not guess a suffix
+from `...`: the missing bytes cannot be recovered from the damaged entry alone.
+If no original message or older backup remains, recovery may be impossible.
+
+Filter compilation warns and omits invalid exported contacts while keeping all
+valid contacts and the original books. Warnings report exported address rows,
+not native file line numbers. A failing exporter or malformed book structure
+still stops compilation; it is not silently treated as an empty addressbook.
+
 ## Migration and installed-workflow qualification
 
 The application default is **native**. Explicit `JARO_FILTER_ENGINE=native`

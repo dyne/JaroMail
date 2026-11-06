@@ -1,6 +1,7 @@
 """Real compiler transactions, with pipe-held preconditions and settled children."""
 from datetime import datetime, timezone
 import hashlib
+import fcntl
 import json
 import os
 import re
@@ -693,6 +694,123 @@ class GenerationTests(unittest.TestCase):
         updated = self.run_compile()
         self.assertEqual(updated[1], 1)
         self.assertEqual(len(list((self.engine / 'generations').iterdir())), 2)
+
+    def contact(self, book, email, name, expected=0, check=False):
+        command = [str(self.native), '--add-contact', str(book), email, name]
+        if check:
+            command.append('--check')
+        result = subprocess.run(command, env=self.env, capture_output=True, timeout=10)
+        self.event(command, result.returncode, result.stdout, result.stderr)
+        self.assertEqual(result.returncode, expected, result.stderr)
+        self.assertEqual(result.stdout, b'')
+        if expected in (0, 1):
+            self.assertEqual(result.stderr, b'')
+        return result
+
+    def test_contact_append_preserves_full_fields_existing_bytes_and_modes(self):
+        book = self.root / 'whitelist.abook'
+        original = b'# preserve comment\n[format]\nprogram=abook\nversion=0.6.1\n[7]\nname=Existing\nemail=existing@example.org\ncustom=preserve me\n'
+        book.write_bytes(original)
+        book.chmod(0o640)
+        inode = book.stat().st_ino
+        email = 'a'*50 + '@' + 'b'*50 + '.example.org'
+        name = 'Last, "First" (Team) \\ Full unabridged display name'
+        self.contact(book, email, name)
+        self.assertTrue(book.read_bytes().startswith(original))
+        self.assertIn(('\n[8]\nname=' + name + '\nemail=' + email + '\n').encode(), book.read_bytes())
+        self.assertEqual(book.stat().st_ino, inode)
+        self.assertEqual(stat.S_IMODE(book.stat().st_mode), 0o640)
+        query = subprocess.run(['abook', '--config', '/dev/null', '--datafile', str(book), '--mutt-query', ''],
+                               env=self.env, capture_output=True, check=True)
+        columns = [row.split(b'\t') for row in query.stdout.splitlines() if b'\t' in row]
+        self.assertIn([email.encode(), name.encode(), b' '], columns)
+        self.assertIn([b'existing@example.org', b'Existing', b' '], columns)
+        fresh = self.root / 'blacklist.abook'
+        self.contact(fresh, 'new@example.org', 'Fresh contact')
+        self.assertEqual(stat.S_IMODE(fresh.stat().st_mode), 0o600)
+
+    def test_contact_duplicate_dryrun_and_invalid_fields_never_rewrite_book(self):
+        book = self.root / 'whitelist.abook'
+        self.contact(book, 'Name@Example.Org', 'Original name')
+        before = book.read_bytes()
+        for email in ['name@example.org', '"name"@EXAMPLE.ORG']:
+            self.contact(book, email, 'Do not replace', expected=1)
+            self.assertEqual(book.read_bytes(), before)
+        self.contact(book, 'other@example.org', 'Check only', check=True)
+        self.assertEqual(book.read_bytes(), before)
+        absent = self.root / 'absent.abook'
+        self.contact(absent, 'other@example.org', 'Check only', check=True)
+        self.assertFalse(absent.exists())
+        for email, name in [('person@invalid.example...', 'Invalid'), ('valid@example.org', 'Injected\nemail=other@example.org'),
+                            ('"a,b"@example.org', 'Unsupported native abook delimiter')]:
+            self.contact(book, email, name, expected=4)
+            self.assertEqual(book.read_bytes(), before)
+        for email in ['bad@host...', '""@example.org']:
+            result = subprocess.run([str(self.native), '--check-address', email], capture_output=True)
+            self.assertEqual(result.returncode, 4)
+
+    def test_contact_lock_conflict_and_nonregular_target_are_safe(self):
+        book = self.root / 'whitelist.abook'
+        self.contact(book, 'existing@example.org', 'Existing')
+        before = book.read_bytes()
+        with book.open('r+b') as held:
+            fcntl.lockf(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            blocked = self.contact(book, 'new@example.org', 'New', expected=6)
+            self.assertIn(b'E_BOOK_BUSY', blocked.stderr)
+            self.assertEqual(book.read_bytes(), before)
+        self.contact(book, 'new@example.org', 'New')
+        self.assertTrue(book.read_bytes().startswith(before))
+        directory = self.root / 'directory.abook'
+        directory.mkdir()
+        self.contact(directory, 'new@example.org', 'New', expected=3)
+        fifo = self.root / 'fifo.abook'
+        os.mkfifo(fifo)
+        self.contact(fifo, 'new@example.org', 'New', expected=3)
+
+    def test_invalid_abook_contacts_warn_preserve_bytes_and_keep_valid_rules(self):
+        from filter_compiler_test import records
+        original = {}
+        for book, good in [('whitelist.abook', 'known@example.org'), ('blacklist.abook', 'blocked@example.org')]:
+            data = ('[format]\nprogram=abook\nversion=0.6.1\n[0]\nname=Valid\nemail=' + good +
+                    '\n[1]\nname=Damaged\nemail=person@invalid.example...\n[2]\nname=Also valid\nemail=last@valid.example\n').encode()
+            (self.root / book).write_bytes(data)
+            original[book] = data
+        checked = self.run_compile('--check')
+        self.assertFalse((self.root / 'cache').exists())
+        self.assertIn('exported address row 2', self.events[-1]['stderr'])
+        first = self.run_compile()
+        self.assertEqual(first[0], checked[0])
+        warm = self.run_compile(extra={'JF_TEST_FAIL': 'parse'})
+        self.assertEqual(warm, (first[0], 0, first[2]))
+        self.assertIn('W_ADDRESS', self.events[-1]['stderr'])
+        self.assertIn('original addressbook unchanged', self.events[-1]['stderr'])
+        decoded = records((first[2] / 'policy.bin').read_bytes())
+        predicates = [row[5] for tag, row in decoded if tag == b'R']
+        self.assertIn(b'known@example.org', predicates)
+        self.assertIn(b'blocked@example.org', predicates)
+        self.assertNotIn(b'person@invalid.example...', predicates)
+        self.assertIn(b'person@invalid.example...', next(row[4] for tag, row in decoded
+                      if tag == b'D' and row[0] == b'export.whitelist'))
+        for book, data in original.items():
+            self.assertEqual((self.root / book).read_bytes(), data)
+        for sender, mailbox in [('known@example.org', 'INBOX'), ('blocked@example.org', 'zz.blacklist')]:
+            message = self.case / (sender + '.eml')
+            message.write_text('From: ' + sender + '\n\nOriginal body.\n')
+            self.oracle.expect(first[2] / 'Filters.sieve', message, mailbox, True)
+
+    def test_invalid_contact_warning_inventory_is_bounded_and_alias_errors_stay_fatal(self):
+        book = self.root / 'whitelist.abook'
+        data = '[format]\nprogram=abook\nversion=0.6.1\n' + ''.join(
+            '[%d]\nname=Invalid\nemail=user%d@invalid.example...\n' % (i, i) for i in range(20))
+        book.write_text(data)
+        self.run_compile()
+        warning = self.events[-1]['stderr']
+        self.assertEqual(warning.count('exported address row'), 8)
+        self.assertIn('ignored 20 invalid contacts (first 8 listed)', warning)
+        self.assertEqual(book.read_text(), data)
+        (self.root / 'Aliases.txt').write_text('not-a-mailbox\n')
+        failed = self.run_compile(expected=4)
+        self.assertIn(b'E_ADDRESS', failed.stderr)
 
 
 if __name__ == '__main__':
