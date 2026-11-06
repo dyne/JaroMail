@@ -141,7 +141,7 @@ int jf_policy_classify(const struct jf_policy *p, const struct jf_message *messa
 			return error(e,"E_MESSAGE_ADDRESS","invalid UTF8 mailbox",7);
 		if (address.value.size) memcpy(mailbox,address.value.data,address.value.size);
 		mailbox[address.value.size]=0;
-		if (!jf_valid_mailbox(mailbox)) return error(e,"E_MESSAGE_ADDRESS","invalid parsed mailbox/domain",7);
+		if (!jf_normalize_mailbox(mailbox)) return error(e,"E_MESSAGE_ADDRESS","invalid parsed mailbox/domain",7);
 	}
 	for (i=0;i<message->sender_count;i++)
 		if ((rc=validate_text(message->senders[i],&sender_values,e))) return rc;
@@ -163,8 +163,10 @@ int jf_policy_classify(const struct jf_policy *p, const struct jf_message *messa
 	for (i=0;i<message->address_count;i++) {
 		struct jf_mailbox address=message->addresses[i];
 		char *domain, *suffix;
-		for (j=0;j<address.value.size;j++) mailbox[j]=(char)fold(address.value.data[j]);
+		memcpy(mailbox,address.value.data,address.value.size);
 		mailbox[address.value.size]=0;
+		(void)jf_normalize_mailbox(mailbox); /* Complete input validated above. */
+		for (j=0;mailbox[j];j++) mailbox[j]=(char)fold((unsigned char)mailbox[j]);
 		best=lookup(p,JF_ADDRESS,mailbox,address.field,best,stats);
 		domain=strrchr(mailbox,'@')+1; /* Complete mailbox was validated above. */
 		best=lookup(p,JF_DOMAIN_APEX,domain,address.field,best,stats);
@@ -176,6 +178,7 @@ int jf_policy_classify(const struct jf_policy *p, const struct jf_message *messa
 			locale_t old=uselocale(p->locale);
 			if (!old) return error(e,"E_REGEX_EXEC","cannot select C regex locale",3);
 			memcpy(mailbox,address.value.data,address.value.size); mailbox[address.value.size]=0;
+			(void)jf_normalize_mailbox(mailbox);
 			for (j=0;j<p->legacy_count && p->legacy[j]<best;j++) {
 				const struct jf_entry *entry=p->legacy[j];
 				if (!(entry->rule.fields&address.field)) continue;

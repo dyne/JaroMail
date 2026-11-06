@@ -198,6 +198,16 @@ static int lex(struct parser *p, const unsigned char *s, size_t n, char *b,
 	return 0;
 }
 
+int jf_policy_tokens(const unsigned char *s, size_t n, char *buffer,
+	char *tokens[5], size_t *count, struct jf_error *error, size_t line)
+{
+	struct parser p={NULL,error,0,line};
+	if (error) memset(error,0,sizeof *error);
+	if (n>JF_LINE_MAX) return fail(&p,"E_LINE_LIMIT","profile line exceeds limit");
+	if (!jf_valid_utf8(s,n)) return fail(&p,"E_UTF8","invalid profile UTF8");
+	return lex(&p,s,n,buffer,tokens,count);
+}
+
 static int alnum_ascii(unsigned c)
 {
 	return (c>='a'&&c<='z') || (c>='A'&&c<='Z') || (c>='0'&&c<='9');
@@ -224,8 +234,8 @@ static int domain(const char *s)
 	return label && s[n-1]!='-';
 }
 
-/* Policy inputs are single mailboxes, not display names/address lists. Quoted
- * local parts and SMTPUTF8 local bytes are preserved; domains are ASCII/A-label.
+/* Policy inputs are single mailboxes, not display names/address lists.
+ * Domains are ASCII/A-label. Normalization below minimizes local quoting.
  */
 int jf_valid_mailbox(const char *s)
 {
@@ -251,6 +261,46 @@ int jf_valid_mailbox(const char *s)
 		if (!component || *p++!='@') return 0;
 	}
 	return domain((const char *)p);
+}
+
+int jf_normalize_mailbox(char *s)
+{
+	size_t original=strlen(s),read=1,n=0,i,out,escapes=0,tail;
+	int quoted=0,component=0;
+	if (original>JF_LINE_MAX || !jf_valid_mailbox(s)) return 0;
+	if (*s!='"') return 1;
+	/* Decode a quoted local part, retaining every decoded byte and its case. */
+	while (s[read]!='"') {
+		if (s[read]=='\\') read++;
+		s[n++]=s[read++];
+	}
+	if (!n) return 0;
+	tail=original-read; /* @domain plus terminating NUL */
+	memmove(s+n,s+read+1,tail);
+	for (i=0;i<n;i++) {
+		unsigned char c=(unsigned char)s[i];
+		if (c=='.') { if (!component) quoted=1; component=0; }
+		else {
+			if (c<128 && !alnum_ascii(c) && !strchr("!#$%&'*+-/=?^_`{|}~",c)) quoted=1;
+			component=1;
+		}
+		if (c=='"' || c=='\\') escapes++;
+	}
+	if (!component) quoted=1;
+	if (!quoted) return 1;
+	/* The original quoted representation already had all necessary escapes,
+ * so this cannot exceed its capacity. Serialize backwards to avoid overlap. */
+	out=n+escapes+2;
+	if (out+tail>original+1) return 0;
+	memmove(s+out,s+n,tail);
+	s[--out]='"';
+	for (i=n;i;) {
+		unsigned char c=(unsigned char)s[--i];
+		s[--out]=(char)c;
+		if (c=='"' || c=='\\') s[--out]='\\';
+	}
+	s[0]='"';
+	return 1;
 }
 
 static int destination(const char *s)
@@ -312,7 +362,7 @@ static int parse_line(struct parser *p, const struct jf_source *s,
 		while (n>start && (line[n-1]==' ' || line[n-1]=='\t')) n--;
 		if (start==n) return 0;
 		memcpy(buffer,line+start,n-start); buffer[n-start]=0;
-		if (!jf_valid_mailbox(buffer)) return fail(p,"E_ADDRESS","invalid exported mailbox");
+		if (!jf_normalize_mailbox(buffer)) return fail(p,"E_ADDRESS","invalid exported mailbox");
 		fold(buffer);
 		return append(p,s,s->kind==JF_KNOWN ? "known" : "blacklist",buffer,
 			s->kind==JF_KNOWN ? "known" : "zz.blacklist",JF_ADDRESS,
@@ -330,7 +380,7 @@ static int parse_line(struct parser *p, const struct jf_source *s,
 		char *address;
 		if (count!=(s->kind==JF_ACCOUNT ? 2u : 1u)) return fail(p,"E_FIELDS","expected one mailbox");
 		address=t[s->kind==JF_ACCOUNT ? 1 : 0];
-		if (!jf_valid_mailbox(address)) return fail(p,"E_ADDRESS","invalid mailbox");
+		if (!jf_normalize_mailbox(address)) return fail(p,"E_ADDRESS","invalid mailbox");
 		fold(address);
 		return append(p,s,"own",address,"priv",JF_ADDRESS,7,JF_TO|JF_CC);
 	} else {
@@ -352,7 +402,7 @@ static int parse_line(struct parser *p, const struct jf_source *s,
 			if (!domain(d)) return fail(p,"E_DOMAIN","invalid ASCII domain");
 			fold(t[1]);
 		} else if (kind==JF_ADDRESS) {
-			if (!jf_valid_mailbox(t[1])) return fail(p,"E_ADDRESS","invalid exact mailbox");
+			if (!jf_normalize_mailbox(t[1])) return fail(p,"E_ADDRESS","invalid exact mailbox");
 			fold(t[1]);
 		}
 		stage=known ? 5 : is_from ? 3 : 4;
@@ -462,7 +512,7 @@ static int resolve(struct parser *p)
 		}
 	}
 	pol->count=kept;
-	if (kept-3>JF_RULE_MAX) {
+	if (kept-JF_BUILTIN_RULES>JF_RULE_MAX) {
 		p->source=pol->entries[JF_RULE_MAX].input_index;
 		p->line=pol->entries[JF_RULE_MAX].rule.line;
 		return fail(p,"E_RULE_LIMIT","too many effective rules/contact predicates");

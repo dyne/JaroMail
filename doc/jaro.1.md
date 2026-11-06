@@ -33,6 +33,18 @@ indexing and SMTP/IMAP actions.
 
 `-f` force mode for selected operations.
 
+## Filter engine selection
+
+`JARO_FILTER_ENGINE=legacy|native` selects the compiler; unset retains legacy.
+Empty/unknown values fail. Native `update`/`sieve` invoke the installed compiler
+with explicit mail/account roots and return its failures without fallback.
+An absent profile selects `core-v1`; unsupported ERE exports fail with a
+migration diagnostic. Explicit legacy rejects typed/domain records. Sieve
+generation writes the local export only, without remote deployment.
+
+At the compiler milestone native batch filtering is unavailable (127) and
+native Sieve import is unsupported (4); incoming messages are retained.
+
 ## Commands
 
 ### Core mail flow

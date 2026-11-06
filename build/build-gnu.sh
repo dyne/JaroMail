@@ -4,7 +4,7 @@ set -eu
 cd "${0:A:h:h}"
 target="${1:-all}"
 case "$target" in
-    all|fetchaddr|parsedate|dotlock|gpgewrap|mutt-kz|mixmaster) ;;
+    all|fetchaddr|parsedate|dotlock|gpgewrap|jaro-filter-compile|mutt-kz|mixmaster) ;;
     *) print -u2 -- "Unknown build target: $target"; exit 2 ;;
 esac
 
@@ -63,6 +63,12 @@ build_gpgewrap() {
         cp src/gpgewrap build/gnu/
 }
 
+build_jaro-filter-compile() {
+    make -f build/filter-core.mk filter-compile "CC=${CC:-gcc}" "CCACHE=${CCACHE-${cache[*]}}" \
+        "CPPFLAGS=${CPPFLAGS-}" "CFLAGS=${cflags[*]}" "LDFLAGS=${ldflags[*]}" "LDLIBS=${LDLIBS-}" &&
+        cp build/gnu/filter/jaro-filter-compile build/gnu/filter/jaro-filter-legacy build/gnu/
+}
+
 build_mutt-kz() {
     (cd src/mutt-kz &&
         ./configure --enable-notmuch --enable-sidebar --enable-hcache --enable-gpgme --enable-imap --enable-pop &&
@@ -85,7 +91,7 @@ build_mixmaster() {
 
 mkdir -p build/gnu || exit $?
 if [[ "$target" == all ]]; then
-    targets=(fetchaddr parsedate dotlock gpgewrap)
+    targets=(fetchaddr parsedate dotlock gpgewrap jaro-filter-compile)
 else
     targets=("$target")
 fi

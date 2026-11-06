@@ -154,6 +154,31 @@ Current policy for this branch:
 - default maintenance and regression checks focus on the core CLI path:
   `init`, `update`, `filter`, `search`, `fetch`, `send`, and addressbook flows.
 
+`JARO_FILTER_ENGINE=legacy|native` selects filter compilation. Unset retains
+legacy; an empty or unknown value fails. `jaro update` and `jaro sieve` use the
+native compiler only when explicitly selected and propagate its errors without
+fallback. The normal build/install includes the compiler and legacy export
+lock bridge; neither needs Dovecot. Custom `JAROMAILDIR`, `JAROWORKDIR` and
+`JAROACCOUNT` paths are passed explicitly. Sieve generation never deploys rules
+to a server. Indexing remains in the existing update/fetch workflows.
+
+Native compilation defaults to `core-v1`, supporting typed address/domain
+rules. Legacy `from`/`to` ERE exports require an independently qualified optional
+profile; unqualified exports fail with migration diagnostics. Explicit legacy
+also rejects typed/domain records rather than discarding them. At this compiler
+milestone native batch filtering reports unavailable (127), retaining incoming
+mail; its integration follows separately. Native Sieve import remains unsupported
+(4). See [the interface contract](doc/filter-interfaces.md).
+
+The optional `pigeonhole-2.4.5-posix-ere-v1` profile needs explicit fileinto,
+mailbox/creation configuration, regex capability and a `regex-qualification`
+record containing the SHA256 of installed `filter-regex-qualification.json`.
+The compiler checks its embedded catalogue, so replacing that file or supplying
+a different hash cannot grant support. The qualified subset covers shipped
+defaults and benchmark patterns; unsupported EREs retain the prior generation
+and fail with a source-line diagnostic. Backend requirements and the narrow
+minimal-quoting correction are documented in the interface/policy contracts.
+
 # License
 Jaromail is Copyright (C) 2010-2023 by the Dyne.org foundation
 

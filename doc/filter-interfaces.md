@@ -145,6 +145,15 @@ NUL; occurrence is 1-based ASCII decimal. Contact IDs hash mailbox bytes only.
 Legacy ERE matching uses `REG_EXTENDED|REG_ICASE`, LC_ALL=C, no PCRE, compiled
 once per loaded policy/process. This pins the actual shell's CASE_MATCH-off
 behavior. It does not license translating an ERE into a Sieve substring/glob.
+Native parsed mailboxes first use `mailbox-minimal-quoting-v2`: decode redundant
+local quotes/quoted pairs and re-quote only when dot-atom serialization is
+insufficient, escaping embedded quote/backslash. Necessary spaces and quoting
+survive. Empty locals fail; supported UTF8 locals are not Unicode-folded.
+Typed predicates, contacts/own inputs and both raw/direct message APIs share
+this normalization. Patterns retain their original regex meaning over these
+canonical strings. This is a narrow representation correction relative to the
+earlier native assumption and legacy shell spellings, documented in
+[filter-policy.md](filter-policy.md).
 
 The address-case policy is `ascii-mailbox-casemap-v1`: typed exact, known,
 blacklist and own predicates ASCII-fold the entire parsed mailbox. Sieve uses
@@ -195,6 +204,20 @@ Runtime validation is native structural/profile validation. The independently
 pinned sievec/sieve-test tools remain build/test oracles, not application
 dependencies.
 
+The installed [qualification catalogue](filter-regex-qualification.json) binds
+compiler `jaromail-filter-compiler-v2`, normalization v2 and the independent
+corpus to the ASCII concatenation grammar: nonempty printable ASCII literals,
+dot, `[.]`, escaped regex metacharacters, and optional outer `^`/`$` anchors.
+No groups, alternatives, repetitions, classes, backreferences or engine escapes
+are admitted. Patterns are emitted unchanged as `address :all :regex`.
+Qualification uses signed 2.4.5 sources configured with PCRE2-32 and
+`--enable-experimental-mail-utf8`, so supported UTF8 mailbox extraction agrees
+too. A backend without that configuration is outside this profile's assurance.
+The profile must explicitly declare regex capability and the exact installed
+catalogue SHA256; unused regex requires are omitted. Runtime never invokes
+Dovecot tools. Unsupported syntax reports status 4 with the rule's source line,
+preserving the prior generation/export.
+
 ## Cache and publication
 
 The canonical root is ROOT/cache/filter-engine. A generation directory is
@@ -241,6 +264,9 @@ is exactly `posix-ere-c-icase-v1` and its Sieve address comparator is exactly
 `i;ascii-casemap`. Unknown values are incompatible, status 5.
 The payload order is M, D records byte-sorted by (role,path), then R records in
 1-based ordinal order. Duplicate dependency keys or noncanonical order fail.
+Compiler v2 requires `config.address-normalization` with exact value
+`mailbox-minimal-quoting-v2`. Prior compiler/normalization metadata is
+incompatible (5); it cannot masquerade as a generation of the corrected model.
 
 Fingerprint SHA256 covers a versioned, length-framed ordered input inventory:
 raw Filters.txt/aliases bytes and presence, byte-sorted account file paths/content

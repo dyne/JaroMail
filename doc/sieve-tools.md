@@ -122,6 +122,22 @@ private tools. Normal `make` and `make install` remain independent of this targe
 the application build/install regression exercises them without any Sieve prefix
 and with unusable system Sieve tools.
 
+### Optional regex oracle prerequisite
+
+The minimal default dependency recipe disables PCRE2, so its regex extension
+reports missing regular expression support. To investigate and qualify regex
+exports, pass `--regex-prefix /absolute/private/pcre2-prefix` to
+`build/sieve-deps.py`. That prefix must contain `include/pcre2.h` and one
+`libpcre2-32.so` development link under `lib` or an architecture subdirectory,
+resolving inside the same prefix. No system installation is performed.
+
+The option uses the same signed and pinned Dovecot/Pigeonhole archives, enables
+`--with-pcre2`, and records PCRE2 header/library hashes, link flags and runtime
+search path in the build identity. The matched source-built frontends remain
+test oracles. PCRE2 support alone does not qualify POSIX ERE equivalence: an
+explicit supported subset and compiler-bound independent evidence are still
+required before a regex export profile can be admitted.
+
 ### Manual source-build equivalent
 
 Keep source archives, complete dependency trees and their build/install output
@@ -170,5 +186,13 @@ make -C src/plugins/settings install
 
 For these dependency compilations, use `CC='ccache gcc'` if ccache is available
 and supply an owned `CCACHE_DIR`; preserve deliberately selected compiler flags.
+Regex qualification additionally passes `--regex-prefix ABSOLUTE_PCRE2_PREFIX`
+and `--mail-utf8` to `build/sieve-deps.py`. The latter enables upstream's
+`--enable-experimental-mail-utf8`: without it the pinned conversion rejects
+UTF8 locals. Both options and dependency identities enter the signed-build
+receipt/cache fingerprint. CI supplies PCRE2-32 development files from its
+declared package and enables both options. This qualification configuration
+does not install or enable an application mail service.
+
 This installs private dependency files only. It does not register or run a
 Dovecot service. The frontend build subsequently needs no network access.

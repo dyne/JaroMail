@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            zsh make gcc python3 perl pkg-config ccache libssl-dev zlib1g-dev binutils \
+            zsh make gcc python3 perl pkg-config ccache libssl-dev zlib1g-dev libpcre2-dev binutils \
             fetchmail msmtp neomutt notmuch pinentry-curses \
             abook wipe mblaze gnupg pandoc ca-certificates netcat-traditional
 
@@ -34,7 +34,7 @@ jobs:
           import subprocess
           identity = Path('/etc/os-release').read_bytes()
           for command in (['cc', '--version'], ['make', '--version'],
-                          ['pkg-config', '--modversion', 'openssl', 'zlib']):
+                          ['pkg-config', '--modversion', 'openssl', 'zlib', 'libpcre2-32']):
               identity += subprocess.check_output(command)
           print('identity=' + hashlib.sha256(identity).hexdigest())
           PY
@@ -54,7 +54,7 @@ jobs:
         run: |
           sieve_prefix="$(python3 build/sieve-deps.py \
             --source-cache "$RUNNER_TEMP/jaromail-sieve-sources" \
-            --cache-dir "$RUNNER_TEMP/jaromail-sieve-deps" --download)"
+            --cache-dir "$RUNNER_TEMP/jaromail-sieve-deps" --regex-prefix /usr --mail-utf8 --download)"
           printf 'SIEVE_DEPS_PREFIX=%s\n' "$sieve_prefix" >> "$GITHUB_ENV"
 
       - name: Compile extracted Sieve validation frontends

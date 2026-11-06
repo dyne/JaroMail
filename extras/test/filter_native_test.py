@@ -42,7 +42,8 @@ class PolicyTests(unittest.TestCase):
             cls.work = Path(cls.temp.name)
         cls.driver = cls.work / 'objects/filter-policy-driver'
         subprocess.run(['make', '-f', 'build/filter-core.mk', '-j2', 'filter-policy-driver',
-                        'FILTER_BUILD_DIR=' + str(cls.driver.parent)], cwd=REPO, check=True)
+                        'FILTER_BUILD_DIR=' + str(cls.driver.parent), 'CFLAGS=' + os.environ.get(
+                            'JARO_FILTER_COMPILER_CFLAGS', '-O2 -Wall -Wextra -Werror -pedantic')], cwd=REPO, check=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -529,6 +530,34 @@ class PolicyTests(unittest.TestCase):
             self.assertEqual(row['id'], explicit('from-address', mailbox, 'quoted'))
             inspected = self.header([], raw, inspect=True)
             self.assertEqual(inspected[0], (1, mailbox))
+
+    def test_minimal_mailbox_quoting_policy_headers_and_direct_api(self):
+        fixture = json.loads((REPO / 'extras/test/fixtures/filter-contract/mailbox-normalization.json').read_text())
+        for group in fixture['groups']:
+            canonical = ascii_fold(group['canonical'])
+            for spelling in group['forms']:
+                rules = ['from-address %s move normalized' % json.dumps(spelling)]
+                for message in group['forms']:
+                    row = self.classify(rules, [{'From': [message]}])[0]
+                    self.assertEqual(row['id'], explicit('from-address', canonical, 'normalized'))
+                    inspected = self.header([], 'From: '+message+'\n\n', inspect=True)
+                    self.assertEqual(inspected[0], (1, group['canonical']))
+                    self.assertEqual(self.header(rules, 'From: '+message+'\n\n')['id'], row['id'])
+
+    def test_empty_quoted_local_is_explicitly_unsupported(self):
+        self.rules('from-address '+json.dumps('""@example.org')+' move empty', error='E_ADDRESS')
+        self.classify([], [{'From': ['""@example.org']}], error='E_MESSAGE_ADDRESS')
+        self.header([], 'From: ""@example.org\n\n', error='E_MESSAGE_ADDRESS')
+
+    def test_equivalent_spelling_duplicates_keep_last_source_position(self):
+        rules = ['from-address '+json.dumps('"us\\er"@example.org')+' move Old',
+                 'from-address other@example.org move Other',
+                 'from-address user@example.org move Last']
+        rows = [r for r in self.rules('\n'.join(rules)) if r['stage'] == '3']
+        self.assertEqual([r['logical'] for r in rows], ['Other', 'Last'])
+        winner = self.classify(rules, [{'From': ['"user"@example.org']}])[0]
+        self.assertEqual(winner['id'], explicit('from-address', 'user@example.org', 'Last'))
+        self.assertEqual(winner['line'], '3')
 
     def test_repeated_missing_and_empty_group_fields(self):
         raw = ('From: other@elsewhere.org\nFrom: blocked@example.org\n'

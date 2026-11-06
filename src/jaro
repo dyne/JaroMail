@@ -246,7 +246,7 @@ main() {
     { option.is_set -R } && { muttflags+=" -R " }
     { option.is_set -f } && { FORCE=1 }
 
-    check_bin "$subcommand"
+    check_bin "$subcommand" || return $?
 
     # clean up options from param
     # PARAM=(${PARAM// -? /})

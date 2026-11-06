@@ -1,0 +1,97 @@
+{
+  "schema": 2,
+  "authority": "Independently authored RFC5321 minimal-quoting forms; canonical strings justified by pinned smtp_address_write and actual generated Sieve oracle. Case is preserved here; whole-mailbox ASCII case mapping is a separate operation.",
+  "groups": [
+    {
+      "canonical": "user@example.org",
+      "forms": [
+        "user@example.org",
+        "\"user\"@example.org",
+        "\"us\\er\"@example.org"
+      ]
+    },
+    {
+      "canonical": "a?b@example.org",
+      "forms": [
+        "a?b@example.org",
+        "\"a?b\"@example.org",
+        "\"a\\?b\"@example.org"
+      ]
+    },
+    {
+      "canonical": "\"a b\"@example.org",
+      "forms": [
+        "\"a b\"@example.org",
+        "\"a\\ b\"@example.org"
+      ]
+    },
+    {
+      "canonical": "\"a\\\"b\"@example.org",
+      "forms": [
+        "\"a\\\"b\"@example.org",
+        "\"\\a\\\"b\"@example.org"
+      ]
+    },
+    {
+      "canonical": "\"a\\\\b\"@example.org",
+      "forms": [
+        "\"a\\\\b\"@example.org",
+        "\"\\a\\\\b\"@example.org"
+      ]
+    },
+    {
+      "canonical": "\".ab\"@example.org",
+      "forms": [
+        "\".ab\"@example.org",
+        "\"\\.ab\"@example.org"
+      ]
+    },
+    {
+      "canonical": "\"ab.\"@example.org",
+      "forms": [
+        "\"ab.\"@example.org",
+        "\"ab\\.\"@example.org"
+      ]
+    },
+    {
+      "canonical": "\"a..b\"@example.org",
+      "forms": [
+        "\"a..b\"@example.org",
+        "\"a\\..b\"@example.org"
+      ]
+    },
+    {
+      "canonical": "\"a@b\"@example.org",
+      "forms": [
+        "\"a@b\"@example.org",
+        "\"a\\@b\"@example.org"
+      ]
+    },
+    {
+      "canonical": "!#$%&'*+-/=?^_`{|}~@example.org",
+      "forms": [
+        "!#$%&'*+-/=?^_`{|}~@example.org",
+        "\"!#$%&'*+-/=?^_`{|}~\"@example.org"
+      ]
+    },
+    {
+      "canonical": "Üser@example.org",
+      "forms": [
+        "Üser@example.org",
+        "\"Üser\"@example.org"
+      ]
+    },
+    {
+      "canonical": "\"Ü ser\"@example.org",
+      "forms": [
+        "\"Ü ser\"@example.org",
+        "\"Ü\\ ser\"@example.org"
+      ]
+    }
+  ],
+  "unsupported": [
+    "\"\"@example.org",
+    "a..b@example.org",
+    "x@exämple.org"
+  ]
+}
