@@ -254,17 +254,42 @@ static char *executable(const char *name)
 	}
 }
 
+static int empty_book(const struct jf_bytes *raw)
+{
+	/* abook rejects books without records, including its own empty header.
+	 * Recognize only trivia or a complete known header, never contact syntax.
+	 * This inspects the snapshot; dependency digests still cover every byte. */
+	size_t pos=0;
+	unsigned header=0;
+	while (pos<raw->size) {
+		size_t start=pos,end;
+		while (pos<raw->size && raw->data[pos]!='\n') {
+			unsigned char c=raw->data[pos++];
+			if ((c<32 && c!='\t' && c!='\r') || c==127) return 0;
+		}
+		end=pos; if (pos<raw->size) pos++;
+		while (start<end && (raw->data[start]==' ' || raw->data[start]=='\t' || raw->data[start]=='\r')) start++;
+		while (end>start && (raw->data[end-1]==' ' || raw->data[end-1]=='\t' || raw->data[end-1]=='\r')) end--;
+		if (start==end || raw->data[start]=='#') continue;
+		if (header==0 && end-start==8 && !memcmp(raw->data+start,"[format]",8)) header=1;
+		else if (header==1 && end-start==13 && !memcmp(raw->data+start,"program=abook",13)) header=2;
+		else if (header==2 && end-start==13 && (!memcmp(raw->data+start,"version=0.6.0",13) ||
+			!memcmp(raw->data+start,"version=0.6.1",13))) header=3;
+		else return 0;
+	}
+	return header==0 || header==3;
+}
+
 static int export_book(const char *exporter, const struct jf_bytes *raw, struct jf_bytes *out)
 {
-	/* Jaromail initializes books with touch; abook itself rejects a zero-byte
-	 * database. Its unambiguous empty input contains no contact to export. */
-	if (!raw->size) return 0;
 	const char *tmp=getenv("TMPDIR");
-	char *name=join(tmp ? tmp : "/tmp","jaro-filter-book-XXXXXX"), descriptor[64];
+	char *name=NULL, descriptor[64];
 	struct jf_bytes result={0};
 	int fd=-1,pipes[2]={-1,-1},status,rc=3;
 	pid_t pid=-1,waited;
 	size_t pos=0;
+	if (empty_book(raw)) return 0;
+	name=join(tmp ? tmp : "/tmp","jaro-filter-book-XXXXXX");
 	if (!name || (fd=mkstemp(name))<0) goto done;
 	if (unlink(name)) goto done;
 	while (pos<raw->size) {

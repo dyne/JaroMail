@@ -305,6 +305,14 @@ This framing prevents concatenation ambiguities and makes the fingerprint
 independently reproducible without trusting mtimes or native struct layout.
 
 Export each abook at most once when its raw content or exporter identity changes.
+Books containing only blank lines and `#` comment lines have an empty export,
+as do those with only the complete ordered header `[format]`, `program=abook`,
+`version=0.6.0` or `version=0.6.1` (allowing blank/comment lines between them).
+Space, tab and CR padding is ignored for this recognition; NUL and other control
+bytes are excluded. This includes Jaromail's touched books and comment-only
+fixtures, which abook itself rejects for having no records. Other input still
+goes through abook with its normal failure checks. The exporter must remain
+available, and the original book bytes remain unchanged and fully fingerprinted.
 An unchanged verified book can reuse its last generation's stored export bytes;
 include their digest in the new fingerprint. Never trust mtime alone. Snapshot
 all inputs under a shared publication lock, release that lock, build in an owned

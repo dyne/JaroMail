@@ -466,6 +466,129 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual((self.root / 'whitelist.abook').read_bytes(), b'')
         self.assertEqual((self.root / 'blacklist.abook').read_bytes(), b'')
 
+    def test_empty_book_grammar_preserves_bytes_and_generation_identity(self):
+        from filter_compiler_test import records
+        # Exercise the production helper, including the exact accepted L1 input.
+        self.compiler = self.native
+        variants = [b'# empty synthetic blacklist\n', b'', b' \t\r\n\n',
+                    b'  # comment\r\n\t# another comment',
+                    b'# abook addressbook file\n\n[format]\nprogram=abook\nversion=0.6.1\n',
+                    b' [format] \r\n# header comment\n program=abook\t\nversion=0.6.0']
+        self.assertEqual(hashlib.sha256(variants[0]).hexdigest(),
+                         '7c69d957d8589345ae5afbb6740d42e0f88c9686ed5c71881de101c3c8df0ddf')
+        identities = []
+        for index, data in enumerate(variants):
+            for name in ('whitelist.abook', 'blacklist.abook'):
+                (self.root / name).write_bytes(b'' if index == 0 and name == 'whitelist.abook' else data)
+            before = {p: p.read_bytes() for p in self.root.glob('*.abook')}
+            check = self.run_compile('--check')
+            first = self.run_compile()
+            dependencies = {(row[0], row[1]): row for tag, row in
+                            records((first[2] / 'policy.bin').read_bytes()) if tag == b'D'}
+            for path, raw in before.items():
+                role = b'whitelist' if path.name == 'whitelist.abook' else b'blacklist'
+                self.assertEqual(dependencies[b'input.' + role, os.fsencode(path)][3],
+                                 hashlib.sha256(raw).digest())
+                self.assertEqual(dependencies[b'export.' + role, os.fsencode(path)][2:],
+                                 [b'1', hashlib.sha256(b'').digest(), b''])
+            identities.append(first[0])
+            self.assertEqual(first[:2], (check[0], 1))
+            products = {p: (p.stat().st_ino, p.stat().st_mtime_ns, p.read_bytes())
+                        for p in first[2].iterdir()}
+            self.assertEqual(self.run_compile(), (first[0], 0, first[2]))
+            self.assertEqual({p: (p.stat().st_ino, p.stat().st_mtime_ns, p.read_bytes())
+                              for p in products}, products)
+            self.assertEqual({p: p.read_bytes() for p in before}, before)
+            self.assertEqual(stat.S_IMODE(first[2].stat().st_mode), 0o700)
+            for path in first[2].iterdir():
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        self.assertEqual(len(set(identities)), len(variants), 'raw book bytes lost from fingerprint')
+        message = self.case / 'unknown.eml'
+        message.write_bytes(b'From: unknown@example.org\n\nUnchanged body.\n')
+        self.oracle.compile(first[2] / 'Filters.sieve')
+        self.oracle.expect(first[2] / 'Filters.sieve', message, 'unsorted', True)
+
+    def test_accepted_benchmark_books_compile_without_fixture_changes(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('filter_baseline_fixture', REPO / 'extras/bench/filter_baseline.py')
+        baseline = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(baseline)
+        self.compiler = self.native
+        self.root = self.case / 'accepted fixture'
+        fixture = baseline.make_fixture(self.root, 10, 8)
+        self.assertEqual(hashlib.sha256((self.root / 'blacklist.abook').read_bytes()).hexdigest(),
+                         '7c69d957d8589345ae5afbb6740d42e0f88c9686ed5c71881de101c3c8df0ddf')
+        qualification = hashlib.sha256((REPO / 'doc/filter-regex-qualification.json').read_bytes()).hexdigest()
+        (self.root / 'FilterProfile.txt').write_text(
+            'version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\n'
+            'capability mailbox\ncapability regex\nregex-qualification ' + qualification + '\n')
+        first = self.run_compile()
+        self.assertEqual(self.run_compile(), (first[0], 0, first[2]))
+        for name, digest in fixture['inputs'].items():
+            self.assertEqual(hashlib.sha256((self.root / name).read_bytes()).hexdigest(), digest)
+        self.oracle.compile(first[2] / 'Filters.sieve')
+        messages = sorted((self.root / 'incoming').glob('*/*'))
+        self.assertEqual(len(messages), 8)
+        for message in messages:
+            ident = message.name.split(':')[0]
+            expected = fixture['target_expected'][ident]
+            self.oracle.expect(first[2] / 'Filters.sieve', message,
+                               'INBOX' if expected == 'known' else expected, True)
+
+    def test_empty_book_boundary_keeps_export_failures_and_previous_generation(self):
+        self.compiler = self.native
+        book = self.root / 'whitelist.abook'
+        header = b'[format]\nprogram=abook\nversion=0.6.1\n'
+        contact = header + b'[0]\nname=Known\nemail=known@example.org\n'
+        book.write_bytes(contact)
+        first = self.run_compile()
+        self.run_compile()  # settle publication before failure injection
+        before = self.snapshot()
+        message = self.case / 'known.eml'
+        message.write_bytes(b'From: known@example.org\n\nUnchanged body.\n')
+        self.oracle.expect(first[2] / 'Filters.sieve', message, 'INBOX', True)
+        for malformed in (b'garbage\n', b'[format]\n', header + b'[0]\nemail=bad\n'):
+            book.write_bytes(malformed)
+            self.run_compile(expected=3)
+            self.assert_old(before)
+        binaries = self.case / 'exporter'
+        binaries.mkdir()
+        wrapper = binaries / 'abook'
+        marker = self.case / 'exported'
+        self.env['PATH'] = str(binaries)
+        wrapper.write_text('#!/usr/bin/python3\nfrom pathlib import Path\n'
+                           'Path(%r).write_bytes(b"called")\nraise SystemExit(1)\n' % str(marker))
+        wrapper.chmod(0o700)
+        # Anything outside the bounded empty grammar must still reach abook.
+        for data in [b'garbage\n', b'[format]\n', header + b'[0]\n',
+                     header + b'email=broken\n', header.replace(b'abook', b'other'),
+                     header.replace(b'0.6.1', b'unknown'), header + b'version=0.6.1\n',
+                     b'# comment\0hidden\n', header + b'\0', contact]:
+            marker.unlink(missing_ok=True)
+            book.write_bytes(data)
+            failed = self.run_compile(expected=3)
+            self.assertIn(b'E_IO', failed.stderr)
+            self.assertEqual(marker.read_bytes(), b'called')
+            self.assertEqual(book.read_bytes(), data)
+            self.assert_old(before)
+        # A nonempty book must retain process/exec/output failure handling.
+        book.write_bytes(contact)
+        for script in ['#!/usr/bin/python3\nimport os,signal\nos.kill(os.getpid(), signal.SIGTERM)\n',
+                       '#!/usr/bin/python3\nprint("known@example.org\\tKnown")\nraise SystemExit(1)\n',
+                       '#!/usr/bin/python3\nprint("malformed output")\n',
+                       '#!/no/such/interpreter\n']:
+            wrapper.write_text(script)
+            self.run_compile(expected=3)
+            self.assert_old(before)
+        wrapper.unlink()
+        for data in (contact, b'# empty synthetic blacklist\n'):
+            book.write_bytes(data)
+            self.run_compile(expected=3)  # empty grammar does not hide a missing exporter
+            self.assert_old(before)
+        self.env = dict(os.environ)
+        book.write_bytes(contact)
+        self.assertEqual(self.run_compile(), (first[0], 0, first[2]))
+
     def test_raw_paths_and_input_link_targets_are_fingerprinted(self):
         self.root = Path(os.fsdecode(os.fsencode(self.case) + b'/raw\n\xff root'))
         self.root.mkdir()
