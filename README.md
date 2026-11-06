@@ -122,6 +122,10 @@ The GNU/Linux build honors `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, and `LDLIBS`.
 It uses `ccache` for compilation when available; set `CCACHE=` to disable it.
 `make install` builds the helpers first. Set `PREFIX` for a private installation
 or `DESTDIR` to stage a package while keeping its final runtime paths.
+Normal builds and installs use the committed `doc/jaro.1` and `doc/jaromail.1`
+without invoking Pandoc or rewriting documentation. After editing manual sources,
+maintainers run `make man` explicitly and commit both the Markdown and generated
+pages. This regeneration requires Pandoc and embeds no build-time date.
 
 `make test` runs the source smoke test and every `extras/test/test-*.sh`
 regression, reporting passed, failed, and skipped scripts. Missing optional
@@ -163,9 +167,12 @@ lock bridge; neither needs Dovecot. Custom `JAROMAILDIR`, `JAROWORKDIR` and
 `JAROACCOUNT` paths are passed explicitly. Sieve generation never deploys rules
 to a server. Indexing remains in the existing update/fetch workflows.
 
-Native compilation defaults to `core-v1`, supporting typed address/domain
-rules. Legacy `from`/`to` ERE exports require an independently qualified optional
-profile; unqualified exports fail with migration diagnostics. Explicit legacy
+Native compilation needs no `FilterProfile.txt`: built-in defaults support typed
+address/domain rules and the independently qualified legacy `from`/`to` ERE
+subset. Sieve declares `fileinto`, `mailbox` for automatic folder creation, and
+`regex` only when regex rules are present. For example,
+`from mute@metamute move pol.newsletters` keeps partial-address matching;
+`save` remains an alias of `move`, and no wildcard suffix is needed. Explicit legacy
 also rejects typed/domain records rather than discarding them. Native batch
 filtering retains failed messages and reports partial outcomes. Native import
 accepts only the bounded Jaromail-generated Sieve grammar. Existing roots need
@@ -173,21 +180,24 @@ explicit compatible policy inputs; filtering commands do not create defaults.
 Fresh `jaro init` under unset/explicit native installs `Filters.native.txt`,
 with no active explicit routes and typed examples in comments; builtins remain
 active. Explicit legacy initialization retains the original 14 ERE defaults.
-Initialization never translates or replaces an existing policy. Existing legacy
-roots need the migration choice above before native compilation succeeds.
+Initialization never translates or replaces an existing policy. Shipped legacy
+defaults compile without creating a profile file or rewriting their patterns.
 Use `jaro sieve` to publish, then `jaro -n filter` or `jaro filter --explain`
 to inspect the current generation without moving mail. See the
 [migration guide](doc/filter-compatibility.md#migration-and-installed-workflow-qualification)
 and [interface contract](doc/filter-interfaces.md).
 
-The optional `pigeonhole-2.4.5-posix-ere-v1` profile needs explicit fileinto,
-mailbox/creation configuration, regex capability and a `regex-qualification`
-record containing the SHA256 of installed `filter-regex-qualification.json`.
-The compiler checks its embedded catalogue, so replacing that file or supplying
-a different hash cannot grant support. The qualified subset covers shipped
+An optional `FilterProfile.txt` can customize mailbox mappings and namespaces or
+explicitly select restrictive `core-v1`. Explicit
+`pigeonhole-2.4.5-posix-ere-v1` overrides retain their capability and qualification
+validation; normal defaults use the compiler's embedded catalogue automatically.
+Replacing the installed catalogue or supplying a different hash cannot grant
+support. The qualified subset covers shipped
 defaults and benchmark patterns; unsupported EREs retain the prior generation
 and fail with a source-line diagnostic. Backend requirements and the narrow
 minimal-quoting correction are documented in the interface/policy contracts.
+The vendored Sieve test environment already enables regex and Maildir storage;
+Maildir is a storage format, not a Sieve capability to put in `require`.
 
 # License
 Jaromail is Copyright (C) 2010-2023 by the Dyne.org foundation

@@ -43,8 +43,12 @@ int jf_profile_parse(const unsigned char *data, size_t size, struct jf_profile *
 	memset(out,0,sizeof *out);
 	if (error) memset(error,0,sizeof *error);
 	if (size>JF_INPUT_MAX) return jf_product_error(error,"E_INPUT_LIMIT",0,"profile exceeds input limit");
-	p.id=strdup("core-v1"); p.prefix=strdup(""); p.separator=strdup("/");
-	p.create=1; p.fileinto=p.mailbox=!size;
+	/* Normal installations need no profile file. The built-in catalogue
+	 * qualifies legacy ERE export; emit only capabilities the policy uses.
+	 * Nonempty profiles remain explicit capability/mapping overrides. */
+	p.id=strdup(size ? "core-v1" : "pigeonhole-2.4.5-posix-ere-v1");
+	p.prefix=strdup(""); p.separator=strdup("/");
+	p.create=1; p.fileinto=p.mailbox=p.regex=!size;
 	buffer=malloc(JF_LINE_MAX+1);
 	if (!p.id || !p.prefix || !p.separator || !buffer) goto memory;
 	while (pos<size) {
@@ -111,7 +115,7 @@ int jf_profile_parse(const unsigned char *data, size_t size, struct jf_profile *
 		rc=jf_product_error(error,"E_CAPABILITY",0,"fileinto required; create-mailboxes yes also requires mailbox"); goto fail;
 	}
 	if ((!strcmp(p.id,"core-v1") && (p.regex || (seen&32))) ||
-		(strcmp(p.id,"core-v1") && (!p.regex || !(seen&32)))) {
+		(strcmp(p.id,"core-v1") && (!p.regex || (size && !(seen&32))))) {
 		rc=jf_product_error(error,"E_REGEX_QUALIFICATION",0,"optional regex profile requires regex capability and installed qualification digest; core-v1 admits neither"); goto fail;
 	}
 	free(buffer); *out=p; return 0;

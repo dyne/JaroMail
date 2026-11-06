@@ -159,6 +159,26 @@ class RegexTests(unittest.TestCase):
                                      'parsed': [(case['field'], case['address'])],
                                      'local': case['expected'], 'sieve': case['expected']})
 
+    def test_default_profile_qualification_and_partial_save_move(self):
+        self.profile.unlink()
+        # Run the independently authored ERE corpus through normal defaults.
+        self.test_independent_subset_cases()
+        for selector, matching in [('from', ('From', 'Sender')), ('to', ('To', 'Cc'))]:
+            exports = []
+            for action in ('save', 'move'):
+                generation = self.compile([selector+' mute@metamute '+action+' matched'])
+                exports.append((generation / 'Filters.sieve').read_bytes())
+                for field in ('From', 'Sender', 'To', 'Cc'):
+                    destination = 'matched' if field in matching else 'unsorted'
+                    self.decide(generation, {'id': selector+'-'+action+'-'+field,
+                                             'headers': {field: 'MUTE@METAMUTE.example.org'},
+                                             'local': destination, 'sieve': destination})
+                self.decide(generation, {'id': selector+'-'+action+'-miss',
+                                         'headers': {matching[0]: 'other@metamute.org'},
+                                         'local': 'unsorted', 'sieve': 'unsorted'})
+            self.assertEqual(exports[0], exports[1])
+        self.assertFalse(self.profile.exists())
+
     def test_equivalent_mailbox_spellings_all_sources(self):
         corpus = json.loads((REPO / 'extras/test/fixtures/filter-contract/mailbox-normalization.json').read_text())
         for index, group in enumerate(corpus['groups']):
@@ -251,7 +271,9 @@ class RegexTests(unittest.TestCase):
             self.assertEqual((os.readlink(self.root / 'cache/filter-engine/current'),
                               (self.root / 'Filters.sieve').read_bytes()), before)
         self.profile.unlink()
-        self.run_tool([self.compiler, '--root', self.root], 4)
+        automatic = self.compile(['from github.com move matched'])
+        self.assertEqual((automatic / 'Filters.sieve').read_bytes(), before[1])
+        self.assertFalse(self.profile.exists())
         self.profile.write_text(PROFILE)
         generation = self.compile(['from-address person@example.org move matched'])
         self.assertNotIn('"regex"', (generation / 'Filters.sieve').read_text())

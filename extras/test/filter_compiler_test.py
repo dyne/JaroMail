@@ -248,7 +248,8 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
             self.assertEqual((out / name).read_bytes(), (second / name).read_bytes())
 
     def test_rejected_profiles_and_legacy_source_diagnostics(self):
-        result = self.build('from ^x@example[.]org$ move folder', error=(4, 'E_REGEX_EXPORT'))
+        core = 'version 1\nprofile core-v1\ncapability fileinto\ncapability mailbox\n'
+        result = self.build('from ^x@example[.]org$ move folder', profile=core, error=(4, 'E_REGEX_EXPORT'))
         self.assertIn(b'Filters.txt":1', result.stderr)
         self.assertIn(b'core-v1', result.stderr)
         for profile in ['version 1\nprofile core-v1\ncapability variables\n',
@@ -257,6 +258,26 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
                         'version 1\nprofile core-v1\ncapability fileinto\ncreate-mailboxes yes\n',
                         'version 1\nprofile core-v1\ncapability fileinto\ncreate-mailboxes no\nmailbox known one\nmailbox known two\n']:
             self.build(profile=profile, error=(4, 'E_'))
+
+    def test_default_capabilities_need_no_profile(self):
+        rules = ['from mute@metamute save pol.newsletters', 'to team@project move Project']
+        out, _ = self.build(rules)
+        self.assertFalse((self.root / 'FilterProfile.txt').exists())
+        self.assertEqual((out / 'Filters.sieve').read_text().splitlines()[0],
+                         'require ["fileinto","mailbox","regex"];')
+        self.oracle.compile(out / 'Filters.sieve')
+        for ident, headers, destination in [
+                ('partial-from', {'From': 'mute@metamute.org'}, 'pol.newsletters'),
+                ('partial-cc', {'From': 'other@example.org', 'Cc': 'team@project.net'}, 'Project'),
+                ('partial-miss', {'From': 'other@metamute.org'}, 'unsorted')]:
+            self.expect(out, {'id': ident, 'headers': headers, 'sieve': destination})
+        typed, _ = self.build('from-address person@example.org move Exact')
+        self.assertEqual((typed / 'Filters.sieve').read_text().splitlines()[0],
+                         'require ["fileinto","mailbox"];')
+        self.oracle.compile(typed / 'Filters.sieve', extensions='-regex')
+        empty_profile, _ = self.build(rules, profile='')
+        self.assertEqual((empty_profile / 'Filters.sieve').read_bytes(), (out / 'Filters.sieve').read_bytes())
+        self.assertEqual((self.root / 'FilterProfile.txt').read_bytes(), b'')
 
     def test_colliding_mailbox_mappings(self):
         profile = 'version 1\nprofile core-v1\ncapability fileinto\ncreate-mailboxes no\nmailbox first Shared\nmailbox second Shared\n'

@@ -39,8 +39,10 @@ indexing and SMTP/IMAP actions.
 unset selects native. Explicit `JARO_FILTER_ENGINE=legacy` selects rollback.
 Empty/unknown values fail. Native `update`/`sieve` invoke the installed compiler
 with explicit mail/account roots and return its failures without fallback.
-An absent profile selects `core-v1`; unsupported ERE exports fail with a
-migration diagnostic. Explicit legacy rejects typed/domain records. Sieve
+No profile file is required: built-in defaults enable fileinto, automatic mailbox
+creation and the qualified legacy ERE subset. Regex is declared only when used;
+partial addresses keep matching without wildcard suffixes. Unsupported ERE
+exports fail with a source-line diagnostic. Explicit legacy rejects typed/domain records. Sieve
 generation writes the local export only, without remote deployment.
 
 Native `filter [MAILDIR]` compiles/verifies once and applies one pinned batch.
@@ -51,8 +53,9 @@ accepts the bounded Jaromail-generated grammar described below.
 
 Fresh `init` under unset/explicit native installs a comment-only typed-example
 policy with builtins active. Explicit legacy keeps the original 14 ERE defaults.
-Existing policies are never replaced or translated; unsupported legacy EREs need
-an explicit qualified profile or deliberate typed rewrite. Invalid selectors or
+Existing policies are never replaced or translated. Supported legacy EREs need
+no profile configuration; patterns outside the qualified subset need a deliberate
+rewrite. `save` and `move` are aliases. Invalid selectors or
 missing required templates fail before bootstrap configuration writes.
 
 Native `filter --explain [MAILDIR]` and `-n filter [MAILDIR]` classify only,

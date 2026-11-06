@@ -137,6 +137,29 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('new', self.indexlog.read_text())
         self.assertEqual(self.snapshot(), first)
 
+    def test_partial_save_move_rules_need_no_profile_for_sieve_and_filter(self):
+        self.message.unlink()
+        for action in ('save', 'move'):
+            rules = ('from mute@metamute '+action+' pol.newsletters\n').encode()
+            (self.root / 'Filters.txt').write_bytes(rules)
+            message = self.root / 'incoming/new' / action
+            body = b'From: MUTE@METAMUTE.example.org\n\nOriginal complete body.\n'
+            message.write_bytes(body)
+            self.run_cli('-n', 'sieve')
+            self.assertEqual(message.read_bytes(), body)
+            self.run_cli('sieve')
+            first = self.snapshot()
+            self.assertEqual(first[1].splitlines()[0], b'require ["fileinto","mailbox","regex"];')
+            self.run_cli('sieve')
+            self.assertEqual(self.snapshot(), first)
+            self.run_cli('-n', 'filter', str(self.root / 'incoming'))
+            self.assertEqual(message.read_bytes(), body)
+            self.run_cli('filter', str(self.root / 'incoming'))
+            self.assertFalse(message.exists())
+            self.assertEqual((self.root / 'pol.newsletters/cur' / action).read_bytes(), body)
+            self.assertEqual((self.root / 'Filters.txt').read_bytes(), rules)
+            self.assertFalse((self.root / 'FilterProfile.txt').exists())
+
     def test_engine_selection_legacy_guard_and_missing_helper(self):
         for engine in ('legacy',):
             self.run_cli('sieve', engine=engine, code=4)
@@ -619,12 +642,12 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(r.returncode,3,r.stderr);self.assertFalse(root.exists())
             finally:hidden.rename(template)
 
-    def test_existing_legacy_policy_is_never_rewritten_or_autoqualified(self):
+    def test_existing_legacy_policy_compiles_without_profile_or_rewrite(self):
         original=(REPO/'doc/Filters.txt').read_bytes();(self.root/'Filters.txt').write_bytes(original)
         aliases=(self.root/'Aliases.txt').read_bytes();account=(self.accounts/'default.txt').read_bytes()
         self.env['HOME']=str(self.root.parent/'migration-home');self.env['JARO_KEYRING']='fixture-unused'
-        self.run_cli('init');result=self.run_cli('sieve',code=4)
-        self.assertIn(b'E_REGEX_EXPORT',result.stderr)
+        self.run_cli('init');self.run_cli('sieve')
+        self.assertEqual(self.snapshot()[1].splitlines()[0],b'require ["fileinto","mailbox","regex"];')
         self.assertEqual((self.root/'Filters.txt').read_bytes(),original)
         self.assertEqual((self.root/'Aliases.txt').read_bytes(),aliases)
         self.assertEqual((self.accounts/'default.txt').read_bytes(),account)

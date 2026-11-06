@@ -1070,9 +1070,12 @@ Native is the default engine. Fresh `jaro init` installs a policy with commented
 typed examples and no active explicit routes; blacklist, bounce, known-contact,
 spam, own-address and unsorted builtins remain active. Use `jaro sieve` to publish,
 then `jaro -n filter` or `jaro filter --explain` to inspect without moving mail.
-Existing policies are retained unchanged. Legacy `from`/`to` ERE exports require
-an explicitly qualified profile or a deliberate typed rewrite; they are not
-translated automatically. `JARO_FILTER_ENGINE=legacy` retains the transition
+Existing policies are retained unchanged. No `FilterProfile.txt` is needed:
+built-in defaults enable fileinto, automatic mailbox creation and the qualified
+legacy `from`/`to` ERE subset. Regex is declared only when a rule uses it.
+Partial-address rules work without adding `*` or `.*`; `save` and `move` are
+aliases. An optional profile can override capabilities or mailbox mappings.
+`JARO_FILTER_ENGINE=legacy` retains the transition
 rollback and original legacy fresh template. See
 [migration and compatibility](filter-compatibility.md) for domain examples,
 known corrections, compare observations and tested platform limits.

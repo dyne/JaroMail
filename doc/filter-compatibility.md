@@ -160,13 +160,17 @@ Blacklist, bounce, known, spam, own-address and unsorted builtins remain active.
 Explicit legacy initialization keeps the original `Filters.txt` with 14 ERE
 rules. Selector and needed-template validation precedes bootstrap writes.
 Every existing policy is retained byte for byte; initialization does not add
-a regex qualification profile or guess a translation. Thus an existing legacy
-policy can still produce the deliberate `E_REGEX_EXPORT` migration diagnostic.
+a profile file or translate patterns. Normal compilation automatically uses
+the built-in qualified regex configuration, so the shipped legacy rules and
+partial-address patterns such as `from mute@metamute move pol.newsletters`
+work without `FilterProfile.txt`. `save` and `move` remain aliases. No wildcard
+suffix is needed for partial matching.
 
-An absent `FilterProfile.txt` selects `core-v1`, which exports typed exact and
-domain predicates. Existing `from`/`to` POSIX ERE records need the explicitly
-qualified `pigeonhole-2.4.5-posix-ere-v1` export profile or a deliberate typed-rule
-rewrite. An unsupported/unqualified ERE reports status 4 with source-line
+The same defaults support typed exact and domain predicates. `fileinto` and
+mailbox creation are enabled; `regex` is declared only for policies that use it.
+An existing explicit `core-v1` override still restricts exports to typed rules;
+remove that override to use normal defaults, retaining any wanted custom
+mapping/namespace settings in a qualified override. An unsupported ERE reports status 4 with source-line
 migration diagnostics and preserves the preceding generation/export. The
 trusted compiler-version-bound catalogue qualifies only its declared subset;
 a caller-supplied hash cannot add regex equivalence. See the complete
