@@ -23,7 +23,7 @@ class WorkflowTests(unittest.TestCase):
         cls.work.mkdir(mode=0o700, parents=True, exist_ok=True)
         cls.source, cls.prefix = cls.work / 'source with spaces', cls.work / 'prefix with spaces'
         cls.source.mkdir()
-        for name in ('src', 'build', 'extras', 'doc', 'Makefile', '.github', 'README.md', 'vendor'):
+        for name in ('src', 'build', 'extras', 'doc', 'Makefile', 'CMakeLists.txt', 'cmake', 'VERSION', 'COPYING.txt', '.github', 'README.md', 'vendor'):
             p = REPO / name
             if p.is_dir():
                 def ignore(directory, names):
@@ -136,6 +136,21 @@ class WorkflowTests(unittest.TestCase):
         self.run_cli('update')
         self.assertIn('new', self.indexlog.read_text())
         self.assertEqual(self.snapshot(), first)
+
+    def test_assigned_version_in_console_and_version_option(self):
+        stamp = self.runtime / 'VERSION'
+        original = stamp.read_bytes()
+        try:
+            stamp.write_text('6.8.9\n')
+            for flag in ('--version', '-v'):
+                self.assertEqual(self.run_cli(flag).stdout, b'Jaro Mail v6.8.9\n')
+            self.assertEqual(self.run_cli('-q', '--version').stdout, b'Jaro Mail v6.8.9\n')
+            self.run_cli('--version', 'filter')
+            self.assertTrue(self.message.exists())
+            result = self.run_cli('source')
+            self.assertIn(b'Jaro Mail v6.8.9 running on', result.stdout+result.stderr)
+        finally:
+            stamp.write_bytes(original)
 
     def test_partial_save_move_rules_need_no_profile_for_sieve_and_filter(self):
         self.message.unlink()

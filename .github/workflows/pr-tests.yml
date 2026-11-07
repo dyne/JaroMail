@@ -1,6 +1,7 @@
 name: PR Build and Tests
 
 on:
+  workflow_call:
   pull_request:
     branches:
       - "**"
@@ -43,7 +44,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            zsh make gcc python3 perl pkg-config ccache libssl-dev zlib1g-dev libpcre2-dev binutils \
+            zsh make cmake ninja-build gcc python3 perl pkg-config ccache libssl-dev zlib1g-dev libpcre2-dev binutils \
             fetchmail msmtp neomutt notmuch pinentry-curses \
             abook wipe mblaze gnupg pandoc ca-certificates netcat-traditional
 
@@ -80,15 +81,17 @@ jobs:
           printf 'SIEVE_DEPS_PREFIX=%s\n' "$sieve_prefix" >> "$GITHUB_ENV"
 
       - name: Compile extracted Sieve validation frontends
-        run: make sieve-tools
+        run: python3 build/sieve-tools.py
 
       - name: Build application
-        run: make
+        run: |
+          cmake -S . -B out/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build out/ci --parallel 2
 
       - name: Run all regression tests (no skips)
         run: |
           mkdir -p "$JARO_TEST_LOG_DIR"
-          make test-strict
+          cmake --build out/ci --target check-strict
 
       - name: Upload regression test logs
         if: ${{ always() }}
@@ -98,3 +101,39 @@ jobs:
           path: ${{ runner.temp }}/jaromail-test-logs
           if-no-files-found: ignore
           retention-days: 7
+
+  version-preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semver.outputs.nextStrict }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select release baseline
+        id: baseline
+        run: python3 build/release.py prepare --output "$GITHUB_OUTPUT"
+      - name: Preview semantic version without publishing
+        id: semver
+        uses: ietf-tools/semver-action@46feaa27e7375da0e3d602721e9fb9573598b880
+        with:
+          token: ${{ github.token }}
+          branch: ${{ github.event.pull_request.head.sha }}
+          fromTag: ${{ steps.baseline.outputs.tag }}
+          additionalCommits: ${{ steps.baseline.outputs.additional }}
+          majorList: breaking
+          noNewCommitBehavior: current
+          noVersionBumpBehavior: patch
+      - name: Validate the proposed release version
+        env:
+          CURRENT_VERSION: ${{ steps.baseline.outputs.tag }}
+          NEXT_VERSION: ${{ steps.semver.outputs.nextStrict }}
+        run: python3 build/release.py validate-version --current "$CURRENT_VERSION" --next "$NEXT_VERSION"
+
+  static:
+    if: github.event_name == 'pull_request'
+    needs: version-preview
+    uses: ./.github/workflows/linux-static.yml
+    with:
+      version: ${{ needs.version-preview.outputs.version }}

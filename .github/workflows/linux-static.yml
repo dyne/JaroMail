@@ -1,0 +1,101 @@
+name: Static Linux artifacts
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Linux static (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            musl: x86_64
+            processor: x86_64
+          - arch: arm64
+            musl: arm_64
+            processor: aarch64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install build and smoke-test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y cmake ninja-build binutils zsh qemu-user
+      - name: Set up verified Dyne musl cross compiler
+        id: musl
+        uses: dyne/musl-action@fe1d1871b096824ddb7aa158f68dd63dabdc9586
+        with:
+          target_arch: ${{ matrix.musl }}
+          version: v2.5.1
+      - name: Resolve assigned version
+        id: version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -n "$RELEASE_VERSION" ]]; then
+            assigned=$(python3 build/version.py --version "$RELEASE_VERSION")
+          else
+            assigned=$(python3 build/version.py)
+          fi
+          printf 'version=%s\n' "$assigned" >> "$GITHUB_OUTPUT"
+      - name: Configure static CMake build
+        env:
+          MUSL_CC: ${{ steps.musl.outputs.CC }}
+          ASSIGNED_VERSION: ${{ steps.version.outputs.version }}
+          TARGET_PROCESSOR: ${{ matrix.processor }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          cmake -S . -B out/static -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER="$MUSL_CC" \
+            -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR="$TARGET_PROCESSOR" \
+            -DJARO_VERSION="$ASSIGNED_VERSION" -DJARO_PACKAGE_ARCH="$TARGET_ARCH" \
+            -DJARO_STATIC=ON -DBUILD_TESTING=OFF -DJARO_BUILD_TEST_DRIVERS=OFF
+          cmake --build out/static --parallel 2
+      - name: Verify every binary is static and has the right architecture
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: python3 build/check-static.py --bin-dir out/static/bin --arch "$TARGET_ARCH"
+      - name: Run native or emulated helper smoke tests
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          emulator=()
+          if [[ "$TARGET_ARCH" == arm64 ]]; then emulator=(qemu-aarch64); fi
+          "${emulator[@]}" out/static/bin/jaro-filter-compile --version
+          "${emulator[@]}" out/static/bin/jaro-filter-compile --check-address person@example.org
+          "${emulator[@]}" out/static/bin/jaro-filter --help
+          printf 'From: Static Test <person@example.org>\n\n' | \
+            "${emulator[@]}" out/static/bin/fetchaddr -a -e | grep -Fx person@example.org
+      - name: Package and test the relocated CLI
+        env:
+          ASSIGNED_VERSION: ${{ steps.version.outputs.version }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          cmake --build out/static --target package
+          archive="jaromail-${ASSIGNED_VERSION}-linux-${TARGET_ARCH}.tar.gz"
+          mkdir -p dist out/unpacked
+          cp "out/static/$archive" dist/
+          (cd dist && sha256sum "$archive" > "$archive.sha256")
+          tar -xzf "dist/$archive" -C out/unpacked
+          package_root="out/unpacked/${archive%.tar.gz}"
+          test "$("$package_root/bin/jaro" --version)" = "Jaro Mail v$ASSIGNED_VERSION"
+          python3 build/check-static.py --bin-dir "$package_root/share/jaromail/bin" --arch "$TARGET_ARCH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-static-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7

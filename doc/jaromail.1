@@ -191,15 +191,13 @@ T}
 .TE
 .SS Setup
 .SS Build
-Some dependencies are needed in order to build this software.
-The Makefile for GNU/Linux configures the build environment
-automatically on Debian and Fedora systems, using their packaging to
-install all needed packages.
-.PP
-The dependencies to be installed on the system for JaroMail are:
+Native helpers are built with CMake 3.20+, Python 3.9+, a C compiler,
+and Ninja or Make.
+The build does not install system packages or download dependencies.
+On Debian\-like systems the build packages are:
 .IP
 .EX
-gcc bison flex make autoconf automake sqlite3 libglib2.0\-dev libgnome\-keyring\-dev
+gcc cmake ninja\-build python3
 .EE
 .SS Install
 To install the following programs need to be installed:
@@ -208,8 +206,22 @@ To install the following programs need to be installed:
 fetchmail msmtp neomutt direnv mblaze pinentry abook wipe notmuch alot
 .EE
 .PP
-Then \f[CR]make install\f[R] will put all jaromail files in
-\f[CR]/usr/local/share/jaromail\f[R].
+Build and install with:
+.IP
+.EX
+cmake \-S . \-B out/build \-DCMAKE_BUILD_TYPE=Release
+cmake \-\-build out/build \-\-parallel
+sudo cmake \-\-install out/build
+.EE
+.PP
+The default runtime is \f[CR]/usr/local/share/jaromail\f[R].
+\f[CR]make install\f[R] remains a compatibility command forwarding to
+CMake.
+Normal builds install the committed manpages without rewriting them.
+The CLI reports its assigned release version from installed metadata,
+derived from Git tags or the release workflow.
+Static Linux x86_64 and arm64 archives and automatic semantic releases
+are described in release automation.
 .SS Apple/OSX
 Apple/OSX users that have no experience in building software can obtain
 a pre\-built universal binary from our download zone on \c

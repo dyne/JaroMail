@@ -23,8 +23,6 @@
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 PROGRAM=jaro-mail
-VERSION=6.0
-DATE=Nov/2023
 JAROMAILEXEC=$0
 
 # default permission on files
@@ -38,6 +36,13 @@ script_dir="${JAROMAILEXEC:A:h}"
 bootstrap_path="${script_dir}/zlibs/bootstrap"
 [[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../zlibs/bootstrap"
 [[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../src/zlibs/bootstrap"
+source "${bootstrap_path:h}/version" || exit 1
+jaromail_version "$script_dir" || exit $?
+VERSION="$REPLY"
+if (( $# == 1 )) && [[ $1 == -v || $1 == --version ]]; then
+    print -r -- "Jaro Mail v${VERSION}"
+    exit 0
+fi
 source "${bootstrap_path}" || {
     print -u2 "Cannot source bootstrap module: ${bootstrap_path}"
     exit 1
@@ -236,8 +241,8 @@ main() {
 
 	# print out version
     if option.is_set -v; then
-		cat $JAROMAILEXEC | awk '/^#/ {print $0 } !/^#/ {exit}'
-		echo
+        print -r -- "Jaro Mail v${VERSION}"
+        return 0
     fi
 
     { option.is_set -a } && { account=`option.value -a` }

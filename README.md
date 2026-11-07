@@ -78,9 +78,12 @@ fetchmail msmtp neomutt notmuch pinentry-curses abook \
 wipe mblaze vim netcat-traditional
 ```
 
-To compile and install jaromail on your system as root:
+Build tools are CMake 3.20+, Python 3.9+, a C compiler and either Ninja or Make.
+To compile and install Jaromail:
 ```
-make install
+cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release
+cmake --build out/build --parallel
+sudo cmake --install out/build
 ```
 
 When Jaromail is installed system-wide, the `JAROMAILDIR`
@@ -112,19 +115,24 @@ We are reachable on [many Dyne.org chats and channels](https://dyne.org/linktree
 Developer build/test commands:
 
 ```
-make
-make test
-sudo make install
+cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release
+cmake --build out/build --parallel
+cmake --build out/build --target check-strict
+sudo cmake --install out/build
 ./extras/test/inittest.sh
 ```
 
-The GNU/Linux build honors `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, and `LDLIBS`.
-It uses `ccache` for compilation when available; set `CCACHE=` to disable it.
-`make install` builds the helpers first. Set `PREFIX` for a private installation
-or `DESTDIR` to stage a package while keeping its final runtime paths.
+CMake owns all native helper and regression-driver targets. It uses `ccache`
+for compilation when available; set `-DCMAKE_C_COMPILER_LAUNCHER=` to disable it.
+Use `-DCMAKE_INSTALL_PREFIX=/your/prefix` or `cmake --install ... --prefix ...`
+for a private installation, and `DESTDIR` to stage a package. Installed wrappers
+resolve resources relative to themselves, so release archives can be relocated.
+The existing `make`, `make install`, `make test-strict` and platform build-script
+commands remain compatibility wrappers around CMake. These wrappers honor `CC`,
+`CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `LDLIBS`, `CCACHE`, `PREFIX` and `DESTDIR`.
 Normal builds and installs use the committed `doc/jaro.1` and `doc/jaromail.1`
 without invoking Pandoc or rewriting documentation. After editing manual sources,
-maintainers run `make man` explicitly and commit both the Markdown and generated
+maintainers run `cmake --build out/build --target man` (or `make man`) explicitly and commit both the Markdown and generated
 pages. This regeneration requires Pandoc and embeds no build-time date.
 
 `make test` runs the source smoke test and every `extras/test/test-*.sh`
@@ -132,6 +140,14 @@ regression, reporting passed, failed, and skipped scripts. Missing optional
 runtime tools produce exit 77 in individual scripts. `make test-strict` requires
 every script to run without skips and is the CI entry point. Module tests use
 local fixtures and never send or fetch real mail.
+
+Release versions start at **v6.0.0**. CMake resolves the latest reachable stable
+SemVer tag, with `VERSION` as the v6 development baseline and `-DJARO_VERSION=...`
+as the release-workflow override. Installed builds carry their assigned version
+in runtime metadata; `jaro --version`, help and the console startup banner use
+that value without requiring Git or Python on the installed machine.
+See [release automation and static Linux archives](doc/releases.md) for the
+Conventional Commits policy, both CPU architectures and installation details.
 
 Only the minimal Pigeonhole `sievec`/`sieve-test` frontend sources, shared helper,
 and required notices are included under [`vendor/`](vendor/README.md). The test

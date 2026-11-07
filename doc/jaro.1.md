@@ -29,7 +29,9 @@ indexing and SMTP/IMAP actions.
 
 `-h` show help.
 
-`-v` show version.
+`-v` or `--version` prints the assigned release version and exits. The startup
+banner and help use the same installed metadata. Source builds derive it from
+release tags, with the v6.0.0 development baseline when no v6 tag exists.
 
 `-f` force mode for selected operations.
 
