@@ -79,14 +79,17 @@ sample configuration, authors and GPLv3 license are installed with Jaromail.
 `-DJARO_ABOOK_NLS=ON` optionally builds the five upstream translations with
 gettext tools and libintl; the default uses English messages.
 
-Static releases reuse Dyne's bundled target ncurses (from the sibling
-`/opt/dyne/<target-triplet>` directory) and build GNU readline 8.3 with the
-selected musl compiler. abook, musl, ncurses and readline are all linked into
-one fully static executable. A pinned ncurses 6.5 source build is retained only
-as a fallback when the selected toolchain has no bundled ncurses.
-`build/abook-deps.json` pins fallback/source URLs and SHA-256 digests.
-`build/abook-deps.py` fingerprints bundled ncurses, verifies downloads and cached
-installed bytes, stages dependencies in a private cache, and prints their prefix
+Static releases use **Dyne musl v2.6.0** and reuse its bundled target ncurses 6.6
+and GNU readline 8.3 from `/opt/dyne/<target-triplet>`. abook, musl, ncurses and
+readline are linked into one fully static executable. The explicit dependency
+step uses `--require-bundled`: incomplete toolchains fail before any dependency
+build or download. Both bundled library/header sets enter the cache identity and
+installed provenance.
+
+For manual builds with older musl toolchains, `build/abook-deps.json` retains
+checksum-pinned source fallbacks. Release CI uses the prebuilt bundle directly.
+`build/abook-deps.py` verifies cached installed bytes, stages target dependencies
+in a private cache, and prints their prefix
 for `-DJARO_ABOOK_DEPS_PREFIX=...`. Ordinary CMake builds never download them.
 Both architectures run abook conversion/query smoke tests and open/quit its TUI
 in a private pseudo-terminal (arm64 via QEMU). Embedded descriptions for common
@@ -134,7 +137,7 @@ release retries use the existing version rather than creating another tag.
 
 Tests must pass before publishing. The Linux matrix uses
 [`dyne/musl-action`](https://github.com/dyne/musl-action), pinned to a reviewed
-revision and the checksum-verified Dyne musl v2.5.1 toolchains. Both builds run on
+revision and the checksum-verified Dyne musl v2.6.0 toolchains. Both builds run on
 an x86_64 Linux host:
 
 | Artifact architecture | Action target | Compiler tuple | Runtime smoke test |
