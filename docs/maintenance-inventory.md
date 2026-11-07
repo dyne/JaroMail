@@ -21,4 +21,4 @@
 ## Evidence Notes
 
 - Default install currently includes both `src/mutt` and `src/stats` plus all `src/zlibs/*` (`Makefile` `install` target).
-- Stats is actively documented in `doc/jaromail-manual.md|org|tex`, but most extras are not referenced in top-level docs.
+- Stats is actively documented in `docs/jaromail-manual.md|org|tex`, but most extras are not referenced in top-level docs.

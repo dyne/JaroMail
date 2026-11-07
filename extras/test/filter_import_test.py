@@ -325,7 +325,7 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(self.policy(self.source), self.policy(self.root))
 
     def regex_profile(self):
-        digest = hashlib.sha256((REPO / 'doc/filter-regex-qualification.json').read_bytes()).hexdigest()
+        digest = hashlib.sha256((REPO / 'docs/filter-regex-qualification.json').read_bytes()).hexdigest()
         return ('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\n'
                 'capability mailbox\ncapability regex\nregex-qualification ' + digest + '\n')
 

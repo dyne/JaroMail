@@ -25,7 +25,7 @@ srcdir=.
     print "Error: first build, then install."; return 1 }
 
 mkdir -p $JARO_SHARE/{.mutt,.stats}
-cp -ra $srcdir/doc/* $JARO_SHARE/
+cp -ra $srcdir/docs/* $JARO_SHARE/
 cp -ra $srcdir/src/mutt/* $JARO_SHARE/.mutt/
 cp -ra $srcdir/src/stats/* $JARO_SHARE/.stats/
 
@@ -34,7 +34,7 @@ mkdir -p $JARO_LIBEXEC/{bin,zlibs}
 cp $srcdir/src/jaro $JARO_LIBEXEC/bin
 cp -ra $srcdir/build/win/* $JARO_LIBEXEC/bin
 cp -ra $srcdir/src/zlibs/* $JARO_LIBEXEC/zlibs/
-cp -ra $srcdir/doc/jaromail-manual.pdf $JARO_LIBEXEC/
+cp -ra $srcdir/docs/jaromail-manual.pdf $JARO_LIBEXEC/
 
 for l in `ls $JARO_LIBEXEC/zlibs/ | grep '.zwc$'`; do
     rm -f $l

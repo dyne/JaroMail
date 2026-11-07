@@ -519,7 +519,7 @@ class GenerationTests(unittest.TestCase):
         fixture = baseline.make_fixture(self.root, 10, 8)
         self.assertEqual(hashlib.sha256((self.root / 'blacklist.abook').read_bytes()).hexdigest(),
                          '7c69d957d8589345ae5afbb6740d42e0f88c9686ed5c71881de101c3c8df0ddf')
-        qualification = hashlib.sha256((REPO / 'doc/filter-regex-qualification.json').read_bytes()).hexdigest()
+        qualification = hashlib.sha256((REPO / 'docs/filter-regex-qualification.json').read_bytes()).hexdigest()
         (self.root / 'FilterProfile.txt').write_text(
             'version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\n'
             'capability mailbox\ncapability regex\nregex-qualification ' + qualification + '\n')

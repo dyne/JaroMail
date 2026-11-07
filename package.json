@@ -1,0 +1,19 @@
+{
+  "name": "jaromail-docs",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "docs:prepare": "node docs/.vitepress/prepare.mjs",
+    "docs:dev": "npm run docs:prepare && vitepress dev docs",
+    "docs:build": "npm run docs:prepare && vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:check": "node docs/.vitepress/check-links.mjs"
+  },
+  "devDependencies": {
+    "@dyne/vite-theme": "file:docs/.vitepress/vendor/dyne-vite-theme-0.1.0.tgz",
+    "markdown-it-footnote": "4.0.0",
+    "vitepress": "1.6.4",
+    "vue": "3.5.44"
+  }
+}

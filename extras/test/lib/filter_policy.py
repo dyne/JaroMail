@@ -114,7 +114,7 @@ def main():
 
     # Shipped defaults: all 14 active records compile and emit; From extraction
     # remains defective, even though the generated Sieve contains the route.
-    defaults = (repo / "doc/Filters.txt").read_text()
+    defaults = (repo / "docs/Filters.txt").read_text()
     active = [line.split() for line in defaults.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     assert len(active) == 14
     (root / "Filters.txt").write_text(defaults)

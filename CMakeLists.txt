@@ -171,13 +171,14 @@ install(PROGRAMS src/jaro DESTINATION "${JARO_RUNTIME_DIR}/bin")
 install(TARGETS fetchaddr parsedate dotlock gpgewrap jaro-filter-compile jaro-filter-legacy jaro-filter
   RUNTIME DESTINATION "${JARO_RUNTIME_DIR}/bin")
 install(FILES "${CMAKE_BINARY_DIR}/generated/VERSION" COPYING.txt DESTINATION "${JARO_RUNTIME_DIR}")
-install(DIRECTORY doc/ DESTINATION "${JARO_RUNTIME_DIR}")
+install(DIRECTORY docs/ DESTINATION "${JARO_RUNTIME_DIR}"
+  PATTERN ".vitepress" EXCLUDE PATTERN "manual" EXCLUDE PATTERN "public" EXCLUDE)
 install(DIRECTORY src/mutt/ DESTINATION "${JARO_RUNTIME_DIR}/mutt" USE_SOURCE_PERMISSIONS)
 install(DIRECTORY src/stats/ DESTINATION "${JARO_RUNTIME_DIR}/stats" USE_SOURCE_PERMISSIONS)
 install(DIRECTORY src/zlibs/ DESTINATION "${JARO_RUNTIME_DIR}/zlibs" USE_SOURCE_PERMISSIONS PATTERN "*.zwc" EXCLUDE)
 file(GLOB _zuper CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/zuper/zuper*")
 install(FILES ${_zuper} DESTINATION "${JARO_RUNTIME_DIR}/zlibs")
-install(FILES doc/jaro.1 doc/jaromail.1 DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
+install(FILES docs/jaro.1 docs/jaromail.1 DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
 install(CODE "file(GLOB _stale \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}/zlibs/*.zwc\")\nif(_stale)\n  file(REMOVE \${_stale})\nendif()")
 add_custom_target(install-system
   COMMAND "${CMAKE_COMMAND}" "-DJARO_BINARY_DIR=${CMAKE_BINARY_DIR}" "-DJARO_INSTALL_CONFIG=$<CONFIG>"
@@ -197,8 +198,8 @@ endif()
 add_custom_target(sieve-tools COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/build/sieve-tools.py" WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" USES_TERMINAL)
 find_program(PANDOC_EXECUTABLE pandoc)
 if(PANDOC_EXECUTABLE)
-  add_custom_target(man COMMAND "${PANDOC_EXECUTABLE}" -s -t man --metadata title=jaromail --metadata section=1 "${PROJECT_SOURCE_DIR}/doc/jaromail-manual.md" -o "${PROJECT_SOURCE_DIR}/doc/jaromail.1"
-    COMMAND "${PANDOC_EXECUTABLE}" -s -t man --metadata title=jaro --metadata section=1 "${PROJECT_SOURCE_DIR}/doc/jaro.1.md" -o "${PROJECT_SOURCE_DIR}/doc/jaro.1" VERBATIM)
+  add_custom_target(man COMMAND "${PANDOC_EXECUTABLE}" -s -t man --metadata title=jaromail --metadata section=1 "${PROJECT_SOURCE_DIR}/docs/jaromail-manual.md" -o "${PROJECT_SOURCE_DIR}/docs/jaromail.1"
+    COMMAND "${PANDOC_EXECUTABLE}" -s -t man --metadata title=jaro --metadata section=1 "${PROJECT_SOURCE_DIR}/docs/jaro.1.md" -o "${PROJECT_SOURCE_DIR}/docs/jaro.1" VERBATIM)
 endif()
 set(CPACK_GENERATOR TGZ)
 set(CPACK_PACKAGE_NAME jaromail)

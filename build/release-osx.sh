@@ -39,14 +39,14 @@ done
 
 cp -r ../src/mutt/*     $WORKDIR/mutt/
 cp -r ../src/stats/*    $WORKDIR/.stats/
-cp ../doc/Applications.txt $WORKDIR/
-cp ../doc/Filters.txt      $WORKDIR/
-cp ../doc/Filters.native.txt $WORKDIR/
-cp ../doc/Aliases.txt      $WORKDIR/
-cp ../doc/jaromail-manual.pdf     $WORKDIR/jaromail-manual.pdf
-cp ../doc/JaroMail.icns	   $appdst/Contents/Resources
+cp ../docs/Applications.txt $WORKDIR/
+cp ../docs/Filters.txt      $WORKDIR/
+cp ../docs/Filters.native.txt $WORKDIR/
+cp ../docs/Aliases.txt      $WORKDIR/
+cp ../docs/jaromail-manual.pdf     $WORKDIR/jaromail-manual.pdf
+cp ../docs/JaroMail.icns	   $appdst/Contents/Resources
 mkdir -p $WORKDIR/Accounts
-cp -r ../doc/Accounts/*      $WORKDIR/Accounts/
+cp -r ../docs/Accounts/*      $WORKDIR/Accounts/
 
 
 print "Copying binaries and adjusting relocations"
@@ -157,7 +157,7 @@ v=README; cp -v -f ../${v}.md ${dir}/${v}.txt
 
 v=COPYING; cp -v -f ../${v}.txt ${dir}/${v}.txt
 v=ChangeLog; cp -v -f ../${v}.md ${dir}/${v}.txt
-v=jaromail-manual.pdf; cp -v -f ../doc/${v} ${dir}/${v}
+v=jaromail-manual.pdf; cp -v -f ../docs/${v} ${dir}/${v}
 ln -sf /Applications ${dir}/Applications
 
 echo "Generating release: $out"

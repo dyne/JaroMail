@@ -1,0 +1,17 @@
+.vp-doc {
+  overflow-wrap: break-word;
+}
+
+.vp-doc p,
+.vp-doc > div > ul,
+.vp-doc > div > ol {
+  max-width: 70ch;
+}
+
+.vp-doc img {
+  height: auto;
+}
+
+.vp-doc table {
+  max-width: 100%;
+}

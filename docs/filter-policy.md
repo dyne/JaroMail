@@ -53,7 +53,7 @@ to-domain project.example move projects
 Legacy four-field `from`/`to` patterns use POSIX ERE under clean Zsh semantics
 (`RE_MATCH_PCRE` off); compile each once. Regex punctuation retains its regex
 meaning. In particular `github.com` is a regex with an unescaped dot, not a
-typed domain. Shipped `doc/Filters.txt` contains 14 active From/save records
+typed domain. Shipped `docs/Filters.txt` contains 14 active From/save records
 routing to `zz.social`; preserving those records does not make their existing
 regex semantics exact domain matching. No private representative rules were
 provided; the public synthetic corpus represents address conflicts instead.

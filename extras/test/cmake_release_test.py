@@ -113,7 +113,7 @@ class CMakeTests(unittest.TestCase):
         cls.arch = 'arm64' if platform.machine() in ('aarch64', 'arm64') else 'x86_64'
         cls.source, cls.binary = cls.work / 'source with spaces', cls.work / 'binary with spaces'
         cls.source.mkdir()
-        for name in ('src', 'build', 'doc', 'cmake', 'vendor', 'CMakeLists.txt', 'Makefile', 'VERSION', 'COPYING.txt'):
+        for name in ('src', 'build', 'docs', 'cmake', 'vendor', 'CMakeLists.txt', 'Makefile', 'VERSION', 'COPYING.txt'):
             original = REPO / name
             if original.is_dir():
                 def ignore(directory, names):
@@ -139,7 +139,7 @@ exec "$JARO_REAL_CC" "$@"
         cls.env = dict(os.environ, PATH=str(cls.bin)+os.pathsep+os.environ['PATH'], JARO_REAL_CC=shutil.which('cc'))
         for name in ('PREFIX', 'DESTDIR', 'CMAKE_INSTALL_PREFIX'):
             cls.env.pop(name, None)
-        cls.manuals = {name: (cls.source/'doc'/name).read_bytes() for name in ('jaro.1','jaromail.1')}
+        cls.manuals = {name: (cls.source/'docs'/name).read_bytes() for name in ('jaro.1','jaromail.1')}
         configured = run(['cmake', '-S', cls.source, '-B', cls.binary, '-G', 'Ninja',
                          '-DCMAKE_C_COMPILER='+str(compiler), '-DCMAKE_BUILD_TYPE=',
                          '-DCMAKE_C_FLAGS=-O0 -DJARO_CMAKE_REGRESSION_TEST=1',
@@ -314,11 +314,11 @@ exec "$JARO_REAL_CC" "$@"
 
     def test_cmake_manpages_are_never_implicit(self):
         run(['cmake','--build',self.binary,'--parallel','2'],env=self.env)
-        for name,data in self.manuals.items():self.assertEqual((self.source/'doc'/name).read_bytes(),data)
+        for name,data in self.manuals.items():self.assertEqual((self.source/'docs'/name).read_bytes(),data)
         result = run(['cmake','--build',self.binary,'--target','man'],env=self.env,succeeds=False)
         self.assertNotEqual(result.returncode,0)
         self.assertIn('unexpected-Pandoc',result.stdout+result.stderr)
-        for name,data in self.manuals.items():self.assertEqual((self.source/'doc'/name).read_bytes(),data)
+        for name,data in self.manuals.items():self.assertEqual((self.source/'docs'/name).read_bytes(),data)
 
     def test_cmake_in_source_build_cannot_overwrite_make_wrapper(self):
         source=self.work/'forbidden in-source build'

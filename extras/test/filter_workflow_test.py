@@ -23,7 +23,7 @@ class WorkflowTests(unittest.TestCase):
         cls.work.mkdir(mode=0o700, parents=True, exist_ok=True)
         cls.source, cls.prefix = cls.work / 'source with spaces', cls.work / 'prefix with spaces'
         cls.source.mkdir()
-        for name in ('src', 'build', 'extras', 'doc', 'Makefile', 'CMakeLists.txt', 'cmake', 'VERSION', 'COPYING.txt', '.github', 'README.md', 'vendor'):
+        for name in ('src', 'build', 'extras', 'docs', 'Makefile', 'CMakeLists.txt', 'cmake', 'VERSION', 'COPYING.txt', '.github', 'README.md', 'vendor'):
             p = REPO / name
             if p.is_dir():
                 def ignore(directory, names):
@@ -620,7 +620,7 @@ class WorkflowTests(unittest.TestCase):
                         self.events.append(dict(command=[str(cli),*args],cwd=str(self.root.parent),engine=engine,root=str(root),exit=r.returncode,stdout_hex=r.stdout.hex(),stderr_hex=r.stderr.hex()))
                         self.assertEqual(r.returncode,code,r.stderr+r.stdout);return r
                     run('init')
-                    expected=REPO/'doc'/('Filters.txt' if engine=='legacy' else 'Filters.native.txt')
+                    expected=REPO/'docs'/('Filters.txt' if engine=='legacy' else 'Filters.native.txt')
                     self.assertEqual((root/'Filters.txt').read_bytes(),expected.read_bytes())
                     self.assertFalse((root/'FilterProfile.txt').exists())
                     run('sieve')
@@ -658,7 +658,7 @@ class WorkflowTests(unittest.TestCase):
             finally:hidden.rename(template)
 
     def test_existing_legacy_policy_compiles_without_profile_or_rewrite(self):
-        original=(REPO/'doc/Filters.txt').read_bytes();(self.root/'Filters.txt').write_bytes(original)
+        original=(REPO/'docs/Filters.txt').read_bytes();(self.root/'Filters.txt').write_bytes(original)
         aliases=(self.root/'Aliases.txt').read_bytes();account=(self.accounts/'default.txt').read_bytes()
         self.env['HOME']=str(self.root.parent/'migration-home');self.env['JARO_KEYRING']='fixture-unused'
         self.run_cli('init');self.run_cli('sieve')
@@ -702,7 +702,7 @@ class WorkflowTests(unittest.TestCase):
         found = [p for p in legacy_root.glob('*/cur/*') if p.read_bytes() == self.message.read_bytes()]
         self.assertEqual([p.parent.parent.name for p in found], ['unsorted'])
         import hashlib
-        qualification = hashlib.sha256((REPO / 'doc/filter-regex-qualification.json').read_bytes()).hexdigest()
+        qualification = hashlib.sha256((REPO / 'docs/filter-regex-qualification.json').read_bytes()).hexdigest()
         (self.root / 'FilterProfile.txt').write_text('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\ncapability mailbox\ncapability regex\nregex-qualification '+qualification+'\n')
         self.run_cli('sieve')
         generation = os.readlink(self.root / 'cache/filter-engine/current').split('/')[-1].encode()
@@ -741,7 +741,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(data, (self.message.parent / ident).read_bytes())
         self.assertEqual(actual, retained)
         import hashlib
-        qualification = hashlib.sha256((REPO / 'doc/filter-regex-qualification.json').read_bytes()).hexdigest()
+        qualification = hashlib.sha256((REPO / 'docs/filter-regex-qualification.json').read_bytes()).hexdigest()
         (self.root / 'FilterProfile.txt').write_text('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\ncapability mailbox\ncapability regex\nregex-qualification '+qualification+'\n')
         self.run_cli('sieve')
         generation = os.readlink(self.root / 'cache/filter-engine/current').split('/')[-1].encode()
