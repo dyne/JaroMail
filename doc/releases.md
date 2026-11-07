@@ -79,9 +79,13 @@ sample configuration, authors and GPLv3 license are installed with Jaromail.
 `-DJARO_ABOOK_NLS=ON` optionally builds the five upstream translations with
 gettext tools and libintl; the default uses English messages.
 
-Static releases explicitly build ncurses 6.5 and readline 8.3 with the selected
-Dyne musl compiler before CMake configuration. `build/abook-deps.json` pins their
-URLs and SHA-256 digests. `build/abook-deps.py` verifies downloads and cached
+Static releases reuse Dyne's bundled target ncurses (from the sibling
+`/opt/dyne/<target-triplet>` directory) and build GNU readline 8.3 with the
+selected musl compiler. abook, musl, ncurses and readline are all linked into
+one fully static executable. A pinned ncurses 6.5 source build is retained only
+as a fallback when the selected toolchain has no bundled ncurses.
+`build/abook-deps.json` pins fallback/source URLs and SHA-256 digests.
+`build/abook-deps.py` fingerprints bundled ncurses, verifies downloads and cached
 installed bytes, stages dependencies in a private cache, and prints their prefix
 for `-DJARO_ABOOK_DEPS_PREFIX=...`. Ordinary CMake builds never download them.
 Both architectures run abook conversion/query smoke tests and open/quit its TUI

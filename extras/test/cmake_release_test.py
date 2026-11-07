@@ -372,6 +372,38 @@ class AbookDependencyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'checksum differs'):
             abook_deps.archive(source,self.root,False)
 
+    def test_abook_reuses_ncurses_from_dyne_target_prefix(self):
+        compiler = self.root/'dyne/gcc-musl/bin/x86_64-linux-musl-gcc'
+        compiler.parent.mkdir(parents=True)
+        self.assertIsNone(abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl'))
+        target = self.root/'dyne/x86_64-linux-musl'
+        include = target/'include/ncursesw'
+        include.mkdir(parents=True)
+        notice = '/* Permission is hereby granted, free of charge. */\n'
+        (include/'curses.h').write_text(notice+'#define NCURSES_VERSION "6.6"\n')
+        (include/'ncurses.h').write_text(notice+'#define NCURSES_VERSION "6.6"\n')
+        (include/'ncurses_dll.h').write_text('/* fixture declarations */\n')
+        (target/'lib').mkdir()
+        (target/'lib/libncursesw.a').write_bytes(b'fixture static library')
+        bundle = abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl')
+        self.assertEqual(bundle['identity']['version'],'6.6')
+        installed = self.root/'staged'
+        abook_deps.stage_ncurses(bundle,installed)
+        self.assertEqual((installed/'include/ncurses.h').read_bytes(),(include/'ncurses.h').read_bytes())
+        self.assertTrue((installed/'include/ncursesw/ncurses_dll.h').is_file())
+        self.assertEqual((installed/'lib/libncursesw.a').read_bytes(),b'fixture static library')
+        self.assertIn('Permission is hereby granted',(installed/'share/licenses/ncurses/COPYING').read_text())
+        first = bundle['identity']
+        (target/'lib/libncursesw.a').write_bytes(b'new bundled library')
+        self.assertNotEqual(first,abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl')['identity'])
+
+    def test_abook_partial_bundle_is_rejected(self):
+        compiler = self.root/'dyne/gcc-musl/bin/x86_64-linux-musl-gcc'
+        (self.root/'dyne/x86_64-linux-musl/lib').mkdir(parents=True)
+        (self.root/'dyne/x86_64-linux-musl/lib/libncursesw.a').write_bytes(b'incomplete')
+        with self.assertRaisesRegex(ValueError,'incomplete bundled ncurses'):
+            abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl')
+
     def test_abook_dependency_extract_rejects_traversal_and_links(self):
         for index,name in enumerate(('../escape','fixture-1/../../escape','fixture-1/link')):
             path = self.root/f'archive{index}.tar.gz'

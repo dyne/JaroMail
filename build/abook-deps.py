@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Explicitly build pinned static ncurses/readline for the selected musl compiler."""
+"""Prepare static abook dependencies, reusing Dyne's bundled ncurses first."""
 import argparse
 import fcntl
 import hashlib
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shlex
 import shutil
@@ -19,6 +20,42 @@ MANIFEST = Path(__file__).with_name('abook-deps.json')
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def bundled_ncurses(compiler, machine):
+    # Dyne installs target libraries beside gcc-musl, not inside its sysroot.
+    prefix = compiler.parents[2]/machine
+    include, library = prefix/'include/ncursesw', prefix/'lib/libncursesw.a'
+    if not include.exists() and not library.exists():
+        return None
+    if not library.is_file() or not (include/'ncurses.h').is_file():
+        raise ValueError('incomplete bundled ncurses: '+str(prefix))
+    headers = sorted(include.glob('*.h'))
+    version = re.search(r'^#define NCURSES_VERSION\s+"([^"]+)"',
+                        (include/'ncurses.h').read_text(),re.MULTILINE)
+    if not version:
+        raise ValueError('cannot identify bundled ncurses: '+str(include))
+    return dict(prefix=prefix,include=include,library=library,
+                identity=dict(provider='Dyne musl target libraries',version=version[1],
+                              library_sha256=digest(library),
+                              headers={p.name:digest(p) for p in headers}))
+
+
+def stage_ncurses(bundle, installed):
+    include = installed/'include'
+    include.mkdir(parents=True)
+    shutil.copytree(bundle['include'],include/'ncursesw')
+    # Preserve nested include paths while supporting readline's <termcap.h>.
+    for header in bundle['include'].glob('*.h'):
+        (include/header.name).symlink_to('ncursesw/'+header.name)
+    (installed/'lib').mkdir()
+    shutil.copy2(bundle['library'],installed/'lib/libncursesw.a')
+    notices = installed/'share/licenses/ncurses'
+    notices.mkdir(parents=True)
+    header = (bundle['include']/'curses.h').read_bytes()
+    if not header.startswith(b'/*') or b'Permission is hereby granted' not in header.split(b'*/',1)[0]:
+        raise ValueError('bundled ncurses copyright notice is missing')
+    (notices/'COPYING').write_bytes(header.split(b'*/',1)[0]+b'*/\n')
 
 
 def archive(source, cache, download):
@@ -94,6 +131,8 @@ def main():
         parser.error(f'compiler {machine!r} is not {args.arch} musl')
     identity = dict(manifest=digest(MANIFEST), builder=digest(Path(__file__)), compiler=digest(compiler),
                     machine=machine, version=subprocess.check_output([str(compiler),'--version'],text=True))
+    bundle = bundled_ncurses(compiler,machine)
+    identity['ncurses'] = bundle['identity'] if bundle else dict(provider='pinned source fallback')
     key = hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
     cache, sources = args.cache_dir.resolve(), args.source_cache.resolve()
     cache.mkdir(parents=True,exist_ok=True)
@@ -111,6 +150,8 @@ def main():
         prefix = entry/'prefix'
         stage = work/'stage'
         installed = stage/str(prefix).lstrip('/')
+        if bundle:
+            stage_ncurses(bundle,installed)
         env = dict(os.environ,CC=shlex.join([str(compiler)]),CFLAGS='-O2 -std=gnu17',
                    CPPFLAGS='',LDFLAGS='-static',LIBS='',LC_ALL='C')
         env.pop('DESTDIR',None)
@@ -118,6 +159,8 @@ def main():
         if launcher:
             env['CC'] = shlex.join([launcher,str(compiler)])
         for source in manifest['sources']:
+            if source['name'] == 'ncurses' and bundle:
+                continue
             src = extract(archive(source,sources,args.download),work,source)
             build = work/(source['name']+'-build')
             build.mkdir()
@@ -144,7 +187,11 @@ def main():
             shutil.rmtree(src)
             shutil.rmtree(build)
         notices = installed/'share/licenses'
-        shutil.copy2(MANIFEST,notices/'sources.json')
+        provenance = dict(manifest)
+        if bundle:
+            provenance['sources'] = [s for s in manifest['sources'] if s['name'] != 'ncurses']
+            provenance['bundled_ncurses'] = bundle['identity']
+        (notices/'sources.json').write_text(json.dumps(provenance,sort_keys=True,indent=2)+'\n')
         shutil.move(installed,work/'prefix')
         shutil.rmtree(stage)
         files = {p.relative_to(work/'prefix').as_posix():digest(p) for p in (work/'prefix').rglob('*') if p.is_file()}
