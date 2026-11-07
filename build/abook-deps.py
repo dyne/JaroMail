@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare static abook dependencies, reusing Dyne's bundled ncurses first."""
+"""Prepare static abook dependencies from Dyne's bundled ncurses and readline."""
 import argparse
 import fcntl
 import hashlib
@@ -56,6 +56,36 @@ def stage_ncurses(bundle, installed):
     if not header.startswith(b'/*') or b'Permission is hereby granted' not in header.split(b'*/',1)[0]:
         raise ValueError('bundled ncurses copyright notice is missing')
     (notices/'COPYING').write_bytes(header.split(b'*/',1)[0]+b'*/\n')
+
+
+def bundled_readline(compiler, machine):
+    prefix = compiler.parents[2]/machine
+    include = prefix/'include/readline'
+    libraries = [prefix/'lib'/name for name in ('libreadline.a','libhistory.a')]
+    if not include.exists() and not any(p.exists() for p in libraries):
+        return None
+    if not all(p.is_file() for p in libraries) or not all((include/name).is_file() for name in ('readline.h','history.h')):
+        raise ValueError('incomplete bundled readline: '+str(prefix))
+    header = (include/'readline.h').read_text()
+    major = re.search(r'^#define RL_VERSION_MAJOR\s+(\d+)',header,re.MULTILINE)
+    minor = re.search(r'^#define RL_VERSION_MINOR\s+(\d+)',header,re.MULTILINE)
+    if not major or not minor:
+        raise ValueError('cannot identify bundled readline: '+str(include))
+    return dict(prefix=prefix,include=include,libraries=libraries,
+                identity=dict(provider='Dyne musl target libraries',version=major[1]+'.'+minor[1],
+                              libraries={p.name:digest(p) for p in libraries},
+                              headers={p.name:digest(p) for p in sorted(include.glob('*.h'))}))
+
+
+def stage_readline(bundle, installed):
+    (installed/'include').mkdir(parents=True,exist_ok=True)
+    (installed/'lib').mkdir(exist_ok=True)
+    shutil.copytree(bundle['include'],installed/'include/readline')
+    for library in bundle['libraries']:
+        shutil.copy2(library,installed/'lib'/library.name)
+    notices = bundle['prefix']/'share/licenses/readline'
+    if notices.is_dir():
+        shutil.copytree(notices,installed/'share/licenses/readline',dirs_exist_ok=True)
 
 
 def archive(source, cache, download):
@@ -120,6 +150,7 @@ def main():
     parser.add_argument('--cache-dir', type=Path, required=True)
     parser.add_argument('--source-cache', type=Path, required=True)
     parser.add_argument('--download', action='store_true')
+    parser.add_argument('--require-bundled', action='store_true', help='fail instead of building missing target libraries')
     parser.add_argument('--jobs', type=int, default=2)
     args = parser.parse_args()
     if args.jobs < 1:
@@ -132,7 +163,11 @@ def main():
     identity = dict(manifest=digest(MANIFEST), builder=digest(Path(__file__)), compiler=digest(compiler),
                     machine=machine, version=subprocess.check_output([str(compiler),'--version'],text=True))
     bundle = bundled_ncurses(compiler,machine)
+    readline = bundled_readline(compiler,machine)
+    if args.require_bundled and not (bundle and readline):
+        parser.error('--require-bundled needs complete target ncurses and GNU readline libraries/headers')
     identity['ncurses'] = bundle['identity'] if bundle else dict(provider='pinned source fallback')
+    identity['readline'] = readline['identity'] if readline else dict(provider='pinned source fallback')
     key = hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
     cache, sources = args.cache_dir.resolve(), args.source_cache.resolve()
     cache.mkdir(parents=True,exist_ok=True)
@@ -152,6 +187,8 @@ def main():
         installed = stage/str(prefix).lstrip('/')
         if bundle:
             stage_ncurses(bundle,installed)
+        if readline:
+            stage_readline(readline,installed)
         env = dict(os.environ,CC=shlex.join([str(compiler)]),CFLAGS='-O2 -std=gnu17',
                    CPPFLAGS='',LDFLAGS='-static',LIBS='',LC_ALL='C')
         env.pop('DESTDIR',None)
@@ -160,6 +197,8 @@ def main():
             env['CC'] = shlex.join([launcher,str(compiler)])
         for source in manifest['sources']:
             if source['name'] == 'ncurses' and bundle:
+                continue
+            if source['name'] == 'readline' and readline:
                 continue
             src = extract(archive(source,sources,args.download),work,source)
             build = work/(source['name']+'-build')
@@ -191,11 +230,15 @@ def main():
         if bundle:
             provenance['sources'] = [s for s in manifest['sources'] if s['name'] != 'ncurses']
             provenance['bundled_ncurses'] = bundle['identity']
+        if readline:
+            provenance['sources'] = [s for s in provenance['sources'] if s['name'] != 'readline']
+            provenance['bundled_readline'] = readline['identity']
         (notices/'sources.json').write_text(json.dumps(provenance,sort_keys=True,indent=2)+'\n')
         shutil.move(installed,work/'prefix')
         shutil.rmtree(stage)
         files = {p.relative_to(work/'prefix').as_posix():digest(p) for p in (work/'prefix').rglob('*') if p.is_file()}
-        for required in ('lib/libncursesw.a','lib/libreadline.a','include/ncurses.h','include/readline/readline.h'):
+        for required in ('lib/libncursesw.a','lib/libreadline.a','lib/libhistory.a',
+                         'include/ncurses.h','include/readline/readline.h','include/readline/history.h'):
             if required not in files:
                 raise ValueError('missing target dependency: '+required)
         (work/'build.json').write_text(json.dumps(dict(identity=identity,files=files),sort_keys=True,indent=2)+'\n')

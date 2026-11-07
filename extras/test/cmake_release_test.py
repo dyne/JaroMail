@@ -404,6 +404,45 @@ class AbookDependencyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'incomplete bundled ncurses'):
             abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl')
 
+    def test_abook_reuses_bundled_readline_and_history(self):
+        compiler = self.root/'dyne/gcc-musl/bin/x86_64-linux-musl-gcc'
+        self.assertIsNone(abook_deps.bundled_readline(compiler,'x86_64-linux-musl'))
+        target = self.root/'dyne/x86_64-linux-musl'
+        include = target/'include/readline'
+        include.mkdir(parents=True)
+        (include/'readline.h').write_text('#define RL_VERSION_MAJOR\t8\n#define RL_VERSION_MINOR\t3\n')
+        (include/'history.h').write_text('/* history fixture */\n')
+        (target/'lib').mkdir()
+        (target/'lib/libreadline.a').write_bytes(b'static readline fixture')
+        history = target/'lib/libhistory.a'
+        history.write_bytes(b'static history fixture')
+        bundle = abook_deps.bundled_readline(compiler,'x86_64-linux-musl')
+        self.assertEqual(bundle['identity']['version'],'8.3')
+        installed = self.root/'staged'
+        abook_deps.stage_readline(bundle,installed)
+        for name in ('libreadline.a','libhistory.a'):
+            self.assertEqual((installed/'lib'/name).read_bytes(),(target/'lib'/name).read_bytes())
+        self.assertEqual((installed/'include/readline/history.h').read_bytes(),(include/'history.h').read_bytes())
+        original = bundle['identity']
+        history.write_bytes(b'updated history library')
+        self.assertNotEqual(original,abook_deps.bundled_readline(compiler,'x86_64-linux-musl')['identity'])
+        history.unlink()
+        with self.assertRaisesRegex(ValueError,'incomplete bundled readline'):
+            abook_deps.bundled_readline(compiler,'x86_64-linux-musl')
+
+    def test_abook_required_bundle_fails_before_building_or_creating_cache(self):
+        compiler = self.root/'dyne/gcc-musl/bin/x86_64-linux-musl-gcc'
+        compiler.parent.mkdir(parents=True)
+        compiler.write_text('#!/bin/sh\ncase "$1" in\n-dumpmachine) echo x86_64-linux-musl ;;\n--version) echo fixture-compiler ;;\n*) exit 91 ;;\nesac\n')
+        compiler.chmod(0o700)
+        cache, sources = self.root/'cache', self.root/'sources'
+        result = run([sys.executable,REPO/'build/abook-deps.py','--cc',compiler,'--arch','x86_64',
+                      '--cache-dir',cache,'--source-cache',sources,'--require-bundled'],succeeds=False)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('--require-bundled needs complete target',result.stderr)
+        self.assertFalse(cache.exists())
+        self.assertFalse(sources.exists())
+
     def test_abook_dependency_extract_rejects_traversal_and_links(self):
         for index,name in enumerate(('../escape','fixture-1/../../escape','fixture-1/link')):
             path = self.root/f'archive{index}.tar.gz'
