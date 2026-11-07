@@ -35,16 +35,18 @@ Jaromail's existing runtime PATH selects it first. It does not replace a system
 `bin/abook`. Manuals, sample configuration and copyright/license notices are
 installed too. User/system prefixes and `DESTDIR` follow the main project.
 
-Linux releases are fully static, including abook. `build/abook-deps.py` first
-reuses the ncurses archive and headers supplied alongside the Dyne compiler at
-`/opt/dyne/<target-triplet>`. GNU readline is built with that musl compiler when
-preparing the dependency prefix. The bundled ncurses bytes and version enter
-the cache identity and installed provenance; its original copyright notice is
-retained. A pinned ncurses source build is only a fallback for toolchains without
-the bundled library. Source URLs and SHA-256 pins are in `build/abook-deps.json`.
-Downloads happen only in this explicit dependency step, never during ordinary
-CMake configure/build. All dependency libraries are linked into the release
-executable; host ncurses/readline packages are not runtime dependencies.
+Linux releases are fully static, including abook. Dyne musl **v2.6.0** supplies
+both ncurses and GNU readline beside the compiler at `/opt/dyne/<target-triplet>`.
+`build/abook-deps.py --require-bundled` stages those target archives and headers;
+the release pipeline uses this strict mode instead of building dependencies.
+Library/header hashes and versions enter the cache identity and package provenance.
+The executable contains musl, ncurses and readline; host ncurses/readline packages
+are not runtime dependencies.
+
+For manually selected older musl toolchains, the explicit dependency command
+retains pinned source fallbacks from `build/abook-deps.json`, available with
+`--download` instead of strict mode. Ordinary CMake configure/build never downloads
+dependencies. The normal release pipeline requires the complete prebuilt bundle.
 
 ## Customization
 

@@ -39,7 +39,7 @@ jobs:
         uses: dyne/musl-action@fe1d1871b096824ddb7aa158f68dd63dabdc9586
         with:
           target_arch: ${{ matrix.musl }}
-          version: v2.5.1
+          version: v2.6.0
       - name: Set abook dependency paths
         run: |
           printf 'CCACHE_DIR=%s\n' "$RUNNER_TEMP/jaromail-abook-ccache" >> "$GITHUB_ENV"
@@ -48,17 +48,16 @@ jobs:
         with:
           path: |
             ${{ runner.temp }}/jaromail-abook-deps
-            ${{ runner.temp }}/jaromail-abook-sources
             ${{ runner.temp }}/jaromail-abook-ccache
-          key: ${{ runner.os }}-abook-musl-v2.5.1-${{ matrix.arch }}-${{ hashFiles('build/abook-deps.py', 'build/abook-deps.json') }}
-      - name: Reuse bundled ncurses and build static GNU readline
+          key: ${{ runner.os }}-abook-musl-v2.6.0-${{ matrix.arch }}-${{ hashFiles('build/abook-deps.py', 'build/abook-deps.json') }}
+      - name: Use bundled static ncurses and GNU readline
         env:
           MUSL_CC: ${{ steps.musl.outputs.CC }}
           TARGET_ARCH: ${{ matrix.arch }}
         run: |
           prefix=$(python3 build/abook-deps.py --cc "$MUSL_CC" --arch "$TARGET_ARCH" \
             --cache-dir "$RUNNER_TEMP/jaromail-abook-deps" \
-            --source-cache "$RUNNER_TEMP/jaromail-abook-sources" --download)
+            --source-cache "$RUNNER_TEMP/jaromail-abook-sources" --require-bundled)
           printf 'JARO_ABOOK_DEPS_PREFIX=%s\n' "$prefix" >> "$GITHUB_ENV"
       - name: Resolve assigned version
         id: version
