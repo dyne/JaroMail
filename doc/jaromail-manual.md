@@ -86,15 +86,20 @@ or Make. The build does not install system packages or download dependencies.
 On Debian-like systems the build packages are:
 
 ```
-gcc cmake ninja-build python3
+gcc cmake ninja-build python3 libncurses-dev libreadline-dev
 ```
 
 ### Install
 To install the following programs need to be installed:
 
 ```
-fetchmail msmtp neomutt direnv mblaze pinentry abook wipe notmuch alot
+fetchmail msmtp neomutt direnv mblaze pinentry wipe notmuch alot
 ```
+
+The full abook 0.6.2 source is bundled and built with Jaromail, using
+wide-character ncurses and GNU readline. Installed Jaromail selects its private
+`share/jaromail/bin/abook`, leaving any system abook untouched. Source provenance
+and customization instructions are in `vendor/abook/README.md`.
 
 Build and install with:
 

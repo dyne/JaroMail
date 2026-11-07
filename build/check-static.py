@@ -8,7 +8,7 @@ import struct
 import subprocess
 
 HELPERS = ('fetchaddr', 'parsedate', 'dotlock', 'gpgewrap', 'jaro-filter',
-           'jaro-filter-compile', 'jaro-filter-legacy')
+           'jaro-filter-compile', 'jaro-filter-legacy', 'abook')
 MACHINES = {'x86_64': 62, 'arm64': 183}
 
 

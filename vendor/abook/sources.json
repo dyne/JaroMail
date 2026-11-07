@@ -1,0 +1,644 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "name": "abook",
+    "version": "0.6.2",
+    "url": "https://abook.sourceforge.io/devel/abook-0.6.2.tar.gz",
+    "sha256": "2d6bde2d2d03523f164f930e4fdec6025f3a94abe48a43706f543880a1a21ebe",
+    "retrieved_on": "2026-11-07",
+    "scope": "Complete release archive, retained byte-for-byte; no source modifications at import."
+  },
+  "directory": "abook/upstream",
+  "files": [
+    {
+      "path": "ABOUT-NLS",
+      "size": 67,
+      "sha256": "fbe8681a07eab3934d302edb4db8fbcea014b460232e3638e7f4cdb7da53e5aa"
+    },
+    {
+      "path": "ANNOUNCE",
+      "size": 272,
+      "sha256": "12f9418eeb4bbd2764800387fec46436837065017831966c07d2e7fbdc7a115a"
+    },
+    {
+      "path": "AUTHORS",
+      "size": 925,
+      "sha256": "5bfeefee30423b440591ede41268ee1b15afcb652e835e8acda0bdb2956135a8"
+    },
+    {
+      "path": "BUGS",
+      "size": 1584,
+      "sha256": "df352fdf49ccfedf96532c0dc5f361dd5a944ef040351d672eb9719a8234d02d"
+    },
+    {
+      "path": "COPYING",
+      "size": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "ChangeLog",
+      "size": 9579,
+      "sha256": "b28888901a6ccc3be69193e11a5a06f0e77a1c71809b2ba2eb5d7db0cf639cf0"
+    },
+    {
+      "path": "FAQ",
+      "size": 2470,
+      "sha256": "1cdb5309d479bf1af32d9c6586d222c638dc461553a947c4aeae64c183abae49"
+    },
+    {
+      "path": "INSTALL",
+      "size": 15766,
+      "sha256": "edebc46c7d07258a20170050d9595ce4e630f5d584a4eb00220bb90c8997a31b"
+    },
+    {
+      "path": "Makefile.am",
+      "size": 1108,
+      "sha256": "b2b41df5c99204b55de46cf8798bffff129fa1d245759e20e0a18ec7dd27e485"
+    },
+    {
+      "path": "Makefile.in",
+      "size": 35309,
+      "sha256": "9c02f665f9f85535afbb1001fc519b1a5a68e58339e7b1163cd0f1e4d2925c50"
+    },
+    {
+      "path": "NEWS",
+      "size": 14,
+      "sha256": "19cf3cea665a60db66d5e03574e3d44a936cb4b61b9077485a113e84c1321dbf"
+    },
+    {
+      "path": "README",
+      "size": 2485,
+      "sha256": "49b61886b4d00e9cc01bfe15d9e22bf0f433beb26066279600b018af30899ef7"
+    },
+    {
+      "path": "RELEASE_NOTES",
+      "size": 3612,
+      "sha256": "ef886c13d8567f5d35db544bf91b4928e03cf57b1897129ca7b6d32c05f07155"
+    },
+    {
+      "path": "THANKS",
+      "size": 360,
+      "sha256": "1e4c5be36317fb9a71310fd61684e5d31a4be781933b27d36d496052b8c9d91b"
+    },
+    {
+      "path": "TODO",
+      "size": 76,
+      "sha256": "da7f5f295da299ea7a3a46b139e1a19a76484bb90a6941a8e0bc6c81bbe8d2cc"
+    },
+    {
+      "path": "abook.1",
+      "size": 3677,
+      "sha256": "3a41f6ae7a820ef2cc37a1a10a31b7af1937a5c3b5f6eace3ed2200203536c0a"
+    },
+    {
+      "path": "abook.c",
+      "size": 19100,
+      "sha256": "409822416df4a2a471e72f45d7a65f4efb31fc84719b4ef3b14c4b8455ddceb9"
+    },
+    {
+      "path": "abook.h",
+      "size": 1257,
+      "sha256": "d5156621fde3a039da387a43a58e0cc85568334f32369c05696e9afccf840432"
+    },
+    {
+      "path": "abook.spec.in",
+      "size": 933,
+      "sha256": "7136baf17812e48de6aeaf77ac67a93db4211049264791aa79c2da343ec17c12"
+    },
+    {
+      "path": "abook_curses.h",
+      "size": 236,
+      "sha256": "dcd5003eee92d28decd12792a5177cd6d9e3815701171353d4eb175c1dbc6a42"
+    },
+    {
+      "path": "abook_rl.c",
+      "size": 3630,
+      "sha256": "1c1ab06937e9049950a58f85a436229d4db0756ec1617e36589acc923e2165e2"
+    },
+    {
+      "path": "abook_rl.h",
+      "size": 156,
+      "sha256": "6d100b5fb5637b6bf5c8dcfcbc1201d31fc23506cbbd02d086fbc377e147ce10"
+    },
+    {
+      "path": "abookrc.5",
+      "size": 7971,
+      "sha256": "6e06fb965a3342130207ee4e49a5d18b68afd5ddb0bb38e6c87ade3541bddfd9"
+    },
+    {
+      "path": "acinclude.m4",
+      "size": 5888,
+      "sha256": "4d3639a0c7bd423c21385676fbc990909b3e3a24c6f775ddbe2f26426c9bd1a4"
+    },
+    {
+      "path": "aclocal.m4",
+      "size": 42655,
+      "sha256": "19bc5f102c36d5ef345c94627b2b8dc214944dff81650d7b5c2c9b1178ace69b"
+    },
+    {
+      "path": "color.h",
+      "size": 257,
+      "sha256": "c1bce76098abb07041e645acd64be3e0852894afc737777db61ab85518a86dcc"
+    },
+    {
+      "path": "compile",
+      "size": 7400,
+      "sha256": "c207b390aac6323062b982214a6c63448e53e6911107993abe96f35fe7a30a18"
+    },
+    {
+      "path": "config.guess",
+      "size": 49482,
+      "sha256": "cf610daf8afdedbf2110abd79bdd4121d59080cab5ec46deaf67f97273bb6bda"
+    },
+    {
+      "path": "config.h.in",
+      "size": 7552,
+      "sha256": "dc25cf8381b17e404b12023a0ed4ecbbc33efce89ea72132d0cc3ba7565cdafa"
+    },
+    {
+      "path": "config.rpath",
+      "size": 18574,
+      "sha256": "9153320951eac143ec6e2715fe660f0eb842a5a058bcbfef98870d114ed6f07a"
+    },
+    {
+      "path": "config.sub",
+      "size": 35406,
+      "sha256": "deb02c26f43b2ea64276c9ede77ec0f53d08e6256710f3c0a12275712085c348"
+    },
+    {
+      "path": "configure",
+      "size": 339740,
+      "sha256": "3460005d0cc115cf8665b788a2faab8c323ae63132fd2429f7e78f68b34937e5"
+    },
+    {
+      "path": "configure.ac",
+      "size": 5020,
+      "sha256": "3fe916501e758532f6e064faa1567f4d8789486ec40598f3fe4509c772a03a27"
+    },
+    {
+      "path": "database.c",
+      "size": 19116,
+      "sha256": "44ae207c541722f3848a95567c5dda230cd0f3efaed7d3fd4eb3bbec868c1634"
+    },
+    {
+      "path": "database.h",
+      "size": 3265,
+      "sha256": "78b62716a1f835ae1bef9107d3e8dd6841edb1a3d20525c85d66c308ddba6ac4"
+    },
+    {
+      "path": "depcomp",
+      "size": 23568,
+      "sha256": "e44b49f71b265788187993090027193a6cd2b4718f9aa7be34412f537bce6873"
+    },
+    {
+      "path": "doc/HOWTO.translating_abook",
+      "size": 10120,
+      "sha256": "10259ece81969fd93ee671fa43ace9d0f11717d816d853983ef2ef8ac57f2a37"
+    },
+    {
+      "path": "edit.c",
+      "size": 17163,
+      "sha256": "9118786ccae64625171657f7fe3bc810cd92c790cdfc998f0b78ff6604e944ff"
+    },
+    {
+      "path": "edit.h",
+      "size": 659,
+      "sha256": "1ea84cbab05b41d336a90ed083e95c26304ffcc09b35a41d76f94550248dd5e3"
+    },
+    {
+      "path": "filter.c",
+      "size": 58505,
+      "sha256": "aa593517ee643dcf3eae0db2c0724d9ea1a805f79bfcc88fc976dea40b24804d"
+    },
+    {
+      "path": "filter.h",
+      "size": 1137,
+      "sha256": "1133d8a88d19d484f4408c39cb96b002154edbfe592db9880a50835f6b61c7be"
+    },
+    {
+      "path": "getname.c",
+      "size": 9098,
+      "sha256": "134b884afe9e57adf504ae5f4888648e752475edb7de6267cadda89482c1f768"
+    },
+    {
+      "path": "getname.h",
+      "size": 128,
+      "sha256": "389d5cd985535c62fd6f2413788abd4595cebbd668b860f4856ea977b900455a"
+    },
+    {
+      "path": "getopt.c",
+      "size": 28501,
+      "sha256": "3c47f3d1a74df3b1eb4302804ae8eeb4f3225532fb5c67290de0adebbbe86d3d"
+    },
+    {
+      "path": "getopt.h",
+      "size": 4710,
+      "sha256": "1a019058e04c17e80220772adf4d1c47db3e223990681c0a9d19cf2d39c2cb6d"
+    },
+    {
+      "path": "getopt1.c",
+      "size": 4643,
+      "sha256": "d9c5988e201ade1cf00238024a06f7ec7573ad8c4a4c56e98812a1e41200c578"
+    },
+    {
+      "path": "gettext.c",
+      "size": 251,
+      "sha256": "bbaed419be13d98dfa2d86bbe5b2be07d3e0510e59547df9fdc212675c23ad97"
+    },
+    {
+      "path": "gettext.h",
+      "size": 591,
+      "sha256": "133e22310c2f8bb41c95d0bb12f110e78d963cb312256ba52e11522a00c3c534"
+    },
+    {
+      "path": "help.h",
+      "size": 1696,
+      "sha256": "3014a786abf4b03083bd31bf61c1ebc9e78df5278f0642ab20f1dfb08caedece"
+    },
+    {
+      "path": "install-sh",
+      "size": 15358,
+      "sha256": "3d7488bebd0cfc9b5c440c55d5b44f1c6e2e3d3e19894821bae4a27f9307f1d2"
+    },
+    {
+      "path": "ldif.c",
+      "size": 7883,
+      "sha256": "3a90c8d45b6b50bc525190a438499e3a7bde9ea05cd9b49996180d6f9fe39083"
+    },
+    {
+      "path": "ldif.h",
+      "size": 335,
+      "sha256": "5ea7cc34cc9fd58273b3e352e597e4ce51d4f9aca934a40a09250abfd762130a"
+    },
+    {
+      "path": "list.c",
+      "size": 9686,
+      "sha256": "480b5a938955240e5b8d626a5720a1ad46274a6503e7ef38cec26e293a903cf3"
+    },
+    {
+      "path": "list.h",
+      "size": 1378,
+      "sha256": "13ad2cc6eb41d2f07cdd01352ac2084b3ad268d824ef515c6d2d2d3c6d384725"
+    },
+    {
+      "path": "m4/codeset.m4",
+      "size": 785,
+      "sha256": "b81dba55e1241a114fe1164f3fe739a7ee896a3c8b690b1eeb4d6ae6d0a4487f"
+    },
+    {
+      "path": "m4/fcntl-o.m4",
+      "size": 2972,
+      "sha256": "1515bd769ec39d1a6e283c2bff4ab7c76a94633c63972a20155f7cc06805e0e4"
+    },
+    {
+      "path": "m4/gettext.m4",
+      "size": 14488,
+      "sha256": "6b8ca63d019cf362cfeb9d4b52e7d431b4feb14d5f3f03f97bef824319c0375b"
+    },
+    {
+      "path": "m4/glibc2.m4",
+      "size": 797,
+      "sha256": "79ba0c2e6d7f14913f899e1abc607dafc51af10d9810da72505090b6c349a7ad"
+    },
+    {
+      "path": "m4/glibc21.m4",
+      "size": 854,
+      "sha256": "12fe3cc4d193b8e99fd7bbcbb3d73d051a5dedfa7cdee10c6de9188e888ea23a"
+    },
+    {
+      "path": "m4/host-cpu-c-abi.m4",
+      "size": 22432,
+      "sha256": "e57eed3ec16c8f4c3555469e1defe954a55ddcb45d3de4022f811f2cd3428f8a"
+    },
+    {
+      "path": "m4/iconv.m4",
+      "size": 9731,
+      "sha256": "45d19e622dd2710126b3bd1376597a461309f26409be3bc0a640d5aabfc7edb8"
+    },
+    {
+      "path": "m4/intdiv0.m4",
+      "size": 2352,
+      "sha256": "efa45fd95bb2f255b462c5c7543a45567b21b4bc9204492cbbd386e7e968053b"
+    },
+    {
+      "path": "m4/intl.m4",
+      "size": 11866,
+      "sha256": "cfc3688d4505283d7422110723d6cc26473cd9d6d76a4f5bf15e13cb00169312"
+    },
+    {
+      "path": "m4/intldir.m4",
+      "size": 923,
+      "sha256": "549788b01e2cec7f9de1240ddf114bd7b1d8c6ae42b405eb43222e5b93f50035"
+    },
+    {
+      "path": "m4/intlmacosx.m4",
+      "size": 3229,
+      "sha256": "fa6e64ba32baf3288d18c332fc4cc3746fc52de51a908d6fe8ed65a50445815f"
+    },
+    {
+      "path": "m4/intmax.m4",
+      "size": 1062,
+      "sha256": "f6da222cb5520f5365fa2e9280ad41d8bbb747218aaf307562661874771e148c"
+    },
+    {
+      "path": "m4/inttypes-pri.m4",
+      "size": 1177,
+      "sha256": "8b69f02f18bb3c732a85326367c13e2c653ee9021fd00f3b3a404906ec47833b"
+    },
+    {
+      "path": "m4/inttypes_h.m4",
+      "size": 960,
+      "sha256": "cc43afc791ffcd4182e0610fe483427d4f7c155c2b1d3624160b77e9f32e9402"
+    },
+    {
+      "path": "m4/lcmessage.m4",
+      "size": 1324,
+      "sha256": "7fea1591763b3a77e5cb14a046a5094fbb5347bcb370cfe0d3c406c2d59fd841"
+    },
+    {
+      "path": "m4/lib-ld.m4",
+      "size": 5370,
+      "sha256": "55d2a7427d8486e457b4a03c577299bf18116d98b9c8e58a1879f75ec10a0388"
+    },
+    {
+      "path": "m4/lib-link.m4",
+      "size": 34802,
+      "sha256": "49fbff19033e65a26c4001dcd66eaf4c275c42d21ef2b0654b403d5d7467bca1"
+    },
+    {
+      "path": "m4/lib-prefix.m4",
+      "size": 11944,
+      "sha256": "7acf0b725120cdbe81415333685d196baea274c18aa8ad0380616498a1fe1fb6"
+    },
+    {
+      "path": "m4/lock.m4",
+      "size": 1244,
+      "sha256": "5106c4e3ebb5f45aa4baefce304c66398f8980953b9fbaede5f6efb2bd952a88"
+    },
+    {
+      "path": "m4/longlong.m4",
+      "size": 4477,
+      "sha256": "05404b842830e3a09cea87bca4f8a2ff149af4ccdd653ae4912e4c5477a70fbd"
+    },
+    {
+      "path": "m4/nls.m4",
+      "size": 1234,
+      "sha256": "1b479b430b6fa6140fb85fec4c987d382e5e18581f37c4159e43ac770f131e90"
+    },
+    {
+      "path": "m4/po.m4",
+      "size": 18831,
+      "sha256": "3449a564192dbfcbf0d746b57afe496c8e4f7adbee2a396005adbff9eb54dc28"
+    },
+    {
+      "path": "m4/printf-posix.m4",
+      "size": 1531,
+      "sha256": "333fb366300168983324ad3b1a777ceae255723ec704fc8c263935442ea1c9f2"
+    },
+    {
+      "path": "m4/progtest.m4",
+      "size": 3090,
+      "sha256": "1362419d882b8fadbbef7e20807c120bab4412000fbf32e05d25d5577c9c9f40"
+    },
+    {
+      "path": "m4/size_max.m4",
+      "size": 2995,
+      "sha256": "2accd298a84b43e0d6dafabd042cf5bc4509887b6a34def10e3f88bece109c0a"
+    },
+    {
+      "path": "m4/stdint_h.m4",
+      "size": 936,
+      "sha256": "6ac5e572c346433ad98ece6bf2b196e8a08c0d7d325f02bdfe1389a8fe0801c5"
+    },
+    {
+      "path": "m4/threadlib.m4",
+      "size": 13708,
+      "sha256": "54ea13a88b82c5adb134634537a2ba6699b94fd5e402946e1b8be1b9307e44bf"
+    },
+    {
+      "path": "m4/uintmax_t.m4",
+      "size": 1113,
+      "sha256": "76cd6e71d581ec406fa1f0b19989e05549359d0a05153036905f50cf0edbf65e"
+    },
+    {
+      "path": "m4/visibility.m4",
+      "size": 3237,
+      "sha256": "fbd1d730c67f320deddc06c6428d28fc58cc573efdfdebedefc9f3670c3bdb08"
+    },
+    {
+      "path": "m4/wchar_t.m4",
+      "size": 766,
+      "sha256": "de3aac7c53f8b8b8dfb4754371f3ea6b83a9a099c6a32d8969381b03949877e5"
+    },
+    {
+      "path": "m4/wint_t.m4",
+      "size": 1001,
+      "sha256": "19a60d87fa156c56c7e6cc388e014b08f1fce2f9ef056c77f455231d85b77fa2"
+    },
+    {
+      "path": "m4/xsize.m4",
+      "size": 434,
+      "sha256": "45c472a99e450a437e226b5a16f31da81db6bd354d2ca9a3d5eb1da66d853aba"
+    },
+    {
+      "path": "mbswidth.c",
+      "size": 8740,
+      "sha256": "82e5b78e333b8df2d48979f714e5602e5403ea7724b6dff79c101668a9c41a4d"
+    },
+    {
+      "path": "mbswidth.h",
+      "size": 1739,
+      "sha256": "ad9a654950fb18b2b779e6b8ad91983f237d868c91ce03d28e8dac3959311c3d"
+    },
+    {
+      "path": "misc.c",
+      "size": 27116,
+      "sha256": "f3bee1021b691ae18417f1030f3430cfc384ba6484f8673dc0fbb120e1bbae19"
+    },
+    {
+      "path": "misc.h",
+      "size": 1416,
+      "sha256": "3f22c49a052a0cf4036789a1c8b32ab9cf651f15fb7193e8072fd86d390bf23e"
+    },
+    {
+      "path": "missing",
+      "size": 6878,
+      "sha256": "a9865db4f39574ff128c0312c367f070d20f81847817021ecce95fd70a610c9d"
+    },
+    {
+      "path": "mkinstalldirs",
+      "size": 3514,
+      "sha256": "42262b72fea21c2b40e283498d74c3fd704a11292da195e813896cebd1528b91"
+    },
+    {
+      "path": "options.c",
+      "size": 11475,
+      "sha256": "08b065d14e38f2c35e7160f8cf4a3ee16ab3dd25c4ed7d6d1e79124a570abd86"
+    },
+    {
+      "path": "options.h",
+      "size": 1647,
+      "sha256": "976f1bf2029ba18f4af9956ec0d69255b337f94b98f6d6302be34287b8e0fdc3"
+    },
+    {
+      "path": "po/ChangeLog",
+      "size": 324,
+      "sha256": "2cfb046986fcd305c475affa49ae85f2801814475e13e6f88c23c1f5139037bf"
+    },
+    {
+      "path": "po/LINGUAS",
+      "size": 44,
+      "sha256": "e6b81ecaa38a506265d21dde496c10e872b87419f50403d9133b8049401a250f"
+    },
+    {
+      "path": "po/Makefile.in.in",
+      "size": 19571,
+      "sha256": "57598157a99797e01050c095625a6904feedf196d06259101f424521a88494e0"
+    },
+    {
+      "path": "po/Makevars",
+      "size": 1863,
+      "sha256": "f115c1a62347499c27a9c424201d3fb351cade8ca3ad39262c7689b85ea9c92d"
+    },
+    {
+      "path": "po/Makevars.template",
+      "size": 3564,
+      "sha256": "d374f67b9c269f97539789e4dc464753cf263064eccb971a70e1e92d3955f4c2"
+    },
+    {
+      "path": "po/POTFILES.in",
+      "size": 145,
+      "sha256": "e4b9ff07ca1c2d90fe3e0f4e8e2bad86cd98d4d760873c6cdb1620a83788dbcb"
+    },
+    {
+      "path": "po/Rules-quot",
+      "size": 2395,
+      "sha256": "8ced8cd2b86458be88c38322db49df53f41f87200a79233ce34499cb031db0cd"
+    },
+    {
+      "path": "po/abook.pot",
+      "size": 14632,
+      "sha256": "06dc9b3e9cc9a6b77cded59db1bef39c1adb531aacecd6dddc2aa9d835b5ec2c"
+    },
+    {
+      "path": "po/boldquot.sed",
+      "size": 217,
+      "sha256": "33234736a58f1610c73e1c8c08faf1b2ef1397d878dd7d2cbd888ca0f2da4ffc"
+    },
+    {
+      "path": "po/de.po",
+      "size": 22854,
+      "sha256": "57ffae611f9dfc1d2ca4b631b2ef5ed0208e664e680660dd07b6529b2db7aa26"
+    },
+    {
+      "path": "po/en@boldquot.header",
+      "size": 1338,
+      "sha256": "99ad82767e9b1b4dd1e413664e06c686c8ab70eaadb129ac08a8b8b76f9173d2"
+    },
+    {
+      "path": "po/en@quot.header",
+      "size": 1204,
+      "sha256": "6f4df89908e6e413db10738ff01e0c7046922c2a4aa4f9e64d376235745a4af5"
+    },
+    {
+      "path": "po/fr.po",
+      "size": 22000,
+      "sha256": "36ac734536e57acd82d92e5c1470abc9943556fc666b4a02f481050b61514f2c"
+    },
+    {
+      "path": "po/insert-header.sin",
+      "size": 906,
+      "sha256": "87041830aa4c5e87cedd35a2a95cf94c4e889604580481430b214422a5e8dc98"
+    },
+    {
+      "path": "po/it.po",
+      "size": 21372,
+      "sha256": "eef8a62d798d4babc717cbbc4318798519544a95bfb062a54b37e9125774346b"
+    },
+    {
+      "path": "po/ja.po",
+      "size": 19867,
+      "sha256": "7da2a878f5f3407e24231a2f1ea430b4a673d9057c32db50650aa46b2ff9fe5e"
+    },
+    {
+      "path": "po/quot.sed",
+      "size": 153,
+      "sha256": "d19ab2cc69000c1206f1b8460952857f05d154158da8b89273ac2900a5c80ec0"
+    },
+    {
+      "path": "po/remove-potcdate.sed",
+      "size": 58,
+      "sha256": "14b395a3e8d475c9eb5eb423613890422b472c69e4a7b5b7f31aa5bb2d7819fd"
+    },
+    {
+      "path": "po/remove-potcdate.sin",
+      "size": 720,
+      "sha256": "d582513385c800f75224f4041fbff207053d4229be6038c6810af382420ac362"
+    },
+    {
+      "path": "po/sv.po",
+      "size": 20390,
+      "sha256": "b62726669537bb59f760318b9dbd7b0ed512b3a957e1c58a8555bd48d8f7f83f"
+    },
+    {
+      "path": "remap.c",
+      "size": 571,
+      "sha256": "b9a5a429d8233ec1c6d221f2c5d1dc6df9f86f7e9ac8acbd8f76bcc2e67aa77c"
+    },
+    {
+      "path": "remap.h",
+      "size": 170,
+      "sha256": "91a4754f619bdff8ee6533fc8a42e38d0df2fb941bdcd09addf65b10c757909b"
+    },
+    {
+      "path": "sample.abookrc",
+      "size": 3464,
+      "sha256": "3de0b46eb6a948f571c84d936990efaa0ffd0a91397690ffcfd39a9964e4d580"
+    },
+    {
+      "path": "stamp-h.in",
+      "size": 10,
+      "sha256": "2cd8ec3de6a07e1fd39676100db57ba62372e820c19812fee55899f65746e192"
+    },
+    {
+      "path": "ui.c",
+      "size": 16393,
+      "sha256": "f7e0097bfdf9543a51780e07a476c19f1d3088479b1aec0c3737cdc738d000dc"
+    },
+    {
+      "path": "ui.h",
+      "size": 1957,
+      "sha256": "a492ff47702f83e6994bad398ec3a00d9f1ef7f3ce6002cc3d967a2299bf76e7"
+    },
+    {
+      "path": "vcard.c",
+      "size": 5746,
+      "sha256": "4e5896fe2a5e2e583e815bcf02e854f74cbeb1cb550f1aafd6c77c1ebd658b97"
+    },
+    {
+      "path": "vcard.h",
+      "size": 115,
+      "sha256": "304802c962825e70a3fdf70b2ae8a99d182f09b00fcddbab1fca5691005e1a77"
+    },
+    {
+      "path": "views.c",
+      "size": 3374,
+      "sha256": "244ff8862ec8b4395e64cfb449357e3a1818828f49be49233d7826fde5d94fe3"
+    },
+    {
+      "path": "views.h",
+      "size": 418,
+      "sha256": "cb22b94a9a49235eefdc70f07fc98e456532297538c5a483eba2d5b123c39d26"
+    },
+    {
+      "path": "xmalloc.c",
+      "size": 3533,
+      "sha256": "4712af7ac5e360cd3d912e450358114260252275aeac3208c0f9d7651bbcd0c1"
+    },
+    {
+      "path": "xmalloc.h",
+      "size": 609,
+      "sha256": "b0a74659b0092dc60df5ca484afc0687ec6b4d12331551f113e13e2faa34b12f"
+    }
+  ]
+}

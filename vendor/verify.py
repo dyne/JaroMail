@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the exact minimal source extraction without network access."""
+"""Verify the pinned Sieve extraction and complete abook release offline."""
 
 import hashlib
 import json
@@ -10,18 +10,24 @@ def verify(root):
     manifest = json.loads((root / "sources.json").read_text())
     if manifest["schema_version"] != 2:
         raise ValueError("unsupported source manifest version")
-    directory = PurePosixPath(manifest["directory"])
-    if directory.is_absolute() or ".." in directory.parts:
-        raise ValueError("unsafe extraction directory")
-    expected = {"README.md", "sources.json", "verify.py"}
-    for entry in manifest["files"]:
-        relative = PurePosixPath(entry["path"])
-        if relative.is_absolute() or ".." in relative.parts or not relative.parts:
-            raise ValueError("unsafe upstream source path: " + entry["path"])
-        name = (directory / relative).as_posix()
-        if name in expected:
-            raise ValueError("duplicate upstream source path: " + name)
-        expected.add(name)
+    abook = json.loads((root / "abook/sources.json").read_text())
+    if abook["schema_version"] != 1 or abook["directory"] != "abook/upstream":
+        raise ValueError("unsupported abook source manifest")
+    expected = {"README.md", "sources.json", "verify.py", "abook/README.md", "abook/sources.json"}
+    entries = []
+    for source in (manifest, abook):
+        directory = PurePosixPath(source["directory"])
+        if directory.is_absolute() or ".." in directory.parts:
+            raise ValueError("unsafe extraction directory")
+        for entry in source["files"]:
+            relative = PurePosixPath(entry["path"])
+            if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+                raise ValueError("unsafe upstream source path: " + entry["path"])
+            name = (directory / relative).as_posix()
+            if name in expected:
+                raise ValueError("duplicate upstream source path: " + name)
+            expected.add(name)
+            entries.append((name, entry))
 
     actual = set()
     parents = {str(p) for name in expected for p in PurePosixPath(name).parents
@@ -40,13 +46,13 @@ def verify(root):
     if actual != expected:
         raise ValueError("extra or missing vendor files: " + repr(sorted(actual ^ expected)))
 
-    for entry in manifest["files"]:
-        target = root.joinpath(*directory.parts, *PurePosixPath(entry["path"]).parts)
+    for name, entry in entries:
+        target = root / name
         data = target.read_bytes()
         if len(data) != entry["size"] or hashlib.sha256(data).hexdigest() != entry["sha256"]:
             raise ValueError("upstream source differs: " + entry["path"])
-    print("PASS: {} pinned upstream files, {} bytes; no extra vendor payload".format(
-        len(manifest["files"]), sum(entry["size"] for entry in manifest["files"])))
+    print("PASS: {} pinned upstream files ({} Sieve, {} abook), {} bytes; no extra vendor payload".format(
+        len(entries), len(manifest["files"]), len(abook["files"]), sum(entry["size"] for _, entry in entries)))
 
 
 if __name__ == "__main__":

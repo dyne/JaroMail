@@ -1,0 +1,12 @@
+# List of source files which contain translatable strings
+abook.c
+abook.h
+database.c
+edit.c
+edit.h
+filter.c
+help.h
+list.c
+options.c
+ui.c
+views.c
