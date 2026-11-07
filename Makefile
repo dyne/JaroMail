@@ -1,12 +1,16 @@
 # Compatibility commands; CMake owns compilation, installation and packaging.
 BUILD_DIR ?= build/gnu
-PREFIX ?= /usr/local
+ifeq ($(origin PREFIX),undefined)
+PREFIX = $(HOME)/.local
+install-system: PREFIX = /usr/local
+endif
 CFLAGS ?= -O2
-export CC CFLAGS CPPFLAGS LDFLAGS LDLIBS PREFIX
-.PHONY: all install clean test test-strict man sieve-tools filter-core package
+export CC CFLAGS CPPFLAGS LDFLAGS LDLIBS PREFIX DESTDIR
+.PHONY: all install install-system clean test test-strict man sieve-tools filter-core package
+.DEFAULT_GOAL := all
 all:
 	python3 build/cmake-build.py --output-dir "$(BUILD_DIR)"
-install:
+install install-system:
 	python3 build/cmake-build.py --output-dir "$(BUILD_DIR)" --install
 clean:
 	python3 build/cmake-build.py --output-dir "$(BUILD_DIR)" --clean

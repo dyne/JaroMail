@@ -20,6 +20,14 @@ if(NOT _version_status EQUAL 0)
 endif()
 string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" _project_version "${JARO_RESOLVED_VERSION}")
 project(JaroMail VERSION "${_project_version}" LANGUAGES C)
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  if(DEFINED ENV{PREFIX})
+    set(_install_prefix "$ENV{PREFIX}")
+  else()
+    set(_install_prefix "$ENV{HOME}/.local")
+  endif()
+  set(CMAKE_INSTALL_PREFIX "${_install_prefix}" CACHE PATH "Install prefix" FORCE)
+endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/VERSION" "${PROJECT_SOURCE_DIR}/build/version.py")
 if(EXISTS "${PROJECT_SOURCE_DIR}/.git_archival.txt")
@@ -170,6 +178,11 @@ file(GLOB _zuper CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/zuper/zuper*")
 install(FILES ${_zuper} DESTINATION "${JARO_RUNTIME_DIR}/zlibs")
 install(FILES doc/jaro.1 doc/jaromail.1 DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
 install(CODE "file(GLOB _stale \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}/zlibs/*.zwc\")\nif(_stale)\n  file(REMOVE \${_stale})\nendif()")
+add_custom_target(install-system
+  COMMAND "${CMAKE_COMMAND}" "-DJARO_BINARY_DIR=${CMAKE_BINARY_DIR}" "-DJARO_INSTALL_CONFIG=$<CONFIG>"
+    -P "${PROJECT_SOURCE_DIR}/cmake/InstallSystem.cmake"
+  DEPENDS fetchaddr parsedate dotlock gpgewrap jaro-filter-compile jaro-filter-legacy jaro-filter
+  USES_TERMINAL VERBATIM)
 
 find_program(ZSH_EXECUTABLE zsh)
 if(ZSH_EXECUTABLE)
