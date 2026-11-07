@@ -30,7 +30,7 @@ def main():
         command = ['cmake', '-S', str(source), '-B', str(binary),
                    '-DCMAKE_BUILD_TYPE=', '-DCMAKE_RUNTIME_OUTPUT_DIRECTORY='+str(output),
                    '-DJARO_BUILD_TEST_DRIVERS='+('ON' if args.testing else 'OFF'),
-                   '-DBUILD_TESTING=OFF', '-DCMAKE_INSTALL_PREFIX='+os.environ.get('PREFIX', '/usr/local'),
+                   '-DBUILD_TESTING=OFF', '-DCMAKE_INSTALL_PREFIX='+os.environ.get('PREFIX', str(Path.home()/'.local')),
                    '-DCMAKE_C_FLAGS='+' '.join(v for v in (os.environ.get('CPPFLAGS',''), os.environ.get('CFLAGS','-O2')) if v),
                    '-DCMAKE_EXE_LINKER_FLAGS='+os.environ.get('LDFLAGS',''),
                    '-DCMAKE_C_STANDARD_LIBRARIES='+os.environ.get('LDLIBS','')]

@@ -13,10 +13,43 @@ download anything, invoke Pandoc, or need the private Sieve test libraries.
 ```sh
 cmake -S . -B out/build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build out/build --parallel
-cmake --install out/build --prefix "$HOME/.local"
+cmake --install out/build
 ```
 
-For package staging, set `DESTDIR` when running `cmake --install`. Both staged
+The default install prefix is `$HOME/.local`; `make install` uses the same
+user-only default. Add `~/.local/bin` to `PATH` if necessary. The command,
+resources and manuals go into `bin`, `share/jaromail` and `share/man/man1`
+under that prefix. No `sudo` is needed.
+
+`install-system` explicitly installs under `/usr/local`:
+
+```sh
+sudo make install-system
+# Native CMake equivalent, after building:
+sudo cmake --build out/build --target install-system
+```
+
+Both Make install targets honor `PREFIX` from the environment or command line
+and `DESTDIR` for package staging. The native CMake `install-system` target
+also honors the `PREFIX` environment variable and leaves the configured user
+prefix intact. For example, Debian and other distribution packagers can run:
+
+```sh
+make install-system PREFIX=/usr DESTDIR="$PWD/package-root"
+# Or use the already configured native CMake build:
+PREFIX=/usr DESTDIR="$PWD/package-root" cmake --build out/build --target install-system
+```
+
+These commands stage `package-root/usr/bin/jaro`,
+`package-root/usr/share/jaromail` and `package-root/usr/share/man/man1`
+without writing to the live system.
+
+For normal CMake installs, `-DCMAKE_INSTALL_PREFIX=/your/prefix` at configure
+time or `cmake --install out/build --prefix /your/prefix` overrides the default.
+A fresh configure also accepts `PREFIX` from the environment; an explicit
+`CMAKE_INSTALL_PREFIX` takes precedence. Existing build directories retain their
+cached prefix until reconfigured explicitly. Set `DESTDIR` when running
+`cmake --install` to stage a normal install too. Both staged
 installations and extracted binary archives resolve their resource directories
 relative to `bin/jaro`; build-machine paths are not needed to run them.
 

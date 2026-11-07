@@ -211,12 +211,34 @@ Build and install with:
 .EX
 cmake \-S . \-B out/build \-DCMAKE_BUILD_TYPE=Release
 cmake \-\-build out/build \-\-parallel
-sudo cmake \-\-install out/build
+cmake \-\-install out/build
 .EE
 .PP
-The default runtime is \f[CR]/usr/local/share/jaromail\f[R].
-\f[CR]make install\f[R] remains a compatibility command forwarding to
-CMake.
+The default prefix is \f[CR]$HOME/.local\f[R], with the command in
+\f[CR]\[ti]/.local/bin/jaro\f[R] and runtime in
+\f[CR]\[ti]/.local/share/jaromail\f[R].
+Add \f[CR]\[ti]/.local/bin\f[R] to \f[CR]PATH\f[R] if needed.
+\f[CR]make install\f[R] uses this same user\-only default without
+\f[CR]sudo\f[R].
+.PP
+For a system installation under \f[CR]/usr/local\f[R], run
+\f[CR]sudo make install\-system\f[R] or
+\f[CR]sudo cmake \-\-build out/build \-\-target install\-system\f[R]
+after building.
+The Make targets accept \f[CR]PREFIX\f[R] from the command line or
+environment; the CMake system target accepts it from the environment.
+Both honor \f[CR]DESTDIR\f[R] for packaging without root privileges:
+.IP
+.EX
+make install\-system PREFIX=/usr DESTDIR=\[dq]$PWD/package\-root\[dq]
+# Or, after configuring and building with CMake:
+PREFIX=/usr DESTDIR=\[dq]$PWD/package\-root\[dq] cmake \-\-build out/build \-\-target install\-system
+.EE
+.PP
+Normal CMake installs also accept \f[CR]\-\-prefix /your/prefix\f[R], or
+configure with \f[CR]\-DCMAKE_INSTALL_PREFIX=/your/prefix\f[R].
+Existing build directories retain their cached prefix until explicitly
+changed.
 Normal builds install the committed manpages without rewriting them.
 The CLI reports its assigned release version from installed metadata,
 derived from Git tags or the release workflow.

@@ -101,11 +101,28 @@ Build and install with:
 ```sh
 cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release
 cmake --build out/build --parallel
-sudo cmake --install out/build
+cmake --install out/build
 ```
 
-The default runtime is `/usr/local/share/jaromail`. `make install` remains a
-compatibility command forwarding to CMake. Normal builds install the committed
+The default prefix is `$HOME/.local`, with the command in `~/.local/bin/jaro`
+and runtime in `~/.local/share/jaromail`. Add `~/.local/bin` to `PATH` if needed.
+`make install` uses this same user-only default without `sudo`.
+
+For a system installation under `/usr/local`, run `sudo make install-system`
+or `sudo cmake --build out/build --target install-system` after building.
+The Make targets accept `PREFIX` from the command line or environment; the
+CMake system target accepts it from the environment. Both honor `DESTDIR`
+for packaging without root privileges:
+
+```sh
+make install-system PREFIX=/usr DESTDIR="$PWD/package-root"
+# Or, after configuring and building with CMake:
+PREFIX=/usr DESTDIR="$PWD/package-root" cmake --build out/build --target install-system
+```
+
+Normal CMake installs also accept `--prefix /your/prefix`, or configure with
+`-DCMAKE_INSTALL_PREFIX=/your/prefix`. Existing build directories retain their
+cached prefix until explicitly changed. Normal builds install the committed
 manpages without rewriting them. The CLI reports its assigned release version
 from installed metadata, derived from Git tags or the release workflow.
 Static Linux x86_64 and arm64 archives and automatic semantic releases are
