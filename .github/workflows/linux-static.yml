@@ -33,7 +33,7 @@ jobs:
       - name: Install build and smoke-test tools
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y cmake ninja-build make gcc ccache binutils ncurses-bin zsh qemu-user
+          sudo apt-get install --no-install-recommends -y cmake ninja-build make gcc ccache binutils zsh qemu-user
       - name: Set up verified Dyne musl cross compiler
         id: musl
         uses: dyne/musl-action@fe1d1871b096824ddb7aa158f68dd63dabdc9586
@@ -51,7 +51,7 @@ jobs:
             ${{ runner.temp }}/jaromail-abook-sources
             ${{ runner.temp }}/jaromail-abook-ccache
           key: ${{ runner.os }}-abook-musl-v2.5.1-${{ matrix.arch }}-${{ hashFiles('build/abook-deps.py', 'build/abook-deps.json') }}
-      - name: Build verified target ncurses and readline
+      - name: Reuse bundled ncurses and build static GNU readline
         env:
           MUSL_CC: ${{ steps.musl.outputs.CC }}
           TARGET_ARCH: ${{ matrix.arch }}

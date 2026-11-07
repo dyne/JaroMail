@@ -35,11 +35,16 @@ Jaromail's existing runtime PATH selects it first. It does not replace a system
 `bin/abook`. Manuals, sample configuration and copyright/license notices are
 installed too. User/system prefixes and `DESTDIR` follow the main project.
 
-Linux release builds use target ncurses/readline archives prepared by
-`build/abook-deps.py`; their sources are fetched only in that explicit build
-step, never by ordinary CMake configure/build. The source versions, URLs and
-SHA-256 pins are in `build/abook-deps.json`. Dependencies are built outside the
-vendor tree, and their notices accompany static packages.
+Linux releases are fully static, including abook. `build/abook-deps.py` first
+reuses the ncurses archive and headers supplied alongside the Dyne compiler at
+`/opt/dyne/<target-triplet>`. GNU readline is built with that musl compiler when
+preparing the dependency prefix. The bundled ncurses bytes and version enter
+the cache identity and installed provenance; its original copyright notice is
+retained. A pinned ncurses source build is only a fallback for toolchains without
+the bundled library. Source URLs and SHA-256 pins are in `build/abook-deps.json`.
+Downloads happen only in this explicit dependency step, never during ordinary
+CMake configure/build. All dependency libraries are linked into the release
+executable; host ncurses/readline packages are not runtime dependencies.
 
 ## Customization
 
