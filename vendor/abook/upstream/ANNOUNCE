@@ -1,0 +1,7 @@
+abook
+
+Abook is small and powerful addressbook program designed to use with mutt mail
+client. Abook runs on Linux / FreeBSD and probably with small changes on other
+unices. Ncurses library is required to compile abook.
+
+Abook is available at http://abook.sourceforge.net/

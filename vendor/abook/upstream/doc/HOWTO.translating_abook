@@ -1,0 +1,240 @@
+Foreword
+--------
+
+This howto is deliberately incomplete, focusing on working with gettext
+for abook specifically. For more comprehensive informations or to grasp
+the Big Picture of Native Language Support, you should refer to the GNU
+gettext manual at: http://www.gnu.org/software/gettext/manual/
+
+After a quick description of how things work, three parts aimed at three
+different people involved in the translation chain will follow: coders,
+language coordinator, and translators.
+
+
+Overview
+--------
+
+To be able to display texts in the native language of the user, two
+steps are required: internationalization (i18n) and localization (l10n).
+
+i18n is about making abook support multiple languages. It is performed
+by coders, who will mark translatable texts and provide a way to display
+them translated at runtime.
+
+l10n is about making the i18n'ed abook adapt to the specific language of
+the user, ie translating the strings previously marked by the
+developers, and setting the environment correctly for abook to use the
+result of this translation.
+
+So, translatable strings are first marked by the coders within the C
+source files, then gathered in a template file (abook.pot). The content
+of this template file is then merged with the translation files for each
+language (fr.po for french, for instance). A given translation team will
+take this file, translate its strings, and send it back to the
+developers. At compilation time, a binary version of this file (for
+efficiency reasons) will be produced (fr.mo), and then installed.  Then
+abook will use this file at runtime, translating the strings according
+to the locale settings of the user.
+
+
+The coders
+----------
+
+* Translating a new file.
+  First, you have to make your C source file aware of the gettext
+  macros by including "gettext.h".
+  Then, you need to make gettext aware that this file contains
+  translatable strings by adding its name to po/POTFILES.in
+
+* Translatable strings
+  This is a two parts process: marking the string to tell gettext to
+  make it available to translators (via the .pot file), and actually
+  translating the string at runtime.
+  There is basically three functions/macros available:
+   * _(): mark the string and translate it.
+   * N_(): only mark the string
+   * gettext(): only translate
+  The last two are used in conjunction, when the string declaration is
+  dissociated in the code from its actual use. You'll then use N_() to
+  mark the string, and later use a gettext() call to translate it.
+
+And that's all, really.
+
+Should the need arise later, it might be handy to know that a few more
+mechanisms exist, for example to deal with ambiguities (same string but
+with different roles should be translated differently), or plurals, etc.
+This is all explained in depth in the gettext manual. But the three
+macros seen above should be enough to handle about all the situations
+met while internationalizing abook.
+
+
+The language coordinator
+------------------------
+
+This is neither a coder, nor a translator. His role is in-between. He
+is the one who will merge the strings changed by the coders into the
+translation files, and merge back the translation files sent to him by
+the translators. He will also take care of initiating language files
+whenever a new translator shows up.
+
+* Updating the template file
+  Translatable strings evolve all the time: coders add some, remove
+  others, change a lot of them. At some point, these strings need to be
+  merged into the po/abook.pot file to reflect the current situation.
+  This is done simply by executing 'make -C po abook.pot-update'.
+
+  The xgettext utility will then parse the files listed into
+  po/POTFILES.in, looking for marked strings, and updating po/abook.pot.
+  
+* Merging the new strings into the po-files
+  After updating, you will have to merge the changes into every .po
+  file. This is done by running 'make -C po update-po', which will use
+  the msgmerge program to perform this task.
+
+  Then, some strings will be marked as "fuzzy" (ie needing review,
+  because of slight changes), some strings will be commented out
+  because of removal from sources, some strings will be added, and
+  some strings will not be changed at all. The po-file is now in sync.
+
+* Compiling plain text translation into binary files suited for runtime
+  Please note that this is implicitly done in the previous step.
+  Anyway, you just have to run 'make -C po update-gmo' to update the
+  mo-files (or gmo-files, which is a GNU specific naming) from the
+  po-files.
+
+  For (re)generating just one particular language (french as example),
+  use 'cd po ; msgfmt -c --statistics -o fr.gmo fr.po'.
+
+* Initiating the translation of a new language
+  So a Swedish translator just contacted you to contribute a
+  translation. Nice!
+  
+  First, find out what the locale name is. For swedish, it is 'sv_SE',
+  or simply 'sv'. This is the value the user will have to put in his
+  LC_MESSAGES/LANG environment variable for software to be translated.
+
+  Then, go into the po/directory, and create a new po-file from the
+  template file: 'msginit -i abook.pot -o sv.po -l sv --no-translator'.
+  Now, having this sv.po file, the translator is ready to begin.
+
+  Last step is making gettext aware of this new language. Just add the
+  locale name to the po/LINGUAS file.
+
+* Committing a po-file received from a translator
+  The Swedish translator just sent you an updated translation, in
+  sv.po.new. Before replacing sv.po in the po/ directory and committing
+  it to cvs, you should check everything is fine, with this step:
+  'msgmerge sv.po.new abook.pot -o sv.po'.
+
+
+The translators
+---------------
+
+The gettext part is the easy one: the format of the po-files is really
+straightforward. The hard part will be the quest for the right word, the
+best fitting formulation.
+
+po-files are made of four things:
+ * location lines: tells you where the strings can be seen (name of file
+   and line number), in case you need to see a bit of context.
+ * msgid lines: the strings to translate.
+ * msgstr lines: the translated strings.
+ * lines prefixed with '#': comments (some with a special meaning, as we
+   will see below).
+
+Basically, all you have to do is fill the msgstr lines with the
+translation of the above msgid line. And send the result to the language
+coordinator of abook.
+
+A few notes:
+
+* Fuzzy strings
+  You will meet strings marked with a "#, fuzzy" comment. abook won't
+  use the translations of such strings until you do something about
+  them.
+  
+  A string being fuzzy means either that the string has already been
+  translated but has since been changed in the sources of the program,
+  or that this is a new string for which gettext made a 'wild guess' for
+  the translation, based on other strings in the file.
+
+  It means you have to review the translation. Sometimes, the original
+  string has changed just because a typo has been fixed. In this case,
+  you won't have to change anything. But sometimes, the translation will
+  no longer be accurate and needs to be changed.
+
+  Once you are done and happy with the translation, just remove the
+  "#, fuzzy" line, and the translation will be used again in abook.
+
+* c-format strings and special sequences
+  Some strings have the following comment: "#, c-format".
+  This tells that parts of the string to translate have a special
+  meaning for the program, and that you should leave them alone.
+
+  For instance, %-sequences, like "%s". These means that abook will
+  replace them with another string. So it is important it remains.
+
+  There are also \-sequences, like \n or \t. Leave them, too. The former
+  represents an end of line, the latter a tabulation.
+
+* Translations can be wrapped
+  If lines are too long, you can just break them like this:
+    msgid ""
+    "some very long line"
+    "another line"
+
+* po-file header
+  At the very beginning of the po-file, the first string form a header,
+  where various kind of information has to be filled in. Most important
+  one is the charset. It should resemble
+  "Content-Type: text/plain; charset=utf-8\n"
+
+  You should also fill in the Last-Translator field, so that potential
+  contributors can contact you if they want to join you in the
+  translation team, or have remarks/typo fixes to give about the
+  translations. You can either just give your name/nick, or add an email
+  address, f ex "Last-Translator: Cédric Duval <cedricduval+abook@free.fr>\n".
+
+* Comments
+  Adding comments (lines begining with the '#' character) can be a good
+  way to point out problems or translation difficulties to proofreaders
+  or other members of your team.
+
+* Strings size
+  abook is a curses/console program, thus it can be heavily dependant on
+  the terminal size (number of columns). You should think about this
+  when translating. Often, a string must fit into a single line
+  (standard length is 80 characters). Don't translate blindly, try to
+  look where your string will be displayed to adapt your translation.
+
+* Testing translations
+  To give a look at the live translations without really installing abook
+  you can install abook and its mo files in a subdirectory:
+  ./configure --prefix $(pwd)/fakeinstall/usr ; make install
+  Then, eg: LANGUAGE=sv ./fakeinstall/usr/bin/abook
+
+* A few useful tools
+  The po-file format is very simple, and the file can be edited with a
+  standard text editor.
+  
+  But if you prefer, there are few specialized tools you may find
+  convenient for translating:
+   * poEdit (http://www.poedit.org/)
+   * Lokalize (http://userbase.kde.org/Lokalize/)
+   * GTranslator (http://projects.gnome.org/gtranslator/)
+   * Emacs po mode
+   * Vim po mode
+     (http://vim.sourceforge.net/scripts/script.php?script_id=695
+     or http://vim.sourceforge.net/scripts/script.php?script_id=913)
+   * And certainly others I'm not aware of. Just tell me!
+
+
+And finally
+-----------
+
+I hope you'll have fun contributing to a more internationalized world. :)
+
+If you have any more questions, don't hesitate to contact me
+(Cédric Duval <cedricduval+abook@free.fr>) or the abook development
+mailing list (http://lists.sourceforge.net/lists/listinfo/abook-devel).
+

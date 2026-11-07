@@ -19,6 +19,11 @@ expected = {
     'src/lib-sieve/util/mail-raw.h',
 }
 assert {entry['path'] for entry in manifest['files']} == expected
+abook = json.loads((source / 'abook/sources.json').read_text())
+assert abook['upstream']['version'] == '0.6.2'
+assert len(abook['files']) == 126
+assert {'abook.c', 'database.c', 'filter.c', 'COPYING', 'AUTHORS', 'configure',
+        'Makefile.in', 'po/fr.po'} <= {entry['path'] for entry in abook['files']}
 with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
     fixture = Path(temp) / 'vendor'
     shutil.copytree(source, fixture)
@@ -38,6 +43,17 @@ with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
     extra.write_bytes(b'archive fixture')
     rejects('extra or missing')
     extra.unlink()
+    abook_target = fixture / 'abook/upstream/database.c'
+    abook_original = abook_target.read_bytes()
+    abook_target.write_bytes(abook_original + b'\n/* changed fixture */\n')
+    rejects('upstream source differs')
+    abook_target.unlink()
+    rejects('extra or missing')
+    abook_target.write_bytes(abook_original)
+    abook_extra = fixture / 'abook/upstream/config.h'
+    abook_extra.write_text('/* build output must stay outside vendor */\n')
+    rejects('extra or missing')
+    abook_extra.unlink()
     extra = fixture / 'pigeonhole/upstream/extra.c'
     extra.write_text('/* unneeded source */\n')
     rejects('extra or missing')
@@ -45,5 +61,5 @@ with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
     target.unlink()
     target.symlink_to(source / 'pigeonhole/upstream/src/sieve-tools/sievec.c')
     rejects('unexpected symlink')
-print('PASS: minimal scope and modified/missing/extra/symlink rejection')
+print('PASS: minimal Sieve scope, complete abook scope and modified/missing/extra/symlink rejection')
 PY

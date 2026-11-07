@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -20,6 +21,9 @@ WORK.mkdir(parents=True, exist_ok=True)
 spec = importlib.util.spec_from_file_location('jaro_build_version', REPO / 'build/version.py')
 version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(version)
+spec = importlib.util.spec_from_file_location('jaro_abook_deps', REPO / 'build/abook-deps.py')
+abook_deps = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(abook_deps)
 
 
 def run(args, *, env=None, cwd=None, succeeds=True):
@@ -109,7 +113,7 @@ class CMakeTests(unittest.TestCase):
         cls.arch = 'arm64' if platform.machine() in ('aarch64', 'arm64') else 'x86_64'
         cls.source, cls.binary = cls.work / 'source with spaces', cls.work / 'binary with spaces'
         cls.source.mkdir()
-        for name in ('src', 'build', 'doc', 'cmake', 'CMakeLists.txt', 'Makefile', 'VERSION', 'COPYING.txt'):
+        for name in ('src', 'build', 'doc', 'cmake', 'vendor', 'CMakeLists.txt', 'Makefile', 'VERSION', 'COPYING.txt'):
             original = REPO / name
             if original.is_dir():
                 def ignore(directory, names):
@@ -154,7 +158,7 @@ exec "$JARO_REAL_CC" "$@"
         self.assertIn('-lm', self.buildlog)
         if shutil.which('ccache') and 'CCACHE' not in os.environ:
             self.assertIn('ccache', self.buildlog)
-        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-filter','jaro-filter-compile','jaro-filter-legacy'):
+        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-filter','jaro-filter-compile','jaro-filter-legacy','abook'):
             self.assertTrue(os.access(self.binary/'bin'/name, os.X_OK))
         result = run([sys.executable, self.source/'build/check-static.py', '--bin-dir', self.binary/'bin', '--arch',self.arch], succeeds=False)
         self.assertNotEqual(result.returncode, 0)
@@ -179,6 +183,46 @@ exec "$JARO_REAL_CC" "$@"
         self.assertFalse(stale.exists())
         for name,data in self.manuals.items():
             self.assertEqual((installed/'share/man/man1'/name).read_bytes(),data)
+
+    def test_cmake_abook_import_export_and_private_install(self):
+        abook = self.binary/'bin/abook'
+        self.assertIn('abook v0.6.2',run([abook,'--help'],env=self.env).stdout)
+        work = self.work/'abook roundtrip'
+        work.mkdir()
+        address = 'person.with.a.long.untruncated.address@addressbook.example.org'
+        aliases, database = work/'aliases', work/'contacts.abook'
+        aliases.write_text(f'alias fixture Full Address <{address}>\n')
+        run([abook,'--config','/dev/null','--convert','--informat','mutt','--infile',aliases,
+             '--outformat','abook','--outfile',database],env=self.env)
+        self.assertIn('email='+address,database.read_text())
+        query = run([abook,'--config','/dev/null','--datafile',database,'--mutt-query',''],env=self.env).stdout
+        self.assertIn(address+'\tFull Address\t',query)
+        exported = run([abook,'--config','/dev/null','--convert','--informat','abook','--infile',database,
+                        '--outformat','vcard'],env=self.env).stdout
+        self.assertIn(address,exported)
+        self.assertIn('BEGIN:VCARD',exported)
+        original = {p.relative_to(self.source/'vendor/abook/upstream'):p.read_bytes()
+                    for p in (self.source/'vendor/abook/upstream').rglob('*') if p.is_file()}
+        installed = work/'installed'
+        run(['cmake','--install',self.binary,'--prefix',installed],env=self.env)
+        runtime = installed/'share/jaromail'
+        self.assertTrue((runtime/'licenses/abook/COPYING').is_file())
+        self.assertTrue((installed/'share/man/man5/abookrc.5').is_file())
+        self.assertFalse((installed/'bin/abook').exists())
+        # Match the bootstrap's private-bin precedence even with a system decoy.
+        decoy = work/'decoy'
+        decoy.mkdir()
+        (decoy/'abook').write_text('#!/bin/sh\nexit 91\n')
+        (decoy/'abook').chmod(0o700)
+        probe = work/'runtime probe.zsh'
+        probe.write_text('source "$JAROWORKDIR/zlibs/bootstrap"\nwhence -p abook\nabook --help\n')
+        env = dict(self.env,JAROWORKDIR=str(runtime),PATH=str(decoy)+os.pathsep+self.env['PATH'])
+        result = run(['zsh',probe],env=env,cwd=work)
+        self.assertIn(str(runtime/'bin/abook'),result.stdout)
+        self.assertIn('abook v0.6.2',result.stdout)
+        run([sys.executable,REPO/'extras/test/abook-tui-smoke.py','--binary',runtime/'bin/abook'],env=self.env)
+        self.assertEqual(original,{p.relative_to(self.source/'vendor/abook/upstream'):p.read_bytes()
+                                  for p in (self.source/'vendor/abook/upstream').rglob('*') if p.is_file()})
 
     def test_cmake_default_user_and_system_install_with_destdir(self):
         user_prefix = Path.home()/'.local'
@@ -307,8 +351,86 @@ exec "$JARO_REAL_CC" "$@"
         root=extracted/('jaromail-6.7.8-linux-'+self.arch)
         self.assertEqual(run([root/'bin/jaro','--version'],env=self.env).stdout,'Jaro Mail v6.7.8\n')
         self.assertTrue((root/'share/jaromail/bin/jaro-filter').is_file())
+        self.assertIn('abook v0.6.2',run([root/'share/jaromail/bin/abook','--help'],env=self.env).stdout)
         self.assertTrue((root/'share/jaromail/COPYING.txt').is_file())
         self.assertFalse((root/'share/jaromail/bin/filter-policy-driver').exists())
+
+
+class AbookDependencyTests(unittest.TestCase):
+    def setUp(self):
+        self.root = WORK/self._testMethodName
+        self.root.mkdir()
+
+    def test_abook_dependency_archive_checksum_and_offline_failures(self):
+        source = dict(name='fixture',version='1',sha256=hashlib.sha256(b'pinned bytes').hexdigest())
+        with self.assertRaisesRegex(ValueError,'missing'):
+            abook_deps.archive(source,self.root,False)
+        path = self.root/'fixture-1.tar.gz'
+        path.write_bytes(b'pinned bytes')
+        self.assertEqual(abook_deps.archive(source,self.root,False),path)
+        path.write_bytes(b'changed archive')
+        with self.assertRaisesRegex(ValueError,'checksum differs'):
+            abook_deps.archive(source,self.root,False)
+
+    def test_abook_reuses_ncurses_from_dyne_target_prefix(self):
+        compiler = self.root/'dyne/gcc-musl/bin/x86_64-linux-musl-gcc'
+        compiler.parent.mkdir(parents=True)
+        self.assertIsNone(abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl'))
+        target = self.root/'dyne/x86_64-linux-musl'
+        include = target/'include/ncursesw'
+        include.mkdir(parents=True)
+        notice = '/* Permission is hereby granted, free of charge. */\n'
+        (include/'curses.h').write_text(notice+'#define NCURSES_VERSION "6.6"\n')
+        (include/'ncurses.h').write_text(notice+'#define NCURSES_VERSION "6.6"\n')
+        (include/'ncurses_dll.h').write_text('/* fixture declarations */\n')
+        (target/'lib').mkdir()
+        (target/'lib/libncursesw.a').write_bytes(b'fixture static library')
+        bundle = abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl')
+        self.assertEqual(bundle['identity']['version'],'6.6')
+        installed = self.root/'staged'
+        abook_deps.stage_ncurses(bundle,installed)
+        self.assertEqual((installed/'include/ncurses.h').read_bytes(),(include/'ncurses.h').read_bytes())
+        self.assertTrue((installed/'include/ncursesw/ncurses_dll.h').is_file())
+        self.assertEqual((installed/'lib/libncursesw.a').read_bytes(),b'fixture static library')
+        self.assertIn('Permission is hereby granted',(installed/'share/licenses/ncurses/COPYING').read_text())
+        first = bundle['identity']
+        (target/'lib/libncursesw.a').write_bytes(b'new bundled library')
+        self.assertNotEqual(first,abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl')['identity'])
+
+    def test_abook_partial_bundle_is_rejected(self):
+        compiler = self.root/'dyne/gcc-musl/bin/x86_64-linux-musl-gcc'
+        (self.root/'dyne/x86_64-linux-musl/lib').mkdir(parents=True)
+        (self.root/'dyne/x86_64-linux-musl/lib/libncursesw.a').write_bytes(b'incomplete')
+        with self.assertRaisesRegex(ValueError,'incomplete bundled ncurses'):
+            abook_deps.bundled_ncurses(compiler,'x86_64-linux-musl')
+
+    def test_abook_dependency_extract_rejects_traversal_and_links(self):
+        for index,name in enumerate(('../escape','fixture-1/../../escape','fixture-1/link')):
+            path = self.root/f'archive{index}.tar.gz'
+            with tarfile.open(path,'w:gz') as bundle:
+                member = tarfile.TarInfo(name)
+                if index == 2:
+                    member.type,member.linkname = tarfile.SYMTYPE,'/outside'
+                    bundle.addfile(member)
+                else:
+                    member.size = 1
+                    bundle.addfile(member,io.BytesIO(b'x'))
+            with self.assertRaises(ValueError):
+                abook_deps.extract(path,self.root,dict(name='fixture',version='1'))
+
+    def test_abook_dependency_cache_rejects_modified_files_and_identity(self):
+        prefix = self.root/'prefix'
+        prefix.mkdir()
+        library = prefix/'target.a'
+        library.write_bytes(b'archive bytes')
+        identity = dict(machine='fixture-musl')
+        (self.root/'build.json').write_text(json.dumps(dict(identity=identity,files={'target.a':abook_deps.digest(library)})))
+        self.assertEqual(abook_deps.verify_cache(self.root,identity),prefix)
+        with self.assertRaisesRegex(ValueError,'identity differs'):
+            abook_deps.verify_cache(self.root,dict(machine='wrong-arch'))
+        library.write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError,'contents differ'):
+            abook_deps.verify_cache(self.root,identity)
 
 
 class ReleaseTests(unittest.TestCase):

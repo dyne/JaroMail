@@ -1,0 +1,47 @@
+Summary:	Text-based addressbook program
+Name:		@PACKAGE@
+Version:	@VERSION@
+Release:	1
+License:	GPL
+Group:		Utilities
+Source:		http://prdownloads.sourceforge.net/abook/%{name}-%{version}.tar.gz
+URL:		http://abook.sourceforge.net/
+BuildPreReq:	ncurses-devel readline-devel gettext
+BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root
+
+%description
+Abook is a text-based addressbook program designed to
+use with mutt mail client.
+
+
+%prep
+%setup -q
+
+
+%build
+%configure
+make %{_smp_mflags}
+
+
+%install
+%makeinstall
+
+%find_lang %{name}
+
+
+%clean
+rm -rf -- "%{buildroot}"
+
+
+%files -f %{name}.lang
+%defattr(-,root,root)
+%doc AUTHORS BUGS COPYING ChangeLog FAQ NEWS README THANKS TODO sample.abookrc
+%{_bindir}/abook
+%{_mandir}/man1/abook.*
+%{_mandir}/man5/abookrc.*
+
+
+%changelog
+* Mon Mar 11 2002 Jaakko Heinonen <jheinonen@users.sourceforge.net>
+- rewrote the spec file originally written by
+  Gustavo Niemeyer <niemeyer@conectiva.com>

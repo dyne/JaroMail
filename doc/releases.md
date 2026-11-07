@@ -56,7 +56,7 @@ relative to `bin/jaro`; build-machine paths are not needed to run them.
 The old Make commands and platform entry points delegate to CMake. There is no
 separate native compiler recipe in the compatibility Makefiles. Native test
 callers enable `JARO_BUILD_TEST_DRIVERS`; ordinary installations and release
-packages include only the seven application helpers.
+packages include the seven application helpers and bundled abook 0.6.2.
 In-source CMake configuration is refused to protect the compatibility Makefile.
 The old optional bundled mutt-kz/Mixmaster build aliases are outside the supported
 core build; use the external mail clients listed in the README.
@@ -64,6 +64,38 @@ core build; use the external mail clients listed in the README.
 Committed manpages are installed unchanged. Maintainers regenerate explicitly
 with `cmake --build out/build --target man` and commit the generated `.1` files
 alongside their Markdown sources. No wall-clock date is embedded.
+
+## Bundled addressbook
+
+CMake builds the full vendored abook 0.6.2 source alongside the native helpers.
+Native builds need wide-character ncurses and GNU readline development libraries
+(`libncurses-dev libreadline-dev` on Debian/Ubuntu). CMake generates its config
+header outside the source tree and requires no Autotools or network access.
+`cmake --build out/build --target abook` builds just the addressbook.
+
+The binary is installed as `share/jaromail/bin/abook`, where the runtime already
+searches first. System abook installations are untouched. Its two manual pages,
+sample configuration, authors and GPLv3 license are installed with Jaromail.
+`-DJARO_ABOOK_NLS=ON` optionally builds the five upstream translations with
+gettext tools and libintl; the default uses English messages.
+
+Static releases reuse Dyne's bundled target ncurses (from the sibling
+`/opt/dyne/<target-triplet>` directory) and build GNU readline 8.3 with the
+selected musl compiler. abook, musl, ncurses and readline are all linked into
+one fully static executable. A pinned ncurses 6.5 source build is retained only
+as a fallback when the selected toolchain has no bundled ncurses.
+`build/abook-deps.json` pins fallback/source URLs and SHA-256 digests.
+`build/abook-deps.py` fingerprints bundled ncurses, verifies downloads and cached
+installed bytes, stages dependencies in a private cache, and prints their prefix
+for `-DJARO_ABOOK_DEPS_PREFIX=...`. Ordinary CMake builds never download them.
+Both architectures run abook conversion/query smoke tests and open/quit its TUI
+in a private pseudo-terminal (arm64 via QEMU). Embedded descriptions for common
+terminals let the static TUI run even without a system terminfo database.
+Dependency license notices and source pins accompany static packages.
+
+See [source provenance and customization](../vendor/abook/README.md). The full
+upstream source remains unchanged by this import; new behavioral changes belong
+in later commits with focused addressbook regressions.
 
 ## Version assignment
 
@@ -110,7 +142,7 @@ an x86_64 Linux host:
 | x86_64 | x86_64 | x86_64-linux-musl | Native |
 | arm64 | arm_64 | aarch64-linux-musl | qemu-aarch64 |
 
-Each of the seven helpers must be an ELF64 binary of the correct machine type,
+Each of the eight executables (the seven helpers plus abook) must be an ELF64 binary of the correct machine type,
 with neither an ELF interpreter nor shared-library dependencies. Failed static
 checks, tests, smoke tests or either architecture prevent publication.
 
@@ -118,7 +150,7 @@ CPack creates `jaromail-VERSION-linux-ARCH.tar.gz`; each archive has a matching
 `.sha256` file. Archives contain `bin/jaro`, the native helpers, Zsh modules,
 version metadata, committed manuals, configuration templates and license text.
 The scripts still need Zsh and the normal external mail tools, including
-fetchmail, msmtp, neomutt, notmuch, pinentry, abook, wipe and mblaze. These tools
+fetchmail, msmtp, neomutt, notmuch, pinentry, wipe and mblaze. These tools
 are not bundled or rebuilt as part of this release.
 
 Both architectures and checksums are uploaded to one draft GitHub release at
