@@ -1,0 +1,69 @@
+abook FAQ
+~~~~~~~~~
+
+Q: Can I recall the old value in editor?
+
+A: Yes, use up arrow to recall the old value.
+
+
+Q: How to query all addresses when I press 'Q' in mutt?
+
+A: Type "all" to the prompt.
+
+
+Q: Can I mark multiple addresses in mutt after a query?
+
+A: You can tag addresses with 't'. When ready, type ";m" (press first ';'
+   and then 'm') and all tagged addresses will appear to your "To:"
+   line.
+
+
+Q: How to insert an address (or many) with abook when I'm forwarding
+   a message in mutt? ("To:" and "Cc:" prompts)
+
+A: When "To:" or "Cc:" prompt appears press ^t for query. (After query
+   you can tag multiple addresses with 't')
+
+
+Q: Can I add addresses to the abook addressbook from mutt?
+
+A: Yes, it is possible starting from abook version 0.4.15. See --add-email
+   command line option and README.
+
+
+Q: How can I import my abook entries to my PalmOS addressbook?
+
+A: Export to palmcsv format, and import from there. Several GUI
+   applications such as jpilot can do this, but the simplest way is to
+   use pilot-addresses from the pilot-link package. Just export to
+   addresses.palmcsv, then run this:
+                                                                                
+   pilot-addresses -d abook -c abook -r addresses.palmcsv
+                                                                                
+   This will delete everything in the abook category and replace it with
+   the latest information from your abook database. By keeping your
+   abook entries in a separate category, you can continue to add and
+   modify entries in other categories manually, and pilot-addresses will
+   not change or delete them.
+   (This entry was contributed by Jeff Covey)
+
+Q: Can I use abook in UTF-8 terminal emulator?
+
+A: Yes, the version 0.5.2 added a multibyte character support.
+
+   There are currently some issues:
+
+   - Addressbook files must have the same encoding as you use with abook.
+     If you have used abook previously with ISO-8859-1 encoding you can
+     convert the addressbook files with iconv(1). For example:
+
+     $ iconv -f ISO-8859-1 -t UTF-8 < ~/.abook/addressbook.old > \
+     ~/.abook/addressbook.new
+
+   - Filters will output strings using multibyte representation of the used
+     locale. This is incorrect for (most of) filters. You can again use
+     iconv to convert between encodings. Same goes with input filters. If
+     you use UTF-8 charset the input is expected to be UTF-8 encoded.
+
+
+last update: $Date$

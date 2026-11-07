@@ -1,0 +1,47 @@
+known bugs in abook
+
+* with certain terminals keyboard may not behave as expected - this is probably
+  a ncurses problem
+* incompatible with some terminals
+  - there seems to be problems with some (old?) gnome-terminal versions -
+    gnome-terminal bug?
+* some keys may cause readline to crash - this is a readline (4.3) problem
+  - there is a fix available for readline:
+    ftp://ftp.gnu.org/gnu/readline/readline-4.3-patches/readline43-001
+
+* cursor disappears in some cases with abook_readline() on Solaris. If
+  you have problems it is recommended to use the GNU ncurses library
+
+* terminal state is not restored correctly on exit with certain ncurses and
+  readline combination (more information is needed on this)
+
+* file format is not tolerant for character set changes
+
+* datafile is always removed and rewritten from scratch (symlinks don't work,
+  timestamp is always updated, comments are removed)
+
+* comma (,) is not allowed in lists and is converted to _
+
+--
+[25]
+name=Lastname, Firstname
+email="Lastname, Firstname" <firstname.lastname@example.com>
+
+but the command "abook --mutt-query lastname" returns two email addresses
+
+"Lastname       Lastname, Firstname
+Firstname" <firstname.lastname@example.com>     Lastname, Firstname
+
+In other words, the mutt-query doesn't treat the comma as protected by the
+quotes, although the conversion from pine format did.
+--
+
+Filters:
+* mutt / elm / pine export filters allow to create a file with duplicate
+  aliases
+
+* mutt import filter imports only first e-mail address
+
+* fseek in ldif import filter should be eliminated
+
+$Id$

@@ -162,6 +162,7 @@ if(JARO_BUILD_TEST_DRIVERS)
 endif()
 
 set(JARO_RUNTIME_DIR "${CMAKE_INSTALL_DATADIR}/jaromail")
+add_subdirectory(cmake/abook)
 file(RELATIVE_PATH JARO_BIN_TO_SHARE "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}" "${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}")
 configure_file(cmake/jaro.in generated/jaro @ONLY)
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/generated/VERSION" CONTENT "${JARO_RESOLVED_VERSION}\n")
@@ -181,13 +182,13 @@ install(CODE "file(GLOB _stale \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_R
 add_custom_target(install-system
   COMMAND "${CMAKE_COMMAND}" "-DJARO_BINARY_DIR=${CMAKE_BINARY_DIR}" "-DJARO_INSTALL_CONFIG=$<CONFIG>"
     -P "${PROJECT_SOURCE_DIR}/cmake/InstallSystem.cmake"
-  DEPENDS fetchaddr parsedate dotlock gpgewrap jaro-filter-compile jaro-filter-legacy jaro-filter
+  DEPENDS fetchaddr parsedate dotlock gpgewrap jaro-filter-compile jaro-filter-legacy jaro-filter abook
   USES_TERMINAL VERBATIM)
 
 find_program(ZSH_EXECUTABLE zsh)
 if(ZSH_EXECUTABLE)
-  add_custom_target(check COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap USES_TERMINAL)
-  add_custom_target(check-strict COMMAND "${CMAKE_COMMAND}" -E env JARO_TEST_REQUIRE_ALL=1 "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap USES_TERMINAL)
+  add_custom_target(check COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap abook USES_TERMINAL)
+  add_custom_target(check-strict COMMAND "${CMAKE_COMMAND}" -E env JARO_TEST_REQUIRE_ALL=1 "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap abook USES_TERMINAL)
   if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME source-regressions COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh")
     set_tests_properties(source-regressions PROPERTIES ENVIRONMENT "JARO_TEST_REQUIRE_ALL=1")
