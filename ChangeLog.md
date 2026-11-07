@@ -1,5 +1,17 @@
 # JaroMail ChangeLog
 
+## 6.0.0 (next release; breaking changes)
+
+- Move native builds, test drivers, installation and packaging to CMake.
+  Existing Make commands forward to CMake; source files are no longer build outputs.
+- Assign release versions from Conventional Commits with ietf-tools/semver-action,
+  starting the next major series at v6.0.0. Display assigned build/tag metadata
+  in the CLI and console banner instead of a fixed version string.
+- Build checksum-verified static Linux release archives for x86_64 and arm64
+  with dyne/musl-action. Publish only after tests and both architecture checks pass.
+- Retain profile-free Sieve defaults, partial-address rules and save/move aliases,
+  lossless contact learning, and committed manpages installed without regeneration.
+
 ## 4.3
 ## 19 Mar 2017
 

@@ -12,6 +12,10 @@ src/mairix/config.log
 src/mairix/mairix
 src/gnome-keyring/jaro-gnome-keyring
 build/gnu
+out/
+_build/
+dist/
+__pycache__/
 build/osx
 build/sieve-tools/
 src/mairix/datescan.c

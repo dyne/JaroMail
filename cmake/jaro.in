@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+# Resolve resources relative to this wrapper, including relocated release archives.
+jaro_runtime="${0:A:h}/@JARO_BIN_TO_SHARE@"
+export JAROWORKDIR="${jaro_runtime:A}"
+exec "$JAROWORKDIR/bin/jaro" "$@"
