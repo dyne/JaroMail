@@ -13,7 +13,9 @@ Jaromail is a terminal mail workflow built mostly from Zsh scripts plus small C 
 - `make`: compatibility wrapper around CMake using `build/gnu/cmake`; `make clean` cleans that build, not source files.
 - `make test`: runs all source and focused regression tests, reporting missing dependencies as skips.
 - `make test-strict`: runs the same suite and fails if any script is skipped; used by CI.
-- `sudo make install`: installs Jaromail under `/usr/local/share/jaromail` and creates `/usr/local/bin/jaro`.
+- `make install` or `cmake --install out/build`: defaults to the user prefix `$HOME/.local`; add `~/.local/bin` to `PATH`.
+- `sudo make install-system` or `sudo cmake --build out/build --target install-system`: explicitly installs under `/usr/local`.
+- `make install-system PREFIX=/usr DESTDIR="$PWD/package-root"`: stages distribution packages without root. The native CMake system target accepts `PREFIX` from the environment; both install targets honor `DESTDIR`.
 - `extras/test/run-source.sh`: smoke test for the checked-out code; runs `src/jaro` with a local staged install in a temp path.
 - `extras/test/test-account-wizard.sh`: validates the interactive `wizard` account flow using scripted stdin.
 - `./extras/test/inittest.sh`: runs the installed smoke test using `/tmp/jaromail-test`.

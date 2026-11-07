@@ -83,10 +83,34 @@ To compile and install Jaromail:
 ```
 cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release
 cmake --build out/build --parallel
-sudo cmake --install out/build
+cmake --install out/build
 ```
 
-When Jaromail is installed system-wide, the `JAROMAILDIR`
+The default prefix is `$HOME/.local`: the command is installed as
+`~/.local/bin/jaro`, with resources in `~/.local/share/jaromail`. Ensure
+`~/.local/bin` is in your `PATH`. No administrator privileges are needed.
+`make install` uses the same default.
+
+For a system-wide installation under `/usr/local`, use the explicit target:
+
+```sh
+sudo make install-system
+# Or, after the CMake build above:
+sudo cmake --build out/build --target install-system
+```
+
+Packagers can override the prefix and stage everything without root privileges:
+
+```sh
+make install-system PREFIX=/usr DESTDIR="$PWD/package-root"
+# Equivalent native CMake target:
+PREFIX=/usr DESTDIR="$PWD/package-root" cmake --build out/build --target install-system
+```
+
+This stages `/usr/bin/jaro`, resources and manuals beneath `package-root`.
+See [installation details](doc/releases.md#build-and-install) for prefix overrides.
+
+The `JAROMAILDIR`
 environmental variable can be changed to point to where all emails
 will be stored, by default it is `$HOME/Mail`.
 
@@ -118,16 +142,17 @@ Developer build/test commands:
 cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release
 cmake --build out/build --parallel
 cmake --build out/build --target check-strict
-sudo cmake --install out/build
+cmake --install out/build
 ./extras/test/inittest.sh
 ```
 
 CMake owns all native helper and regression-driver targets. It uses `ccache`
 for compilation when available; set `-DCMAKE_C_COMPILER_LAUNCHER=` to disable it.
 Use `-DCMAKE_INSTALL_PREFIX=/your/prefix` or `cmake --install ... --prefix ...`
-for a private installation, and `DESTDIR` to stage a package. Installed wrappers
+to override the user prefix, and `DESTDIR` to stage a package. Existing CMake
+build directories retain their configured prefix. Installed wrappers
 resolve resources relative to themselves, so release archives can be relocated.
-The existing `make`, `make install`, `make test-strict` and platform build-script
+The existing `make`, `make install`, `make install-system`, `make test-strict` and platform build-script
 commands remain compatibility wrappers around CMake. These wrappers honor `CC`,
 `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `LDLIBS`, `CCACHE`, `PREFIX` and `DESTDIR`.
 Normal builds and installs use the committed `doc/jaro.1` and `doc/jaromail.1`
@@ -157,7 +182,7 @@ libraries and remains separate from Jaromail's default build.
 
 `extras/test/run-source.sh` validates the checked-out tree by executing
 `src/jaro` against a temporary local install layout. `inittest.sh`
-validates the installed command (`/usr/local/bin/jaro`).
+validates the installed `jaro` command selected by `PATH`.
 
 Developer test dependencies (also listed in `.github/workflows/pr-tests.yml`) include:
 `zsh`, `make`, `gcc`, `python3`, `fetchmail`, `msmtp`, `mutt` or `neomutt`,

@@ -109,7 +109,7 @@ class CMakeTests(unittest.TestCase):
         cls.arch = 'arm64' if platform.machine() in ('aarch64', 'arm64') else 'x86_64'
         cls.source, cls.binary = cls.work / 'source with spaces', cls.work / 'binary with spaces'
         cls.source.mkdir()
-        for name in ('src', 'build', 'doc', 'cmake', 'CMakeLists.txt', 'VERSION', 'COPYING.txt'):
+        for name in ('src', 'build', 'doc', 'cmake', 'CMakeLists.txt', 'Makefile', 'VERSION', 'COPYING.txt'):
             original = REPO / name
             if original.is_dir():
                 def ignore(directory, names):
@@ -133,6 +133,8 @@ exec "$JARO_REAL_CC" "$@"
 ''')
         compiler.chmod(0o700)
         cls.env = dict(os.environ, PATH=str(cls.bin)+os.pathsep+os.environ['PATH'], JARO_REAL_CC=shutil.which('cc'))
+        for name in ('PREFIX', 'DESTDIR', 'CMAKE_INSTALL_PREFIX'):
+            cls.env.pop(name, None)
         cls.manuals = {name: (cls.source/'doc'/name).read_bytes() for name in ('jaro.1','jaromail.1')}
         configured = run(['cmake', '-S', cls.source, '-B', cls.binary, '-G', 'Ninja',
                          '-DCMAKE_C_COMPILER='+str(compiler), '-DCMAKE_BUILD_TYPE=',
@@ -177,6 +179,70 @@ exec "$JARO_REAL_CC" "$@"
         self.assertFalse(stale.exists())
         for name,data in self.manuals.items():
             self.assertEqual((installed/'share/man/man1'/name).read_bytes(),data)
+
+    def test_cmake_default_user_and_system_install_with_destdir(self):
+        user_prefix = Path.home()/'.local'
+        cache = (self.binary/'CMakeCache.txt').read_text()
+        self.assertIn(f'CMAKE_INSTALL_PREFIX:PATH={user_prefix}\n', cache)
+        stage = self.work/'user stage'
+        run(['cmake','--install',self.binary],env=dict(self.env,DESTDIR=str(stage)))
+        installed = stage/str(user_prefix).lstrip('/')
+        self.assertEqual(run([installed/'bin/jaro','--version'],env=self.env).stdout,'Jaro Mail v6.7.8\n')
+        for prefix in ('/usr/local', '/usr', '/opt/system with spaces'):
+            stage = self.work/('system stage '+prefix.rsplit('/',1)[-1])
+            env = dict(self.env,DESTDIR=str(stage))
+            if prefix != '/usr/local':
+                env['PREFIX'] = prefix
+            run(['cmake','--build',self.binary,'--target','install-system'],env=env)
+            installed = stage/prefix.lstrip('/')
+            self.assertEqual(run([installed/'bin/jaro','--version'],env=self.env).stdout,'Jaro Mail v6.7.8\n')
+            self.assertTrue((installed/'share/man/man1/jaro.1').is_file())
+        self.assertEqual((self.binary/'CMakeCache.txt').read_text(),cache)
+        blocked = self.work/'invalid staging directory'
+        blocked.write_text('not a directory\n')
+        result = run(['cmake','--build',self.binary,'--target','install-system'],
+                     env=dict(self.env,DESTDIR=str(blocked)),succeeds=False)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('System installation failed',result.stdout+result.stderr)
+
+    def test_cmake_explicit_prefix_is_preserved(self):
+        for name, extra, env in (
+            ('cache', ['-DCMAKE_INSTALL_PREFIX=/opt/explicit prefix'], dict(self.env,PREFIX='/opt/ignored')),
+            ('environment', [], dict(self.env,PREFIX='/opt/explicit prefix')),
+        ):
+            binary = self.work/('prefix '+name)
+            run(['cmake','-S',self.source,'-B',binary,'-G','Ninja','-DBUILD_TESTING=OFF',*extra],env=env)
+            self.assertIn('CMAKE_INSTALL_PREFIX:PATH=/opt/explicit prefix\n',(binary/'CMakeCache.txt').read_text())
+            run(['cmake','-S',self.source,'-B',binary],env=self.env)
+            self.assertIn('CMAKE_INSTALL_PREFIX:PATH=/opt/explicit prefix\n',(binary/'CMakeCache.txt').read_text())
+
+    def test_make_user_system_and_prefix_overrides_with_destdir(self):
+        binary = self.work/'make output'
+        cases = (
+            ('install', Path.home()/'.local', 'default'),
+            ('install-system', Path('/usr/local'), 'default'),
+            ('install-system', Path('/usr'), 'command'),
+            ('install-system', Path('/opt/env with spaces'), 'environment'),
+            ('install', Path('/opt/user override'), 'command'),
+        )
+        expected_version = 'Jaro Mail v'+version.resolve(self.source)+'\n'
+        for index, (target,prefix,override) in enumerate(cases):
+            stage = self.work/f'make stage {index}'
+            args = ['make','-C',self.source,target,'BUILD_DIR='+str(binary),'DESTDIR='+str(stage)]
+            env = dict(self.env)
+            if override == 'command':
+                args.append('PREFIX='+str(prefix))
+            elif override == 'environment':
+                env['PREFIX'] = str(prefix)
+            run(args,env=env)
+            installed = stage/str(prefix).lstrip('/')
+            self.assertEqual(run([installed/'bin/jaro','--version'],env=self.env).stdout,expected_version)
+            self.assertTrue((installed/'share/man/man1/jaro.1').is_file())
+        stage = self.work/'direct helper stage'
+        run([sys.executable,self.source/'build/cmake-build.py','--output-dir',binary,'--install'],
+            env=dict(self.env,DESTDIR=str(stage)))
+        installed = stage/str(Path.home()/'.local').lstrip('/')
+        self.assertEqual(run([installed/'bin/jaro','--version'],env=self.env).stdout,expected_version)
 
     def test_cmake_incremental_build_refreshes_tag_version(self):
         run(['git','init','-q',self.source])
