@@ -33,13 +33,33 @@ jobs:
       - name: Install build and smoke-test tools
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y cmake ninja-build binutils zsh qemu-user
+          sudo apt-get install --no-install-recommends -y cmake ninja-build make gcc ccache binutils ncurses-bin zsh qemu-user
       - name: Set up verified Dyne musl cross compiler
         id: musl
         uses: dyne/musl-action@fe1d1871b096824ddb7aa158f68dd63dabdc9586
         with:
           target_arch: ${{ matrix.musl }}
           version: v2.5.1
+      - name: Set abook dependency paths
+        run: |
+          printf 'CCACHE_DIR=%s\n' "$RUNNER_TEMP/jaromail-abook-ccache" >> "$GITHUB_ENV"
+      - name: Restore static abook dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/jaromail-abook-deps
+            ${{ runner.temp }}/jaromail-abook-sources
+            ${{ runner.temp }}/jaromail-abook-ccache
+          key: ${{ runner.os }}-abook-musl-v2.5.1-${{ matrix.arch }}-${{ hashFiles('build/abook-deps.py', 'build/abook-deps.json') }}
+      - name: Build verified target ncurses and readline
+        env:
+          MUSL_CC: ${{ steps.musl.outputs.CC }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          prefix=$(python3 build/abook-deps.py --cc "$MUSL_CC" --arch "$TARGET_ARCH" \
+            --cache-dir "$RUNNER_TEMP/jaromail-abook-deps" \
+            --source-cache "$RUNNER_TEMP/jaromail-abook-sources" --download)
+          printf 'JARO_ABOOK_DEPS_PREFIX=%s\n' "$prefix" >> "$GITHUB_ENV"
       - name: Resolve assigned version
         id: version
         env:
@@ -62,6 +82,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER="$MUSL_CC" \
             -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR="$TARGET_PROCESSOR" \
             -DJARO_VERSION="$ASSIGNED_VERSION" -DJARO_PACKAGE_ARCH="$TARGET_ARCH" \
+            -DJARO_ABOOK_DEPS_PREFIX="$JARO_ABOOK_DEPS_PREFIX" \
             -DJARO_STATIC=ON -DBUILD_TESTING=OFF -DJARO_BUILD_TEST_DRIVERS=OFF
           cmake --build out/static --parallel 2
       - name: Verify every binary is static and has the right architecture
@@ -77,6 +98,16 @@ jobs:
           "${emulator[@]}" out/static/bin/jaro-filter-compile --version
           "${emulator[@]}" out/static/bin/jaro-filter-compile --check-address person@example.org
           "${emulator[@]}" out/static/bin/jaro-filter --help
+          "${emulator[@]}" out/static/bin/abook --help | grep -Fx 'abook v0.6.2'
+          printf 'alias fixture Static Test <static.person.with.a.long.address@example.org>\n' > out/abook-aliases
+          "${emulator[@]}" out/static/bin/abook --config /dev/null --convert \
+            --informat mutt --infile out/abook-aliases --outformat abook --outfile out/abook-fixture
+          "${emulator[@]}" out/static/bin/abook --config /dev/null --datafile out/abook-fixture \
+            --mutt-query '' | grep -F 'static.person.with.a.long.address@example.org'
+          abook_emulator=()
+          if [[ "$TARGET_ARCH" == arm64 ]]; then abook_emulator=(--emulator qemu-aarch64); fi
+          python3 extras/test/abook-tui-smoke.py --binary out/static/bin/abook \
+            --no-terminfo "${abook_emulator[@]}"
           printf 'From: Static Test <person@example.org>\n\n' | \
             "${emulator[@]}" out/static/bin/fetchaddr -a -e | grep -Fx person@example.org
       - name: Package and test the relocated CLI

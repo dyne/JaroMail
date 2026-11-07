@@ -1,0 +1,296 @@
+.TH ABOOKRC 5 "Oct 25, 2005"
+.nh
+.SH NAME
+\fB$HOME/.abook/abookrc\fP \- configuration file for abook address book program
+.SH DESCRIPTION
+.B abookrc
+is the (optional) configuration file for use with the
+.B abook(1)
+address book program.
+
+.B abookrc
+is stored in a user's \fI$HOME/.abook\fR or \f$XDG_DATA_HOME/abook\fR directory. It follows a format of
+\(lq\fBset option=value\fP\(rq.
+The following information lists each of these options and the values they
+may take.
+
+If a variable is not set in 
+.B abookrc
+, a sensible default, as 
+listed with the description below, will be used.
+
+Comments in 
+.B abookrc
+are on lines beginning with '#'.
+
+.SH COMMANDS
+
+.TP
+\fBset\fP \fIoption\fP = \fIvalue\fP
+
+.TP
+\fBfield\fP \fIidentifier\fP = \fIhuman_readable_name\fP [ , \fItype\fP ]
+Defines a new custom field. \fItype\fP can be one of 'string' (default)
+, 'emails', 'list', or 'date'.
+
+.TP
+\fBview\fP \fIview name\fP = \fIfield1\fP [ , \fIfield2\fP, ... ]
+Defines a view/tab, with \fIfieldN\fP being the identifier of a field
+declared with the \fBfield\fP command, or the identifier of a standard field.
+.IP
+Standard fields:
+.br
+	name, email,
+.br
+	address, address2, city, state, zip, country,
+.br
+	phone, workphone, fax, mobile,
+.br
+	nick, url, notes, anniversary
+.IP
+Note: if you don't define any view, abook will use a default display based
+on the above standard fields.
+
+
+.SH VARIABLES
+
+.TP
+\fBautosave\fP=[true|false]
+Defines whether the addressbook is automatically saved on exit. Default is true.
+
+.TP
+\fBpreserve_fields\fP=[all|standard|none]
+Specifies how fields not declared with the \fBfield\fP command nor in a view
+should be preserved while loading an abook database.
+.RS
+.TP
+.B all
+preserve any completely unknown field.
+.TP
+.B standard
+only preserve the standard fields (see a list in the
+  description of the \fBview\fP command) and the legacy
+  'custom[1\-5]' fields.
+.TP
+.B none
+discards any unknown field.
+.RE
+.IP
+Default is \fIstandard\fP.
+
+.TP
+\fBindex_format\fP=format_string
+Defines the way entries are displayed in the main list. This is a string containing field names enclosed between braces, with an optional width limit specified by a number (right alignment if negative) after the field name and a colon, and an arbitrary number of alternative fields (first with non empty content is to be displayed) separated by vertical bars. For instance:
+.RS
+.TP
+\fI{name:22}\fP
+displays the \fIname\fP field with a maximal width of 22 characters.
+.TP
+\fI{phone:\-12|workphone|mobile}\fP
+displays (right aligned within a width of 13 characters), either the \fIphone\fP, \fIworkphone\fP or \fImobile\fP field, whichever being the first to be non\-empty.
+.RE
+.IP
+Default is \fI" {name:22} {email:40} {phone:12|workphone|mobile}"\fP
+
+.TP
+\fBshow_all_emails\fP=[true|false]
+Defines whether all email addresses for a contact are shown in the main list view. Default is true.
+
+.TP
+.PD 0
+\fBemailpos\fP
+.TP
+.PD 0
+\fBextra_column\fP
+.TP
+.PD 0
+\fBextra_alternative\fP
+.TP
+.PD
+\fBextrapos\fP
+Obsoleted by \fBindex_format\fP.
+
+.TP
+\fBmutt_return_all_emails\fP=[true|false]
+Defines whether to return all email addresses matching the search criteria to a mutt query. Default is true.
+
+.TP
+\fBprint_command\fP=command
+Defines the command to used when printing the addressbook. Default is "lpr".
+
+.TP
+\fBwww_command\fP=command
+Defines the command used to start the web browser to view a contact's URL. Default is "lynx".
+
+.TP
+\fBaddress_style\fP=[eu|uk|us]
+Defines the style of address formatting to be used when exporting as text / printing the database (European, UK, or USA). Default is European ("eu").
+
+.TP
+\fBuse_ascii_only\fP=[true|false]
+This option allows you to force Abook use only ASCII characters. This option is useful if your terminal doesn't support non\-ASCII characters. Default is false.
+
+.TP
+\fBadd_email_prevent_duplicates\fP=[true|false]
+Defines whether to avoid adding addresses already in data. Default is false.
+
+.TP
+\fBsort_field\fP=field
+Defines the field to be used by the "sort by field" command. Default is "nick" (Nickname/Alias).
+
+.TP
+\fBshow_cursor\fP=[true|false]
+Defines if the cursor is visible in main display. Default is false.
+
+.TP
+\fBuse_mouse\fP=[true|false]
+Defines if navigation via the mouse is activated. Default is false. Most terminals can also inhibit ncurses mouse events at runtime by holding the Shift key (restoring mouse\-selection behavior).
+
+.TP
+\fBscroll_speed\fP=lines
+Defines the number of lines the address list is scrolled by on a mouse wheel
+action. This option only takes effect if use_mouse is enabled. Default is 2.
+
+.TP
+\fBuse_colors\fP=[true|false]
+Defines if the output of abook is colorized. Default is false.
+
+.TP
+Color settings:
+\fBcolor_header_fg\fP=color
+Foreground color for header bar
+
+\fBcolor_header_bg\fP=color
+Background color for header bar
+
+\fBcolor_footer_fg\fP=color
+Foreground color for footer bar
+
+\fBcolor_footer_bg\fP=color
+Background color for footer bar
+
+\fBcolor_list_even_fg\fP=color
+Foreground color for normal list entries with even index in the list (starting
+with index 0)
+
+\fBcolor_list_even_bg\fP=color
+Background color for normal list entries with even index in the list (starting
+with index 0)
+
+\fBcolor_list_odd_fg\fP=color
+Foreground color for normal list entries with odd index in the list (starting
+with index 0)
+
+\fBcolor_list_odd_bg\fP=color
+Background color for normal list entries with odd index in the list (starting
+with index 0)
+
+\fBcolor_list_header_fg\fP=color
+Foreground color for the list header
+
+\fBcolor_list_header_bg\fP=color
+Background color for the list header
+
+\fBcolor_list_highlight_fg\fP=color
+Foreground color for highlighted list entries
+
+\fBcolor_list_highlight_bg\fP=color
+Background color for highlighted list entries
+
+\fBcolor_tab_border_fg\fP=color
+Foreground color for tab borders on details page
+
+\fBcolor_tab_border_bg\fP=color
+Background color for tab borders on details page
+
+\fBcolor_tab_label_fg\fP=color
+Foreground color for tab labes on details page
+
+\fBcolor_tab_label_bg\fP=color
+Background color for tab labes on details page
+
+\fBcolor_field_name_fg\fP=color
+Foreground color for field names on details page
+
+\fBcolor_field_name_bg\fP=color
+Background color for field names on details page
+
+\fBcolor_field_value_fg\fP=color
+Foreground color for field values on details page
+
+\fBcolor_field_value_bg\fP=color
+Background color for field values on details page
+
+Where \fBcolor\fP can be: default, black, red, green, yellow, blue, magenta, cyan, white
+
+
+
+.SH SAMPLE CONFIGURATION FILE
+
+.nf
+# sample abook configuration file
+#
+
+# Declare a few custom fields
+field pager = Pager
+field address_lines = Address, list
+field birthday = Birthday, date
+
+# Define how fields should be displayed in tabs
+view CONTACT = name, email
+view ADDRESS = address_lines, city, state, zip, country
+view PHONE = phone, workphone, pager, mobile, fax
+view OTHER = url, birthday
+
+
+# Preserve any unknown field while loading an abook database
+set preserve_fields=all
+
+# Automatically save database on exit
+set autosave=true
+
+# Format of entries lines in list
+set index_format=" {name:22} {email:40} {phone:12|workphone|mobile}"
+
+# Show all email addresses in list
+set show_all_emails=true
+
+# Command used to start mutt
+set mutt_command=mutt
+
+# Return all email addresses to a mutt query
+set mutt_return_all_emails=true
+
+# Command used to print
+set print_command=lpr
+
+# Command used to start the web browser
+set www_command=lynx
+
+# Address style [eu|us|uk]
+set address_style=eu
+
+# Use ASCII characters only
+set use_ascii_only=false
+
+# Prevent double entry
+set add_email_prevent_duplicates=false
+
+# Field to be used with "sort by field" command
+set sort_field=nick
+
+# Show cursor in main display
+set show_cursor=false
+
+.fi
+
+.SH SEE ALSO
+.BR abook (1).
+.br
+.SH AUTHORS
+This manual page was written by Alan Ford <alan@whirlnet.co.uk> and
+expanded by Cedric Duval <cedricduval@free.fr>.
+
+.br
+.B abook
+was written by Jaakko Heinonen <jheinonen@users.sourceforge.net>

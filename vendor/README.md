@@ -1,4 +1,10 @@
-# Minimal Sieve tool source extraction
+# Vendored sources
+
+The complete [abook 0.6.2 release](abook/README.md) is vendored separately for
+the application build and future customization. Its full source archive is an
+explicit exception to the minimal Sieve extraction policy below.
+
+## Minimal Sieve tool source extraction
 
 Only the files needed for the **sievec** and **sieve-test** command frontends
 are extracted from Pigeonhole 2.4.5, pinned to Git commit
@@ -13,7 +19,7 @@ are extracted from Pigeonhole 2.4.5, pinned to Git commit
 | `src/lib-sieve/util/mail-raw.h` | Private raw-message interface used by the shared implementation |
 | `AUTHORS`, `COPYING`, `COPYING.LGPL` | Attribution and licensing notices |
 
-No release archives, full upstream trees, server implementations, extra command
+Within the Pigeonhole extraction, no release archives, full upstream trees, server implementations, extra command
 frontends, translations, generated build systems, or upstream test suites are
 vendored. Each retained file has a dependency reason and SHA-256 digest in
 [`sources.json`](sources.json). The selected bytes were checked against both
@@ -37,7 +43,7 @@ See [the private tool build instructions](../doc/sieve-tools.md) for prerequisit
 fingerprints and private output paths. If development dependencies
 are built from upstream sources, keep those source/build caches outside this
 repository; never expand the vendor tree to a full distribution as a workaround.
-Additional vendored source requires a demonstrated compile/link dependency,
+Additional Pigeonhole source requires a demonstrated compile/link dependency,
 per-file provenance, a reason, and an updated minimal-scope regression.
 
 The ordinary application build does not compile these tools. This development

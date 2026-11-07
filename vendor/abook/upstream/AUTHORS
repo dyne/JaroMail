@@ -1,0 +1,46 @@
+abook AUTHORS
+-------------
+
+Jaakko Heinonen		<jheinonen@users.sourceforge.net>
+
+Cedric Duval		<cedricduval@free.fr>
+ - views
+ - i18n
+ - etc.
+
+Alan Ford		<alan@whirlnet.co.uk>
+ - Debian package
+ - manual pages
+ - GnomeCard, csv, text, elm export filters
+ - etc.
+
+Josua Groeger		<fractalus@gmx.net>
+ - spruce export filter
+ - text export filter update
+
+Matt Kraai		<kraai@alumni.carnegiemellon.edu>
+ - patches
+
+Koenraad Heijlen	<vipie@ulyssis.org>
+ - csv import filter
+ - palmcsv export filter
+ - fixes
+
+Michael Krolikowski	<mkroli@yahoo.de>
+ - built-in vcard import filter
+
+Raphaël Droz	     	<raphael.droz+floss@gmail.com>
+ - custom output format
+ - reworked ldif input/output
+ - vcard import filter through libvformat
+ - fixes
+
+Thorsten Wißmann	<edu@thorsten-wissmann.de>
+ - color support
+ - mouse support
+
+Fabio Zanini		<fabio.zanini@fastmail.fm>
+ - merge entries
+ - duplicated entries removal
+ - mutt "groups"
+ - fixes

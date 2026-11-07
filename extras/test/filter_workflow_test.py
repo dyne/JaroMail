@@ -71,7 +71,7 @@ class WorkflowTests(unittest.TestCase):
 
     @classmethod
     def instrument_helpers(cls):
-        for name in ('jaro-filter-compile', 'jaro-filter'):
+        for name in ('jaro-filter-compile', 'jaro-filter', 'abook'):
             helper = cls.runtime / 'bin' / name
             real = helper.with_name(name+'.real')
             if helper.read_bytes()[:2] == b'#!':

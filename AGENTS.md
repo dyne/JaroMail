@@ -7,7 +7,7 @@ Jaromail is a terminal mail workflow built mostly from Zsh scripts plus small C 
 ## Build, Test, and Development Commands
 
 - `cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release`: configures the native build; use a fresh directory for each toolchain/sanitizer variant.
-- `cmake --build out/build --parallel`: builds the seven native helpers; CMake defines all compiler targets, including regression drivers.
+- `cmake --build out/build --parallel`: builds the seven native helpers and vendored abook; CMake defines all compiler targets, including regression drivers.
 - `cmake --build out/build --target check-strict`: runs the full suite, requiring no skipped scripts. `ctest --test-dir out/build --output-on-failure` is also supported after building.
 - `cmake --install out/build --prefix /your/prefix`: installs helpers, scripts, assigned version metadata and committed manuals. `DESTDIR` stages packages.
 - `make`: compatibility wrapper around CMake using `build/gnu/cmake`; `make clean` cleans that build, not source files.
@@ -27,8 +27,12 @@ Prefer minimal, readable changes. Keep Zsh functions lowercase, shell modules gr
 
 ## Testing Guidelines
 
-Use `make test` for checkout-level validation and `make test-strict` for a complete dependency-equipped run. The runner discovers `extras/test/test-*.sh` automatically; module fixtures require no live mail service. Integration tests depend on external mail tools (`fetchmail`, `msmtp`, `mutt`/`neomutt`, `notmuch`, `pinentry-curses`, `abook`, `wipe`, `mblaze`/`maddr`) plus build tools from `.github/workflows/pr-tests.yml`. Missing prerequisites use exit 77; assertion failures must fail the test. Use `extras/test/inittest.sh` separately for installed-path validation. For narrow C helper changes, rebuild with `make` and add a focused command-line check where practical.
+Use `make test` for checkout-level validation and `make test-strict` for a complete dependency-equipped run. The runner discovers `extras/test/test-*.sh` automatically; module fixtures require no live mail service. Integration tests depend on external mail tools (`fetchmail`, `msmtp`, `mutt`/`neomutt`, `notmuch`, `pinentry-curses`, `abook`, `wipe`, `mblaze`/`maddr`) plus build tools and `libncurses-dev libreadline-dev` from `.github/workflows/pr-tests.yml`. Installed Jaromail uses its bundled abook; some source fixtures still use a host abook. Missing prerequisites use exit 77; assertion failures must fail the test. Use `extras/test/inittest.sh` separately for installed-path validation. For narrow C helper changes, rebuild with `make` and add a focused command-line check where practical.
 
 ## Architecture Notes
 
 Respect the existing slice-by-feature organization. Keep IO boundaries explicit: shell modules should call external mail tools clearly, and helpers should do one job well.
+
+## Vendored abook
+
+The complete pinned abook 0.6.2 release is in `vendor/abook/upstream`; its manifest and customization notes are in `vendor/abook/`. Keep CMake integration and generated headers outside the upstream tree (`cmake/abook/` and the build directory). Deliberate source changes need regression coverage and updated manifest digests while preserving the original archive provenance. Run `python3 vendor/verify.py` and `zsh extras/test/test-build.sh`. Linux static builds use the explicit `build/abook-deps.py` step for pinned target ncurses/readline, never host libraries or an implicit configure-time download.

@@ -1,0 +1,327 @@
+git
+
+0.6.2
+ - upgrade the license to GPLv3
+ - custom fields' can be used in placeholder in the "custom" output export (Raphaël Droz)
+ - allcsv export format can now export any custom fields (of any name) (Raphaël Droz)
+ - German translation update (Rieger Anton)
+ - Avoid SIGSEV if USER is not defined (Denis Briand)
+ - Spelling (Denis Briand)
+ - added --email-fields to collect email addresses from cc,bcc,... email message fields (Corey Minyard)
+ - don't leak data file's handle #6 (dcb)
+ - don't rewrite database when quitting after no change (Raphaël Droz)
+ - custom output filter fixes
+ - Aliased --datafile to -f (Gerfried Fuchs)
+ - autotools update (Raphaël Droz)
+ - key remapping support (Imran Haider)
+ - fix a double-free() (Alejandro Colomar)
+ - added "mailto" output format (Alejandro Colomar)
+ - added "ical" output of entries having an anniversary (Guillem Jover)
+ - XDG base directory compliance (Keith Bowes)
+ - --mutt-query loose search (Colin Zhengj)
+
+0.6.1
+ - custom output format (Raphaël Droz)
+ - remove duplicates (Fabio Zanini)
+ - merge entries (Fabio Zanini)
+ - mutt groups support (Fabio Zanini)
+ - vcard initial input filter (Michael Krolikowski)
+ - vcard parser improvements (Fabio Zanini, Raphaël Droz)
+ - color support (Thorsten Wißmann)
+ - mouse support (Thorsten Wißmann)
+ - extra-fields deletion bugfix (Jorrit Tijben)
+ - additional keybindings (Hagen Fuchs)
+ - autotools update (Fabio Zanini)
+ - case-sensitive ldif fields parsing (Christian Brabandt)
+ - ldif standard input support (Raphaël Droz)
+ - ldif extensible field management rewrite (Raphaël Droz)
+ - html output fixes (Stéphane Aulery)
+ - memory bugfixes (Peter Wu)
+ - vcard birthday export fix (Gaetan Bisson)
+
+0.6.0
+ - configurable views (Cedric Duval)
+ - new field types, lists and improved custom field support (Cedric Duval)
+ - index_format option (Cedric Duval)
+ - Italian translation (Claudio Stazzone)
+
+0.5.6
+ - translation fixes
+ - fixed gcrd export format (\r\n line endings according to RFC, Marc Tardif)
+ - fix localized keybindings with --disable-nls
+
+0.5.5
+ - fixed gcrd export format (Marc Tardif)
+ - i18n support (Cedric Duval)
+ - French translation (Cedric Duval)
+ - Swedish translation (Susanna Björverud)
+ - Japanese translation (Takahashi Tamotsu)
+ - German translation (Johannes Weißl)
+ - palmcsv import filter (Marc Tardif)
+ - use better common code for csv filters (Marc Tardif)
+ - translation HOWTO (Cedric Duval)
+ - wanderlust export filter (Josef Schugt)
+ - create a backup at save time
+ - editor undo fix
+ - ui_readline limit fix
+
+0.5.4
+ - add show_cursor config option (idea from Cheryl Homiak)
+ - autoconf/automake update
+ - replace abook_malloc, abook_realloc and my_free with new xmalloc routines
+ - replace strdup with xstrdup
+ - update for abook_rl (abook_readline)
+ - make it compile with tcc (Tiny C Compiler)
+ - code cleanups and minor fixes
+
+0.5.3
+ - add allcvs filters (Christoph Sobotka)
+ - removed a lefover debug message
+ - fixed mutt import filter nickname cutoff
+ - wrap searches
+ - contrib updates
+
+0.5.2
+ - five custom fields added
+ - experimental wide character support
+ - fixed a crash bug in mutt filter
+ - fixed errors in configure.in (especially snprintf-functions were incorrectly
+   detected)
+ - abookrc manual page update
+
+0.5.1
+ - sort by field command
+ - duplicate item command
+ - quit without saving command
+ - autoconf/automake update
+ - minor filter fixes
+ - tried to fix \" quotation problem with mutt import filter
+ - removed obsolete filesel_sort option from abookrc manual page
+ - added bbdb2xx translator source to contrib
+
+0.5.0
+ - tried to work around some problems with readline
+ - some documentation update
+20030530
+ - updated autoconf/automake
+ - updated man page
+ - pine import filter update
+20021008
+ - options.c rewritten (new mutt style rc file support)
+ - palmcsv export filter (Koenraad Heijlen)
+ - added a spec file for rpm support
+ - added --with-readline configure option
+ - merged newtab patch by Sinan Kaan Yerli
+ - new option: add_email_prevent_duplicates
+ - bugfixes
+2002-03-11
+ - readline support
+ - abook can be compiled with g++
+ - attempt to improve --datafile behavior
+ - html filter update (Morten Brix Pedersen)
+ - store rcfile and addressbook to .abook directory
+2002-02-04
+ - use getopt to parse command line (also new options added)
+ - use strcoll instead of strcmp for sorting entries
+ - html filter fix
+ - bugfixes
+
+0.4.17
+ - fixed an annoying file creation bug
+
+0.4.16
+ - use strcoll instead of strcmp for sorting entries
+ - html filter fix
+ - many bugfixes
+
+0.4.15
+ - new options --add-email and --add-email-quiet
+ - proper mutt alias import filter
+ - editor update
+ - don't handle extra_column and extra_alternative as numbers in abookrc
+ - added second address field
+ - mail.vim update in contrib directory
+
+0.4.14
+ - added csv import filter
+ - csv export filter fix
+ - minor html filter update
+ - fixed a minor memory leak in pine import filter
+ - filter cleanups
+ - fixes
+ - "quit and print selected item(s) to stderr" command (Brian Medley)
+ - contrib update
+
+0.4.13
+ - major code reorganization (phase 1)
+ - fixed help viewer functions
+ - ability to disable use of non-ascii characters (configuration option)
+ - changed SIGINT behaviour
+ - html export filter creates now valid html documents
+ - ability to print/export only selected items
+ - new editor commands
+ - text filter update
+ - query/find code cleanup
+ - fixed snprintf related bugs
+ - minor bugfixes
+
+0.4.12
+ - added man page for abookrc (Alan Ford)
+ - notes are returned as optional data in mutt queries
+ - created a workaround for a mutt query bug
+ - new "extra_alternative" config option (Alan)
+ - added undo feature to editor
+ - FAQ
+ - macro updates
+ - fixed the cancel key behavior in editor
+
+0.4.11
+ - new configuration file format
+ - new sorting routines
+ - minor mutt query patch (Matt)
+ - html filter update
+ - added mail2abook.py script to improve the mutt integration
+ - memory allocation changes
+ - contrib update
+
+0.4.10
+ - mutt alias import filter
+ - --datafile option should work better now
+ - merged HPUX patch (submitted by Matt Kraai)
+ - added field for nickname/alias
+ - bugfixes
+
+0.4.9
+ - increased the maximum length of an e-mail address
+ - added Spruce and ldif export filters
+ - text filter update
+ - added support for systemwide configuration file (/etc/abook.conf)
+ - list.c cleanup
+ - minor fixes
+
+0.4.8
+ - new enter_string function (scrollable input)
+ - fileselector
+ - new fields for phone numbers
+ - extra field support
+ - added open database command and --datafile option
+
+0.4.7
+ - fixed terminal resizing bug
+ - new man page
+ - fixed "roll emails" bug
+ - merged Alan's urlview patch
+ - fixed some compile warnings on some systems
+
+0.4.6
+ - new proper ldif import filter
+ - printing
+ - GnomeCard export filter
+ - improved ui
+ - csv export filter
+ - elm alias export filter
+ - plain text export filter
+ - improved import / export system
+ - a man page (contributed by Alan Ford)
+ - some fixes
+
+0.4.5
+ - new command line option --convert to make format conversions
+ - new common functions for filters
+ - mutt alias export filter
+ - minor filter updates
+ - fixed a compile problem in list.c 
+
+0.4.4
+ - fixed a serious segfault bug in editor
+ - conff.c update
+
+0.4.3
+ - improved "send mail with mutt" command
+ - optimized screen refreshing
+ - abook handles now SIGINT, SIGKILL, SIGTERM signals
+
+0.4.2
+ - new editor
+ - added fields for address (address, city, state, zip, country)
+ - terminal resizing is now handled by abook
+ - improved scrolling
+ - bugfixes 
+ - dropped support for abook 0.1 / 0.2 file format
+
+0.4.1
+ - fixed a redraw bug in editor which occurred only with old ncurses library
+ - minor updates 
+
+0.4.0
+ - PINE addressbook import and export filters added
+ - new faster load and save functions
+ - changed memory allocation method
+ - better configuration system - options.c rewritten
+ - new version of conff.c
+ - find segfault bug fixed
+ - fixed overwriting policy
+
+0.3.1
+ - fixed a bug which caused list to disappear sometimes after removing items
+ - minor changes in datafile loader
+ - abook.gz import filter is now disabled as default
+
+0.3.0
+ - new portable file format
+ - import filter for old data format
+ - now compiles on FreeBSD
+ - new "send mail with mutt" command
+ - multiple e-mail address support
+ - html export filter
+ - improved cursor behavior
+ - fixed misc.c
+ - new configuration system ( ~/.abook.conf )
+ - improved memory allocation functions
+ - added invert selection command 
+ - minor filter updates
+
+0.2.4
+ - minor memory freeing fix 
+
+0.2.3
+ - major memory allocation bugfix
+
+0.2.2
+ - bugfixes
+
+0.2.1
+ - abook finaly uses automake/autoconf setup
+ - documentation updated
+ - minor changes 
+
+0.2.0
+ - multiple selection
+ - added find function
+ - ldif import filter update (still some bugs?)
+ - added check for terminal size
+ - removed obsolete rcfile code
+ - some changes in list.c
+ - new file: help.h
+ - Makefiles modified
+ - complete rewrote of misc.c
+ - fixed a bug in mutt query
+ - changed first_item to first_list_item and LAST_ITEM to LAST_LIST_ITEM
+ - lots of minor improvements
+ - documentation updated (it's still very bad)
+
+0.1.0
+ - removed dummy defaultrc.h file
+ - README and COPYING
+ - minor ldif import filter update
+ - minor changes and fixes
+
+0.1.0-pre-release 2
+ - locale support
+ - mutt query now ignores case
+ - rcfile support is compiled only if -DEXPERIMENTAL option is selected (see
+   Makefile) because the rcfile support is very poor and should
+   be rewritten for 0.2 or something
+ - new file: defaultrc.h
+
+0.1.0-pre-release 1

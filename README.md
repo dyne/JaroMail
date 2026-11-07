@@ -74,11 +74,15 @@ List of core features
 Make sure you have installed the following dependencies on your operating system, they should be named in a similar way across distributions, here below the names of the packages are referring to those found in APT distros:
 
 ```
-fetchmail msmtp neomutt notmuch pinentry-curses abook \
+fetchmail msmtp neomutt notmuch pinentry-curses \
 wipe mblaze vim netcat-traditional
 ```
 
-Build tools are CMake 3.20+, Python 3.9+, a C compiler and either Ninja or Make.
+Build tools are CMake 3.20+, Python 3.9+, a C compiler and either Ninja or Make,
+plus wide-character ncurses and GNU readline development libraries
+(`libncurses-dev libreadline-dev` on Debian/Ubuntu). The complete abook 0.6.2
+source is bundled and built by CMake; no system abook is needed by an installed
+Jaromail. See [abook source and customization](vendor/abook/README.md).
 To compile and install Jaromail:
 ```
 cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release
@@ -173,6 +177,12 @@ in runtime metadata; `jaro --version`, help and the console startup banner use
 that value without requiring Git or Python on the installed machine.
 See [release automation and static Linux archives](doc/releases.md) for the
 Conventional Commits policy, both CPU architectures and installation details.
+
+The complete abook release, including translations, manuals and upstream build
+files, is retained separately under `vendor/abook/upstream` with per-file hashes.
+Its CMake adapter is under `cmake/abook`; future source changes can be tested
+against the bundled import/export and terminal regressions. It installs in
+Jaromail's private runtime directory without replacing the system `abook`.
 
 Only the minimal Pigeonhole `sievec`/`sieve-test` frontend sources, shared helper,
 and required notices are included under [`vendor/`](vendor/README.md). The test

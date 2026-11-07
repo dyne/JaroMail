@@ -46,7 +46,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            zsh make cmake ninja-build gcc python3 perl pkg-config ccache libssl-dev zlib1g-dev libpcre2-dev binutils \
+            zsh make cmake ninja-build gcc python3 perl pkg-config ccache libssl-dev zlib1g-dev libpcre2-dev binutils libncurses-dev libreadline-dev \
             fetchmail msmtp neomutt notmuch pinentry-curses \
             abook wipe mblaze gnupg pandoc ca-certificates netcat-traditional
 

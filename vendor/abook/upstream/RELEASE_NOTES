@@ -1,0 +1,83 @@
+This file lists major changes affecting abook's behavior.
+Please read this file carefully when upgrading abook.
+A more comprehensive list of changes can be found in the ChangeLog file.
+
+--
+Git:
+
+0.6.2 (2025-01-19):
+ * change: GPLv3 licensing
+ * change: --datafile aliased to -f
+ * change: --mutt-query loose search: now searches within NOTES and disregards whitespace differences
+ * new: customizable keys mapping
+ * new: XDG directories compliance (rc/db files)
+ * new: --email-fields allows --add-email to collect email
+   addresses from fields others than "From" (eg: cc, bcc, or any other).
+ * new: "mailto" and "ical" export format
+ * fix: "custom" export format now consider any custom field
+ * fix: "allcsv" export format now correctly handle custom fields
+ * fix: Don't rewrite database file when closing without change
+   --add-email is more likely to work now even if another interactive abook instance is running in parallel
+   (as long as the later doesn't modify the database)
+ * fix: Multiple bug and spelling fixes. German translation update
+
+0.6.1 (2015-08-11):
+  * support for mouse
+  * scrolling now affects the viewport instead of the cursor
+  * support for a colored UI
+  * added "groups" as a default field
+  * the UI now supports merging selected entries [key M]
+    and removing duplicates [key U]
+  * a "custom" output filter allows the specification of an output
+    format using placeholders
+  * search-next is now bound to "/" too
+  * some output filters can now be used in the context
+    of --mutt-query. This is the case of "vcard" and "custom"
+    [ no --query option has been created and --mutt-query is fully
+      backward compatible ]
+  * ldif output filter has been fixed [output modified] in multiple
+    ways, does not force output to latin1 anymore and supports input
+    from stdin.
+  * vcard input/output support:
+    An original input filter implementation was provided soon
+       after 0.6.0pre2.
+    In 2012, an optional build-time option to link against libvformat
+    was added for the very same task: parsing vcard.
+    - It depends on the --enable-vformat ./configure switch
+    - It's only used as an input filter, especially useful to
+      deal with multi-valued fields and encoded characters.
+  * when the UI requests a confirmation from the user before a
+    destructive operation it does not treat unknown key as "yes" anymore.
+  * allcsv output changes:
+    - header line uses lowercase
+    - "MOBILEPHONE" column name changed to "mobile" (consistent w.r.t. standard_fields)
+    - defined custom fields as well are part of the output now
+
+0.6.0pre2 (2010-07-22):
+  * Added anniversary as a default field
+  * Display dates according to current locale
+  * The four following configuration options have been deprecated and will
+    no longer be accepted by abook:
+      * emailpos
+      * extra_column
+      * extra_alternative
+      * extrapos
+
+    They have been replaced with a single more flexible option:
+    index_format.
+
+    This option is a string defining the format of a line in the main list.
+    It allows displaying of as many fields as desired, with optional
+    width limit, as well as an arbitrary number of alternative fields.
+
+0.6.0pre1 (2006-08-30):
+  * The 'customfield' command has been obsoleted by a more flexible set
+    of commands: 'field' and 'view'.
+
+    Those two commands make it possible to define fields and organize
+    them within tabs as you see fit.
+
+    Not using these commands, the look and feel of previous releases
+    will mostly be kept the same. Also see the related 'preserve_fields'
+    configuration variable.
+
