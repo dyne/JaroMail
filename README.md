@@ -71,6 +71,17 @@ List of core features
 
 # Install
 
+On Linux x86_64 or arm64, install the complete package from the latest release:
+
+```bash
+curl -fsSL https://dyne.github.io/JaroMail/install.sh | bash
+```
+
+The installer checks the published SHA-256 checksum and installs under
+`$HOME/.local` without sudo. Install the external mail tools listed below
+separately. See the [installation guide](docs/install.md) for details and
+custom prefixes. The one-liner is served by the documentation deployment.
+
 Make sure you have installed the following dependencies on your operating system, they should be named in a similar way across distributions, here below the names of the packages are referring to those found in APT distros:
 
 ```
@@ -112,7 +123,7 @@ PREFIX=/usr DESTDIR="$PWD/package-root" cmake --build out/build --target install
 ```
 
 This stages `/usr/bin/jaro`, resources and manuals beneath `package-root`.
-See [installation details](doc/releases.md#build-and-install) for prefix overrides.
+See [installation details](docs/releases.md#build-and-install) for prefix overrides.
 
 The `JAROMAILDIR`
 environmental variable can be changed to point to where all emails
@@ -135,6 +146,22 @@ Note for experienced Mutt users: keys will be familiar, but there are
 things to learn in the manual on how jaromail enhances the workflow.
 
 # Developers
+
+## Documentation website
+
+The manual-first VitePress website is in `docs/`, using the pinned Dyne Vite
+theme. Use Node.js 24 and Pandoc, then run:
+
+```sh
+npm ci
+npm run docs:dev
+# Production build for GitHub Pages:
+BASE_PATH=/JaroMail/ npm run docs:build
+BASE_PATH=/JaroMail/ npm run docs:check
+```
+
+See [website development and deployment](docs/contributing.md) for source
+generation and GitHub Pages setup. Native Jaromail builds do not need Node.js.
 
 All development happens on [github.com/jaromail](https://github.com/dyne/JaroMail)
 
@@ -159,7 +186,7 @@ resolve resources relative to themselves, so release archives can be relocated.
 The existing `make`, `make install`, `make install-system`, `make test-strict` and platform build-script
 commands remain compatibility wrappers around CMake. These wrappers honor `CC`,
 `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `LDLIBS`, `CCACHE`, `PREFIX` and `DESTDIR`.
-Normal builds and installs use the committed `doc/jaro.1` and `doc/jaromail.1`
+Normal builds and installs use the committed `docs/jaro.1` and `docs/jaromail.1`
 without invoking Pandoc or rewriting documentation. After editing manual sources,
 maintainers run `cmake --build out/build --target man` (or `make man`) explicitly and commit both the Markdown and generated
 pages. This regeneration requires Pandoc and embeds no build-time date.
@@ -175,7 +202,7 @@ SemVer tag, with `VERSION` as the v6 development baseline and `-DJARO_VERSION=..
 as the release-workflow override. Installed builds carry their assigned version
 in runtime metadata; `jaro --version`, help and the console startup banner use
 that value without requiring Git or Python on the installed machine.
-See [release automation and static Linux archives](doc/releases.md) for the
+See [release automation and static Linux archives](docs/releases.md) for the
 Conventional Commits policy, both CPU architectures and installation details.
 
 The complete abook release, including translations, manuals and upstream build
@@ -200,8 +227,8 @@ Developer test dependencies (also listed in `.github/workflows/pr-tests.yml`) in
 
 Legacy/optional surfaces are documented in:
 
-- `doc/optional-integrations.md`
-- `doc/maintenance-inventory.md`
+- `docs/optional-integrations.md`
+- `docs/maintenance-inventory.md`
 
 Current policy for this branch:
 
@@ -235,8 +262,8 @@ Initialization never translates or replaces an existing policy. Shipped legacy
 defaults compile without creating a profile file or rewriting their patterns.
 Use `jaro sieve` to publish, then `jaro -n filter` or `jaro filter --explain`
 to inspect the current generation without moving mail. See the
-[migration guide](doc/filter-compatibility.md#migration-and-installed-workflow-qualification)
-and [interface contract](doc/filter-interfaces.md).
+[migration guide](docs/filter-compatibility.md#migration-and-installed-workflow-qualification)
+and [interface contract](docs/filter-interfaces.md).
 
 An optional `FilterProfile.txt` can customize mailbox mappings and namespaces or
 explicitly select restrictive `core-v1`. Explicit

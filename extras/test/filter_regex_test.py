@@ -15,7 +15,7 @@ from sieve_oracle import SieveOracle
 from filter_compiler_test import records
 
 REPO = Path(__file__).resolve().parents[2]
-CATALOGUE = REPO / 'doc/filter-regex-qualification.json'
+CATALOGUE = REPO / 'docs/filter-regex-qualification.json'
 FIXTURE = REPO / 'extras/test/fixtures/filter-contract/regex-subset.json'
 DIGEST = hashlib.sha256(CATALOGUE.read_bytes()).hexdigest()
 PROFILE = ('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\n'
@@ -229,7 +229,7 @@ class RegexTests(unittest.TestCase):
             self.decide(generation, case)
 
     def test_shipped_defaults_unchanged(self):
-        generation = self.compile((REPO / 'doc/Filters.txt').read_text().splitlines())
+        generation = self.compile((REPO / 'docs/Filters.txt').read_text().splitlines())
         for case in json.loads(FIXTURE.read_text())['cases']:
             if case['id'].startswith('default-') and case['expected'] == 'matched':
                 self.decide(generation, {'id': case['id'], 'headers': {'From': case['address']},

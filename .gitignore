@@ -73,3 +73,9 @@ src/parsedate
 gnupg-mass-recv.cache
 *.sieve
 !extras/test/fixtures/sieve-oracle/*.sieve
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/content/
+docs/.vitepress/dist/
+docs/public/downloads/
+docs/public/install.sh

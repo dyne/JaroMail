@@ -221,7 +221,7 @@ def main():
                     env = dict(os.environ, JAROMAILDIR=str(root), JAROWORKDIR=str(args.work))
                     env["JARO_FILTER_ENGINE"] = args.engine
                     if args.engine == "native":
-                        qualification = sha((args.repo / "doc/filter-regex-qualification.json").read_bytes())
+                        qualification = sha((args.repo / "docs/filter-regex-qualification.json").read_bytes())
                         profile = ('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\ncapability mailbox\ncapability regex\nregex-qualification ' + qualification + '\n')
                         (root / "FilterProfile.txt").write_text(profile)
                         metadata["supplemental_profile"] = {"sha256": sha(profile.encode()), "regex_qualification": qualification,

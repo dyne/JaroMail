@@ -109,7 +109,7 @@ profile and abook paths without publishing them. The importer extends the
 generation transaction with a fixed four-input backup journal covered by the
 same commit marker; failure/crash recovery restores the previous complete view.
 It never interprets general Sieve or deploys remotely. The migration and mapping
-limits are in `doc/filter-interfaces.md`. `test-filter-import.sh` covers
+limits are in `docs/filter-interfaces.md`. `test-filter-import.sh` covers
 round trips, malformed input, idempotency and controlled publication recovery.
 `test-filter-parity.sh` checks 432 positive decisions per backend against authored
 winners: source-parsed pure C, cache-loaded batch C and actual pinned Sieve. The
@@ -127,7 +127,7 @@ reconstruction. No raw policy source is reparsed. Allocation failure destroys
 the entire reconstructed model; no partial policy escapes.
 
 The helper defaults to classification and emits the byte-framed JFD1 stream
-specified in `doc/filter-interfaces.md`. Maildir selection snapshots regular
+specified in `docs/filter-interfaces.md`. Maildir selection snapshots regular
 files from cur/new only, sorts raw absolute paths and excludes tmp, directories,
 symlinks and special files. Explicit paths preserve their original bytes and
 occurrences; relative paths retain the invocation's cwd. Selection is bounded

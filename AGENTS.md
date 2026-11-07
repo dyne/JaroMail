@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Jaromail is a terminal mail workflow built mostly from Zsh scripts plus small C and Objective-C helpers. The main command is `src/jaro`; reusable shell modules live under `src/zlibs/`, grouped by concern such as `accounts`, `addressbook`, `maildirs`, `filters`, `imap`, and `search`. C helpers such as `fetchaddr.c`, `parsedate.c`, `dotlock.c`, and `gpgewrap.c` are in `src/`. Mutt configuration and color assets are in `src/mutt/`. Build scripts are in `build/`; documentation is in `doc/`; optional integrations and tests are in `extras/`.
+Jaromail is a terminal mail workflow built mostly from Zsh scripts plus small C and Objective-C helpers. The main command is `src/jaro`; reusable shell modules live under `src/zlibs/`, grouped by concern such as `accounts`, `addressbook`, `maildirs`, `filters`, `imap`, and `search`. C helpers such as `fetchaddr.c`, `parsedate.c`, `dotlock.c`, and `gpgewrap.c` are in `src/`. Mutt configuration and color assets are in `src/mutt/`. Build scripts are in `build/`; documentation is in `docs/`; optional integrations and tests are in `extras/`.
 
 ## Build, Test, and Development Commands
 

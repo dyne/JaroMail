@@ -76,7 +76,7 @@ assert_contains "${filter_log}" "-> tobucket" "to-rule progress line"
 # A qualified profile preserves these legacy ERE rule bytes without weakening
 # them into globs. Source and destination bodies must be identical.
 qualification="$(python3 -c 'import hashlib,pathlib,sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' \
-    "$repo_root/doc/filter-regex-qualification.json")"
+    "$repo_root/docs/filter-regex-qualification.json")"
 cat > "$mail_root/FilterProfile.txt" <<EOF
 version 1
 profile pigeonhole-2.4.5-posix-ere-v1

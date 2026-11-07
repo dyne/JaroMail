@@ -239,7 +239,7 @@ class ParityTests(unittest.TestCase):
     def test_qualified_regex_corpus_before_and_after_import(self):
         fixture = REPO / 'extras/test/fixtures/filter-contract/regex-subset.json'
         corpus = json.loads(fixture.read_text())
-        catalogue = json.loads((REPO / 'doc/filter-regex-qualification.json').read_text())
+        catalogue = json.loads((REPO / 'docs/filter-regex-qualification.json').read_text())
         self.assertEqual(hashlib.sha256(fixture.read_bytes()).hexdigest(), catalogue['fixture_sha256'])
         self.assertEqual(len(corpus['cases']), 141)
         self.assertEqual(len({c['id'] for c in corpus['cases']}), 141)

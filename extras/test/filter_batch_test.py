@@ -23,7 +23,7 @@ from sieve_oracle import SieveOracle
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = REPO / 'extras/test/fixtures/filter-policy'
-CATALOGUE = REPO / 'doc/filter-regex-qualification.json'
+CATALOGUE = REPO / 'docs/filter-regex-qualification.json'
 PROFILE = ('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\n'
            'capability mailbox\ncapability regex\nregex-qualification ' +
            hashlib.sha256(CATALOGUE.read_bytes()).hexdigest() + '\n')

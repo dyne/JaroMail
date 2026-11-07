@@ -4,7 +4,7 @@ This file lists integrations that are *not* part of the core CLI workflow (`init
 
 ## Default Install Scope
 
-- `make install` copies `doc/*`, `src/mutt/*`, `src/stats/*`, `src/zlibs/*`, `src/zuper/zuper*`, `src/jaro`, and `build/gnu/*`.
+- `make install` copies `docs/*`, `src/mutt/*`, `src/stats/*`, `src/zlibs/*`, `src/zuper/zuper*`, `src/jaro`, and `build/gnu/*`.
 - Most content under `extras/` and `src/MailToMutt` is **not** installed by default.
 
 ## Retained Optional Integrations
