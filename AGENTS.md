@@ -7,7 +7,7 @@ Jaromail is a terminal mail workflow built mostly from Zsh scripts plus small C 
 ## Build, Test, and Development Commands
 
 - `cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release`: configures the native build; use a fresh directory for each toolchain/sanitizer variant.
-- `cmake --build out/build --parallel`: builds the seven native helpers and vendored abook; CMake defines all compiler targets, including regression drivers.
+- `cmake --build out/build --parallel`: builds the eight native helpers and vendored abook; CMake defines all compiler targets, including regression drivers.
 - `cmake --build out/build --target check-strict`: runs the full suite, requiring no skipped scripts. `ctest --test-dir out/build --output-on-failure` is also supported after building.
 - `cmake --install out/build --prefix /your/prefix`: installs helpers, scripts, assigned version metadata and committed manuals. `DESTDIR` stages packages.
 - `make`: compatibility wrapper around CMake using `build/gnu/cmake`; `make clean` cleans that build, not source files.

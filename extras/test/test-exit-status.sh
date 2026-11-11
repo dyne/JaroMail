@@ -77,6 +77,7 @@ touch "$MAILDIRS/Filters.txt"
   print first > "$MAILDIRS/outbox/new/1"
   print second > "$MAILDIRS/outbox/new/2"
   account=fixture DRYRUN=0 global_quit=0
+  WORKDIR="$repo_root/src"
   lock() { return 0; }; unlock() { return 0; }
   hdr() { print 'From: fixture@example.org'; }
   zstat() { print 10; }; human_size() { print 10; }

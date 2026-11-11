@@ -23,8 +23,13 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
 - `fetch`: pulls mail into `incoming/` via fetchmail.
 - A successful poll with no messages returns zero; transport failures return
   non-zero and stop the subsequent filter/index workflow.
-- `send`/`smtp`: sends queued messages from `outbox/` via msmtp.
+- `send`: sends eligible queued messages from `outbox/` via msmtp;
+  `smtp` sends stdin directly and does not use the outbox recovery journal.
 - `send` returns non-zero if any message fails, even if a later message succeeds.
+- Confirmed accepted items finish local archive/removal without another SMTP
+  invocation. Interrupted/uncertain and invalid state is held; held counts are
+  reported. Every nonzero msmtp result remains uncertain rather than proving
+  non-delivery. Legacy anonymous sending keeps its original behavior.
 - `imap`: account-bound IMAP actions.
 - IO: reads account credentials and queue; writes to maildirs and replay logs.
 - Test-safe: partially (`run-source.sh` covers queue/index/filter path; network calls are environment dependent).
@@ -64,6 +69,22 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
   folder can move `new/` files into `cur/`; the bridge does not promise a
   read-only filesystem. INBOX is a separate root Maildir; existing mail remains
   accessible in named folders such as `known` and `priv`.
+
+## Outbox recovery (`outbox list`, `outbox retry`, `outbox archive`)
+
+- `outbox list`: read-only `ID STATE OUTCOME` rows. No message text, recipients,
+  filenames, bootstrap initialization, account reads, keyring or transport calls.
+- `outbox retry ID --confirm-duplicate`: retries one in-flight/uncertain held
+  item under the outbox lock; the flag acknowledges possible duplication.
+- `outbox archive ID`: records external verification before finishing the local
+  sent copy; zero SMTP and credential calls. Accepted/verified/complete items can
+  also complete local cleanup.
+- `-n`: validates without lock/state writes or transport. Invalid, stale,
+  ambiguous and content-mismatched selections do not change delivery state.
+- IDs bind the stable queue basename to a content-checked immutable journal.
+  Private records and independent claims must be preserved for recovery.
+- Tests: `test-outbox-controls.sh`, `test-send-recovery.sh`,
+  `test-send-locking.sh`, including source and staged installed invocations.
 
 ## Index/search family (`index`, `search`, `extract`, `headers`)
 

@@ -412,10 +412,131 @@ computer is connected to the Internet and issue the **send** command:
 jaro send
 ```
 
-Jaro Mail will send all emails in outbox, one by one, listing their
-recipients and size while doing so. If successful, mails will be removed
-from the outbox and put into the **sent** folder, which can be accessed
-from inside mutt or with the command **jaro open sent**.
+Jaro Mail processes eligible outbox messages one by one. After the SMTP
+server accepts a message, Jaro Mail saves an exact copy in **sent** before
+removing the queued original. Open that folder with **jaro open sent**.
+
+### Delivery state and interrupted sends
+
+Normal SMTP sending keeps a private recovery journal in
+`$MAILDIRS/.outbox-state`, outside the Maildir message directories. Each
+record binds a stable queue ID (the SHA-256 of the Maildir basename without
+flags) to the SHA-256 of the complete original message and an immutable
+private copy. Identical messages with different queue IDs remain separate.
+Moving a message from `new` to `cur` or changing its Maildir flags preserves
+the ID; editing its contents after an attempt causes a hold.
+
+Before invoking SMTP, Jaro Mail persists an `inflight` record. It records
+`accepted` after a successful SMTP result, before saving to **sent** or
+removing the queue entry. Repeating **jaro send** for an accepted message
+finishes that local work without invoking SMTP again. The sent filename is
+deterministic, so recovery also reuses an existing copy, including one moved
+to `cur` with Maildir flags. Original bytes remain in the queue until the
+sent copy is durable; the private journal copy is retained after completion.
+
+An interruption during transport or a nonzero SMTP result leaves delivery
+uncertain. The server may have accepted the message before the connection
+failed. Ordinary **jaro send** holds these messages, reports their IDs and a
+held count, continues with other eligible items, and returns a nonzero status.
+Only a local failure known to precede the SMTP invocation leaves an item
+automatically eligible. SMTP acceptance is not a guarantee of final delivery
+to the recipient, and recovery cannot guarantee exactly-once SMTP delivery.
+
+State changes use atomic replacement and checked file and directory `fsync`
+calls. Message bytes and the in-flight record must be durable before
+transport; acceptance must be durable before local cleanup. A required
+persistence failure prevents transport or leaves the item held. This requires
+a filesystem and storage stack that honor those synchronization operations;
+an atomic rename alone is insufficient. Incomplete, missing, corrupt or
+content-mismatched records are held. Separate private claim markers under
+`outbox/.recovery-claims` prevent a missing journal record from looking like
+an unattempted message.
+
+Keep the queued message, journal and claim markers together while resolving
+a hold. Do not delete private state or requeue the same bytes to force a
+retry: that can duplicate mail. Removing both the journal and its independent
+claims destroys the evidence of earlier attempts. Existing queue entries with
+no prior journal or claim are treated as unattempted. These recovery rules
+cover normal SMTP sending; legacy anonymous/Mixmaster sending retains its
+existing behavior.
+
+### Inspect and reconcile held outbox messages
+
+Use the read-only queue summary before deciding how to recover:
+
+``` example
+jaro outbox list
+```
+
+Its columns are `ID STATE OUTCOME`. IDs are stable 64-character lowercase
+hexadecimal values; copy the complete ID from the first column. The summary
+does not print subjects, message bodies, recipients or queue filenames. It
+does not initialize configuration, obtain credentials or invoke transport,
+and works without the usual mail applications. It is a best-effort view;
+another sender can change the queue while it is being inspected.
+Close editors and stop other outbox writers before a recovery action; the
+exclusive outbox lock coordinates Jaromail senders, not external editors.
+
+| State | Classified outcome | Next action |
+| --- | --- | --- |
+| `eligible` | `no-attempt` | Use ordinary `jaro send`. |
+| `prepared` | `transport-not-started` | Ordinary send can process it. |
+| `inflight` | `interrupted-or-in-progress` | Let an active sender finish; otherwise reconcile the unknown outcome. |
+| `uncertain` | `transport-unknown` | Check delivery externally before choosing retry or archive. |
+| `accepted` | `smtp-accepted` | Repeat send to finish only the local copy. |
+| `verified` | `externally-verified` | Repeat send or archive to finish the local copy. |
+| `complete` | `locally-archived` | Local queue removal remains; repeat send or archive. |
+| `held` | `invalid-state-or-content` | Preserve the files and follow the damaged-state guidance below. |
+
+If delivery is still uncertain and you deliberately choose another SMTP
+attempt, use **retry**. It acts on the selected held ID only; other queued
+messages are untouched. The confirmation flag is required in both scripts
+and interactive use because the previous attempt may already have delivered:
+
+``` example
+jaro -n outbox retry ID --confirm-duplicate
+jaro -a personal outbox retry ID --confirm-duplicate
+```
+
+Replace `ID` with the complete queue ID. The first command validates and
+shows the action without changing files or invoking SMTP. The second starts
+a new attempt through the selected account. A new uncertain result is held
+again. Ordinary send never silently repeats it. Already accepted, verified,
+complete or unattempted items cannot be selected for this retry command.
+
+If a recipient or an external delivery record confirms that the message
+arrived, use **archive**. This records your verification durably and finishes
+the local sent copy and queue removal. It makes no SMTP or credential-store
+request and does not require an account:
+
+``` example
+jaro -n outbox archive ID
+jaro outbox archive ID
+```
+
+Archive also finishes accepted or previously verified items after a local
+failure. It preserves a conflicting existing sent file and leaves the queue
+held rather than overwriting that file. Once an item leaves the queue, its ID
+is stale for these actions; unknown, malformed, ambiguous and content-mismatched
+IDs fail without changing delivery state.
+
+For `held invalid-state-or-content`, stop senders and preserve the queue,
+journal and claims before investigating. If the queued message was edited,
+save that edited draft outside the outbox, then restore the exact original
+bytes from a trusted copy of the private journal message. If journal metadata
+or claims are missing or corrupt, restore a matching intact backup rather
+than inventing state. Run `outbox list` again before using either action.
+When no intact recovery copy exists, quarantine the message outside the
+automatically sendable queue and verify delivery externally. Keep the damaged
+evidence; a deliberate new message can duplicate an earlier delivery. The
+commands refuse to guess or repair an unverifiable history.
+
+List returns zero for a readable queue, including valid held items, and
+nonzero for invalid/unreadable state. Invalid command syntax or a missing
+retry confirmation returns 2. Other action failures return nonzero; SMTP
+failure status is preserved. A failed action never authorizes an automatic
+retry of uncertain delivery. Bare **jaro outbox** still opens the Maildir
+in Mutt, and **jaro queue** still reads a message from stdin.
 
 ### Write a new email from the commandline
 

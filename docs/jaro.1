@@ -94,6 +94,28 @@ does not infer a legacy winner from proposal text.
 .PP
 \f[CR]send\f[R] send queued messages from \f[CR]outbox/\f[R].
 .PP
+\f[CR]outbox list\f[R] print stable queue IDs, delivery states and
+classified outcomes without message content or recipients.
+This route does not initialize files, consult credentials or require the
+mail transport tools.
+.PP
+\f[CR]outbox retry ID \-\-confirm\-duplicate\f[R] explicitly retry only
+a held uncertain item.
+The required flag acknowledges possible duplicate delivery.
+\f[CR]\-a ACCOUNT\f[R] selects its account.
+A new uncertain result is held again.
+.PP
+\f[CR]outbox archive ID\f[R] record externally verified delivery and
+complete the local sent copy without SMTP or account/credential access.
+Accepted, verified and complete items can also finish local recovery
+this way.
+.PP
+Both actions accept \f[CR]\-n\f[R] for validation without writes or
+transport.
+Unknown, stale, ambiguous and content\-mismatched IDs are refused.
+See delivery recovery for states, examples and damaged\-state handling.
+Bare \f[CR]outbox\f[R] still opens the outbox Maildir in Mutt.
+.PP
 \f[CR]queue\f[R] read a full message from stdin and queue it.
 .PP
 \f[CR]smtp\f[R] read a full message from stdin and send via SMTP.
