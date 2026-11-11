@@ -52,6 +52,12 @@ serve_request() {
     fi
 
     serve_mail_root="${MAILDIRS:A}"
+    case "$serve_mail_root" in
+        *:*)
+            error "Invalid MAILDIRS path '$serve_mail_root' (':' not supported by dovecot mail_location)"
+            return 1
+            ;;
+    esac
     serve_runtime="${MAILDIRS}/.imap"
     serve_runtime="${serve_runtime:A}"
     serve_conf="${serve_runtime}/dovecot.conf"
@@ -63,6 +69,31 @@ serve_request() {
     serve_gid="$(id -g)"
 
     return 0
+}
+
+# Dovecot passwd-file fields must not contain separators/newlines.
+serve_validate_passwd_field() {
+    fn serve_validate_passwd_field
+    local _field_name="$1"
+    local _field_value="$2"
+
+    [[ "$_field_value" == *:* ]] && {
+        error "Invalid ${_field_name}: ':' is not allowed"
+        return 1
+    }
+    [[ "$_field_value" == *$'\n'* || "$_field_value" == *$'\r'* ]] && {
+        error "Invalid ${_field_name}: newlines are not allowed"
+        return 1
+    }
+    return 0
+}
+
+# Escape paths for dovecot.conf values.
+serve_escape_dovecot_path() {
+    local _path="$1"
+    _path="${_path//\\/\\\\}"
+    _path="${_path// /\\\\ }"
+    print -- "$_path"
 }
 
 # Keep canonical maildirs present so IMAP exposure is predictable.
@@ -121,23 +152,31 @@ serve_generate_password() {
 
 # Render dovecot.conf from request/domain state.
 serve_render_dovecot_conf() {
+    local _mail_root _runtime _passwd_file _log_file _info_log_file
+    _mail_root="$(serve_escape_dovecot_path "$serve_mail_root")"
+    _runtime="$(serve_escape_dovecot_path "$serve_runtime")"
+    _passwd_file="$(serve_escape_dovecot_path "$serve_passwd_file")"
+    _log_file="$(serve_escape_dovecot_path "$serve_log_file")"
+    _info_log_file="$(serve_escape_dovecot_path "$serve_info_log_file")"
+
     cat <<EOF
 protocols = imap
 listen = ${serve_host}
 ssl = no
+disable_plaintext_auth = no
 auth_mechanisms = plain
 mail_debug = no
 
-mail_location = maildir:${serve_mail_root}:LAYOUT=fs:INDEX=${serve_runtime}/index:CONTROL=${serve_runtime}/control
+mail_location = maildir:${_mail_root}:LAYOUT=fs:INDEX=${_runtime}/index:CONTROL=${_runtime}/control
 
-base_dir = ${serve_runtime}/run
-state_dir = ${serve_runtime}/state
-log_path = ${serve_log_file}
-info_log_path = ${serve_info_log_file}
+base_dir = ${_runtime}/run
+state_dir = ${_runtime}/state
+log_path = ${_log_file}
+info_log_path = ${_info_log_file}
 
 passdb {
   driver = passwd-file
-  args = ${serve_passwd_file}
+  args = ${_passwd_file}
 }
 
 userdb {
@@ -164,6 +203,9 @@ EOF
 serve_write_runtime_files() {
     fn serve_write_runtime_files
 
+    serve_validate_passwd_field "JARO_SERVE_USER" "$serve_user" || return 1
+    serve_validate_passwd_field "JARO_SERVE_PASSWORD" "$serve_password" || return 1
+
     cat <<EOF > "$serve_passwd_file"
 ${serve_user}:{PLAIN}${serve_password}:${serve_uid}:${serve_gid}::${serve_mail_root}::
 EOF
@@ -187,26 +229,42 @@ serve_validate_config() {
     return 0
 }
 
-# Return 0 when selected port is already listening, 1 when free, 2 when unknown.
+# Return 0 when a listener conflicts with requested bind.
+serve_port_listener_conflicts() {
+    fn serve_port_listener_conflicts
+    local _listener="$1"
+
+    case "$_listener" in
+        "127.0.0.1:${serve_port}"|"localhost:${serve_port}"|"0.0.0.0:${serve_port}"|"*:${serve_port}"|"[::]:${serve_port}"|":::${serve_port}")
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+# Return 0 when selected port is already listening on conflicting address, 1 when free, 2 when unknown.
 serve_port_in_use() {
     fn serve_port_in_use
+    local _listener
 
     if command -v lsof >/dev/null 2>&1; then
-        lsof -nP -iTCP:${serve_port} -sTCP:LISTEN 2>/dev/null \
-            | awk '{print $9}' \
-            | grep -Eq "(^|:)${serve_port}$" && return 0
+        while IFS= read -r _listener; do
+            serve_port_listener_conflicts "$_listener" && return 0
+        done < <(lsof -nP -iTCP:${serve_port} -sTCP:LISTEN 2>/dev/null | awk '{print $9}')
         return 1
     fi
 
     if command -v ss >/dev/null 2>&1; then
-        ss -ltn 2>/dev/null | awk '{print $4}' \
-            | grep -Eq "(^|:)${serve_port}$" && return 0
+        while IFS= read -r _listener; do
+            serve_port_listener_conflicts "$_listener" && return 0
+        done < <(ss -ltn 2>/dev/null | awk '{print $4}')
         return 1
     fi
 
     if command -v netstat >/dev/null 2>&1; then
-        netstat -ltn 2>/dev/null | awk '{print $4}' \
-            | grep -Eq "(^|:)${serve_port}$" && return 0
+        while IFS= read -r _listener; do
+            serve_port_listener_conflicts "$_listener" && return 0
+        done < <(netstat -ltn 2>/dev/null | awk '{print $4}')
         return 1
     fi
 

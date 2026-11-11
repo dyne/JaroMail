@@ -45,6 +45,7 @@ conf_body="$(cat "${conf_path}")"
 assert_contains "${conf_body}" "protocols = imap" "serve protocols"
 assert_contains "${conf_body}" "listen = 127.0.0.1" "serve listen"
 assert_contains "${conf_body}" "ssl = no" "serve ssl"
+assert_contains "${conf_body}" "disable_plaintext_auth = no" "serve plaintext auth"
 assert_contains "${conf_body}" "auth_mechanisms = plain" "serve auth mechanism"
 assert_contains "${conf_body}" "mail_location = maildir:${mail_root}:LAYOUT=fs" "serve mail location"
 assert_contains "${conf_body}" "port = 61444" "serve selected port"
@@ -93,3 +94,24 @@ JARO_SERVE_CONFIG_ONLY=1 JARO_SERVE_MAX_CONNECTIONS=100 jaro_source serve >/dev/
 bad_max_ec=$?
 set -e
 [[ "${bad_max_ec}" -ne 0 ]] || { print -- "ASSERT FAIL: invalid max connections accepted"; exit 1; }
+
+space_root="${tmp_root}/mail root with spaces"
+space_out="$(
+  JAROMAILDIR="${space_root}" \
+  JAROWORKDIR="${work_root}" \
+  JARO_SERVE_CONFIG_ONLY=1 \
+  JARO_SERVE_PASSWORD=testpass \
+  "${repo_root}/src/jaro" serve 2>&1
+)"
+space_conf="${space_root}/.imap/dovecot.conf"
+[[ -f "${space_conf}" ]] || { print -- "ASSERT FAIL: missing ${space_conf}"; exit 1; }
+space_conf_body="$(cat "${space_conf}")"
+escaped_space_root="${space_root// /\\ }"
+assert_contains "${space_conf_body}" "mail_location = maildir:${escaped_space_root}:LAYOUT=fs" "serve escaped mail location"
+assert_contains "${space_out}" "Host: 127.0.0.1" "serve response with spaced root"
+
+set +e
+JARO_SERVE_CONFIG_ONLY=1 JARO_SERVE_USER='bad:user' jaro_source serve >/dev/null 2>&1
+bad_user_ec=$?
+set -e
+[[ "${bad_user_ec}" -ne 0 ]] || { print -- "ASSERT FAIL: invalid user with colon accepted"; exit 1; }
