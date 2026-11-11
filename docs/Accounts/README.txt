@@ -71,7 +71,59 @@ Carriage returns and newlines cannot occur inside a serialized field value.
 SMTP requires msmtp 1.8.3 or newer and always verifies the certificate and
 hostname on the sending connection, using the system CA store. For a private
 CA, set `certfile /path/to/ca-bundle.pem` in the account configuration.
-The `cert` setting controls fetchmail only; it cannot disable SMTP verification.
+The `cert` setting controls fetchmail and IMAP inspection; it cannot disable
+SMTP verification.
+
+IMAP inspection (jaro imap and automatic folder discovery) uses these connection
+styles. The historical names retain their existing IMAP meaning:
+
+  TLS1, tls, implicit             implicit TLS (usually port 993)
+  SSL2, SSL23, SSL3, ssl, starttls STARTTLS (usually port 143)
+  plain                          explicitly unencrypted IMAP
+
+An omitted transport uses TLS1. Unknown values fail before connecting. The
+historical SSL labels select STARTTLS, not obsolete SSL protocol versions;
+OpenSSL negotiates the TLS version. Do not infer an IMAP style from the spelling
+of a fetchmail sslproto option. These aliases describe inspection, not a change
+to fetchmail's separate sslproto configuration or Mutt's peek settings.
+
+For IMAP, cert check verifies both the chain and the DNS name (or IP address)
+on the connection carrying authentication. It uses system trust unless a
+readable certfile CA bundle is supplied. Verification and STARTTLS failures
+are errors with no plaintext retry. The historical cert ignore default remains
+an explicit, warned opt-out from IMAP verification; set cert check for verified
+inspection. transport plain also warns because LOGIN is sent unencrypted.
+IMAP uses OpenSSL s_client with hostname/IP verification support (1.1.1 or newer)
+and nc only for explicit plain. JARO_IMAP_TIMEOUT bounds the entire connection
+and query to 30 seconds by default; accepted values are 1..300 seconds. Timeout
+and child failures return nonzero. LOGIN quotes and backslashes are escaped;
+CR, LF and NUL in login/password values are rejected before connecting.
+
+Folder discovery
+----------------
+jaro imap listfolders writes one exact folder name per line, including quoted
+spaces, tabs, leading/trailing spaces, quotes and backslashes. It accepts IMAP4rev1
+LIST responses with parenthesized flags, a quoted one-character hierarchy
+delimiter or NIL, and an atom or quoted mailbox name. Quoted strings support
+only the IMAP escapes for double quote and backslash. Empty quoted names are
+retained. Names remain in their server encoding: 7-bit modified UTF-7 is passed
+through without decoding. UTF-8/IMAP4rev2 negotiation is not implemented.
+
+Literal strings (including {length} mailbox names), LIST extensions, unsupported
+control/non-ASCII bytes and malformed responses are errors; no partial list is
+published. Responses must contain successful tagged completions for CAPABILITY,
+LOGIN, LIST and LOGOUT in order, and every line must end in LF (CRLF is accepted).
+Tagged NO/BAD, early disconnects, missing completions and transport failures
+return nonzero. Supported limits are 1 MiB per response, 16 KiB per line and
+10,000 mailbox entries. These limits apply to parsing, alongside the transport
+deadline above.
+
+Without configured folders, fetch stops before invoking fetchmail if discovery
+fails, returns no folders, or exclusions remove them all. Configured folders
+bypass discovery. Discovered and configured names each become one quoted
+fetchmail configuration token; spaces, tabs, quotes and backslashes retain their
+boundaries. See https://www.fetchmail.info/fetchmail-man.html for the run
+control file grammar and its hexadecimal string-delimiter escapes.
 
 The old smtp_fingerprints.zkv cache is no longer used. Existing private or
 self-signed servers must have their CA trusted by the system or by certfile.

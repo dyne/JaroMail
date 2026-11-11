@@ -20,62 +20,280 @@
 # this source code; if not, write to:
 # Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-run_imap_query() {
-    fn run_imap_query $*
-
-    _trans=${transport:-plain}
-    case $_trans in
-        SSL*) _trans=ssl ;;
-        TLS*) _trans=tls ;;
+# Historical IMAP connection styles: TLS1 used implicit TLS; SSL2/SSL23/SSL3
+# used STARTTLS. These names do not request obsolete TLS protocol versions.
+_imap_transport() {
+    case "${transport:-TLS1}" in
+        TLS1|tls|implicit) REPLY=implicit ;;
+        SSL2|SSL23|SSL3|ssl|starttls) REPLY=starttls ;;
+        plain) REPLY=plain ;;
+        *) error "Unsupported IMAP transport: $transport"; return 1 ;;
     esac
-
-    if [ "$_trans" = "plain" ]; then
-	    func "running plain imap query via netcat, no encryption"
-	    nc ${imap} ${imap_port} -q 10 2>&1
-
-    elif [ "$_trans" = "tls" ]; then
-        func "running tls imap query via openssl, encrypted"
-	    openssl s_client -crlf -quiet -connect ${imap}:${imap_port} 2>&1
-
-    elif [ "$_trans" = "ssl" ]; then
-	    func "running ssl imap query via openssl, encrypted"
-	    openssl s_client -starttls imap -quiet -connect ${imap}:${imap_port} 2>&1
-
-    else
-        error "unknown transport \"$_trans\" for a imap query"
-    fi
 }
+
+_imap_quote() {
+    local value="$1"
+    # IMAP quoted strings cannot contain CR, LF or NUL. Zsh can hold NULs.
+    [[ "$value" != *$'\r'* && "$value" != *$'\n'* && "$value" != *$'\0'* ]] || {
+        error "IMAP strings cannot contain CR, LF or NUL"
+        return 1
+    }
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    REPLY="\"$value\""
+}
+
+_imap_login_command() {
+    local REPLY user pass
+    _imap_quote "$login" || return 1
+    user="$REPLY"
+    _imap_quote "$password" || return 1
+    pass="$REPLY"
+    print -r -- "B00001 LOGIN $user $pass"
+}
+
+run_imap_query() (
+    # A subshell keeps signal handlers and module options out of the caller.
+    local REPLY style endpoint child='' watchdog='' result=1 is_ip=0 watchdog_result=0
+    local deadline="${JARO_IMAP_TIMEOUT:-30}"
+    local -a command_args
+    _imap_transport || return 1
+    style="$REPLY"
+    [[ "$deadline" == <-> ]] && (( deadline >= 1 && deadline <= 300 )) || {
+        error "JARO_IMAP_TIMEOUT must be an integer from 1 to 300 seconds"
+        return 1
+    }
+    [[ -n "$imap" && "$imap" != -* && "$imap" != *[[:space:]]* &&
+       "$imap_port" == <-> ]] && (( imap_port >= 1 && imap_port <= 65535 )) || {
+        error "Invalid IMAP host or port"
+        return 1
+    }
+    if [[ "$style" == plain ]]; then
+        warning "IMAP plaintext explicitly requested; credentials are unencrypted"
+        command_args=(nc "$imap" "$imap_port")
+    else
+        endpoint="$imap:$imap_port"
+        [[ "$imap" == *:* ]] && endpoint="[$imap]:$imap_port"
+        command_args=(openssl s_client -crlf -quiet -connect "$endpoint")
+        if [[ "$imap" == *:* || "$imap" == <->.<->.<->.<-> ]]; then
+            is_ip=1
+        else
+            command_args+=(-servername "$imap")
+        fi
+        [[ "$style" == starttls ]] && command_args+=(-starttls imap)
+        case "${cert:-ignore}" in
+            check)
+                # Verification happens on the connection carrying LOGIN. With
+                # verify_return_error s_client aborts before application data.
+                command_args+=(-verify_return_error)
+                if (( is_ip )); then
+                    command_args+=(-verify_ip "$imap")
+                else
+                    command_args+=(-verify_hostname "$imap")
+                fi
+                if [[ -n "$certfile" ]]; then
+                    [[ -r "$certfile" && -f "$certfile" ]] || {
+                        error "Cannot read IMAP CA file: $certfile"
+                        return 1
+                    }
+                    command_args+=(-CAfile "$certfile" -no-CApath)
+                fi
+                ;;
+            ignore) warning "IMAP cert ignore: peer certificate and identity are NOT verified" ;;
+            *) error "Unsupported IMAP certificate policy: $cert"; return 1 ;;
+        esac
+    fi
+    zmodload zsh/zselect || return 1
+    trap 'exit 130' INT
+    trap 'exit 143' TERM HUP
+    {
+        "${command_args[@]}" <&0 &
+        child=$!
+        (
+            # Before expiry, TERM is normal cancellation by the parent.
+            trap 'exit 0' TERM
+            zselect -t $(( deadline * 100 )) || :
+            # After expiry, retain timeout even if the parent cancels this
+            # watchdog when a TERM-handling transport exits zero.
+            trap 'exit 124' TERM
+            error "IMAP query exceeded ${deadline}s deadline" || :
+            kill -TERM "$child" 2>/dev/null || :
+            zselect -t 100 || :
+            kill -KILL "$child" 2>/dev/null || :
+            exit 124
+        ) &
+        watchdog=$!
+        if wait "$child"; then result=0; else result=$?; fi
+        child=''
+    } always {
+        # Only PIDs allocated above are signalled, and every child is joined.
+        if [[ -n "$watchdog" ]]; then
+            kill -TERM "$watchdog" 2>/dev/null || :
+            if wait "$watchdog" 2>/dev/null; then
+                watchdog_result=0
+            else
+                watchdog_result=$?
+            fi
+            (( watchdog_result == 124 )) && result=124
+        fi
+        if [[ -n "$child" ]]; then
+            kill -TERM "$child" 2>/dev/null || :
+            zselect -t 100 || :
+            kill -KILL "$child" 2>/dev/null || :
+            wait "$child" 2>/dev/null || :
+        fi
+    }
+    return $result
+)
 
 check_imap() {
 	fn check_imap $*
 
-    [[ $name == "" ]] &&  {
-	    error "get_imap_info() called with no account loaded"
+    [[ -z "${name:-}" ]] &&  {
+	    error "IMAP inspection called with no account loaded"
 	    return 1 }
 
-    [[ "$imap" == "" ]] && {
-	    error "get_imap_info() called on a non-imap account: $name on $imap"
+    [[ -z "${imap:-}" || "${proto:-imap}" != imap ]] && {
+	    error "IMAP inspection requires an IMAP account: $name"
 	return 1 }
+    return 0
+}
+
+_imap_parse_list() {
+    LC_ALL=C awk '
+    function fail(message) {
+        if (!failed) print "IMAP LIST: " message > "/dev/stderr"
+        failed = 1
+    }
+    function space() {
+        while (substr(line, pos, 1) ~ /^[ \t]$/) pos++
+    }
+    function quoted(    c) {
+        if (substr(line, pos, 1) != "\"") return 0
+        pos++; value = ""
+        while (pos <= length(line)) {
+            c = substr(line, pos++, 1)
+            if (c == "\"") return 1
+            if (c == "\\") {
+                c = substr(line, pos++, 1)
+                if (c != "\\" && c != "\"") return 0
+            }
+            value = value c
+        }
+        return 0
+    }
+    function mailbox(    closing, flags, start) {
+        if (!login_ok || list_ok) { fail("LIST response outside LIST command"); return }
+        pos = match(line, /[ \t]/); space()
+        pos += 4; space() # LIST
+        if (substr(line, pos, 1) != "(") { fail("malformed LIST flags"); return }
+        closing = index(substr(line, pos), ")")
+        if (!closing) { fail("truncated LIST flags"); return }
+        flags = substr(line, pos + 1, closing - 2)
+        if (flags ~ /[()"{]/) { fail("unsupported LIST flags"); return }
+        pos += closing
+        if (substr(line, pos, 1) !~ /^[ \t]$/) { fail("missing LIST delimiter"); return }
+        space()
+        if (substr(line, pos, 1) == "\"") {
+            if (!quoted() || length(value) != 1) { fail("malformed LIST delimiter"); return }
+        } else if (toupper(substr(line, pos, 3)) == "NIL") {
+            pos += 3
+        } else { fail("unsupported LIST delimiter"); return }
+        if (substr(line, pos, 1) !~ /^[ \t]$/) { fail("missing LIST mailbox"); return }
+        space()
+        if (substr(line, pos, 1) == "{" || substr(line, pos, 2) == "~{") {
+            fail("literal mailbox names are unsupported"); return
+        }
+        if (substr(line, pos, 1) == "\"") {
+            if (!quoted()) { fail("malformed quoted mailbox"); return }
+        } else {
+            start = pos
+            while (pos <= length(line) && substr(line, pos, 1) !~ /[ \t]/) pos++
+            value = substr(line, start, pos - start)
+            if (!length(value) || value ~ /[(){%*"\\]/) { fail("malformed atom mailbox"); return }
+        }
+        space()
+        if (pos <= length(line)) { fail("unsupported LIST extension or trailing data"); return }
+        names[++count] = value
+    }
+    {
+        bytes += length($0) + 1
+        if (bytes > 1048576 || length($0) > 16384 || count > 10000) fail("response exceeds supported limits")
+        if (failed) next
+        line = $0; sub(/\r$/, "", line)
+        if (line ~ /[^\t -~]/) { fail("only 7-bit mailbox encoding is supported"); next }
+        upper = toupper(line)
+        if (upper ~ /^\*[ \t]+LIST([ \t]|$)/) { mailbox(); next }
+        if (upper ~ /^\*[ \t]+BYE([ \t]|$)/) {
+            if (!list_ok) fail("server disconnected before LIST completed")
+            next
+        }
+        if (upper ~ /^\*[ \t]+(NO|BAD)([ \t]|$)/) { fail("server rejected query"); next }
+        if (upper ~ /^\*[ \t]+(OK|CAPABILITY)([ \t]|$)/) next
+        split(upper, fields, /[ \t]+/)
+        if (fields[2] == "NO" || fields[2] == "BAD") { fail("tagged command rejected"); next }
+        if (fields[1] != sprintf("B0000%d", completed) || fields[2] != "OK" || completed > 3) {
+            fail("unexpected or incomplete tagged response"); next
+        }
+        completed++
+        if (completed == 2) login_ok = 1
+        if (completed == 3) list_ok = 1
+    }
+    END {
+        if (!failed && completed != 4) fail("truncated reply: missing command completion")
+        if (failed) exit 1
+        # NUL framing preserves empty names and every supported whitespace byte.
+        for (i = 1; i <= count; i++) printf "%s%c", names[i], 0
+    }'
+}
+
+_imap_discover_folders() {
+    local login_command query output response_file response_size last_byte
+    reply=()
+    check_imap || return 1
+
+    login_command="$(_imap_login_command)" || return 1
+    query="B00000 CAPABILITY
+$login_command
+B00002 LIST \"\" *
+B00003 LOGOUT"
+    response_file=$(mktemp "${TMPDIR:-/tmp}/jaro-imap-list.XXXXXXXX") || return 1
+    {
+        # Collect transport and parser statuses separately. Nested Zsh pipelines
+        # containing a transport watchdog can lose a failing parser status.
+        run_imap_query <<< "$query" > "$response_file" || return $?
+        response_size=$(wc -c < "$response_file") || return 1
+        (( response_size <= 1048576 )) || {
+            error "IMAP LIST: response exceeds supported limits"
+            return 1
+        }
+        # A sentinel preserves the final LF in command substitution.
+        last_byte=$(tail -c 1 "$response_file"; print -rn -- .)
+        [[ "$last_byte" == $'\n.' ]] || {
+            error "IMAP LIST: truncated response line"
+            return 1
+        }
+        output=$(_imap_parse_list < "$response_file") || return $?
+        if [[ -n "$output" ]]; then
+            reply=("${(@0)output}")
+            reply[-1]=() # discard only the framing terminator
+        fi
+    } always {
+        command rm -f -- "$response_file" || return 1
+    }
+    return 0
 }
 
 imap_list_folders() {
-	fn imap_list_folders $*
-    check_imap && return 1
-
-    query="B00000 CAPABILITY
-B00001 LOGIN \"${login}\" \"${password}\"
-B00002 LIST \"\" *
-B00003 LOGOUT"
-    response=`print $query | run_imap_query`
-    folders=`print $response | awk '
-/^\* LIST/ {  gsub(/"/, "", $5); print $5 }' | tr -d '\r'`
-    print $folders
+    _imap_discover_folders || return $?
+    (( ${#reply} == 0 )) || print -rl -- "${reply[@]}"
+    return 0
 }
 
 imap_get_size() {
 	fn imap_get_size $*
 
-    check_imap && return 1
+    check_imap || return 1
 
     # skip getting size if Gmail
     # (imap there lacks support for RFC822.SIZE)
@@ -84,13 +302,16 @@ imap_get_size() {
 	return 1 }
     func "Querying size on $imap:$imap_port"
 
-    [[ "$1" == "" ]] && {
-	folders=(`imap_list_folders`)
+    [[ "${1:-}" == "" ]] && {
+        _imap_discover_folders || return $?
+	folders=("${reply[@]}")
     } || {
 	folders=("$1") }
 
+    local login_command REPLY
+    login_command="$(_imap_login_command)" || return 1
     query="B00000 CAPABILITY
-B00001 LOGIN \"${login}\" \"${password}\""
+$login_command"
 
     c=1
     for f in ${folders}; do
@@ -98,8 +319,9 @@ B00001 LOGIN \"${login}\" \"${password}\""
 	[[ "$f" == "" ]] && continue
 	c=$(( $c + 1 ))
 
+        _imap_quote "$f" || return 1
 	query="$query
-B0000$c SELECT \"${f}\""
+B0000$c SELECT $REPLY"
 
 	c=$(( $c + 1 ))
         query="$query
@@ -109,12 +331,24 @@ B0000$c FETCH 1:* (RFC822.SIZE)"
     c=$(( $c + 1 ))
     query="$query
 B0000$c LOGOUT"
-    # print $query
-    # print "$query" | run_imap_query
-    # return 0
 
-    result=(`print "$query" | run_imap_query | awk '
-/^\*.*FETCH.*RFC822.SIZE/ { gsub(/\)/, "", $NF); print $NF }' | tr -d '\r'`)
+    local response
+    response=$(print -r -- "$query" | run_imap_query) || return $?
+    if ! print -r -- "$response" | LC_ALL=C awk -v last="$c" '
+        /^\*/ { next }
+        {
+            sub(/\r$/, "")
+            split(toupper($0), fields, /[ \t]+/)
+            if (fields[1] != sprintf("B0000%d", completed) || fields[2] != "OK" || completed > last) failed = 1
+            completed++
+        }
+        END { exit (failed || completed != last + 1) }
+    '; then
+        error "IMAP size query rejected or truncated"
+        return 1
+    fi
+    result=($(print -r -- "$response" | awk '
+/^\*.*FETCH.*RFC822.SIZE/ { gsub(/\)/, "", $NF); print $NF }' | tr -d '\r'))
 
     bytes_total=0
     typeset -A fsizes
@@ -129,38 +363,47 @@ cmd_imap() {
     imapcmd="${option_params[(w)1]}"
     case $imapcmd in
         console)
-            read_account $account
+            read_account $account >&2 || { exitcode=$?; return $exitcode; }
+            check_imap || { exitcode=1; return 1; }
             host=${imap:-$host}
-            ask_password
-            func "$login $password"
+            [[ -n "$password" ]] || ask_password || { exitcode=$?; return $exitcode; }
+            local login_command
+            login_command="$(_imap_login_command)" || { exitcode=1; return 1; }
             cat <<EOF | run_imap_query
 B00000 CAPABILITY
-B00001 LOGIN "${login}" "${password}"
+$login_command
+B00002 LOGOUT
 EOF
+            exitcode=$?
             ;;
         getsize)
-            read_account $account
+            read_account $account >&2 || { exitcode=$?; return $exitcode; }
+            check_imap || { exitcode=1; return 1; }
             host=${imap:-$host}
-            ask_password
-            bytes_total=`imap_get_size "$2"`
-            exitcode=$?
+            [[ -n "$password" ]] || ask_password || { exitcode=$?; return $exitcode; }
+            bytes_total=$(imap_get_size "${option_params[2]:-}") || { exitcode=$?; return $exitcode; }
+            exitcode=0
             notice "Size of account $login on $imap"
             act "$bytes_total bytes"
             mib_total=$(( $bytes_total / 1048576 ))
             act "$mib_total MB (MiB)"
             ;;
         listfolders)
-            read_account $account
+            read_account $account >&2 || { exitcode=$?; return $exitcode; }
+            check_imap || { exitcode=1; return 1; }
             host=${imap:-$host}
-            ask_password
-            folders=(`imap_list_folders`)
-            exitcode=$?
+            [[ -n "$password" ]] || ask_password || { exitcode=$?; return $exitcode; }
+            _imap_discover_folders || { exitcode=$?; return $exitcode; }
+            folders=("${reply[@]}")
+            exitcode=0
             notice "List of folders for $login on $imap"
-            for f in $folders; do print - "$f"; done \
-                | save_replay $subcommand | column
+            # One exact folder per line; column would reinterpret whitespace.
+            { (( ${#folders} == 0 )) || print -rl -- "${folders[@]}"; } | save_replay $subcommand
             ;;
         *)
             error "imap needs a subcommand: getsize or listfolders"
+            exitcode=1
             ;;
     esac
+    return $exitcode
 }
