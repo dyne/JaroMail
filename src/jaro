@@ -43,6 +43,34 @@ if (( $# == 1 )) && [[ $1 == -v || $1 == --version ]]; then
     print -r -- "Jaro Mail v${VERSION}"
     exit 0
 fi
+# Select the command before bootstrap can initialize files or touch a keyring.
+# Skip option values so `queue outbox` and account names never become a route.
+jaro_outbox_route() {
+    while (( $# )); do
+        case "$1" in
+            -a|-l|--account|--list) (( $# >= 2 )) || return 1; shift 2 ;;
+            --) shift; break ;;
+            -*) shift ;;
+            *) break ;;
+        esac
+    done
+    [[ "$1" == outbox && $# -gt 1 ]] || return 1
+    return 0
+}
+if jaro_outbox_route "$@"; then
+    source "${bootstrap_path:h}/outbox" || exit 1
+    outbox_needs_runtime=0
+    outbox_cli "$bootstrap_path" "$@"
+    outbox_status=$?
+    (( outbox_status == 0 )) || exit $outbox_status
+    if (( outbox_needs_runtime )); then
+        # Framework typeset initialization requires top-level source scope.
+        source "$bootstrap_path" source || exit $?
+        outbox_execute
+        exit $?
+    fi
+    exit 0
+fi
 source "${bootstrap_path}" || {
     print -u2 "Cannot source bootstrap module: ${bootstrap_path}"
     exit 1
@@ -59,6 +87,7 @@ Main commands:
 
  fetch  download unread emails from [account]
  send   send all mails queued in the outbox
+ outbox inspect held messages and explicitly retry or archive an ID
  peek   look into the [account] mailbox without downloading
  serve  run localhost IMAP over local maildirs (single-user)
  index  build or update the search index for all maildirs
@@ -91,6 +120,13 @@ a pipe | in front indicate they take an email body from stdin
  fetch    downloads emails locally from [account]
 
  send     send all outbox/ queue via the [account]'s smtp
+
+ outbox list
+          read-only IDs, delivery states and classified outcomes
+ outbox retry ID --confirm-duplicate
+          retry only this held ID; previously accepted mail may duplicate
+ outbox archive ID
+          finish local sent copy after externally verifying delivery; no SMTP
 
  peek     interactive connection to an [account]'s imap folder
           (takes folder names as argument, default is INBOX)

@@ -82,6 +82,24 @@ fail; this command does not infer a legacy winner from proposal text.
 
 `send` send queued messages from `outbox/`.
 
+`outbox list` print stable queue IDs, delivery states and classified outcomes
+without message content or recipients. This route does not initialize files,
+consult credentials or require the mail transport tools.
+
+`outbox retry ID --confirm-duplicate` explicitly retry only a held uncertain
+item. The required flag acknowledges possible duplicate delivery. `-a ACCOUNT`
+selects its account. A new uncertain result is held again.
+
+`outbox archive ID` record externally verified delivery and complete the local
+sent copy without SMTP or account/credential access. Accepted, verified and
+complete items can also finish local recovery this way.
+
+Both actions accept `-n` for validation without writes or transport. Unknown,
+stale, ambiguous and content-mismatched IDs are refused. See
+[delivery recovery](jaromail-manual.md#inspect-and-reconcile-held-outbox-messages)
+for states, examples and damaged-state handling. Bare `outbox` still opens
+the outbox Maildir in Mutt.
+
 `queue` read a full message from stdin and queue it.
 
 `smtp` read a full message from stdin and send via SMTP.

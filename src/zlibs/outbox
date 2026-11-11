@@ -1,0 +1,147 @@
+#!/usr/bin/env zsh
+# Explicit recovery commands have a minimal startup route. Listing and dry-run
+# never load the mutating bootstrap, framework logging, keyrings or account data.
+
+outbox_usage() {
+    print -u2 -- 'Usage: jaro [-a ACCOUNT] [-n] outbox list'
+    print -u2 -- '       jaro [-a ACCOUNT] [-n] outbox retry ID --confirm-duplicate'
+    print -u2 -- '       jaro [-n] outbox archive ID'
+}
+
+outbox_inspect() {
+    local report rc=0
+    report=$("$outbox_helper" inspect "$MAILDIRS" "${1:h:t}/${1:t}" 2>/dev/null) || rc=$?
+    outbox_fields=( ${=report} )
+    (( ${#outbox_fields} == 3 )) || { print -u2 -- 'outbox: cannot inspect queue entry'; return 1; }
+    return $rc
+}
+
+outbox_select() {
+    local qbody found=0 selected_valid=0
+    local -a queue
+    outbox_selected=''
+    queue=("$MAILDIRS"/outbox/{new,cur}/*(.DN))
+    for qbody in "${queue[@]}"; do
+        if outbox_inspect "$qbody"; then selected_valid=1; else selected_valid=0; fi
+        [[ "$outbox_fields[1]" == "$outbox_id" ]] || continue
+        (( found += 1 ))
+        outbox_selected="$qbody"
+        outbox_selected_state="$outbox_fields[2]"
+        (( selected_valid )) || { print -u2 -- 'outbox: selected ID has invalid state or changed content'; return 1; }
+    done
+    (( found == 1 )) || { print -u2 -- 'outbox: unknown, stale or ambiguous ID'; return 1; }
+}
+
+outbox_cli() {
+    setopt localoptions localtraps extendedglob
+    local bootstrap="$1" outbox_account=default outbox_dryrun=0 confirmed=0 arg
+    local WORKDIR MAILDIRS outbox_helper outbox_id outbox_selected outbox_selected_state
+    local -a params outbox_fields queue
+    shift
+    while (( $# )); do
+        case "$1" in
+            -a|--account)
+                (( $# >= 2 )) && [[ -n "$2" ]] || { outbox_usage; return 2; }
+                outbox_account="$2"; shift 2 ;;
+            -n|--dry-run) outbox_dryrun=1; shift ;;
+            --confirm-duplicate) confirmed=1; shift ;;
+            -q|--quiet|-D|--debug) shift ;;
+            -h|--help) outbox_usage; return 0 ;;
+            --) shift; params+=("$@"); break ;;
+            -*) outbox_usage; return 2 ;;
+            *) params+=("$1"); shift ;;
+        esac
+    done
+    [[ "$params[1]" == outbox ]] || { outbox_usage; return 2; }
+    local action="$params[2]"
+    case "$action" in
+        list) (( ${#params} == 2 && !confirmed )) || { outbox_usage; return 2; } ;;
+        retry|archive)
+            (( ${#params} == 3 )) || { outbox_usage; return 2; }
+            outbox_id="$params[3]"
+            [[ "$outbox_id" == [0-9a-f](#c64) ]] || { print -u2 -- 'outbox: ID must be 64 lowercase hexadecimal characters'; return 2; }
+            [[ "$action" == retry || $confirmed == 0 ]] || { outbox_usage; return 2; }
+            ;;
+        *) outbox_usage; return 2 ;;
+    esac
+    WORKDIR="${JAROWORKDIR:-${bootstrap:h:h}}"
+    [[ -d "$WORKDIR/zlibs" ]] || WORKDIR="${bootstrap:h:h}"
+    outbox_helper="$WORKDIR/bin/jaro-outbox"
+    [[ -x "$outbox_helper" ]] || outbox_helper="$WORKDIR/../build/gnu/jaro-outbox"
+    [[ -x "$outbox_helper" ]] || { print -u2 -- 'outbox: missing jaro-outbox helper'; return 127; }
+    MAILDIRS="$PWD"
+    if [[ -r /Applications/JaroMail.app ]]; then
+        MAILDIRS="$HOME/Library/Application Support/JaroMail"
+    elif [[ -r "$HOME/Mail/Filters.txt" ]]; then MAILDIRS="$HOME/Mail"; fi
+    MAILDIRS="${JAROMAILDIR:-$MAILDIRS}"
+    [[ -d "$MAILDIRS/outbox/new" && -r "$MAILDIRS/outbox/new" && -x "$MAILDIRS/outbox/new" &&
+       -d "$MAILDIRS/outbox/cur" && -r "$MAILDIRS/outbox/cur" && -x "$MAILDIRS/outbox/cur" ]] || {
+        print -u2 -- 'outbox: missing or unreadable outbox Maildir'; return 1
+    }
+    if [[ "$action" == list ]]; then
+        local result=0 qbody
+        print -- 'ID STATE OUTCOME'
+        queue=("$MAILDIRS"/outbox/{new,cur}/*(.DN))
+        for qbody in "${queue[@]}"; do
+            outbox_inspect "$qbody" || result=1
+            (( ${#outbox_fields} == 3 )) && print -r -- "${(j: :)outbox_fields}"
+        done
+        return $result
+    fi
+    outbox_select || return $?
+    case "$action:$outbox_selected_state" in
+        retry:inflight|retry:uncertain|archive:inflight|archive:uncertain|archive:accepted|archive:verified|archive:complete) ;;
+        *) print -u2 -- 'outbox: action is not valid for this delivery state'; return 1 ;;
+    esac
+    if [[ "$action" == retry ]]; then
+        print -u2 -- 'outbox: retry may duplicate mail already accepted by the server.'
+        (( confirmed )) || { print -u2 -- 'outbox: retry requires --confirm-duplicate'; return 2; }
+    else
+        print -u2 -- 'outbox: archive records your externally verified delivery; SMTP will not run.'
+    fi
+    if (( outbox_dryrun )); then
+        print -r -- "dry-run: $action $outbox_id"
+        return 0
+    fi
+    # The entrypoint loads framework/locking at top level only after successful
+    # validation, then invokes outbox_execute. Its source mode skips templates.
+    typeset -g outbox_cli_action="$action" outbox_cli_account="$outbox_account"
+    typeset -g outbox_cli_id="$outbox_id" outbox_cli_helper="$outbox_helper"
+    typeset -g outbox_cli_root="${MAILDIRS:A}" outbox_needs_runtime=1
+    return 0
+}
+
+outbox_execute() {
+    setopt localoptions localtraps extendedglob pipefail
+    local action="$outbox_cli_action" outbox_id="$outbox_cli_id"
+    local outbox_helper="$outbox_cli_helper" outbox_selected outbox_selected_state
+    local -a outbox_fields
+    [[ "${MAILDIRS:A}" == "$outbox_cli_root" ]] || { error 'Outbox root changed during startup'; return 1; }
+    account="$outbox_cli_account"
+    DRYRUN=0
+    [[ "$action" != retry ]] || check_bin smtp || return $?
+    local result=0 interrupted=0 outbox_item_held=0
+    lock "$MAILDIRS/outbox" || return $?
+    trap 'interrupted=130; global_quit=1' INT
+    trap 'interrupted=143; global_quit=1' TERM
+    trap 'interrupted=129; global_quit=1' HUP
+    {
+        # Re-select under exclusion; the helper rechecks identity and content
+        # immediately before its durable retry/verification transition too.
+        if outbox_select && (( interrupted == 0 )); then
+            if [[ "$action" == retry ]]; then
+                if outbox_state retry "${outbox_selected:h:t}/${outbox_selected:t}"; then
+                    outbox_send_one "$outbox_selected" || result=$?
+                else result=$?; fi
+            else
+                outbox_state archive "${outbox_selected:h:t}/${outbox_selected:t}" || result=$?
+            fi
+        else result=1; fi
+    } always {
+        unlock "$MAILDIRS/outbox" || result=1
+        unset password
+        smtp_keep_password=0
+    }
+    (( interrupted == 0 )) || return $interrupted
+    return $result
+}

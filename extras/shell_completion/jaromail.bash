@@ -1,40 +1,40 @@
-# file: jaromail.bash
-# jaro parameter-completion for Bash
+# Bash completion for jaro. Keep every path or ID as one suggestion.
+jarodir=${JAROMAILDIR:-${HOME}/Mail}
 
-# location hardcoded is Mail
-jarodir=${HOME}/Mail
-
-
-_jaro() {  #+ starts with an underscore.
-  local cur
-  # Pointer to current completion word.
-
-  COMPREPLY=()   # Array variable storing the possible completions.
-#  cur=${COMP_WORDS[COMP_CWORD]}
-  curlen=$(( ${#COMP_WORDS[@]} - 1 ))
-  cur=${COMP_WORDS[$curlen]}
-
-  case "$cur" in
+_jaro() {
+  local cur previous word command_index=1 suggestions='' path
+  COMPREPLY=()
+  previous="${COMP_WORDS[COMP_CWORD-1]}"
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  while (( command_index < COMP_CWORD )); do
+    case "${COMP_WORDS[command_index]}" in
+      -a|-l|--account|--list) (( command_index += 2 )) ;;
+      -*) (( command_index += 1 )) ;;
+      *) break ;;
+    esac
+  done
+  if [[ "${COMP_WORDS[command_index]}" == outbox ]] && (( COMP_CWORD > command_index )); then
+    case "$previous" in
+      outbox) suggestions='list retry archive' ;;
+      retry|archive)
+        while IFS= read -r word; do
+          [[ "$word" == "$cur"* ]] && COMPREPLY+=("$word")
+        done < <(jaro outbox list 2>/dev/null | awk 'NR > 1 { print $1 }') ;;
       *)
-	  COMPREPLY=( $( compgen -W 'fetch send peek serve compose open update sieve sieve-import filter wizard' -- $cur ) )
-	  ;;
-
-      open)
-	  for f in `ls $jarodir`; do
-	      COMPREPLY+=( $( compgen -W "$f" -- $cur ) )
-	  done
-	  ;;
-
-#   Generate the completion matches and load them into $COMPREPLY array.
-#   xx) May add more cases here.
-#   yy)
-#   zz)
-  esac
-
-echo 
-echo "words: cur[$cur] len[$curlen] word[${COMP_WORDS[$curlen]}]"
-echo "current array: ${COMP_WORDS[@]}"
-
+        [[ " ${COMP_WORDS[*]} " != *' retry '* ]] || suggestions='--confirm-duplicate' ;;
+    esac
+  elif [[ "$previous" == open ]]; then
+    for path in "$jarodir"/*; do
+      [[ -d "$path/cur" && "${path##*/}" == "$cur"* ]] && COMPREPLY+=("${path##*/}")
+    done
+  else
+    suggestions='fetch send outbox queue peek serve compose open update sieve sieve-import filter wizard'
+  fi
+  if [[ -n "$suggestions" ]]; then
+    while IFS= read -r word; do
+      COMPREPLY+=("$word")
+    done < <(compgen -W "$suggestions" -- "$cur")
+  fi
   return 0
 }
 

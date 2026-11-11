@@ -10,13 +10,32 @@ _jaromail() {
     typeset -A opt_args
     typeset -alU results
 
+    local command_index=2
+    while (( command_index < CURRENT )); do
+        case "$words[command_index]" in
+            -a|-l|--account|--list) (( command_index += 2 )) ;;
+            -*) (( command_index += 1 )) ;;
+            *) break ;;
+        esac
+    done
+    if [[ "$words[command_index]" == outbox ]] && (( CURRENT > command_index )); then
+        case "$words[CURRENT-1]" in
+            outbox) compadd list retry archive ;;
+            retry|archive)
+                results=("${(@f)$(jaro outbox list 2>/dev/null | awk 'NR > 1 { print $1 }')}")
+                compadd -a results ;;
+            *) [[ "${words[*]}" == *' retry '* ]] && compadd -- --confirm-duplicate ;;
+        esac
+        return
+    fi
+
     _arguments \
         '1: :->commands'\
         '*: :->args'
 
     case $state in
 	    commands)
-            _arguments '1:Commands:(open compose fetch send peek serve search passwd wizard abook extract import backup merge update sieve sieve-import filter)'
+            _arguments '1:Commands:(open compose queue fetch send outbox peek serve search passwd wizard abook extract import backup merge update sieve sieve-import filter)'
 	        ;;
 	    *)
             _last=$(( ${#words} - 1 ))

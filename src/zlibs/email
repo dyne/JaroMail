@@ -473,6 +473,7 @@ fetch() {
 smtp_send() {
     fn smtp-send
     local msmtpcfg smtp_status=1 trust_file
+    smtp_delivery_outcome=not-started
     req=(account)
     ckreq || return 1
 
@@ -527,8 +528,10 @@ password ${password}
 EOF
     then
         [[ "${smtp_keep_password:-0}" = 1 ]] || unset password
+        smtp_delivery_outcome=uncertain
         msmtp -C "$msmtpcfg" -t
         smtp_status=$?
+        (( smtp_status == 0 )) && smtp_delivery_outcome=accepted
     fi
     } always {
         [[ "${smtp_keep_password:-0}" = 1 ]] || unset password
@@ -536,6 +539,66 @@ EOF
     }
     func "msmtp returns: $smtp_status"
     return $smtp_status
+}
+
+outbox_state() {
+    local helper="$WORKDIR/bin/jaro-outbox"
+    # The source bootstrap also supports WORKDIR=src.
+    [[ -x "$helper" ]] || helper="$WORKDIR/../build/gnu/jaro-outbox"
+    [[ -x "$helper" ]] || { error "Missing recovery helper: jaro-outbox"; return 1; }
+    "$helper" "$1" "$MAILDIRS" "$2"
+}
+
+outbox_send_one() {
+    local qbody="$1" relative="${1:h:t}/${1:t}" report id state res
+    local -a fields
+    outbox_item_held=0
+    if ! report=$(outbox_state prepare "$relative"); then
+        error "Outbox item held: recovery state or message validation failed"
+        outbox_item_held=1
+        return 1
+    fi
+    fields=( ${=report} )
+    (( ${#fields} == 2 )) || { outbox_item_held=1; return 1; }
+    id="$fields[1]" state="$fields[2]"
+    case "$state" in
+        accepted|verified|complete)
+            notice "Finishing local sent copy for outbox $id (no SMTP)"
+            outbox_state finish "$relative"
+            return $?
+            ;;
+        inflight|uncertain)
+            warning "Outbox $id held: delivery uncertain; explicit reconciliation required"
+            outbox_item_held=1
+            return 1
+            ;;
+        prepared) ;;
+        *) outbox_item_held=1; return 1 ;;
+    esac
+    # A checked durable transition is required before even invoking smtp_send.
+    outbox_state inflight "$relative" || { outbox_item_held=1; return 1; }
+    act "Sending out email via ${account:-default} account (outbox $id)"
+    smtp_keep_password=1
+    smtp_delivery_outcome=uncertain
+    # Transport reads the private snapshot, never changing live queue bytes.
+    smtp_send < "$MAILDIRS/.outbox-state/$id/message"
+    res=$?
+    if [[ "$smtp_delivery_outcome" == accepted || $res == 0 ]]; then
+        # Also preserve acceptance if removing the private SMTP config failed.
+        outbox_state accepted "$relative" || { outbox_item_held=1; return 1; }
+        (( interrupted == 0 )) || return $interrupted
+        hdr "$MAILDIRS/.outbox-state/$id/message" | learn recipient
+        outbox_state finish "$relative" || return 1
+        return $res
+    fi
+    if [[ "$smtp_delivery_outcome" == not-started ]]; then
+        outbox_state not-started "$relative" || return 1
+    else
+        outbox_state uncertain "$relative" || { outbox_item_held=1; return 1; }
+        warning "Outbox $id held: SMTP outcome uncertain (status $res)"
+        outbox_item_held=1
+    fi
+    return $res
 }
 
 
@@ -546,7 +609,7 @@ send() {
     fn send $*
     setopt localoptions localtraps pipefail
     local -a queue_outbox
-    local qbody res=0 result=0 interrupted=0 recipient_status
+    local qbody res=0 result=0 interrupted=0 recipient_status held=0 outbox_item_held=0 anonymous anon_report
     [[ $DRYRUN = 1 ]] && { return 0 }
 
     lock "${MAILDIRS}/outbox" || return $?
@@ -571,9 +634,14 @@ send() {
             break
         }
 
-        # check if this is an anonymous mail
-        hdr "$qbody" | grep -i '^from: anon' > /dev/null
-        if [[ $? = 0 ]]; then
+        # Anonymous mail keeps its legacy transport, but changing an already
+        # journaled SMTP item's From header must not bypass its recovery hold.
+        anonymous=0
+        if hdr "$qbody" | grep -i '^from: anon' > /dev/null; then
+            if anon_report=$(outbox_state inspect "${qbody:h:t}/${qbody:t}") &&
+                [[ "$anon_report" == *' eligible no-attempt' ]]; then anonymous=1; fi
+        fi
+        if (( anonymous )); then
 
             ztmp
             anoncfg=$ztmpfile
@@ -623,20 +691,11 @@ BEGIN { body=0 }
             done
 
         else # normal send with msmtp
-
-            act "Sending out email via ${account:-default} account"
-            hdr "$qbody" | awk '
-/^From:/ { print " .  " $0 }
-/^To:/   { print " .  " $0 }
-/^Cc:/   { print " .  " $0 }
-/^Subject:/ { print " .  " $0 }
-'
-
-            tsize=`zstat +size "$qbody"`
-            act "sending `human_size $tsize` over the network ..."
-            smtp_keep_password=1
-            smtp_send < "${qbody}"
-            res=$?
+            if outbox_send_one "$qbody"; then res=0; else res=$?; fi
+            held=$(( held + outbox_item_held ))
+            (( interrupted == 0 )) || break
+            (( res == 0 )) || result=$res
+            continue
         fi
 
         # evaluate results
@@ -656,6 +715,7 @@ BEGIN { body=0 }
         fi
 
     done
+    (( held == 0 )) || warning "$held outbox item(s) held; delivery requires reconciliation"
 
     } always {
         unlock "$MAILDIRS/outbox" || result=1

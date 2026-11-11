@@ -56,7 +56,7 @@ relative to `bin/jaro`; build-machine paths are not needed to run them.
 The old Make commands and platform entry points delegate to CMake. There is no
 separate native compiler recipe in the compatibility Makefiles. Native test
 callers enable `JARO_BUILD_TEST_DRIVERS`; ordinary installations and release
-packages include the seven application helpers and bundled abook 0.6.2.
+packages include the eight application helpers and bundled abook 0.6.2.
 In-source CMake configuration is refused to protect the compatibility Makefile.
 The old optional bundled mutt-kz/Mixmaster build aliases are outside the supported
 core build; use the external mail clients listed in the README.
@@ -145,7 +145,7 @@ an x86_64 Linux host:
 | x86_64 | x86_64 | x86_64-linux-musl | Native |
 | arm64 | arm_64 | aarch64-linux-musl | qemu-aarch64 |
 
-Each of the eight executables (the seven helpers plus abook) must be an ELF64 binary of the correct machine type,
+Each of the nine executables (the eight helpers plus abook) must be an ELF64 binary of the correct machine type,
 with neither an ELF interpreter nor shared-library dependencies. Failed static
 checks, tests, smoke tests or either architecture prevent publication.
 

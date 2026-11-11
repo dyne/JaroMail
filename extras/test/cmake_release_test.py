@@ -158,7 +158,7 @@ exec "$JARO_REAL_CC" "$@"
         self.assertIn('-lm', self.buildlog)
         if shutil.which('ccache') and 'CCACHE' not in os.environ:
             self.assertIn('ccache', self.buildlog)
-        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-filter','jaro-filter-compile','jaro-filter-legacy','abook'):
+        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-outbox','jaro-filter','jaro-filter-compile','jaro-filter-legacy','abook'):
             self.assertTrue(os.access(self.binary/'bin'/name, os.X_OK))
         result = run([sys.executable, self.source/'build/check-static.py', '--bin-dir', self.binary/'bin', '--arch',self.arch], succeeds=False)
         self.assertNotEqual(result.returncode, 0)
@@ -174,6 +174,7 @@ exec "$JARO_REAL_CC" "$@"
         shutil.copytree(installed,moved)
         self.assertEqual(run([moved/'bin/jaro','-v'],env=self.env,cwd=self.work).stdout,'Jaro Mail v6.7.8\n')
         runtime = moved/'share/jaromail'
+        self.assertTrue(os.access(runtime/'bin/jaro-outbox', os.X_OK))
         self.assertEqual((runtime/'VERSION').read_text(),'6.7.8\n')
         module = runtime/'zlibs/filters.zwc'
         # Installation removes stale precompiled Zsh modules from the real prefix.

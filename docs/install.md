@@ -14,7 +14,7 @@ that architecture's archive and its SHA-256 checksum, verifies the archive,
 then installs the complete package under **`$HOME/.local`**. No `sudo` is used.
 Running it again installs the latest release over the same prefix.
 
-The package includes Jaromail's scripts, seven native helpers, bundled abook,
+The package includes Jaromail's scripts, eight native helpers, bundled abook,
 configuration templates, manpages and licenses. It does not bundle the external
 mail applications listed below, and it does not change your mail directory.
 
