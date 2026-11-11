@@ -18,6 +18,11 @@ _jaromail() {
             *) break ;;
         esac
     done
+    if [[ "$words[command_index]" == snapshot ]] && (( CURRENT > command_index )); then
+        if [[ "$words[CURRENT-1]" == snapshot ]]; then compadd create verify restore
+        else _files -/; fi
+        return
+    fi
     if [[ "$words[command_index]" == doctor ]] && (( CURRENT > command_index )); then
         compadd -- --json --help
         return
@@ -39,7 +44,7 @@ _jaromail() {
 
     case $state in
 	    commands)
-            _arguments '1:Commands:(open compose queue fetch send outbox doctor peek serve search passwd wizard abook extract import backup merge update sieve sieve-import filter)'
+            _arguments '1:Commands:(open compose queue fetch send outbox doctor snapshot peek serve search passwd wizard abook extract import backup merge update sieve sieve-import filter)'
 	        ;;
 	    *)
             _last=$(( ${#words} - 1 ))

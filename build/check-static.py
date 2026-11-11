@@ -7,7 +7,7 @@ from pathlib import Path
 import struct
 import subprocess
 
-HELPERS = ('fetchaddr', 'parsedate', 'dotlock', 'gpgewrap', 'jaro-outbox', 'jaro-filter',
+HELPERS = ('fetchaddr', 'parsedate', 'dotlock', 'gpgewrap', 'jaro-outbox', 'jaro-snapshot', 'jaro-filter',
            'jaro-filter-compile', 'jaro-filter-legacy', 'abook')
 MACHINES = {'x86_64': 62, 'arm64': 183}
 

@@ -1,0 +1,40 @@
+#!/usr/bin/env zsh
+# Snapshot commands bypass normal initialization, indexing and keyring access.
+snapshot_cli() {
+    setopt localoptions
+    local bootstrap="$1" action root work helper
+    shift
+    [[ ${1:-} == snapshot ]] || {
+        print -u2 -- 'snapshot: global options are not supported; use jaro snapshot --help'
+        return 2
+    }
+    shift
+    if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+        print -- 'Usage: jaro snapshot create DEST | verify SNAPSHOT | restore SNAPSHOT DEST'
+        print -- 'Stop all mail writers before create. Snapshots contain message bytes and flags only.'
+        return 0
+    fi
+    action="${1:-}"
+    case $action in
+        create|verify) (( $# == 2 )) && [[ -n "$2" ]] || { print -u2 -- 'snapshot: expected exactly one nonempty path'; return 2; } ;;
+        restore) (( $# == 3 )) && [[ -n "$2" && -n "$3" ]] || { print -u2 -- 'snapshot: restore requires SNAPSHOT and DEST'; return 2; } ;;
+        *) print -u2 -- 'Usage: jaro snapshot create DEST | verify SNAPSHOT | restore SNAPSHOT DEST'; return 2 ;;
+    esac
+    work="${JAROWORKDIR:-${bootstrap:h:h}}"
+    helper="$work/bin/jaro-snapshot"
+    [[ -x $helper ]] || helper="${bootstrap:h:h}/../build/gnu/jaro-snapshot"
+    [[ -x $helper ]] || { print -u2 -- 'snapshot: missing jaro-snapshot helper; rebuild or reinstall'; return 127; }
+    if [[ $action == restore ]]; then
+        "$helper" restore "$2" "$3"
+    elif [[ $action == verify ]]; then
+        "$helper" verify "$2"
+    else
+        root="$PWD"
+        if [[ -d /Applications/JaroMail.app ]]; then
+            root="$HOME/Library/Application Support/JaroMail"
+        elif [[ -r "$HOME/Mail/Filters.txt" ]]; then root="$HOME/Mail"; fi
+        root="${JAROMAILDIR:-$root}"
+        print -u2 -- 'snapshot: all external mail writers must be stopped for a consistent capture.'
+        "$helper" create "$root" "$2"
+    fi
+}
