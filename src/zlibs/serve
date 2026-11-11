@@ -53,12 +53,16 @@ serve_request() {
 
     serve_mail_root="${MAILDIRS:A}"
     case "$serve_mail_root" in
-        *:*)
-            error "Invalid MAILDIRS path '$serve_mail_root' (':' not supported by dovecot mail_location)"
+        *:*|*%*|*$'\n'*|*$'\r'*)
+            error "MAILDIRS must not contain colons, percent signs or newlines"
             return 1
             ;;
     esac
     serve_runtime="${MAILDIRS}/.imap"
+    [[ ! -L "$serve_runtime" ]] || {
+        error "Refusing a symlinked IMAP runtime"
+        return 1
+    }
     serve_runtime="${serve_runtime:A}"
     serve_conf="${serve_runtime}/dovecot.conf"
     serve_passwd_file="${serve_runtime}/passwd"
@@ -67,6 +71,18 @@ serve_request() {
     serve_info_log_file="${serve_log_dir}/dovecot-info.log"
     serve_uid="$(id -u)"
     serve_gid="$(id -g)"
+    serve_system_user="$(id -un)" || return 1
+    serve_system_group="$(id -gn)" || return 1
+    (( serve_uid != 0 )) || {
+        error "Run jaro serve as the owner of the mail, not root"
+        return 1
+    }
+
+    serve_validate_passwd_field JARO_SERVE_USER "$serve_user" || return 1
+    [[ "$serve_user" != \#* && "$serve_user" != *[[:space:]]* ]] || {
+        error "JARO_SERVE_USER must not start with # or contain whitespace"
+        return 1
+    }
 
     return 0
 }
@@ -88,12 +104,32 @@ serve_validate_passwd_field() {
     return 0
 }
 
-# Escape paths for dovecot.conf values.
+# Escape the contents of a quoted dovecot.conf string. Percent expansion in
+# mail paths is rejected above rather than interpreting a directory as a template.
 serve_escape_dovecot_path() {
     local _path="$1"
     _path="${_path//\\/\\\\}"
-    _path="${_path// /\\\\ }"
-    print -- "$_path"
+    _path="${_path//\"/\\\"}"
+    print -r -- "$_path"
+}
+
+# Config-only works without Dovecot; a live launch requires matching 2.4 tools.
+serve_check_version() {
+    local version
+    if command -v dovecot >/dev/null 2>&1; then
+        version="$(dovecot --version)" || return 1
+        [[ "$version" == 2.4.<->* ]] || {
+            error "jaro serve requires Dovecot 2.4.x (found $version)"
+            return 1
+        }
+    elif [[ "$serve_config_only" != 1 ]]; then
+        error "jaro serve requires Dovecot 2.4.x"
+        return 1
+    fi
+    if [[ "$serve_config_only" != 1 ]] && ! command -v doveconf >/dev/null 2>&1; then
+        error "jaro serve requires doveconf from the same Dovecot installation"
+        return 1
+    fi
 }
 
 # Keep canonical maildirs present so IMAP exposure is predictable.
@@ -160,36 +196,61 @@ serve_render_dovecot_conf() {
     _info_log_file="$(serve_escape_dovecot_path "$serve_info_log_file")"
 
     cat <<EOF
-protocols = imap
+dovecot_config_version = 2.4.0
+dovecot_storage_version = 2.4.0
+protocols {
+  imap = yes
+}
 listen = ${serve_host}
 ssl = no
-disable_plaintext_auth = no
+auth_allow_cleartext = yes
 auth_mechanisms = plain
-mail_debug = no
+auth_username_format = %{user}
+default_internal_user = ${serve_system_user}
+default_login_user = ${serve_system_user}
+default_internal_group = ${serve_system_group}
+first_valid_uid = ${serve_uid}
+last_valid_uid = ${serve_uid}
+first_valid_gid = ${serve_gid}
+last_valid_gid = ${serve_gid}
 
-mail_location = maildir:${_mail_root}:LAYOUT=fs:INDEX=${_runtime}/index:CONTROL=${_runtime}/control
+mail_driver = maildir
+mail_path = "${_mail_root}"
+mailbox_list_layout = fs
+mail_index_path = "${_runtime}/index"
+mail_control_path = "${_runtime}/control"
+mail_home = "${_mail_root}"
+mail_uid = ${serve_uid}
+mail_gid = ${serve_gid}
 
-base_dir = ${_runtime}/run
-state_dir = ${_runtime}/state
-log_path = ${_log_file}
-info_log_path = ${_info_log_file}
+base_dir = "${_runtime}/run"
+state_dir = "${_runtime}/state"
+log_path = "${_log_file}"
+info_log_path = "${_info_log_file}"
 
-passdb {
-  driver = passwd-file
-  args = ${_passwd_file}
+passdb passwd-file {
+  passwd_file_path = "${_passwd_file}"
 }
 
-userdb {
-  driver = static
-  args = uid=${serve_uid} gid=${serve_gid} home=${serve_mail_root}
+userdb static {
+}
+
+service anvil {
+  chroot =
+}
+service auth-worker {
+  user = ${serve_system_user}
 }
 
 service imap-login {
+  chroot =
   process_limit = ${serve_max_connections}
-  service_count = 1
+  restart_request_count = 1
   inet_listener imap {
-    address = ${serve_host}
     port = ${serve_port}
+  }
+  inet_listener imaps {
+    port = 0
   }
 }
 
@@ -206,9 +267,7 @@ serve_write_runtime_files() {
     serve_validate_passwd_field "JARO_SERVE_USER" "$serve_user" || return 1
     serve_validate_passwd_field "JARO_SERVE_PASSWORD" "$serve_password" || return 1
 
-    cat <<EOF > "$serve_passwd_file"
-${serve_user}:{PLAIN}${serve_password}:${serve_uid}:${serve_gid}::${serve_mail_root}::
-EOF
+    print -r -- "${serve_user}:{PLAIN}${serve_password}" > "$serve_passwd_file" || return 1
     chmod 600 "$serve_passwd_file" || return 1
 
     serve_render_dovecot_conf > "$serve_conf" || return 1
@@ -222,9 +281,8 @@ serve_validate_config() {
     fn serve_validate_config
     command -v doveconf >/dev/null 2>&1 || return 0
     _doveconf_out="$(doveconf -c "$serve_conf" -n 2>&1)" || {
-        warning "doveconf rejected generated config: ${_doveconf_out[(w)1,12]}"
-        warning "continuing without strict validation"
-        return 0
+        error "doveconf rejected generated config: $_doveconf_out"
+        return 1
     }
     return 0
 }
@@ -273,40 +331,69 @@ serve_port_in_use() {
 
 # Response payload for users and tests.
 serve_response() {
-    print "Host: ${serve_host}"
-    print "Port: ${serve_port}"
-    print "TLS: none"
-    print "User: ${serve_user}"
-    print "Password: ${serve_password}"
-    print "Config: ${serve_conf}"
-    print "Log: ${serve_log_file}"
-    print "Mail root: ${serve_mail_root}"
+    print -r -- "Host: ${serve_host}"
+    print -r -- "Port: ${serve_port}"
+    print -r -- "TLS: none"
+    print -r -- "User: ${serve_user}"
+    print -r -- "Password: ${serve_password}"
+    print -r -- "Config: ${serve_conf}"
+    print -r -- "Log: ${serve_log_file}"
+    print -r -- "Mail root: ${serve_mail_root}"
 }
 
-# IO adapter to launch dovecot in foreground.
+# Keep the shell's advisory lock alive until Dovecot exits. Dovecot closes
+# inherited descriptors, so exec would release it prematurely. Signals target
+# only our child and wait for shutdown before releasing runtime ownership.
 serve_exec_dovecot() {
     fn serve_exec_dovecot
-    exec dovecot -F -c "$serve_conf"
+    local serve_pid
+    dovecot -F -c "$serve_conf" &
+    serve_pid=$!
+    trap 'kill -TERM "$serve_pid" 2>/dev/null; wait "$serve_pid" 2>/dev/null; exit 130' INT
+    trap 'kill -TERM "$serve_pid" 2>/dev/null; wait "$serve_pid" 2>/dev/null; exit 143' TERM
+    trap 'kill -TERM "$serve_pid" 2>/dev/null; wait "$serve_pid" 2>/dev/null; exit 129' HUP
+    wait "$serve_pid"
 }
 
+# Never unlink the lock file: contenders share its inode. Keep the CLI process
+# supervising Dovecot so signals sent to jaro also stop its child.
 cmd_serve() {
+    setopt localoptions localtraps
+    umask 077
     fn cmd_serve
 
-    serve_request || { exitcode=1; return 1; }
-    serve_ensure_maildirs || { exitcode=1; return 1; }
-    serve_prepare_runtime || { exitcode=1; return 1; }
-    serve_generate_password || { exitcode=1; return 1; }
-    serve_write_runtime_files || { exitcode=1; return 1; }
-    serve_validate_config || { exitcode=1; return 1; }
-    serve_response
+    serve_request || return 1
+    if [[ "${DRYRUN:-0}" == 1 ]]; then
+        print -r -- "Would serve $serve_mail_root on $serve_host:$serve_port using Dovecot 2.4.x"
+        return 0
+    fi
+    serve_check_version || return 1
 
-    [[ "$serve_config_only" = "1" ]] && { exitcode=0; return 0; }
+    local serve_lock_fd live_pid
+    [[ ! -L "$serve_runtime" ]] || return 1
+    command mkdir -p -m 700 -- "$serve_runtime" || return 1
+    [[ ! -L "$serve_runtime/lock" ]] || return 1
+    ( : >> "$serve_runtime/lock" ) || return 1
+    zmodload zsh/system || return 1
+    zsystem flock -t 0 -f serve_lock_fd "$serve_runtime/lock" || {
+        error "A jaro serve instance already owns $serve_runtime"
+        return 1
+    }
+    {
+    # Also protect a daemon orphaned by SIGKILL of its supervising shell.
+    if [[ -r "$serve_runtime/run/master.pid" ]]; then
+        read -r live_pid < "$serve_runtime/run/master.pid"
+        if [[ "$live_pid" == <-> ]] && kill -0 "$live_pid" 2>/dev/null; then
+            error "Dovecot is already running in $serve_runtime"
+            return 1
+        fi
+    fi
 
-    serve_port_in_use
-    case $? in
+    local port_status=0
+    serve_port_in_use || port_status=$?
+    case $port_status in
         0)
             error "Port busy: ${serve_host}:${serve_port}"
-            exitcode=1
             return 1
             ;;
         2)
@@ -314,5 +401,15 @@ cmd_serve() {
             ;;
     esac
 
+    serve_ensure_maildirs || return 1
+    serve_prepare_runtime || return 1
+    serve_generate_password || return 1
+    serve_write_runtime_files || return 1
+    serve_validate_config || return 1
+    serve_response
+    [[ "$serve_config_only" == 1 ]] && return 0
     serve_exec_dovecot
+    } always {
+        zsystem flock -u "$serve_lock_fd"
+    }
 }

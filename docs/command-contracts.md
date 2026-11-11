@@ -34,7 +34,36 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
 - `serve`: generates local Dovecot config in `$MAILDIRS/.imap` and serves existing Maildirs over localhost IMAP.
 - IO: reads local Maildir tree; writes `$MAILDIRS/.imap/dovecot.conf`, `$MAILDIRS/.imap/passwd`, and runtime logs/state.
 - Network scope: loopback-only (`127.0.0.1`) with generated local credentials; no POP3/LMTP/submission surfaces.
-- Test-safe: config generation yes (`JARO_SERVE_CONFIG_ONLY=1`), live daemon launch optional (`dovecot` availability dependent).
+- Requires Dovecot **2.4.x** and its matching `doveconf`/IMAP service for live
+  use. Unsupported versions fail before writing runtime files. A rejected
+  configuration is an error, never a successful skip.
+- Run as the mail owner, not root. Internal/login/auth-worker processes use
+  that user's identity and do not require chroot capabilities or system config.
+- `jaro -n serve` previews without bootstrap initialization, credential
+  generation, configuration writes, version probes or daemon startup.
+- A per-mail-root advisory lock is held through daemon shutdown. A second
+  launch, including config-only or a different port, cannot replace a live
+  instance's credentials. Busy ports are checked before configuration writes.
+  Do not delete `.imap/lock`; the OS releases ownership when the process exits.
+- `JARO_SERVE_HOST` accepts `localhost` or `127.0.0.1`; `JARO_SERVE_PORT`
+  defaults to 61443 (1024–65535); `JARO_SERVE_MAX_CONNECTIONS` defaults to 4
+  (1–16). `JARO_SERVE_USER` defaults to `jaro`; `JARO_SERVE_PASSWORD` can
+  override the generated password. These credentials are separate from accounts.
+- Paths are quoted, including spaces and `#`. Colons, percent signs and
+  newlines in the mail root are unsupported. Dovecot's UNIX socket path length
+  limit also applies; use a short mail-root path if its listeners cannot start.
+- `JARO_SERVE_CONFIG_ONLY=1` renders without launching; Dovecot is optional for
+  this mode, but any available tools must accept the configuration. The live
+  test skips with exit 77 only when its required version/tools are unavailable.
+- Test coverage: `test-serve-config.sh` covers CLI, validation and dry-run;
+  `test-serve-dovecot.sh` starts Dovecot, logs in, reads a fixture, rejects a
+  second launch and checks signal shutdown. It can use `SIEVE_DEPS_PREFIX` for
+  the existing 2.4 installation and `JARO_SERVE_TEST_TMPDIR` for a short private
+  test parent. No external mail server is contacted.
+- IMAP clients can change flags, move or delete messages as usual. Selecting a
+  folder can move `new/` files into `cur/`; the bridge does not promise a
+  read-only filesystem. INBOX is a separate root Maildir; existing mail remains
+  accessible in named folders such as `known` and `priv`.
 
 ## Index/search family (`index`, `search`, `extract`, `headers`)
 

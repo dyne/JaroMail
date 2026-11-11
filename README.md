@@ -89,7 +89,15 @@ fetchmail msmtp neomutt notmuch pinentry-curses \
 wipe mblaze vim netcat-traditional
 ```
 
-Optional for the `jaro serve` local IMAP bridge: `dovecot-imapd`.
+Optional for the `jaro serve` local IMAP bridge: **Dovecot 2.4.x**, including
+`dovecot`, `doveconf` and the IMAP service. Distribution packages are often
+named `dovecot-core` and `dovecot-imapd`; check `dovecot --version`, since
+Dovecot 2.3 uses an incompatible configuration format and is not supported.
+Run `jaro serve` as the mail owner, without sudo. It prints credentials for
+`127.0.0.1:61443` (unencrypted, loopback only) and stops on Ctrl-C. Use
+`jaro -n serve` to preview without changing files or starting a server.
+See [the serve contract](docs/command-contracts.md#local-imap-bridge-serve)
+for configuration and runtime ownership.
 
 Build tools are CMake 3.20+, Python 3.9+, a C compiler and either Ninja or Make,
 plus wide-character ncurses and GNU readline development libraries

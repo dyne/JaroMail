@@ -207,7 +207,7 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 
 # Native filtering requires explicit existing policy. In particular, a read-only
 # request must not materialize defaults before the option parser has run.
-[[ "$1" = "source" || ( ${JARO_FILTER_ENGINE-native} != legacy &&
+[[ "$1" = "source" || ${@[(Ie)serve]} -gt 0 || ( ${JARO_FILTER_ENGINE-native} != legacy &&
     ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 || ${@[(Ie)sieve-import]} -gt 0 ||
       ${@[(Ie)sieve]} -gt 0 || ${@[(Ie)update]} -gt 0 ) ) ]] || {
     # Validate selector/template before any bootstrap configuration write.
@@ -387,8 +387,8 @@ check_bin() {
             check_keyring
             ;;
         serve)
-            [[ -n "${JARO_SERVE_CONFIG_ONLY:-}" && "${JARO_SERVE_CONFIG_ONLY}" != "0" ]] \
-                || check_required_bins dovecot
+            # The serve slice owns preflight after handling dry-run. It must
+            # remain usable without Dovecot for -n and config-only generation.
             ;;
     esac
 
