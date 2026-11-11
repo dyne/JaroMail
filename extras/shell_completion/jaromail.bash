@@ -16,7 +16,7 @@ _jaro() {  #+ starts with an underscore.
 
   case "$cur" in
       *)
-	  COMPREPLY=( $( compgen -W 'fetch send peek compose open update sieve sieve-import filter wizard' -- $cur ) )
+	  COMPREPLY=( $( compgen -W 'fetch send peek serve compose open update sieve sieve-import filter wizard' -- $cur ) )
 	  ;;
 
       open)

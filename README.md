@@ -89,6 +89,8 @@ fetchmail msmtp neomutt notmuch pinentry-curses \
 wipe mblaze vim netcat-traditional
 ```
 
+Optional for the `jaro serve` local IMAP bridge: `dovecot-imapd`.
+
 Build tools are CMake 3.20+, Python 3.9+, a C compiler and either Ninja or Make,
 plus wide-character ncurses and GNU readline development libraries
 (`libncurses-dev libreadline-dev` on Debian/Ubuntu). The complete abook 0.6.2
@@ -224,6 +226,7 @@ validates the installed `jaro` command selected by `PATH`.
 Developer test dependencies (also listed in `.github/workflows/pr-tests.yml`) include:
 `zsh`, `make`, `gcc`, `python3`, `fetchmail`, `msmtp`, `mutt` or `neomutt`,
 `notmuch`, `pinentry-curses`, `abook`, `wipe`, and `mblaze` (for `maddr`).
+`dovecot` is optional and only needed for `jaro serve` live daemon checks.
 
 Legacy/optional surfaces are documented in:
 
