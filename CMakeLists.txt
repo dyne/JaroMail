@@ -120,6 +120,7 @@ jaro_executable(dotlock src/dotlock.c)
 target_compile_definitions(dotlock PRIVATE DL_STANDALONE)
 jaro_executable(gpgewrap src/gpgewrap.c)
 jaro_executable(jaro-outbox src/jaro-outbox.c src/filter/sha256.c)
+jaro_executable(jaro-snapshot src/jaro-snapshot.c src/filter/sha256.c)
 # These retained helpers previously used the compiler's GNU dialect. Keep its
 # POSIX declarations while the shared filter core remains strict C99.
 set_target_properties(fetchaddr parsedate dotlock gpgewrap PROPERTIES C_EXTENSIONS ON)
@@ -131,6 +132,8 @@ add_custom_target(filter-core DEPENDS jaro-policy)
 add_custom_target(filter-compile DEPENDS jaro-filter-compile jaro-filter-legacy jaro-filter)
 
 if(JARO_BUILD_TEST_DRIVERS)
+  jaro_executable(jaro-snapshot-test src/jaro-snapshot.c src/filter/sha256.c)
+  target_compile_definitions(jaro-snapshot-test PRIVATE JARO_SNAPSHOT_TESTING)
   jaro_executable(jaro-outbox-test src/jaro-outbox.c src/filter/sha256.c)
   target_compile_definitions(jaro-outbox-test PRIVATE JARO_OUTBOX_TESTING)
   jaro_executable(filter-policy-driver extras/test/filter-policy-driver.c ${_policy})
@@ -171,7 +174,7 @@ configure_file(cmake/jaro.in generated/jaro @ONLY)
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/generated/VERSION" CONTENT "${JARO_RESOLVED_VERSION}\n")
 install(PROGRAMS "${CMAKE_BINARY_DIR}/generated/jaro" DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(PROGRAMS src/jaro DESTINATION "${JARO_RUNTIME_DIR}/bin")
-install(TARGETS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-filter-compile jaro-filter-legacy jaro-filter
+install(TARGETS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-filter-compile jaro-filter-legacy jaro-filter
   RUNTIME DESTINATION "${JARO_RUNTIME_DIR}/bin")
 install(FILES "${CMAKE_BINARY_DIR}/generated/VERSION" COPYING.txt DESTINATION "${JARO_RUNTIME_DIR}")
 install(DIRECTORY docs/ DESTINATION "${JARO_RUNTIME_DIR}"
@@ -186,13 +189,13 @@ install(CODE "file(GLOB _stale \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_R
 add_custom_target(install-system
   COMMAND "${CMAKE_COMMAND}" "-DJARO_BINARY_DIR=${CMAKE_BINARY_DIR}" "-DJARO_INSTALL_CONFIG=$<CONFIG>"
     -P "${PROJECT_SOURCE_DIR}/cmake/InstallSystem.cmake"
-  DEPENDS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-filter-compile jaro-filter-legacy jaro-filter abook
+  DEPENDS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-filter-compile jaro-filter-legacy jaro-filter abook
   USES_TERMINAL VERBATIM)
 
 find_program(ZSH_EXECUTABLE zsh)
 if(ZSH_EXECUTABLE)
-  add_custom_target(check COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox abook USES_TERMINAL)
-  add_custom_target(check-strict COMMAND "${CMAKE_COMMAND}" -E env JARO_TEST_REQUIRE_ALL=1 "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox abook USES_TERMINAL)
+  add_custom_target(check COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot abook USES_TERMINAL)
+  add_custom_target(check-strict COMMAND "${CMAKE_COMMAND}" -E env JARO_TEST_REQUIRE_ALL=1 "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot abook USES_TERMINAL)
   if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME source-regressions COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh")
     set_tests_properties(source-regressions PROPERTIES ENVIRONMENT "JARO_TEST_REQUIRE_ALL=1")

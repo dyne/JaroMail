@@ -2100,9 +2100,181 @@ Mblaze can safely move all e\-mails stored in one maildir to another.
 The above command will move all emails stored inside the maildir folder
 \f[CR]latest\-mails\f[R] to the other maildir folder
 \f[CR]global\-archive\f[R].
-.SS Backup mails
-Backup strategies can be easily managed: just move all emails older than
-a certain period from one maildir to another.
+.SS Message snapshots
+\f[CR]jaro snapshot create DEST\f[R] copies messages into a
+\f[B]new\f[R] private directory.
+Use a destination outside the source mail root, preferably on separate
+storage:
+.IP
+.EX
+JAROMAILDIR=\[dq]$HOME/Mail\[dq] jaro snapshot create /media/backup/mail\-2026\-11\-11
+jaro snapshot verify /media/backup/mail\-2026\-11\-11
+.EE
+.PP
+Stop Jaromail delivery/sending, Mutt and every other writer before
+creating a snapshot.
+Keep them stopped until creation finishes.
+Jaromail checks source identity, size, timestamps, names and content
+again during capture, but cannot lock external MUAs or provide a live
+filesystem snapshot.
+A change it detects fails the capture.
+Use a trusted destination parent which other processes will not rename
+or modify during creation.
+Global options, including \f[CR]\-n\f[R], are not supported by snapshot
+commands; invalid invocations fail before initialization.
+.PP
+Version 1 captures regular message files in Maildir \f[CR]new\f[R] and
+\f[CR]cur\f[R], including nested folders, Unicode, spaces, newlines and
+filename flags.
+Distinct filenames remain distinct even when their content is identical.
+Empty folders are not recorded.
+Source files are only read.
+Directory and message symlinks, special message files, destinations
+inside the source, and existing destinations are refused.
+The directory is created with mode 0700 and payload/metadata with 0600.
+Creation does not encrypt the artifact or make it unwritable by its
+owner; keep the verified copy protected from later changes.
+.PP
+Only messages and relative locations/flags are included.
+Accounts, passwords, keyrings, executable configuration, addressbooks,
+derived search indexes, Maildir \f[CR]tmp\f[R] files and delivery
+journals are excluded.
+Back up configuration and credentials separately using a suitable
+protected method.
+These snapshots are not a complete home or system recovery backup.
+.PP
+The helper fsyncs copied payloads and metadata, independently verifies
+their content, and publishes a hash\-bound \f[CR]complete\f[R] marker
+last.
+A successful \f[CR]verify\f[R] checks the versioned manifest, canonical
+paths, flags, sizes, SHA\-256 digests, message count and exact payload
+set.
+Missing or modified bytes and malformed/traversing manifest paths fail
+verification.
+It provides corruption detection, not authentication against someone
+able to rewrite both the artifact and its hashes.
+Verification neither initializes Jaromail nor contacts a server.
+.PP
+On a read, write, sync or detected\-change failure, or a handled
+interruption, creation returns nonzero and removes its
+manifest/completion staging files.
+A private incomplete destination and partial numbered payloads may
+remain for inspection; it cannot pass verification.
+Remove that failed destination yourself or choose a new destination for
+the next attempt.
+An uncatchable kill or power loss can leave staging files; always run
+\f[CR]verify\f[R] before relying on a copy.
+A filesystem that cannot honor file/directory fsync causes creation to
+fail.
+.PP
+The v1 format is deliberately small: \f[CR]manifest\f[R] contains
+NUL\-delimited fields, starting with \f[CR]JMS1\f[R], followed by one
+four\-field record per message (relative path, flags without
+\f[CR]:2,\f[R], decimal byte size, lowercase SHA\-256).
+Records sort by raw relative\-path bytes.
+An empty path terminates the records, followed by the decimal count and
+a final NUL.
+Payloads are \f[CR]messages/0\f[R], \f[CR]messages/1\f[R], \&...
+in record order.
+\f[CR]complete\f[R] contains SHA\-256(manifest) and a newline.
+Paths use canonical relative components and end in \f[CR]new/NAME\f[R]
+or \f[CR]cur/NAME\f[R]; dot and dot\-dot components, excluded trees,
+duplicates, and nonascending records are invalid.
+This is a binary format; newline\-based filename tools cannot parse it.
+.SS Restore messages into a fresh mail root
+.IP
+.EX
+jaro snapshot verify /media/backup/mail\-2026\-11\-11
+jaro snapshot restore /media/backup/mail\-2026\-11\-11 \[dq]$HOME/Mail\-restored\[dq]
+.EE
+.PP
+The destination must be absent or an empty directory owned by you.
+Existing messages, files, symlinks and populated directories are
+refused.
+The destination cannot be inside the snapshot.
+Keep the snapshot, destination and destination parent free of other
+writers until restore returns.
+Parent directories must already exist and must not use symlink
+components.
+.PP
+Restore verifies the entire snapshot before writing anything at the
+destination.
+It builds a private \f[CR].jaro\-restore\-*\f[R] staging directory
+beside the destination, on the same filesystem, copies and fsyncs
+messages, and independently checks the staged bytes and unchanged
+snapshot again.
+It publishes the complete tree with one directory rename and syncs the
+parent.
+Relative Maildir placement, exact filenames and flags are retained, with
+private 0700 directories and 0600 files.
+No configuration or delivery journal is loaded or executed; restore
+never sends mail.
+Empty Maildir \f[CR]new\f[R]/\f[CR]cur\f[R]/\f[CR]tmp\f[R] directories
+are created as needed.
+.PP
+Outbox messages need a separate decision because their delivery journals
+are excluded: a queued message in an older snapshot may already have
+been sent.
+Restore places every \f[CR]outbox/...\f[R] message under
+\f[CR].jaro\-recovered\-outbox\-N/outbox/...\f[R] inside the new root,
+preserving its name, flags and original subfolder.
+\f[CR]N\f[R] is chosen to avoid any captured folder name.
+The command prints that relative location.
+It does \f[B]not\f[R] populate the normal \f[CR]outbox/new\f[R] or
+\f[CR]outbox/cur\f[R], so an ordinary \f[CR]jaro send\f[R] cannot pick
+up restored queue entries automatically.
+.PP
+Inspect the held Maildir read\-only, substituting the location printed
+by restore:
+.IP
+.EX
+restore_root=\[dq]$HOME/Mail\-restored\[dq]
+mutt \-R \-f \[dq]$restore_root/.jaro\-recovered\-outbox\-0/outbox\[dq]
+.EE
+.PP
+After checking delivery history outside the snapshot, requeue only a
+message you have deliberately decided still needs sending.
+For example, with an already configured active mail root and the exact
+held filename:
+.IP
+.EX
+held_message=\[dq]$restore_root/.jaro\-recovered\-outbox\-0/outbox/cur/FILE:2,S\[dq]
+JAROMAILDIR=\[dq]$HOME/Mail\[dq] jaro queue < \[dq]$held_message\[dq]
+.EE
+.PP
+\f[CR]queue\f[R] creates a fresh queue entry; it does not send it.
+The held copy remains available.
+Requeueing previously accepted mail can duplicate delivery.
+Do not rename the whole recovery folder into \f[CR]outbox\f[R] or merge
+it into the send queue.
+.PP
+Restore account/configuration backups and credential stores separately
+using their protected recovery procedures, or configure accounts anew.
+The message snapshot does not supply those settings, unlock a keyring or
+recreate delivery history.
+After configuration, inspect the selected root with
+\f[CR]JAROMAILDIR=\[dq]$restore_root\[dq] jaro doctor\f[R] and
+explicitly rebuild its derived index with
+\f[CR]JAROMAILDIR=\[dq]$restore_root\[dq] jaro index\f[R].
+.PP
+Handled read/write/corruption/interruption failures remove the private
+restore stage and preserve the input snapshot and any original empty
+destination.
+A parent\-sync failure after rename triggers rollback of this
+invocation\[cq]s published tree.
+If storage failure also prevents rollback/cleanup, the command reports
+that inspection is required; keep all writers stopped.
+SIGKILL or power loss can leave private staging or a published tree.
+Keep the original verified snapshot, inspect any residue, and use a
+fresh empty root for another attempt.
+Restore refuses to overwrite recovered messages on a repeated
+invocation.
+.SS Move older mail with the legacy backup command
+\f[CR]jaro backup DEST SEARCH...\f[R] keeps its existing
+\f[B]search\-and\-move\f[R] behavior: matched messages are removed from
+the source.
+It does not create an independent snapshot.
+For a retained copy, use \f[CR]jaro snapshot create\f[R] instead.
 .PP
 Using jaromail search function with date we obtain a list of matches and
 process them using mblaze\[cq]s \f[CR]mrefile\f[R] command:
@@ -2114,7 +2286,7 @@ separate folder:
 jaro search date:3y.. | mrefile /media/backup/old\-mails
 .EE
 .PP
-This will move into the maildir \f[CR]/media/backup/old.mails\f[R] all
+This will move into the maildir \f[CR]/media/backup/old\-mails\f[R] all
 the emails older than 3 years that are found in any folder.
 .PP
 One can also use \f[B]jaro link\f[R] to create symlinks into a new

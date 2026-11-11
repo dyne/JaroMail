@@ -119,6 +119,38 @@ the outbox Maildir in Mutt.
 
 `open` open a local maildir folder.
 
+### Message snapshots
+
+`snapshot create DEST` copy regular Maildir `new`/`cur` messages and filename
+flags from `$JAROMAILDIR` into a new private destination outside the source.
+Stop all mail writers first; detected source changes fail creation. This is
+a message-only copy, excluding accounts, credentials, configuration, indexes,
+temporary messages and delivery journals. Symlinks and existing destinations
+are refused. A failed capture may leave an incomplete private destination;
+choose a fresh destination after inspecting/removing it.
+
+`snapshot verify SNAPSHOT` check the complete manifest and every payload using
+sizes and SHA-256. Invalid paths, missing/altered messages and malformed
+manifests fail.
+
+`snapshot restore SNAPSHOT DEST` verify the full artifact, stage and verify
+message copies privately on the destination filesystem, then publish into an
+absent or owned empty mail root. Existing populated roots and symlink paths are
+refused. Keep snapshot/destination writers stopped until it returns. Outbox
+messages go under `.jaro-recovered-outbox-N/outbox`, outside the normal send
+queue; inspect and explicitly requeue individual messages only after checking
+delivery history. Accounts, credentials and configuration need separate
+recovery; rebuild the mail index after setup. Handled failures clean staging;
+a parent-sync failure rolls back publication. Power loss or failed cleanup can
+require inspection before retrying into a fresh root.
+
+All three commands work without initialization or network access;
+global options, including `-n`, are unsupported. Exit status is 0 on success,
+1 for validation/storage failure, 2 for invalid invocation, and 128+signal for
+a handled interruption. No encryption, live snapshot or full configuration
+recovery is provided. See the manual's message snapshot section for the
+versioned artifact format and consistency requirements.
+
 ### Recipient groups
 
 Local recipient lists live in `$JAROMAILDIR/Groups/` (for example

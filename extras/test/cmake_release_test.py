@@ -158,7 +158,7 @@ exec "$JARO_REAL_CC" "$@"
         self.assertIn('-lm', self.buildlog)
         if shutil.which('ccache') and 'CCACHE' not in os.environ:
             self.assertIn('ccache', self.buildlog)
-        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-outbox','jaro-filter','jaro-filter-compile','jaro-filter-legacy','abook'):
+        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-outbox','jaro-snapshot','jaro-filter','jaro-filter-compile','jaro-filter-legacy','abook'):
             self.assertTrue(os.access(self.binary/'bin'/name, os.X_OK))
         result = run([sys.executable, self.source/'build/check-static.py', '--bin-dir', self.binary/'bin', '--arch',self.arch], succeeds=False)
         self.assertNotEqual(result.returncode, 0)
@@ -175,6 +175,27 @@ exec "$JARO_REAL_CC" "$@"
         self.assertEqual(run([moved/'bin/jaro','-v'],env=self.env,cwd=self.work).stdout,'Jaro Mail v6.7.8\n')
         runtime = moved/'share/jaromail'
         self.assertTrue(os.access(runtime/'bin/jaro-outbox', os.X_OK))
+        self.assertTrue(os.access(runtime/'bin/jaro-snapshot', os.X_OK))
+        self.assertIn('Usage: jaro snapshot', run([moved/'bin/jaro','snapshot','--help'],env=self.env).stdout)
+        mail = self.work/'snapshot source'
+        for folder in ('new', 'cur', 'tmp'):
+            (mail/'inbox'/folder).mkdir(parents=True)
+        message = mail/'inbox/cur/installed message:2,S'
+        message.write_bytes(b'From: fixture@example.org\r\n\r\nexact\x00bytes\xff\r\n')
+        for folder in ('new', 'cur', 'tmp'):
+            (mail/'outbox'/folder).mkdir(parents=True)
+        queued = mail/'outbox/new/queued installed mail'
+        queued.write_bytes(b'held queued bytes\x00\xff')
+        snapshot = self.work/'installed snapshot'
+        env = dict(self.env,JAROMAILDIR=str(mail))
+        run([moved/'bin/jaro','snapshot','create',snapshot],env=env)
+        run([moved/'bin/jaro','snapshot','verify',snapshot],env=env)
+        self.assertEqual((snapshot/'messages/0').read_bytes(),message.read_bytes())
+        restored = self.work/'installed restoration'
+        run([moved/'bin/jaro','snapshot','restore',snapshot,restored],env=env)
+        self.assertEqual((restored/'inbox/cur/installed message:2,S').read_bytes(),message.read_bytes())
+        self.assertFalse((restored/'outbox').exists())
+        self.assertEqual((restored/'.jaro-recovered-outbox-0/outbox/new/queued installed mail').read_bytes(),queued.read_bytes())
         self.assertEqual((runtime/'VERSION').read_text(),'6.7.8\n')
         module = runtime/'zlibs/filters.zwc'
         # Installation removes stale precompiled Zsh modules from the real prefix.
@@ -352,6 +373,8 @@ exec "$JARO_REAL_CC" "$@"
         root=extracted/('jaromail-6.7.8-linux-'+self.arch)
         self.assertEqual(run([root/'bin/jaro','--version'],env=self.env).stdout,'Jaro Mail v6.7.8\n')
         self.assertTrue((root/'share/jaromail/bin/jaro-filter').is_file())
+        self.assertTrue((root/'share/jaromail/bin/jaro-snapshot').is_file())
+        self.assertFalse((root/'share/jaromail/bin/jaro-snapshot-test').exists())
         self.assertIn('abook v0.6.2',run([root/'share/jaromail/bin/abook','--help'],env=self.env).stdout)
         self.assertTrue((root/'share/jaromail/COPYING.txt').is_file())
         self.assertFalse((root/'share/jaromail/bin/filter-policy-driver').exists())

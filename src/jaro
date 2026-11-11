@@ -36,6 +36,22 @@ script_dir="${JAROMAILEXEC:A:h}"
 bootstrap_path="${script_dir}/zlibs/bootstrap"
 [[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../zlibs/bootstrap"
 [[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../src/zlibs/bootstrap"
+jaro_snapshot_route() {
+    while (( $# )); do
+        case "$1" in
+            -a|-l|--account|--list) (( $# >= 2 )) || return 1; shift 2 ;;
+            --) shift; break ;;
+            -*) shift ;;
+            *) break ;;
+        esac
+    done
+    [[ ${1:-} == snapshot ]]
+}
+if jaro_snapshot_route "$@"; then
+    source "${bootstrap_path:h}/snapshot" || exit 1
+    snapshot_cli "$bootstrap_path" "$@"
+    exit $?
+fi
 # Doctor must also work when version metadata or the normal framework is absent.
 jaro_doctor_route() {
     while (( $# )); do
@@ -110,6 +126,7 @@ Main commands:
  send   send all mails queued in the outbox
  outbox inspect held messages and explicitly retry or archive an ID
  doctor diagnose local setup offline without changing files
+ snapshot create, verify or restore an independent message copy
  peek   look into the [account] mailbox without downloading
  serve  run localhost IMAP over local maildirs (single-user)
  index  build or update the search index for all maildirs
@@ -170,6 +187,14 @@ a pipe | in front indicate they take an email body from stdin
 
  backup   move search results from a maildir to another one
           (string or date range matches, can use -n for dry-run)
+
+ snapshot create DEST
+          copy message bytes and flags to a new private snapshot
+          stop all mail writers first; accounts and credentials are excluded
+ snapshot verify SNAPSHOT
+          check the complete manifest and every captured message
+ snapshot restore SNAPSHOT DEST
+          restore into a fresh empty mail root; outbox is held for inspection
 
  merge    merge a source maildir into destination, then delete source
 
