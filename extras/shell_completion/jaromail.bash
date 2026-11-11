@@ -13,7 +13,9 @@ _jaro() {
       *) break ;;
     esac
   done
-  if [[ "${COMP_WORDS[command_index]}" == outbox ]] && (( COMP_CWORD > command_index )); then
+  if [[ "${COMP_WORDS[command_index]}" == doctor ]] && (( COMP_CWORD > command_index )); then
+    suggestions='--json --help'
+  elif [[ "${COMP_WORDS[command_index]}" == outbox ]] && (( COMP_CWORD > command_index )); then
     case "$previous" in
       outbox) suggestions='list retry archive' ;;
       retry|archive)
@@ -28,7 +30,7 @@ _jaro() {
       [[ -d "$path/cur" && "${path##*/}" == "$cur"* ]] && COMPREPLY+=("${path##*/}")
     done
   else
-    suggestions='fetch send outbox queue peek serve compose open update sieve sieve-import filter wizard'
+    suggestions='fetch send outbox doctor queue peek serve compose open update sieve sieve-import filter wizard'
   fi
   if [[ -n "$suggestions" ]]; then
     while IFS= read -r word; do

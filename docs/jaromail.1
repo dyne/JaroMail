@@ -190,6 +190,253 @@ Tomb
 T}
 .TE
 .SS Setup
+.SS Offline diagnostics
+Run \f[CR]jaro doctor\f[R] at any point during setup or troubleshooting,
+including before \f[CR]init\f[R] succeeds.
+Use \f[CR]jaro \-a personal doctor\f[R] for an account other than
+\f[CR]default\f[R].
+Doctor prints the resolved runtime, mail and account directories and
+version metadata, then checks all independently discoverable issues in
+one invocation.
+\f[CR]JAROWORKDIR\f[R], \f[CR]JAROMAILDIR\f[R] and
+\f[CR]JAROACCOUNT\f[R] use the same path resolution as normal startup.
+If neither the macOS default nor \f[CR]$HOME/Mail/Filters.txt\f[R]
+exists, the mail root defaults to the current directory; set
+\f[CR]JAROMAILDIR\f[R] explicitly for a new root.
+.PP
+Checks include required versus optional commands, native helpers,
+account data validation, configured transport/certificate policy,
+keyring configuration existence, Maildir permissions, filter generation
+presence, search index presence and outbox
+eligible/held/local\-recovery/invalid counts.
+Missing optional integrations are informative.
+A readable index or generation manifest does not establish freshness or
+validity.
+System trust and keyring unlock/session state remain unknown when they
+cannot be established by offline configuration checks.
+.PP
+Doctor reads local configuration without executing it, does not query
+secret stores, and never initializes, repairs, fetches, sends, indexes
+or regenerates filters.
+Outbox inspection uses the native helper\[cq]s read\-only operation and
+discloses counts without subjects, recipients, bodies or queue
+filenames.
+Stop other writers if you need stable counts; this is a snapshot without
+a queue lock.
+Credential values and raw account\-parser errors are redacted.
+.PP
+Exit status 0 means there are no blocking findings; 1 means actionable
+blocking findings remain; 2 means invalid arguments or an internal
+diagnostic failure.
+A successful offline check does not establish connectivity or credential
+validity.
+.PP
+Each finding has an ID and one of four statuses:
+.PP
+.TS
+tab(@);
+lw(23.3n) lw(23.3n) lw(23.3n).
+T{
+Status
+T}@T{
+Meaning
+T}@T{
+Exit status effect
+T}
+_
+T{
+\f[CR]ok\f[R]
+T}@T{
+The stated local check passed.
+T}@T{
+None
+T}
+T{
+\f[CR]warning\f[R]
+T}@T{
+Optional integration missing, insecure opt\-out, or derived data absent.
+T}@T{
+None
+T}
+T{
+\f[CR]blocker\f[R]
+T}@T{
+Required setup or recoverable queue issue needs action.
+T}@T{
+Exit 1
+T}
+T{
+\f[CR]unknown\f[R]
+T}@T{
+The check needs unavailable context, a live connection or a
+secret\-store query.
+T}@T{
+None
+T}
+.TE
+.PP
+Human output\[cq]s \f[CR]Next:\f[R] lines are suggestions only.
+Doctor never runs those commands.
+For example, missing account configuration suggests
+\f[CR]jaro wizard\f[R], a missing index suggests \f[CR]jaro index\f[R],
+and a held queue suggests \f[CR]jaro outbox list\f[R].
+Read the recovery instructions before retrying any held item.
+.PP
+After installing Jaromail and its required mail tools, a short setup
+flow is:
+.IP
+.EX
+export PATH=\[dq]$HOME/.local/bin:$PATH\[dq]
+export JAROMAILDIR=\[dq]$HOME/Mail\[dq]
+jaro doctor
+jaro wizard
+jaro \-a me\[at]example.org doctor
+jaro \-a me\[at]example.org fetch
+.EE
+.PP
+The first doctor may exit 1 while configuration is missing.
+Choose the intended mail root before running the wizard;
+\f[CR]jaro init\f[R] can create the root separately when doctor suggests
+it.
+Use the account filename created by the wizard in place of
+\f[CR]me\[at]example.org\f[R]; the wizard does not automatically create
+a \f[CR]default\f[R] account.
+Decline its optional reachability checks to keep setup offline.
+Review all blocking findings before fetching.
+Doctor does not verify stored credentials; use
+\f[CR]jaro \-a me\[at]example.org passwd\f[R] separately if the account
+needs a password stored in the selected keyring.
+.SS JSON diagnostics, schema version 1
+Use \f[CR]jaro doctor \-\-json\f[R] or
+\f[CR]jaro \-a personal doctor \-\-json\f[R].
+The option follows \f[CR]doctor\f[R].
+JSON uses only built\-in Zsh encoding, with no JSON utility or Python
+requirement in the installed runtime.
+Paths preserve Unicode, quotes, backslashes and control characters using
+JSON string escaping.
+Human paths use shell quoting so control characters do not act on the
+terminal.
+.PP
+The single stdout object has these fields:
+.PP
+.TS
+tab(@);
+lw(35.0n) lw(35.0n).
+T{
+Field
+T}@T{
+Type and contract
+T}
+_
+T{
+\f[CR]schema_version\f[R]
+T}@T{
+Integer \f[CR]1\f[R]; consumers must check this before interpreting
+fields.
+T}
+T{
+\f[CR]paths\f[R]
+T}@T{
+Object with string \f[CR]runtime\f[R], \f[CR]mail\f[R],
+\f[CR]accounts\f[R] and \f[CR]account\f[R] (resolved selected
+account\-file path); \f[CR]null\f[R] if path resolution was not reached.
+T}
+T{
+\f[CR]checks\f[R]
+T}@T{
+Array of findings, each with string \f[CR]id\f[R], \f[CR]status\f[R],
+\f[CR]explanation\f[R] and \f[CR]next_action\f[R].
+IDs are unique within a report.
+T}
+T{
+\f[CR]exit_status\f[R]
+T}@T{
+Integer matching the process exit status: 0, 1 or 2.
+T}
+.TE
+.PP
+Each finding\[cq]s \f[CR]status\f[R] is \f[CR]ok\f[R],
+\f[CR]warning\f[R], \f[CR]blocker\f[R] or \f[CR]unknown\f[R], as above.
+\f[CR]explanation\f[R] describes only the stated observation, with
+private account values, raw parser diagnostics and message content
+redacted.
+\f[CR]next_action\f[R] is a suggestion string, empty when no action is
+needed.
+It is never executable input.
+Paths are explicitly disclosed; review them before sharing a report.
+Wording, array order, and additional fields may change; consume IDs and
+statuses instead of parsing explanations.
+Outbox counts describe only the observed queue snapshot.
+.PP
+Normal reports contain the following stable IDs, including unavailable
+checks:
+.PP
+.TS
+tab(@);
+lw(35.0n) lw(35.0n).
+T{
+IDs
+T}@T{
+Coverage
+T}
+_
+T{
+\f[CR]paths\f[R], \f[CR]runtime\f[R], \f[CR]version\f[R]
+T}@T{
+Resolved paths, core modules and assigned version metadata.
+T}
+T{
+\f[CR]command.NAME\f[R]
+T}@T{
+Required \f[CR]zsh\f[R], \f[CR]fetchmail\f[R], \f[CR]msmtp\f[R],
+\f[CR]gpg\f[R], \f[CR]pinentry\f[R], \f[CR]notmuch\f[R],
+\f[CR]maddr\f[R], \f[CR]mdeliver\f[R], \f[CR]mpick\f[R],
+\f[CR]openssl\f[R], \f[CR]awk\f[R], \f[CR]sed\f[R], \f[CR]grep\f[R],
+\f[CR]find\f[R], \f[CR]hostname\f[R], \f[CR]sqlite3\f[R];
+\f[CR]command.mutt\f[R] accepts Mutt or NeoMutt.
+T}
+T{
+\f[CR]optional.NAME\f[R]
+T}@T{
+Optional \f[CR]pass\f[R], \f[CR]secret\-tool\f[R], \f[CR]wipe\f[R],
+\f[CR]srm\f[R], \f[CR]alot\f[R], \f[CR]mixmaster\f[R], \f[CR]nc\f[R],
+\f[CR]tomb\f[R].
+A selected keyring can separately require one of these.
+T}
+T{
+\f[CR]helper.NAME\f[R]
+T}@T{
+Native \f[CR]fetchaddr\f[R], \f[CR]parsedate\f[R], \f[CR]dotlock\f[R],
+\f[CR]gpgewrap\f[R], \f[CR]abook\f[R], \f[CR]jaro\-filter\-compile\f[R],
+\f[CR]jaro\-filter\-legacy\f[R], \f[CR]jaro\-filter\f[R],
+\f[CR]jaro\-outbox\f[R].
+T}
+T{
+\f[CR]mail.root\f[R], \f[CR]maildirs\f[R]
+T}@T{
+Mail\-root access and discovered Maildir layouts/permissions.
+T}
+T{
+\f[CR]account\f[R], \f[CR]trust\f[R], \f[CR]keyring\f[R]
+T}@T{
+Data validation and offline configuration checks, without account values
+or credential retrieval.
+T}
+T{
+\f[CR]filters\f[R], \f[CR]index\f[R], \f[CR]outbox\f[R]
+T}@T{
+Generation/index presence and queue inspection.
+T}
+.TE
+.PP
+Invalid parsed invocations return an \f[CR]invocation\f[R] blocker with
+exit status 2.
+Internal diagnostic failures use \f[CR]diagnostic\f[R], retain earlier
+findings where possible, and return 2.
+Failure before loading the diagnostic module can only produce a stderr
+error and exit 2; consumers must handle absent/invalid JSON as a failed
+diagnostic.
+\f[CR]doctor \-\-help\f[R] prints usage instead of JSON and exits 0.
 .SS Build
 Native helpers are built with CMake 3.20+, Python 3.9+, a C compiler,
 and Ninja or Make.

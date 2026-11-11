@@ -79,6 +79,113 @@ locally:
 
 ## Setup
 
+### Offline diagnostics
+
+Run `jaro doctor` at any point during setup or troubleshooting, including before
+`init` succeeds. Use `jaro -a personal doctor` for an account other than `default`.
+Doctor prints the resolved runtime, mail and account directories and version
+metadata, then checks all independently discoverable issues in one invocation.
+`JAROWORKDIR`, `JAROMAILDIR` and `JAROACCOUNT` use the same path resolution as
+normal startup. If neither the macOS default nor `$HOME/Mail/Filters.txt` exists,
+the mail root defaults to the current directory; set `JAROMAILDIR` explicitly for
+a new root.
+
+Checks include required versus optional commands, native helpers, account data
+validation, configured transport/certificate policy, keyring configuration
+existence, Maildir permissions, filter generation presence, search index presence
+and outbox eligible/held/local-recovery/invalid counts. Missing optional
+integrations are informative. A readable index or generation manifest does not
+establish freshness or validity. System trust and keyring unlock/session state
+remain unknown when they cannot be established by offline configuration checks.
+
+Doctor reads local configuration without executing it, does not query secret
+stores, and never initializes, repairs, fetches, sends, indexes or regenerates
+filters. Outbox inspection uses the native helper's read-only operation and
+discloses counts without subjects, recipients, bodies or queue filenames. Stop
+other writers if you need stable counts; this is a snapshot without a queue lock.
+Credential values and raw account-parser errors are redacted.
+
+Exit status 0 means there are no blocking findings; 1 means actionable blocking
+findings remain; 2 means invalid arguments or an internal diagnostic failure.
+A successful offline check does not establish connectivity or credential validity.
+
+Each finding has an ID and one of four statuses:
+
+| Status | Meaning | Exit status effect |
+| --- | --- | --- |
+| `ok` | The stated local check passed. | None |
+| `warning` | Optional integration missing, insecure opt-out, or derived data absent. | None |
+| `blocker` | Required setup or recoverable queue issue needs action. | Exit 1 |
+| `unknown` | The check needs unavailable context, a live connection or a secret-store query. | None |
+
+Human output's `Next:` lines are suggestions only. Doctor never runs those
+commands. For example, missing account configuration suggests `jaro wizard`, a
+missing index suggests `jaro index`, and a held queue suggests `jaro outbox list`.
+Read the recovery instructions before retrying any held item.
+
+After installing Jaromail and its required mail tools, a short setup flow is:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+export JAROMAILDIR="$HOME/Mail"
+jaro doctor
+jaro wizard
+jaro -a me@example.org doctor
+jaro -a me@example.org fetch
+```
+
+The first doctor may exit 1 while configuration is missing. Choose the intended
+mail root before running the wizard; `jaro init` can create the root separately
+when doctor suggests it. Use the account filename created by the wizard in place
+of `me@example.org`; the wizard does not automatically create a `default` account.
+Decline its optional reachability checks to keep setup offline. Review all
+blocking findings before fetching. Doctor does not verify stored credentials;
+use `jaro -a me@example.org passwd` separately if the account needs a password
+stored in the selected keyring.
+
+#### JSON diagnostics, schema version 1
+
+Use `jaro doctor --json` or `jaro -a personal doctor --json`. The option follows
+`doctor`. JSON uses only built-in Zsh encoding, with no JSON utility or Python
+requirement in the installed runtime. Paths preserve Unicode, quotes, backslashes
+and control characters using JSON string escaping. Human paths use shell quoting
+so control characters do not act on the terminal.
+
+The single stdout object has these fields:
+
+| Field | Type and contract |
+| --- | --- |
+| `schema_version` | Integer `1`; consumers must check this before interpreting fields. |
+| `paths` | Object with string `runtime`, `mail`, `accounts` and `account` (resolved selected account-file path); `null` if path resolution was not reached. |
+| `checks` | Array of findings, each with string `id`, `status`, `explanation` and `next_action`. IDs are unique within a report. |
+| `exit_status` | Integer matching the process exit status: 0, 1 or 2. |
+
+Each finding's `status` is `ok`, `warning`, `blocker` or `unknown`, as above.
+`explanation` describes only the stated observation, with private account values,
+raw parser diagnostics and message content redacted. `next_action` is a suggestion
+string, empty when no action is needed. It is never executable input. Paths are
+explicitly disclosed; review them before sharing a report. Wording, array order,
+and additional fields may change; consume IDs and statuses instead of parsing
+explanations. Outbox counts describe only the observed queue snapshot.
+
+Normal reports contain the following stable IDs, including unavailable checks:
+
+| IDs | Coverage |
+| --- | --- |
+| `paths`, `runtime`, `version` | Resolved paths, core modules and assigned version metadata. |
+| `command.NAME` | Required `zsh`, `fetchmail`, `msmtp`, `gpg`, `pinentry`, `notmuch`, `maddr`, `mdeliver`, `mpick`, `openssl`, `awk`, `sed`, `grep`, `find`, `hostname`, `sqlite3`; `command.mutt` accepts Mutt or NeoMutt. |
+| `optional.NAME` | Optional `pass`, `secret-tool`, `wipe`, `srm`, `alot`, `mixmaster`, `nc`, `tomb`. A selected keyring can separately require one of these. |
+| `helper.NAME` | Native `fetchaddr`, `parsedate`, `dotlock`, `gpgewrap`, `abook`, `jaro-filter-compile`, `jaro-filter-legacy`, `jaro-filter`, `jaro-outbox`. |
+| `mail.root`, `maildirs` | Mail-root access and discovered Maildir layouts/permissions. |
+| `account`, `trust`, `keyring` | Data validation and offline configuration checks, without account values or credential retrieval. |
+| `filters`, `index`, `outbox` | Generation/index presence and queue inspection. |
+
+Invalid parsed invocations return an `invocation` blocker with exit status 2.
+Internal diagnostic failures use `diagnostic`, retain earlier findings where
+possible, and return 2. Failure before loading the diagnostic module can only
+produce a stderr error and exit 2; consumers must handle absent/invalid JSON as a
+failed diagnostic. `doctor --help` prints usage instead of JSON and exits 0.
+
 ### Build
 
 Native helpers are built with CMake 3.20+, Python 3.9+, a C compiler, and Ninja

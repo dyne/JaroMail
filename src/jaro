@@ -36,6 +36,27 @@ script_dir="${JAROMAILEXEC:A:h}"
 bootstrap_path="${script_dir}/zlibs/bootstrap"
 [[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../zlibs/bootstrap"
 [[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../src/zlibs/bootstrap"
+# Doctor must also work when version metadata or the normal framework is absent.
+jaro_doctor_route() {
+    while (( $# )); do
+        case "$1" in
+            -a|-l|--account|--list) (( $# >= 2 )) || return 1; shift 2 ;;
+            --) shift; break ;;
+            -*) shift ;;
+            *) break ;;
+        esac
+    done
+    [[ ${1:-} == doctor ]]
+}
+if jaro_doctor_route "$@"; then
+    [[ -r "${bootstrap_path:h}/doctor" ]] || {
+        print -u2 -- 'doctor: diagnostic module missing; reinstall Jaromail'
+        exit 2
+    }
+    source "${bootstrap_path:h}/doctor" || exit 2
+    doctor_cli "$bootstrap_path" "$@"
+    exit $?
+fi
 source "${bootstrap_path:h}/version" || exit 1
 jaromail_version "$script_dir" || exit $?
 VERSION="$REPLY"
@@ -88,6 +109,7 @@ Main commands:
  fetch  download unread emails from [account]
  send   send all mails queued in the outbox
  outbox inspect held messages and explicitly retry or archive an ID
+ doctor diagnose local setup offline without changing files
  peek   look into the [account] mailbox without downloading
  serve  run localhost IMAP over local maildirs (single-user)
  index  build or update the search index for all maildirs
@@ -133,6 +155,9 @@ a pipe | in front indicate they take an email body from stdin
 
  passwd   set [account]'s passwords in the OS native keyring
  wizard   interactive setup for a new account configuration
+ doctor [--json]
+          read-only setup checks; use -a to select an account
+          --json emits schema version 1 with stable check IDs
 
 |queue    read a mail from stdin and queue it in outbox/ for sending
 

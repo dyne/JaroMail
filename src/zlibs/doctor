@@ -1,0 +1,320 @@
+#!/usr/bin/env zsh
+# Deliberately independent of the normal framework, initialization and keyrings.
+# External work is limited to source-version resolution (when available) and
+# the native outbox helper's read-only inspect operation.
+
+doctor_usage() {
+    print -r -- 'Usage: jaro [-a ACCOUNT] doctor [--json]'
+}
+
+doctor_check() {
+    local check_id="$1" check_status="$2" explanation="$3" action="$4"
+    [[ $check_status != blocker ]] || doctor_result=1
+    doctor_ids+=("$check_id")
+    doctor_statuses+=("$check_status")
+    doctor_explanations+=("$explanation")
+    doctor_actions+=("$action")
+}
+
+doctor_json_string() {
+    # JSON encoding uses only Zsh builtins, even in a broken/empty PATH. Keep
+    # UTF-8 bytes intact; escape quotes, backslashes and every ASCII control.
+    local value="$1" char code i
+    print -rn -- '"'
+    for (( i=1; i <= ${#value}; i++ )); do
+        char="${value[i]}"
+        case "$char" in
+            '"') print -rn -- '\"' ;;
+            '\') print -rn -- '\\' ;;
+            *)
+                builtin printf -v code '%d' "'$char"
+                if (( code < 32 )); then builtin printf '\\u%04x' "$code"
+                else print -rn -- "$char"; fi ;;
+        esac
+    done
+    print -rn -- '"'
+}
+
+doctor_emit() {
+    local result="$1" i
+    if (( doctor_json )); then
+        print -rn -- '{"schema_version":1,"paths":'
+        if (( doctor_paths_ready )); then
+            print -rn -- '{"runtime":'; doctor_json_string "$doctor_runtime"
+            print -rn -- ',"mail":'; doctor_json_string "$doctor_mail"
+            print -rn -- ',"accounts":'; doctor_json_string "$doctor_accounts"
+            print -rn -- ',"account":'; doctor_json_string "$doctor_account_file"
+            print -rn -- '}'
+        else print -rn -- null; fi
+        print -rn -- ',"checks":['
+        for (( i=1; i <= ${#doctor_ids}; i++ )); do
+            (( i == 1 )) || print -rn -- ','
+            print -rn -- '{"id":'; doctor_json_string "$doctor_ids[i]"
+            print -rn -- ',"status":'; doctor_json_string "$doctor_statuses[i]"
+            print -rn -- ',"explanation":'; doctor_json_string "$doctor_explanations[i]"
+            print -rn -- ',"next_action":'; doctor_json_string "$doctor_actions[i]"
+            print -rn -- '}'
+        done
+        print -r -- "],\"exit_status\":$result}"
+    else
+        for (( i=1; i <= ${#doctor_ids}; i++ )); do
+            print -r -- "$doctor_statuses[i] [$doctor_ids[i]] $doctor_explanations[i]"
+            [[ -z $doctor_actions[i] ]] || print -r -- "  Next: $doctor_actions[i]"
+        done
+    fi
+}
+
+doctor_directory() {
+    local target="$1"
+    [[ -d $target && -r $target && -x $target ]]
+}
+
+doctor_helper() {
+    REPLY="$WORKDIR/bin/$1"
+    # A source checkout keeps built helpers outside src/.
+    if [[ ! -x $REPLY && -r "$WORKDIR/../CMakeLists.txt" ]]; then
+        REPLY="$WORKDIR/../build/gnu/$1"
+    fi
+    [[ -f $REPLY && -x $REPLY ]]
+}
+
+doctor_account() {
+    local account_file="$ACCOUNTS/$account"
+    [[ -e $account_file || -L $account_file ]] || account_file+='.txt'
+    if [[ ! -f $account_file || ! -r $account_file ]]; then
+        doctor_check account blocker 'Selected account is missing or unreadable.' 'Run jaro wizard, or check -a ACCOUNT and JAROACCOUNT.'
+        doctor_check trust unknown 'Trust configuration requires a valid account.' 'Review the selected account configuration.'
+        return
+    fi
+    if [[ ! -r "$WORKDIR/zlibs/accounts" ]]; then
+        doctor_check account blocker 'Account validation module is missing.' 'Reinstall Jaromail.'
+        doctor_check trust unknown 'Trust configuration cannot be validated.' 'Reinstall Jaromail.'
+        return
+    fi
+    # The shared parser treats values as data. Suppress its diagnostics because
+    # unknown directive names and filenames may themselves contain private text.
+    source "$WORKDIR/zlibs/accounts" || return 2
+    error() { :; }
+    if ! _account_load_file "$account_file" >/dev/null 2>&1; then
+        doctor_check account blocker 'Selected account has invalid configuration (details redacted).' 'Review account grammar and hosts/ports in the manual.'
+        doctor_check trust unknown 'Trust configuration requires a valid account.' 'Correct the account configuration.'
+        return
+    fi
+    doctor_check account ok 'Selected account passes data-format and host/port validation.' ''
+    case "$transport" in
+        TLS1|tls|implicit|SSL2|SSL23|SSL3|ssl|starttls) ;;
+        plain)
+            doctor_check trust warning 'Explicit plaintext transport; credentials are unencrypted.' 'Set transport TLS1 or starttls and cert check in the account.'
+            return ;;
+        *)
+            doctor_check trust blocker 'Unsupported account transport (value redacted).' 'Set a documented account transport.'
+            return ;;
+    esac
+    case "$cert" in
+        check)
+            if [[ -n $certfile && ( ! -f $certfile || ! -r $certfile ) ]]; then
+                doctor_check trust blocker 'Configured CA file is missing or unreadable (path redacted).' 'Correct certfile in the selected account.'
+            elif [[ -n $certfile ]]; then
+                doctor_check trust ok 'Certificate checking uses a readable custom CA file; no handshake performed.' ''
+            else
+                doctor_check trust unknown 'Certificate checking uses system trust; certificates and peer identity were not tested offline.' 'Use a trusted system CA configuration.'
+            fi ;;
+        ignore) doctor_check trust warning 'Certificate verification is disabled by cert ignore.' 'Set cert check and configure trusted CA certificates.' ;;
+        *) doctor_check trust blocker 'Unsupported certificate policy (value redacted).' 'Set cert check in the selected account.' ;;
+    esac
+    unset password
+}
+
+doctor_keyring() {
+    local backend="${JARO_KEYRING:-}" store="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
+    if [[ -z $backend ]]; then
+        if (( $+commands[pass] )); then backend=pass
+        elif (( $+commands[secret-tool] )); then backend=secret-tool
+        else
+            doctor_check keyring unknown 'No explicit keyring; daemon state is not inspected.' 'Set JARO_KEYRING to pass, secret-tool or gnome-keyring.'
+            return
+        fi
+    fi
+    case "$backend" in
+        pass)
+            if (( ! $+commands[pass] )); then
+                doctor_check keyring blocker 'Configured pass command is missing.' 'Install pass for the selected keyring.'
+            elif [[ ! -f "$store/.gpg-id" || ! -r "$store/.gpg-id" ]]; then
+                doctor_check keyring blocker 'Pass configuration .gpg-id is missing or unreadable; store was not opened.' 'Initialize your chosen pass store with pass init GPG-ID.'
+            else
+                doctor_check keyring ok 'Pass configuration exists; keys and credentials were not accessed.' ''
+            fi ;;
+        secret-tool|gnome-keyring)
+            local executable=secret-tool
+            [[ $backend != gnome-keyring ]] || executable=gnome-keyring-daemon
+            if (( $+commands[$executable] )); then
+                doctor_check keyring unknown 'Selected keyring command exists; session/unlock state was not queried.' 'Use jaro -a ACCOUNT passwd after setup if credentials are needed.'
+            else
+                doctor_check keyring blocker 'Selected keyring command is missing.' 'Install the selected keyring integration or change JARO_KEYRING.'
+            fi ;;
+        *) doctor_check keyring blocker 'Unknown selected keyring (value redacted).' 'Set JARO_KEYRING to pass, secret-tool or gnome-keyring.' ;;
+    esac
+}
+
+doctor_outbox() {
+    local outbox_helper REPLY entry report item_status rc held=0 eligible=0 recovery=0 invalid=0
+    local -a entries fields
+    if ! doctor_directory "$MAILDIRS/outbox/new" || ! doctor_directory "$MAILDIRS/outbox/cur"; then
+        doctor_check outbox unknown 'Outbox counts unavailable: Maildir is missing or unreadable.' 'Check the outbox Maildir after jaro init.'
+        return
+    fi
+    if ! doctor_helper jaro-outbox; then
+        doctor_check outbox unknown 'Outbox counts require the missing native jaro-outbox helper.' 'Build or reinstall Jaromail.'
+        return
+    fi
+    outbox_helper="$REPLY"
+    entries=("$MAILDIRS"/outbox/{new,cur}/*(DN))
+    for entry in "${entries[@]}"; do
+        if [[ ! -f $entry || -L $entry ]]; then (( invalid += 1 )); continue; fi
+        rc=0
+        report=$("$outbox_helper" inspect "$MAILDIRS" "${entry:h:t}/${entry:t}" 2>/dev/null) || rc=$?
+        fields=( ${=report} )
+        if (( rc != 0 || ${#fields} != 3 )); then (( invalid += 1 )); continue; fi
+        item_status="$fields[2]"
+        case "$item_status" in
+            eligible|prepared) (( eligible += 1 )) ;;
+            inflight|uncertain) (( held += 1 )) ;;
+            accepted|verified|complete) (( recovery += 1 )) ;;
+            *) (( invalid += 1 )) ;;
+        esac
+    done
+    local finding=ok
+    (( held + invalid + recovery == 0 )) || finding=blocker
+    doctor_check outbox "$finding" "Queue snapshot: eligible=$eligible held=$held local-recovery=$recovery invalid=$invalid; no message details shown." 'Run jaro outbox list; reconcile held items using the recovery manual.'
+}
+
+doctor_run() {
+    setopt localoptions extendedglob
+    local bootstrap="$1" account=default REPLY command_name invalid=0
+    local WORKDIR MAILDIRS ACCOUNTS
+    shift
+    while (( $# )); do
+        case "$1" in
+            -a|--account)
+                (( $# >= 2 )) && [[ -n $2 && $2 != */* && $2 != . && $2 != .. ]] || return 2
+                account="$2"; shift 2 ;;
+            -q|--quiet|-D|--debug) shift ;;
+            --) shift; break ;;
+            *) break ;;
+        esac
+    done
+    [[ ${1:-} == doctor ]] || return 2
+    shift
+    while (( $# )); do
+        case "$1" in
+            --json) doctor_json=1 ;;
+            -h|--help) doctor_help=1 ;;
+            *) invalid=1 ;;
+        esac
+        shift
+    done
+    (( !invalid )) || return 2
+    (( !doctor_help )) || return 0
+    # This source route resolves paths and returns before loading the framework.
+    [[ -r $bootstrap ]] && source "$bootstrap" doctor || {
+        doctor_check diagnostic blocker 'Path resolver is missing or failed.' 'Reinstall Jaromail.'
+        return 2
+    }
+    WORKDIR="${WORKDIR:A}" MAILDIRS="${MAILDIRS:A}" ACCOUNTS="${ACCOUNTS:A}"
+    # Quote controls in public paths for safe terminal output. Account *contents*
+    # (including certfile and password-store paths) are never rendered.
+    local selected_account="$ACCOUNTS/$account"
+    [[ -e $selected_account || -L $selected_account ]] || selected_account+='.txt'
+    doctor_paths_ready=1
+    doctor_runtime="$WORKDIR" doctor_mail="$MAILDIRS" doctor_accounts="$ACCOUNTS" doctor_account_file="$selected_account"
+    doctor_check paths ok "Runtime: ${(qqqq)WORKDIR}; mail: ${(qqqq)MAILDIRS}; accounts: ${(qqqq)ACCOUNTS}; selected account: ${(qqqq)selected_account}" ''
+    if [[ -r "$WORKDIR/zlibs/accounts" && ( -r "$WORKDIR/zlibs/zuper" || -r "$WORKDIR/zuper/zuper" ) ]]; then
+        doctor_check runtime ok 'Core runtime modules are present.' ''
+    else doctor_check runtime blocker 'Core runtime modules are missing or unreadable.' 'Build or reinstall Jaromail.'; fi
+    if [[ -r "${bootstrap:h}/version" ]] && source "${bootstrap:h}/version" &&
+       jaromail_version "${JAROMAILEXEC:A:h}" >/dev/null 2>&1; then
+        doctor_check version ok "Version: $REPLY" ''
+    else doctor_check version blocker 'Version metadata/module is missing or invalid (details redacted).' 'Reinstall Jaromail.'; fi
+    # Availability only: never execute a dependency to discover its version.
+    local -a required=(zsh fetchmail msmtp gpg pinentry notmuch maddr mdeliver mpick openssl awk sed grep find hostname sqlite3)
+    local -a optional=(pass secret-tool wipe srm alot mixmaster nc tomb)
+    for command_name in "${required[@]}"; do
+        if (( $+commands[$command_name] )); then doctor_check "command.$command_name" ok "Required command $command_name is available." ''
+        else doctor_check "command.$command_name" blocker "Required command $command_name is missing." "Install $command_name."; fi
+    done
+    if (( $+commands[mutt] || $+commands[neomutt] )); then doctor_check command.mutt ok 'Required Mutt or NeoMutt is available.' ''
+    else doctor_check command.mutt blocker 'Required Mutt or NeoMutt is missing.' 'Install mutt or neomutt.'; fi
+    for command_name in "${optional[@]}"; do
+        if (( $+commands[$command_name] )); then doctor_check "optional.$command_name" ok "Optional command $command_name is available." ''
+        else doctor_check "optional.$command_name" warning "Optional command $command_name is unavailable." ''; fi
+    done
+    for command_name in fetchaddr parsedate dotlock gpgewrap abook jaro-filter-compile jaro-filter-legacy jaro-filter jaro-outbox; do
+        if doctor_helper "$command_name"; then doctor_check "helper.$command_name" ok "Native helper $command_name is available." ''
+        else doctor_check "helper.$command_name" blocker "Native helper $command_name is missing." 'Build or reinstall Jaromail.'; fi
+    done
+    if doctor_directory "$MAILDIRS"; then
+        if [[ -w $MAILDIRS ]]; then doctor_check mail.root ok 'Mail root is readable, searchable and writable.' ''
+        else doctor_check mail.root blocker 'Mail root is not writable for normal mail operations.' 'Review mail-root ownership and permissions.'; fi
+    else doctor_check mail.root blocker 'Mail root is absent or unreadable/unsearchable.' 'Set JAROMAILDIR; run jaro init when ready to create a mail root.'; fi
+    local -a maildirs=("$MAILDIRS"/*(/N))
+    local maildir part bad=0 found=0
+    for maildir in "${maildirs[@]}"; do
+        if ! doctor_directory "$maildir"; then (( bad += 1 )); continue; fi
+        [[ -e "$maildir/new" || -e "$maildir/cur" || -e "$maildir/tmp" ]] || continue
+        (( found += 1 ))
+        for part in new cur tmp; do
+            doctor_directory "$maildir/$part" && [[ -w "$maildir/$part" ]] || (( bad += 1 ))
+        done
+    done
+    if (( bad )); then doctor_check maildirs blocker 'One or more Maildir directories are missing or lack read/search/write permissions (names redacted).' 'Review Maildir new/cur/tmp permissions.'
+    elif (( found )); then doctor_check maildirs ok "Readable Maildir layouts: $found." ''
+    else doctor_check maildirs warning 'No Maildir layouts discovered.' 'Run jaro init after choosing the mail root.'; fi
+    doctor_account || return 2
+    doctor_keyring
+    if [[ ! -r "$MAILDIRS/Filters.txt" || ! -f "$MAILDIRS/Filters.txt" ]]; then
+        doctor_check filters blocker 'Filter policy is missing or unreadable.' 'Run jaro init for a new root; review existing policy before jaro update.'
+    elif [[ ${JARO_FILTER_ENGINE-native} == native ]]; then
+        if [[ -r "$MAILDIRS/cache/filter-engine/current/manifest.json" ]]; then
+            doctor_check filters unknown 'Native generation manifest exists; content validity and freshness were not checked.' 'Run jaro -n filter --explain or jaro update after reviewing policy.'
+        else doctor_check filters warning 'No readable native generation manifest.' 'Run jaro update after reviewing policy.'; fi
+    elif [[ ${JARO_FILTER_ENGINE-native} == legacy ]]; then
+        doctor_check filters unknown 'Legacy policy exists; generated cache validity was not checked.' 'Run jaro update after reviewing policy.'
+    else doctor_check filters blocker 'Invalid filter engine selection (value redacted).' 'Set JARO_FILTER_ENGINE to native or legacy.'; fi
+    if [[ -d "$MAILDIRS/.notmuch/xapian" ]]; then
+        doctor_check index unknown 'Search index exists; index freshness was not assessed.' 'Run jaro index if an index refresh is needed.'
+    else doctor_check index warning 'Search index is absent.' 'Run jaro index after configuring mail.'; fi
+    doctor_outbox
+    return $doctor_result
+}
+
+doctor_cli() {
+    local doctor_json=0 doctor_help=0 doctor_result=0 result=0 doctor_paths_ready=0
+    local doctor_runtime doctor_mail doctor_accounts doctor_account_file
+    local -a doctor_ids=() doctor_statuses=() doctor_explanations=() doctor_actions=()
+    # Retain the requested format even when global account validation fails.
+    # Skip account/list values just as the entrypoint's route selector does.
+    local -a invocation=("$@")
+    local position=2 i
+    while (( position <= ${#invocation} )); do
+        case "$invocation[position]" in
+            -a|-l|--account|--list) (( position += 2 )) ;;
+            --) (( position += 1 )); break ;;
+            -*) (( position += 1 )) ;;
+            *) break ;;
+        esac
+    done
+    if [[ ${invocation[position]:-} == doctor ]]; then
+        for (( i=position+1; i <= ${#invocation}; i++ )); do
+            [[ $invocation[i] != --json ]] || doctor_json=1
+        done
+    fi
+    doctor_run "$@" || result=$?
+    if (( result == 2 && ${#doctor_ids} == 0 )); then
+        doctor_check invocation blocker 'Usage: jaro [-a ACCOUNT] doctor [--json]' 'Correct the arguments; diagnostic options follow doctor.'
+    elif (( result == 2 )) && [[ ${doctor_ids[-1]:-} != diagnostic ]]; then
+        doctor_check diagnostic blocker 'An internal diagnostic failed; earlier findings are retained.' 'Check or reinstall the Jaromail runtime.'
+    fi
+    if (( doctor_help && result == 0 )); then doctor_usage || return 2
+    else doctor_emit "$result" || return 2; fi
+    return $result
+}
