@@ -211,6 +211,32 @@ that will be added to the mails sent. For more information about the
 vast amount of configurations supported please refer to the Mutt
 documentation[^1].
 
+Account files are data, not shell programs. Use one directive and its value per
+line. Blank lines and comments beginning with `#` are ignored; an unquoted `#`
+after whitespace begins an inline comment. Single and double quotes preserve
+spaces, and a backslash quotes the next character outside single quotes. For
+example, `name "Alice O'Connor"` and `folders INBOX "Work projects"` preserve
+the name and folder boundaries. Variables, command substitutions and wildcards
+remain literal. Configurations that relied on executing shell expressions must
+be changed manually to contain their literal values.
+
+Unknown directives, malformed quotes, unsupported protocols, invalid hosts and
+ports outside 1–65535 produce errors with the account filename and line number.
+Repeated directives replace earlier values; repeated `my_hdr` lines accumulate
+for Mutt. The historical `host` and `port` aliases remain supported. Passwords,
+ports, options and folder lists are reset when selecting another account. The
+complete directive list, quoting grammar and defaults are in
+`Accounts/README.txt`, shipped beside the default account template.
+
+`jaro wizard` accepts literal display names and logins and adds account-file
+quoting automatically. It shares the parser's host and port validation, writes
+a private staging file with mode 0600, and parses that file before publishing
+it. Publication requires the standard `link` and `mktemp` utilities and
+hard-link support in the account directory. Existing files, directories and
+symlinks, including `.txt` accounts, are preserved. Invalid or incomplete input
+leaves no new account file or staging file. Type names normally at the prompts;
+do not add the account-file quotes yourself.
+
 ### Organization
 
 One of the main goals for Jaro Mail is to organize the e-mail workflow

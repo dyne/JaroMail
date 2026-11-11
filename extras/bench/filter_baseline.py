@@ -43,7 +43,7 @@ def make_fixture(root, rules, messages):
     (root / "Accounts").mkdir()
     (root / "cache").mkdir()
     (root / "Accounts/default.txt").write_text(
-        "name Benchmark Fixture\nemail own@example.net\nlogin own@example.net\n")
+        "name Benchmark Fixture\nemail own@example.net\nlogin own@example.net\nimap fixture.invalid\n")
     half = rules // 2
     text = [f"from ^from{i:04d}@example[.]org$ move from-routes" for i in range(half)]
     text += [f"to ^to{i:04d}@example[.]org$ move route-{i % 2}" for i in range(half)]
