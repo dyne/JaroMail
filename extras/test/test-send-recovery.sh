@@ -2,12 +2,14 @@
 source "${0:A:h}/lib/module_helpers.zsh"
 source "$repo_root/src/zlibs/email"
 
-# Build the compile-time fault variant through the real CMake target. No fault
-# environment variable is interpreted by the installed production helper.
-if ! python3 "$repo_root/build/cmake-build.py" --testing --target jaro-outbox-test > "$tmp_root/build.log" 2>&1; then
-  cat "$tmp_root/build.log"
-  exit 1
-fi
+# Build both variants in the source checkout, independent of the caller's cwd
+# and earlier fixtures. The production helper must ignore fault controls.
+for target in jaro-outbox jaro-outbox-test; do
+  if ! python3 "$repo_root/build/cmake-build.py" --output-dir "$repo_root/build/gnu" --testing --target "$target" > "$tmp_root/build.log" 2>&1; then
+    cat "$tmp_root/build.log"
+    exit 1
+  fi
+done
 helper="$repo_root/build/gnu/jaro-outbox-test"
 outbox_state() { "$helper" "$1" "$MAILDIRS" "$2"; }
 lock() { return 0; }; unlock() { return 0; }
