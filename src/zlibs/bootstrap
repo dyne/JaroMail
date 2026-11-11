@@ -27,6 +27,18 @@ bootstrap_root="${bootstrap_file:A:h:h}"
         fi
     fi
 
+    # Path resolution is shared with doctor; everything below its return belongs
+    # to normal startup and may initialize files or consult credential stores.
+    MAILDIRS="$PWD"
+    if [[ -r /Applications/JaroMail.app ]]; then
+        MAILDIRS="$HOME/Library/Application Support/JaroMail"
+    elif [[ -r "$HOME/Mail/Filters.txt" ]]; then
+        MAILDIRS="$HOME/Mail"
+    fi
+    MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
+    ACCOUNTS=${JAROACCOUNT:-$MAILDIRS/Accounts}
+    [[ ${1:-} != doctor ]] || return 0
+
     # Abort early if no valid runtime path can be found.
     if [[ ! -d "$WORKDIR/zlibs" ]]; then
         print -u2 "Cannot find Jaro Mail runtime in WORKDIR: ${WORKDIR}"
@@ -145,22 +157,8 @@ bootstrap_root="${bootstrap_file:A:h:h}"
     # which command to use when creating dirs
     mkdir="`command -v mkdir` -m 700 -p"
 
-    MAILDIRS="$PWD"
-    # check if we are on OSX
-    if [ -r /Applications/JaroMail.app ]; then
-        MAILDIRS="$HOME/Library/Application Support/JaroMail"
-    # else use GNU/Linux default
-    elif [ -r "$HOME/Mail/Filters.txt" ]; then
-        MAILDIRS="$HOME/Mail"
-    fi
-    # end override
-    MAILDIRS=${JAROMAILDIR:-$MAILDIRS}
-
     # default addressbook
     ADDRESSBOOK="whitelist.abook"
-
-    ACCOUNTS="$MAILDIRS/Accounts"
-    ACCOUNTS=${JAROACCOUNT:-$ACCOUNTS}
 
     act "System in $WORKDIR"
     act "Mail in $MAILDIRS"

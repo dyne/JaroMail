@@ -88,6 +88,22 @@ Ambiguous dry\-run proposals and unsupported files fail; this command
 does not infer a legacy winner from proposal text.
 .SS Commands
 .SS Core mail flow
+\f[CR]doctor [\-\-json]\f[R] report local setup problems without
+initialization, network requests, credential retrieval or repair.
+\f[CR]jaro \-a ACCOUNT doctor\f[R] checks a selected account.
+It continues through independently discoverable problems even if mail
+tools or version metadata are missing.
+Exit status is 0 when there are no blocking findings, 1 for actionable
+blockers, and 2 for invalid invocation or an internal diagnostic
+failure.
+Human output suggests commands without running them.
+\f[CR]\-\-json\f[R] emits schema version 1 with stable check IDs,
+status, redacted \f[CR]explanation\f[R] and \f[CR]next_action\f[R]
+strings, resolved paths and \f[CR]exit_status\f[R].
+Warnings and unknown checks do not make the exit status nonzero.
+See the manual\[cq]s offline diagnostics section for the complete schema
+and setup flow.
+.PP
 \f[CR]wizard\f[R] interactive account setup.
 .PP
 \f[CR]fetch\f[R] fetch unread messages for an account.

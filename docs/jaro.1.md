@@ -76,6 +76,17 @@ fail; this command does not infer a legacy winner from proposal text.
 
 ### Core mail flow
 
+`doctor [--json]` report local setup problems without initialization, network requests,
+credential retrieval or repair. `jaro -a ACCOUNT doctor` checks a selected account.
+It continues through independently discoverable problems even if mail tools or
+version metadata are missing. Exit status is 0 when there are no blocking
+findings, 1 for actionable blockers, and 2 for invalid invocation or an internal
+diagnostic failure. Human output suggests commands without running them.
+`--json` emits schema version 1 with stable check IDs, status, redacted
+`explanation` and `next_action` strings, resolved paths and `exit_status`.
+Warnings and unknown checks do not make the exit status nonzero. See the
+manual's offline diagnostics section for the complete schema and setup flow.
+
 `wizard` interactive account setup.
 
 `fetch` fetch unread messages for an account.
