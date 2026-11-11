@@ -29,7 +29,8 @@ smtp_port 587
 # Authentication type
 auth plain # or kerberos, etc
 
-# Fetchmail server certificate: check or ignore.
+# Fetchmail and IMAP inspection certificate: check or ignore.
+# IMAP cert ignore warns and skips verification; use check for verified IMAP.
 # SMTP always verifies the certificate and hostname using system CAs.
 cert ignore
 
@@ -37,8 +38,11 @@ cert ignore
 # 'SSL23', (use of these two values is discouraged and should only
 # be used as a last resort) 'SSL3', and 'TLS1' (default).
 # transport TLS1
+# IMAP inspection preserves TLS1 = implicit TLS and SSL2/SSL23/SSL3 = STARTTLS.
+# Inspection also accepts implicit/tls, starttls/ssl and explicit plain.
+# These names do not enable obsolete SSL versions. See Accounts/README.txt.
 
-# Optional SMTP CA bundle, replacing system trust (for a private CA).
+# Optional SMTP/IMAP CA bundle for a private CA.
 # certfile /path/to/my/private/cert
 
 # Options when fetching

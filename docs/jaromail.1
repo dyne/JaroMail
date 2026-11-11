@@ -536,6 +536,62 @@ T}
 .SS Workflow
 This section goes through a scenario of simple usage for Jaro Mail
 .SS Fetch and read your mail at home
+IMAP inspection and automatic folder discovery obey the account\[cq]s
+transport and certificate policy.
+\f[CR]transport TLS1\f[R] (the default), \f[CR]tls\f[R] and
+\f[CR]implicit\f[R] use implicit TLS; the historical \f[CR]SSL2\f[R],
+\f[CR]SSL23\f[R], \f[CR]SSL3\f[R] and \f[CR]ssl\f[R] labels, and
+\f[CR]starttls\f[R], use STARTTLS.
+These labels retain the existing inspection connection styles and do not
+force obsolete SSL versions.
+\f[CR]plain\f[R] explicitly requests unencrypted IMAP and warns.
+Fetchmail\[cq]s \f[CR]sslproto\f[R] and Mutt\[cq]s \f[CR]peek\f[R]
+settings remain separate; see \f[CR]Accounts/README.txt\f[R] for their
+account context.
+.PP
+Set \f[CR]cert check\f[R] to verify the IMAP certificate chain and DNS
+hostname or IP address using system trust or your \f[CR]certfile\f[R] CA
+bundle.
+The historical \f[CR]cert ignore\f[R] default skips IMAP verification
+with a warning.
+Neither failed verification nor rejected STARTTLS retries in plaintext.
+IMAP inspection requires OpenSSL 1.1.1 or newer; explicit plaintext uses
+\f[CR]nc\f[R].
+Connection and query waits share a 30\-second deadline, configurable
+with \f[CR]JARO_IMAP_TIMEOUT=1..300\f[R] seconds; failures return
+nonzero.
+IMAP LOGIN escapes quotes and backslashes and rejects CR, LF and NUL
+before connecting.
+Debug output does not include the generated LOGIN command or password.
+.PP
+\f[CR]jaro imap listfolders\f[R] prints one exact folder name per line.
+Discovery accepts IMAP4rev1 LIST responses with parenthesized flags, a
+quoted hierarchy delimiter or \f[CR]NIL\f[R], and atom or quoted mailbox
+names.
+Spaces, tabs, leading/trailing spaces, quotes, backslashes and empty
+quoted names retain their boundaries.
+Names stay in their server encoding; 7\-bit modified UTF\-7 passes
+through without decoding.
+UTF\-8 negotiation, literal strings such as \f[CR]{12}\f[R] and LIST
+extensions are unsupported and produce a clear failure instead of a
+partial folder name.
+.PP
+Discovery requires successful tagged CAPABILITY, LOGIN, LIST and LOGOUT
+completions in order.
+Rejection, malformed/truncated replies and transport failures return
+nonzero without publishing a partial list.
+Parsing accepts at most 1 MiB per response, 16 KiB per line and 10,000
+mailbox entries; every line must end in LF or CRLF.
+With no configured folders, \f[CR]fetch\f[R] stops before fetchmail on
+failed discovery, an empty list or an all\-excluded selection.
+Configured folders bypass discovery.
+Each selected folder becomes one quoted fetchmail token; its documented
+\c
+.UR https://www.fetchmail.info/fetchmail-man.html
+hexadecimal delimiter escapes
+.UE \c
+\ preserve embedded quotes along with spaces and backslashes.
+.PP
 As you acces your computer where Jaro Mail has been configured, you can
 open a Terminal and type:
 .IP

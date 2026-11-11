@@ -336,6 +336,43 @@ This section goes through a scenario of simple usage for Jaro Mail
 
 ### Fetch and read your mail at home
 
+IMAP inspection and automatic folder discovery obey the account's transport
+and certificate policy. `transport TLS1` (the default), `tls` and `implicit`
+use implicit TLS; the historical `SSL2`, `SSL23`, `SSL3` and `ssl` labels,
+and `starttls`, use STARTTLS. These labels retain the existing inspection
+connection styles and do not force obsolete SSL versions. `plain` explicitly
+requests unencrypted IMAP and warns. Fetchmail's `sslproto` and Mutt's `peek`
+settings remain separate; see `Accounts/README.txt` for their account context.
+
+Set `cert check` to verify the IMAP certificate chain and DNS hostname or IP
+address using system trust or your `certfile` CA bundle. The historical
+`cert ignore` default skips IMAP verification with a warning. Neither failed
+verification nor rejected STARTTLS retries in plaintext. IMAP inspection
+requires OpenSSL 1.1.1 or newer; explicit plaintext uses `nc`. Connection and
+query waits share a 30-second deadline, configurable with
+`JARO_IMAP_TIMEOUT=1..300` seconds; failures return nonzero. IMAP LOGIN escapes
+quotes and backslashes and rejects CR, LF and NUL before connecting. Debug
+output does not include the generated LOGIN command or password.
+
+`jaro imap listfolders` prints one exact folder name per line. Discovery accepts
+IMAP4rev1 LIST responses with parenthesized flags, a quoted hierarchy delimiter
+or `NIL`, and atom or quoted mailbox names. Spaces, tabs, leading/trailing
+spaces, quotes, backslashes and empty quoted names retain their boundaries.
+Names stay in their server encoding; 7-bit modified UTF-7 passes through without
+decoding. UTF-8 negotiation, literal strings such as `{12}` and LIST extensions
+are unsupported and produce a clear failure instead of a partial folder name.
+
+Discovery requires successful tagged CAPABILITY, LOGIN, LIST and LOGOUT
+completions in order. Rejection, malformed/truncated replies and transport
+failures return nonzero without publishing a partial list. Parsing accepts at
+most 1 MiB per response, 16 KiB per line and 10,000 mailbox entries; every line
+must end in LF or CRLF. With no configured folders, `fetch` stops before
+fetchmail on failed discovery, an empty list or an all-excluded selection.
+Configured folders bypass discovery. Each selected folder becomes one quoted
+fetchmail token; its documented
+[hexadecimal delimiter escapes](https://www.fetchmail.info/fetchmail-man.html)
+preserve embedded quotes along with spaces and backslashes.
+
 As you acces your computer where Jaro Mail has been configured, you can
 open a Terminal and type:
 

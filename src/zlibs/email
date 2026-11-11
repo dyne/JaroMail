@@ -336,38 +336,55 @@ fetch() {
 			fmconf+=(" ${accountopt} ") }
 
 		# check if folders on commandline
-		if [[ "$1" != "" ]]; then
+		if (( $# )); then
 
 			unset password
 
 			act "commanded to fetch folders: $1"
-			folders=($1)
+			folders=("$@")
 
         else
 
 			# if no folders specified, use all
-			[[ "$folders" == "" ]] && {
-				folders=(`imap_list_folders`) }
+            if (( ${#folders} == 0 )); then
+                _imap_discover_folders || {
+                    res=$?
+                    unset password
+                    error "Cannot discover IMAP folders; fetch stopped"
+                    return $res
+                }
+                folders=("${reply[@]}")
+            fi
 			act "${#folders} folders found"
 
 			# unset here because listing folders still needed a pass
 			unset password
 
 			# nothing to download, bail out with error
-			[[ ${#folders} == "0" ]] && return 1
+			[[ ${#folders} == "0" ]] && {
+                error "No IMAP folders selected; fetch stopped"
+                return 1
+            }
 
 			# remove excludes
 			[[ ${#exclude} == "0" ]] || {
 				func "exclude folders: $exclude"
-				for e in ${exclude}; do
+				for e in "${exclude[@]}"; do
 					# fuzzy match
-					for f in ${folders}; do
+					for f in "${folders[@]}"; do
 						[[ "$f" =~ "$e" ]] && {
-							folders=(${folders:#$f})
+                            # Escape metacharacters, then apply that literal
+                            # name as the removal pattern.
+							folders=("${(@)folders:#${~${(b)f}}}")
 						}
 					done
 				done
 			}
+
+            (( ${#folders} )) || {
+                error "No IMAP folders remain after exclusions; fetch stopped"
+                return 1
+            }
 
 		fi
 
@@ -412,7 +429,22 @@ fetch() {
     func "fetch folders: $folders"
 
     # add folder configuration
-    fmconf+=(" folder ${=folders} ");
+    # fetchmail receives a configuration string, so every folder needs its own
+    # quoted token. Word splitting loses spaces and unescaped quotes/backslashes.
+    if (( ${#folders} )); then
+        fmconf+=(" folder ")
+        for f in "${folders[@]}"; do
+            [[ "$f" != *$'\r'* && "$f" != *$'\n'* && "$f" != *$'\0'* ]] || {
+                error "Fetch folder names cannot contain CR, LF or NUL"
+                return 1
+            }
+            f="${f//\\/\\\\}"
+            # Fetchmail accepts hex escapes for delimiters; avoid lexer
+            # ambiguity around an embedded escaped double quote.
+            f="${f//\"/\\x22}"
+            fmconf+=("\"$f\" ")
+        done
+    fi
 
     # try login without doing anything
     probe_log="$(print -r -- "$fmconf" | fetchmail -v -c -f -)"
