@@ -96,6 +96,8 @@ Dovecot 2.3 uses an incompatible configuration format and is not supported.
 Run `jaro serve` as the mail owner, without sudo. It prints credentials for
 `127.0.0.1:61443` (unencrypted, loopback only) and stops on Ctrl-C. Use
 `jaro -n serve` to preview without changing files or starting a server.
+Same-user clients can read `MAIL_ROOT/.imap/passwd` (mode 0600), the
+`username:{PLAIN}password` credential file shown by `Credentials:` at startup.
 See [the serve contract](docs/command-contracts.md#local-imap-bridge-serve)
 for configuration and runtime ownership.
 

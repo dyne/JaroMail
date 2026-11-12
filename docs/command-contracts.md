@@ -61,14 +61,55 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
   this mode, but any available tools must accept the configuration. The live
   test skips with exit 77 only when its required version/tools are unavailable.
 - Test coverage: `test-serve-config.sh` covers CLI, validation and dry-run;
-  `test-serve-dovecot.sh` starts Dovecot, logs in, reads a fixture, rejects a
-  second launch and checks signal shutdown. It can use `SIEVE_DEPS_PREFIX` for
+  `test-serve-dovecot.sh` starts real Dovecot and checks folder listing/nesting,
+  exact message routing, persistent flag changes, deletion/expunge, delivery
+  into an already selected Maildir, same-user credential-file login, runtime
+  ownership and signal shutdown. It can use `SIEVE_DEPS_PREFIX` for
   the existing 2.4 installation and `JARO_SERVE_TEST_TMPDIR` for a short private
   test parent. No external mail server is contacted.
 - IMAP clients can change flags, move or delete messages as usual. Selecting a
   folder can move `new/` files into `cur/`; the bridge does not promise a
   read-only filesystem. INBOX is a separate root Maildir; existing mail remains
   accessible in named folders such as `known` and `priv`.
+
+### Same-user credential file
+
+`serve` prints a `Credentials:` path pointing to the existing
+`$MAILDIRS/.imap/passwd` file (`$JAROMAILDIR/.imap/passwd` when that override is
+set). This is the filesystem credential cookie for local clients running as
+the mail owner. The runtime directory is created with mode 0700 and the file
+with mode 0600. The file contains one line in Dovecot passwd-file format:
+
+```text
+username:{PLAIN}password
+```
+
+The default username is `jaro`; `JARO_SERVE_USER` overrides it.
+`JARO_SERVE_PASSWORD` overrides the password; otherwise a fresh random password
+is generated when configuration is written. Config-only mode also writes these
+credentials. A rejected competing launch leaves the running server's credentials
+unchanged. The file remains after shutdown and is replaced by the next generated
+configuration, so its presence does not mean that a server is running. Clients
+should reread it for a new server session. These credentials are separate from
+account passwords and the OS keyring.
+
+For example, after starting `jaro serve` with an explicit `JAROMAILDIR`, a
+same-user Python client can read the cookie without scraping terminal output:
+
+```python
+import imaplib
+import os
+from pathlib import Path
+
+cookie = Path(os.environ["JAROMAILDIR"]) / ".imap/passwd"
+username, stored = cookie.read_text().removesuffix("\n").split(":", 1)
+if not stored.startswith("{PLAIN}"):
+    raise ValueError("Unsupported serve credential format")
+password = stored[len("{PLAIN}"):]
+with imaplib.IMAP4("127.0.0.1", int(os.environ.get("JARO_SERVE_PORT", "61443"))) as client:
+    client.login(username, password)
+    client.select("known", readonly=True)
+```
 
 ## Outbox recovery (`outbox list`, `outbox retry`, `outbox archive`)
 
