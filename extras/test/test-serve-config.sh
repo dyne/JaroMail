@@ -60,6 +60,7 @@ assert_contains "${serve_out}" "Port: 61444" "serve port response"
 assert_contains "${serve_out}" "TLS: none" "serve tls response"
 assert_contains "${serve_out}" "User: jaro" "serve user response"
 assert_contains "${serve_out}" "Password: testpass" "serve password response"
+assert_contains "${serve_out}" "Credentials: ${passwd_path}" "serve credential file response"
 assert_contains "${serve_out}" "Config: ${conf_path}" "serve config response"
 
 conf_body="$(cat "${conf_path}")"

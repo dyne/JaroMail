@@ -868,6 +868,41 @@ ascending order they are listed in that configuration file..
 .PP
 From there on, pressing \f[B]=\f[R] or \f[B]c\f[R] you can change to
 other folders and your \f[B]unsorted\f[R] mails.
+.SS Serve local Maildirs over IMAP
+Run \f[CR]JAROMAILDIR=\[dq]$HOME/Mail\[dq] jaro serve\f[R] as the mail
+owner to expose that root through a local Dovecot 2.4.x instance.
+The default endpoint is \f[CR]127.0.0.1:61443\f[R];
+\f[CR]JARO_SERVE_PORT\f[R] selects another unprivileged port.
+Stop the server with Ctrl\-C.
+IMAP clients can list and select nested folders, read messages, update
+flags and delete/expunge messages.
+Mail delivered into a folder while it is selected becomes visible
+without restarting the server.
+These operations affect the actual Maildirs; use a client\[cq]s
+read\-only mode when appropriate.
+.PP
+The startup output includes a \f[CR]Credentials:\f[R] path.
+Same\-user clients can use the existing
+\f[CR]$JAROMAILDIR/.imap/passwd\f[R] file as a filesystem credential
+cookie: it contains \f[CR]username:{PLAIN}password\f[R] followed by a
+newline.
+The runtime directory is created with mode 0700 and the credential file
+with mode 0600.
+Remove the \f[CR]{PLAIN}\f[R] scheme prefix before passing the password
+to an IMAP client.
+The default username is \f[CR]jaro\f[R], overridden by
+\f[CR]JARO_SERVE_USER\f[R].
+.PP
+Unless \f[CR]JARO_SERVE_PASSWORD\f[R] is set, a fresh random password is
+generated when configuration is written.
+Config\-only mode also generates credentials; the file remains after
+shutdown, so its presence is not a liveness check.
+Clients must reread it for a new server session.
+A competing launch cannot replace a running instance\[cq]s credentials.
+This local password is independent of account passwords and the OS
+keyring.
+See the serve contract for a client example that reads the file
+directly.
 .SS Write a new mail
 If you like to write a mail to someone, hit \f[B]m\f[R] and write the
 recipient address, you will be then asked about any additional Cc:

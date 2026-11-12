@@ -509,6 +509,33 @@ they are listed in that configuration file..
 From there on, pressing **=** or **c** you can change to other folders
 and your **unsorted** mails.
 
+### Serve local Maildirs over IMAP
+
+Run `JAROMAILDIR="$HOME/Mail" jaro serve` as the mail owner to expose that
+root through a local Dovecot 2.4.x instance. The default endpoint is
+`127.0.0.1:61443`; `JARO_SERVE_PORT` selects another unprivileged port.
+Stop the server with Ctrl-C. IMAP clients can list and select nested folders,
+read messages, update flags and delete/expunge messages. Mail delivered into
+a folder while it is selected becomes visible without restarting the server.
+These operations affect the actual Maildirs; use a client's read-only mode
+when appropriate.
+
+The startup output includes a `Credentials:` path. Same-user clients can use
+the existing `$JAROMAILDIR/.imap/passwd` file as a filesystem credential cookie:
+it contains `username:{PLAIN}password` followed by a newline. The runtime
+directory is created with mode 0700 and the credential file with mode 0600.
+Remove the `{PLAIN}` scheme prefix before passing the password to an IMAP
+client. The default username is `jaro`, overridden by `JARO_SERVE_USER`.
+
+Unless `JARO_SERVE_PASSWORD` is set, a fresh random password is generated when
+configuration is written. Config-only mode also generates credentials; the
+file remains after shutdown, so its presence is not a liveness check. Clients
+must reread it for a new server session. A competing launch cannot replace a
+running instance's credentials. This local password is independent of account
+passwords and the OS keyring. See the
+[serve contract](command-contracts.md#same-user-credential-file) for a client
+example that reads the file directly.
+
 ### Write a new mail
 
 If you like to write a mail to someone, hit **m** and write the

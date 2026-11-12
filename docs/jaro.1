@@ -139,6 +139,20 @@ Bare \f[CR]outbox\f[R] still opens the outbox Maildir in Mutt.
 \f[CR]peek\f[R] open remote IMAP mailbox view.
 .PP
 \f[CR]open\f[R] open a local maildir folder.
+.PP
+\f[CR]serve\f[R] expose local Maildirs through Dovecot 2.4.x on
+\f[CR]127.0.0.1:61443\f[R].
+Run as the mail owner.
+Same\-user clients can read the mode\-0600
+\f[CR]MAIL_ROOT/.imap/passwd\f[R] credential file, containing
+\f[CR]username:{PLAIN}password\f[R].
+The \f[CR]Credentials:\f[R] startup line gives its path.
+\f[CR]JARO_SERVE_USER\f[R] defaults to \f[CR]jaro\f[R];
+\f[CR]JARO_SERVE_PASSWORD\f[R] overrides the otherwise randomly
+generated password.
+Read the current file for each new server session.
+See the manual\[cq]s local IMAP section for credential lifetime and
+client behavior.
 .SS Message snapshots
 \f[CR]snapshot create DEST\f[R] copy regular Maildir
 \f[CR]new\f[R]/\f[CR]cur\f[R] messages and filename flags from

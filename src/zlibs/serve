@@ -336,6 +336,7 @@ serve_response() {
     print -r -- "TLS: none"
     print -r -- "User: ${serve_user}"
     print -r -- "Password: ${serve_password}"
+    print -r -- "Credentials: ${serve_passwd_file}"
     print -r -- "Config: ${serve_conf}"
     print -r -- "Log: ${serve_log_file}"
     print -r -- "Mail root: ${serve_mail_root}"

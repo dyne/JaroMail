@@ -119,6 +119,14 @@ the outbox Maildir in Mutt.
 
 `open` open a local maildir folder.
 
+`serve` expose local Maildirs through Dovecot 2.4.x on `127.0.0.1:61443`.
+Run as the mail owner. Same-user clients can read the mode-0600
+`MAIL_ROOT/.imap/passwd` credential file, containing `username:{PLAIN}password`.
+The `Credentials:` startup line gives its path. `JARO_SERVE_USER` defaults to
+`jaro`; `JARO_SERVE_PASSWORD` overrides the otherwise randomly generated
+password. Read the current file for each new server session. See the manual's
+local IMAP section for credential lifetime and client behavior.
+
 ### Message snapshots
 
 `snapshot create DEST` copy regular Maildir `new`/`cur` messages and filename
