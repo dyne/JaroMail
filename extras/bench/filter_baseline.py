@@ -145,6 +145,147 @@ def native_decisions(result, fixture):
     return dict(Counter(found.values()))
 
 
+def delivery_benchmark(args):
+    """Common literal-route workload, usable unchanged on base and candidates."""
+    assert args.runs >= 5, 'delivery baseline requires at least five repetitions'
+    assert all(n >= 1 for n in args.sizes + args.messages)
+    assert args.message_bytes >= 256
+    args.scratch.mkdir(parents=True, exist_ok=False)
+    args.output.mkdir(parents=True, exist_ok=True)
+    assert not any(args.output.iterdir()), 'output directory must be empty'
+    compiler, batch = [args.work / 'bin' / n for n in ('jaro-filter-compile', 'jaro-filter')]
+    cli = args.work.parents[1] / 'bin/jaro'
+    assert all(p.is_file() for p in (compiler, batch, cli))
+    metadata = dict(schema=2, source_root=str(args.repo), runtime=str(args.work),
+                    runtime_sha256={str(p): sha(p.read_bytes()) for p in (compiler, batch, cli)},
+                    source_revision=args.revision, host=platform.platform(), cpus=os.cpu_count(),
+                    environment={key: os.environ.get(key) for key in ('PATH', 'LD_LIBRARY_PATH', 'CCACHE_DIR', 'CFLAGS')},
+                    command_path=str(args.work / 'bin') + os.pathsep + os.environ['PATH'],
+                    cache='Warm OS caches; cold means absent application generation only. No cache eviction.',
+                    memory='wait4 descendant peak RSS includes launcher floor; no isolated engine RSS claim',
+                    schedule='Sequential repeats alternate single then batch, reversing order on even repeats; restoration excluded',
+                    filesystem=subprocess.check_output(['df', '-T', str(args.scratch)], text=True),
+                    build='Caller supplies matched uninstrumented Release installed runtime; build logs retained separately',
+                    harness_sha256=sha(Path(__file__).read_bytes()), runs=args.runs)
+    write_json(args.output / 'environment.json', metadata)
+    samples, fixtures = [], []
+    for rules in args.sizes:
+        for count in args.messages:
+            for device in args.delivery_devices:
+                for repeat in range(args.runs):
+                    for mode in [m for m in (('single', 'batch') if repeat % 2 == 0 else ('batch', 'single')) if m in args.delivery_modes]:
+                        label = f'r{rules}-m{count}-b{args.message_bytes}-{device}-{mode}-{repeat+1}'
+                        root = args.scratch / label
+                        root.mkdir()
+                        (root / 'Accounts').mkdir()
+                        (root / 'Accounts/default.txt').write_text('name Benchmark\nemail own@example.net\nlogin fixture\nproto pop\nhost fixture.invalid\nport 995\n')
+                        policy = ''.join(f'to-address target{i}@example.org move receipts\n' for i in range(rules))
+                        (root / 'Filters.txt').write_text(policy)
+                        (root / 'Aliases.txt').write_text('')
+                        for book in ('whitelist.abook', 'blacklist.abook'):
+                            (root / book).write_text('')
+                        qualification = sha((args.repo / 'docs/filter-regex-qualification.json').read_bytes())
+                        (root / 'FilterProfile.txt').write_text('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\ncapability mailbox\ncapability regex\nregex-qualification ' + qualification + '\n')
+                        source = root
+                        if device == 'cross':
+                            assert args.cross_root is not None, '--cross-root required'
+                            source = args.cross_root / label
+                            source.mkdir(parents=True, exist_ok=False)
+                            assert source.stat().st_dev != root.stat().st_dev, 'cross fixture must use distinct devices'
+                        maildir(root, 'receipts')
+                        paths, payloads = [], []
+                        for i in range(count):
+                            box = 'incoming' if mode == 'batch' else f'incoming-{i:05d}'
+                            maildir(source, box)
+                            path = source / box / ('cur' if i % 2 else 'new') / f'message-{i:05d}:2,FS'
+                            header = f'From: stranger@example.net\nTo: target{i % rules}@example.org\nMessage-ID: <delivery-{i}@benchmark.invalid>\nSubject: literal delivery\n\n'.encode()
+                            raw = header + (bytes([65 + i % 26]) * (args.message_bytes - len(header)))
+                            assert len(raw) == args.message_bytes
+                            paths.append(path); payloads.append(raw)
+                        inventory = [dict(source=str(path.relative_to(source)), destination='receipts/cur/' + path.name,
+                                          sha256=sha(raw), bytes=len(raw), flags='FS') for path, raw in zip(paths, payloads)]
+                        identity = sha(json.dumps(dict(policy=sha(policy.encode()), inventory=inventory), sort_keys=True).encode())
+                        fixtures.append(dict(workload=label, input_sha256=identity, policy_sha256=sha(policy.encode()),
+                                             inventory=inventory, source_device=source.stat().st_dev, destination_device=root.stat().st_dev))
+                        write_json(args.output / 'fixtures.json', fixtures)
+                        env = dict(os.environ, PATH=metadata['command_path'], JAROMAILDIR=str(root), JAROWORKDIR=str(args.work), JAROACCOUNT=str(root / 'Accounts'), JARO_FILTER_ENGINE='native')
+                        empty = root / 'empty.paths'; empty.write_bytes(b'')
+
+                        def restore():
+                            for path in paths:
+                                if path.exists(): path.unlink()
+                            for path in (root / 'receipts/cur').iterdir(): path.unlink()
+                            for path, raw in zip(paths, payloads): path.write_bytes(raw)
+
+                        def verify(moved):
+                            actual = {}
+                            for base in set((root, source)):
+                                for path in base.rglob('*'):
+                                    if path.is_file() and path.parent.name in ('cur', 'new', 'tmp'):
+                                        actual[str(path)] = sha(path.read_bytes())
+                            expected = {str(root / item['destination'] if moved else path): item['sha256'] for path, item in zip(paths, inventory)}
+                            assert actual == expected, 'physical path/digest/occurrence inventory mismatch'
+
+                        phases = ('cold-compile', 'unchanged-update', 'readonly-check', 'pin-validation', 'classify', 'helper-apply', 'jaro-filter')
+                        for phase in phases:
+                            restore()
+                            publication_before = generation_snapshot(root) if phase != 'cold-compile' else None
+                            commands = [[str(compiler), '--root', str(root), '--accounts-dir', str(root / 'Accounts'), '--report0']]
+                            if phase == 'readonly-check': commands[0].append('--check')
+                            elif phase == 'pin-validation': commands = [[str(batch), '--root', str(root), '--files0-from', str(empty)]]
+                            elif phase in ('classify', 'helper-apply'):
+                                head = [str(batch), '--root', str(root), '--mode', 'classify' if phase == 'classify' else 'apply']
+                                commands = [head + ['--', str(path)] for path in paths] if mode == 'single' else [head + ['--maildir', str(paths[0].parent.parent)]]
+                            elif phase == 'jaro-filter':
+                                commands = [[str(cli), 'filter', str(path.parent.parent)] for path in paths] if mode == 'single' else [[str(cli), 'filter', str(paths[0].parent.parent)]]
+                            results = []
+                            for invocation, command in enumerate(commands):
+                                result = run_command(command, env, args.repo, args.output / f'{label}-{phase}-{invocation:05d}')
+                                if phase in ('classify', 'helper-apply'):
+                                    fields = Path(result['stdout']).read_bytes().split(b'\0')
+                                    assert fields[0] == b'JFD1' and fields[-1] == b''
+                                    rows = fields[2:-1]
+                                    selected = [paths[invocation]] if mode == 'single' else sorted(paths, key=os.fsencode)
+                                    assert len(rows) == 11 * len(selected)
+                                    for offset, path in enumerate(selected):
+                                        row = rows[offset*11:(offset+1)*11]
+                                        assert row[1] == os.fsencode(path) and row[5] == os.fsencode(root / 'receipts')
+                                        assert row[7] == (b'classified' if phase == 'classify' else b'moved')
+                                results.append(result)
+                            moved = phase in ('helper-apply', 'jaro-filter')
+                            verify(moved)
+                            publication_after = generation_snapshot(root)
+                            assert publication_after
+                            if publication_before is not None:
+                                assert publication_after == publication_before, 'unchanged fixture republished generation'
+                            wall = sum(r['wall_seconds'] for r in results)
+                            products = root / 'cache/filter-engine/generations'
+                            samples.append(dict(workload=label, rules=rules, messages=count, message_bytes=args.message_bytes,
+                                                device=device, mode=mode, repeat=repeat+1, phase=phase, input_sha256=identity,
+                                                wall_seconds=wall, messages_per_second=count/wall if phase in ('classify', 'helper-apply', 'jaro-filter') else None,
+                                                maxrss=max(r['maxrss'] for r in results), cpu_seconds=sum(r['user_seconds']+r['system_seconds'] for r in results),
+                                                database_bytes=sum(p.stat().st_size for p in products.rglob('*') if p.name in ('policy.bin', 'rules.cdb')),
+                                                generation_product_bytes=sum(p.stat().st_size for p in products.rglob('*') if p.is_file()),
+                                                publication_sha256=sha(json.dumps(publication_after, sort_keys=True).encode()), publication_unchanged=publication_before is not None,
+                                                commands=results, verified_occurrences=count))
+                            write_json(args.output / 'samples.json', samples)
+                        print('PASS ' + label + ': 7 phases, exact physical inventory', flush=True)
+    groups = defaultdict(list)
+    for sample in samples:
+        groups[tuple(sample[key] for key in ('rules', 'messages', 'message_bytes', 'device', 'mode', 'phase'))].append(sample)
+    summaries = []
+    for key, group in sorted(groups.items()):
+        wall = [sample['wall_seconds'] for sample in group]
+        summaries.append(dict(zip(('rules', 'messages', 'message_bytes', 'device', 'mode', 'phase'), key),
+                              runs=len(group), median_wall_seconds=statistics.median(wall), minimum_seconds=min(wall), maximum_seconds=max(wall),
+                              spread_seconds=max(wall)-min(wall), median_cpu_seconds=statistics.median(s['cpu_seconds'] for s in group),
+                              median_maxrss=statistics.median(s['maxrss'] for s in group), maxrss_unit='KiB on Linux',
+                              median_messages_per_second=statistics.median(s['messages_per_second'] for s in group) if group[0]['messages_per_second'] else None,
+                              database_bytes=group[0]['database_bytes']))
+    write_json(args.output / 'summary.json', summaries)
+    print(f'Delivery benchmark: {len(samples)} phase samples passed; 0 failed; 0 skipped')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True)
@@ -156,7 +297,16 @@ def main():
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--no-profile", action="store_true")
     parser.add_argument("--engine", choices=("legacy", "native"), default="legacy")
+    parser.add_argument('--delivery', action='store_true', help='Run the common literal-route delivery baseline')
+    parser.add_argument('--message-bytes', type=int, default=1024)
+    parser.add_argument('--delivery-devices', nargs='+', choices=('same', 'cross'), default=['same'])
+    parser.add_argument('--delivery-modes', nargs='+', choices=('single', 'batch'), default=['single', 'batch'])
+    parser.add_argument('--cross-root', type=Path)
+    parser.add_argument('--revision', help='Exact caller-verified source revision for delivery evidence')
     args = parser.parse_args()
+    if args.delivery:
+        delivery_benchmark(args)
+        return
     assert args.runs >= 1 and all(n >= 2 and n % 2 == 0 for n in args.sizes)
     assert all(n >= 4 and n % 4 == 0 for n in args.messages)
     args.scratch.mkdir(parents=True, exist_ok=False)
