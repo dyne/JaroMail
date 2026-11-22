@@ -1,5 +1,82 @@
 # Reproducing filter benchmarks
 
+The common physical-delivery baseline uses literal typed rules on both the
+original native engine and later candidates. Supply a separately built Release
+runtime and its matching source tree; the harness itself can come from the
+candidate checkout:
+
+```sh
+python3 extras/bench/filter_baseline.py --delivery \
+  --repo /absolute/base-source \
+  --work /absolute/base-prefix/share/jaromail \
+  --revision c973e5f8456827bb98ed56a8d9cff75d184e410a \
+  --scratch /absolute/private-ext4/fixtures \
+  --output /absolute/empty/baseline-report \
+  --sizes 1000 --messages 100 --message-bytes 1024 --runs 5 \
+  --delivery-devices same cross --cross-root /absolute/private-other-device
+```
+
+This runs 100 separate one-message calls against one unchanged generation and
+one batch of the same message bytes. Five sequential repetitions alternate
+single/batch order. Fixture restoration and verification occur outside every
+timed phase. The same-device control uses the scratch filesystem; the cross
+control asserts a different source device. Use a persistent local filesystem
+for the primary baseline and retain `df -T` from `environment.json`; tmpfs
+durability timings are a separate control. Both scratch locations must be
+private, writable, and absent initially. The output must be empty.
+
+Seven phases separate cold compilation, unchanged update, read-only compiler
+check, empty-selection generation pin/validation, classify, helper apply and
+the actual installed `jaro filter` command. The empty-selection phase includes
+helper startup, not an isolated database-open microbenchmark. Single-message
+phase time is the sum of its command intervals. Every command records its
+exit, wall/CPU time, descendant peak RSS and UTC observation. RSS includes the
+Python launcher floor. No timing wrappers or durability shortcuts are used.
+`summary.json` reports medians, min/max spread, throughput and native store bytes
+(`policy.bin` or `rules.cdb`); individual samples also retain all generation
+product bytes and unchanged-publication evidence.
+`samples.json` retains every invocation. `fixtures.json` records exact 1 KiB
+message digests, policy digest, per-occurrence destination/flags and devices.
+The verifier requires exact paths and complete bytes after every phase.
+`--sizes`, `--messages` and `--message-bytes` select additional independent
+controls; at least five repetitions are required in delivery mode. Large
+matrices belong to qualification, separate from the common baseline.
+`--delivery-modes batch` selects a large-batch control without adding a long
+series of single-message calls. Compiler and CLI phases always use the same
+explicit accounts root, so internal/external account identity cannot cause an
+accidental rebuild during the nominally unchanged workload. Both phases also
+resolve the installed runtime's bundled abook first; changing the exporter
+binary legitimately invalidates a compiled generation.
+
+Local correctness coverage runs without a Sieve dependency prefix:
+
+```sh
+env -u SIEVE_DEPS_PREFIX zsh extras/test/run-tests.sh \
+  extras/test/test-filter-batch.sh extras/test/test-filter-storage.sh
+```
+
+The storage fixture's authored inventory binds each input occurrence to the
+winning rule, exact directory, cur/new location, flag suffix and full-message
+digest. Its mixed-mail control includes identical headers with distinct bodies,
+nested routes, overlapping recipients, malformed retained mail, no-op and rerun.
+A negative control changes the expected directory and successful report while
+preserving the actual count/hash inventory; physical-path verification rejects
+it. External comparisons are discovered separately as
+`test-filter-delivery-oracle.sh`; real two-device tests use
+`test-filter-cross-device.sh` and require `JARO_FILTER_CROSS_FS_DIR`. Missing
+prerequisites exit 77 and fail the strict runner.
+
+For line/branch coverage, retain separate fixture builds with
+`JARO_FILTER_COMPILER_CFLAGS='-O0 -g --coverage -Wall -Wextra -Werror -pedantic'`
+and `JARO_FILTER_BATCH_WORK`/`JARO_FILTER_STORAGE_WORK`, then run the local
+suites above. Collect `gcov --json-format --branch-probabilities --branch-counts`
+for classify.c, headers.c, storage.c and jaro-filter.c from those builds.
+Combine repeat-suite counters only within an identical target; report normal
+helpers and injected-fault/signal variants separately. Retain uncovered line
+numbers and branch slots with source digests, including defensive failures;
+coverage is evidence of execution, not a completeness guarantee. Instrumented
+builds are excluded from Release timing.
+
 Run from a dependency-equipped source checkout:
 
 ```sh

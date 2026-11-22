@@ -1,4 +1,4 @@
-"""Decision-only batch contract, authored expectations and pinned Sieve oracle."""
+"""Local decision-only batch contract and independently authored expectations."""
 from datetime import datetime, timezone
 from pathlib import Path
 import errno
@@ -19,7 +19,6 @@ from contextlib import contextmanager
 sys.dont_write_bytecode = True
 import filter_native_test as authored
 from filter_compiler_test import records
-from sieve_oracle import SieveOracle
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = REPO / 'extras/test/fixtures/filter-policy'
@@ -28,6 +27,15 @@ PROFILE = ('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileint
            'capability mailbox\ncapability regex\nregex-qualification ' +
            hashlib.sha256(CATALOGUE.read_bytes()).hexdigest() + '\n')
 FIELDS = 'index path rule_id action logical local sieve status source line detail'.split()
+
+
+def authored_groups():
+    target = json.loads((FIXTURES / 'target.json').read_text())
+    casing = json.loads((FIXTURES / 'casing.json').read_text())
+    return ([(target['cases'], target['rules'], target),
+             (target['domain_cases'], target['domain_rules'], {}),
+             (casing['cases'], casing['rules'], casing)] +
+            [([case], case['rules'], {}) for case in target['isolated_domain_cases']])
 
 
 def tree(path):
@@ -46,9 +54,11 @@ def tree(path):
 
 
 class BatchTests(unittest.TestCase):
+    work_variable = 'JARO_FILTER_BATCH_WORK'
+
     @classmethod
     def setUpClass(cls):
-        retained = os.environ.get('JARO_FILTER_BATCH_WORK')
+        retained = os.environ.get(cls.work_variable)
         cls.temp = None
         if retained:
             cls.work = Path(retained)
@@ -63,7 +73,6 @@ class BatchTests(unittest.TestCase):
                         'FILTER_BUILD_DIR=' + str(cls.objects), 'CFLAGS=' + os.environ.get(
                             'JARO_FILTER_COMPILER_CFLAGS', '-O2 -Wall -Wextra -Werror -pedantic')], cwd=REPO, check=True)
         cls.compiler, cls.batch = (cls.objects / n for n in ['jaro-filter-compile', 'jaro-filter'])
-        cls.oracle = SieveOracle(cls.work / 'oracle', os.environ['SIEVE_DEPS_PREFIX'])
         cls.events, cls.counts = [], dict(invocations=0, target_decisions=0, oracle_decisions=0,
                                          messages=0, snapshots=0, controlled_children=0, unsettled_children=0)
 
@@ -213,17 +222,11 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(row['line'], expected['line'].encode(), case['id'])
         self.assertEqual((row['action'], row['status'], row['detail']), (b'move', b'classified', b''))
 
-    def test_original_52_authored_targets_and_actual_sieve(self):
-        target = json.loads((FIXTURES / 'target.json').read_text())
-        casing = json.loads((FIXTURES / 'casing.json').read_text())
-        groups = [(target['cases'], target['rules'], target),
-                  (target['domain_cases'], target['domain_rules'], {}), (casing['cases'], casing['rules'], casing)]
-        groups += [([case], case['rules'], {}) for case in target['isolated_domain_cases']]
+    def test_original_52_authored_targets(self):
         count = 0
-        for group, (cases, rules, contacts) in enumerate(groups):
+        for group, (cases, rules, contacts) in enumerate(authored_groups()):
             books = {key: contacts.get(key, []) for key in ['known', 'blacklist', 'own']}
-            product = self.compile(rules, **books)
-            self.oracle.compile(product / 'Filters.sieve', extensions='+regex')
+            self.compile(rules, **books)
             paths = [self.message(('cur/' if i % 2 else 'new/') + '%d-%s:2,FS' % (group, case['id']), case['headers'])
                      for i, case in enumerate(cases)]
             rows = self.batch_paths(paths)
@@ -231,19 +234,17 @@ class BatchTests(unittest.TestCase):
             for row, path, case in zip(rows, paths, cases):
                 self.assertEqual(row['path'], os.fsencode(path))
                 self.assert_target(row, case, rules, books)
-                self.oracle.expect(product / 'Filters.sieve', path, case['sieve'], True, extensions='+regex')
                 count += 1
         self.assertEqual(count, 52)
         self.counts['target_decisions'] += count
-        self.counts['oracle_decisions'] += count
-        print('Independent batch target identities: 52/52; same-policy Sieve winners: 52/52')
+        print('Independent batch target identities: 52/52')
 
     def test_normalization_and_qualified_regex_corpus(self):
         corpus = json.loads((REPO / 'extras/test/fixtures/filter-contract/regex-subset.json').read_text())
         previous = None
         for i, case in enumerate(corpus['cases']):
             if case['pattern'] != previous:
-                product = self.compile(['from '+json.dumps(case['pattern'])+' move matched'])
+                self.compile(['from '+json.dumps(case['pattern'])+' move matched'])
                 previous = case['pattern']
             path = self.message('new/regex-%d' % i, {case['field']: case['address']})
             row = self.batch_paths([path])[0]
@@ -251,17 +252,13 @@ class BatchTests(unittest.TestCase):
             self.assertEqual((row['local'], row['sieve']), (os.fsencode(self.root/expected), expected.encode()))
             expected_id = authored.explicit('from', case['pattern'], 'matched') if expected=='matched' else 'builtin:unsorted'
             self.assertEqual(row['rule_id'], expected_id.encode())
-            self.oracle.expect(product/'Filters.sieve', path, expected, True, extensions='+regex')
-            self.counts['oracle_decisions'] += 1
         normal = json.loads((REPO/'extras/test/fixtures/filter-contract/mailbox-normalization.json').read_text())
         for i, group in enumerate(normal['groups']):
-            product = self.compile(['from-address %s move normalized' % json.dumps(group['canonical'])])
+            self.compile(['from-address %s move normalized' % json.dumps(group['canonical'])])
             paths = [self.message('new/normal-%d-%d' % (i, j), {'From': form}) for j, form in enumerate(group['forms'])]
             for row, path in zip(self.batch_paths(paths), paths):
                 expected = authored.explicit('from-address', authored.ascii_fold(group['canonical']), 'normalized')
                 self.assertEqual(row['rule_id'], expected.encode())
-                self.oracle.expect(product/'Filters.sieve', path, 'normalized', True, extensions='+regex')
-                self.counts['oracle_decisions'] += 1
 
     def test_raw_byte_paths_occurrences_sorting_and_selection(self):
         self.compile()

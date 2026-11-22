@@ -21,7 +21,6 @@ import filter_batch_test as fixtures
 from filter_generation_test import Held
 
 REPO = fixtures.REPO
-EVIDENCE = Path(os.environ.get('JARO_FILTER_CROSS_FS_DIR', REPO.parent/'.gestalt/evidence/native-filter-execution/l5'))
 
 
 def digest(data):
@@ -44,6 +43,7 @@ def body_files(root):
 
 
 class StorageTests(unittest.TestCase):
+    work_variable = 'JARO_FILTER_STORAGE_WORK'
     setUp = fixtures.BatchTests.setUp
     maildir = fixtures.BatchTests.maildir
     compile = fixtures.BatchTests.compile
@@ -52,19 +52,12 @@ class StorageTests(unittest.TestCase):
     command = fixtures.BatchTests.command
     capture = fixtures.BatchTests.capture
     assert_target = fixtures.BatchTests.assert_target
+    batch_paths = fixtures.BatchTests.batch_paths
+    snapshot = fixtures.BatchTests.snapshot
 
     @classmethod
     def setUpClass(cls):
-        previous = os.environ.get('JARO_FILTER_BATCH_WORK')
-        if os.environ.get('JARO_FILTER_STORAGE_WORK'):
-            os.environ['JARO_FILTER_BATCH_WORK'] = os.environ['JARO_FILTER_STORAGE_WORK']
-        try:
-            fixtures.BatchTests.setUpClass.__func__(cls)
-        finally:
-            if previous is None:
-                os.environ.pop('JARO_FILTER_BATCH_WORK',None)
-            else:
-                os.environ['JARO_FILTER_BATCH_WORK'] = previous
+        fixtures.BatchTests.setUpClass.__func__(cls)
         cls.counts.update(applied_targets=0,body_inventories=0,real_cross_filesystem=0,fault_cases=0)
 
     @classmethod
@@ -142,6 +135,44 @@ class StorageTests(unittest.TestCase):
         self.assertTrue(lock.is_file())
         self.assertEqual(stat.S_IMODE(lock.stat().st_mode),0o600)
 
+    def delivery_record(self, path, rule, destination, status='moved'):
+        """Author the expected occurrence before invoking the filter."""
+        data = Path(path).read_bytes()
+        target = Path(path) if status in ('noop', 'error') else self.root / destination / 'cur' / Path(path).name
+        return dict(source=str(path), rule_id=rule, local=str(self.root / destination) if destination else None,
+                    status=status, target=str(target), location=target.parent.name,
+                    flags=target.name.partition(':2,')[2], bytes=len(data), sha256=digest(data))
+
+    def delivery_inventory(self, rows, expected, previous=()):
+        """Correlate each input occurrence, winner and exact physical placement."""
+        self.assertEqual(len(rows), len(expected))
+        for occurrence, (row, item) in enumerate(zip(rows, expected), 1):
+            self.assertEqual(row['index'], str(occurrence).encode())
+            self.assertEqual(row['path'], os.fsencode(item['source']))
+            self.assertEqual(row['status'], item['status'].encode())
+            if item['rule_id'] is not None:
+                self.assertEqual(row['rule_id'], item['rule_id'].encode())
+            if item['status'] == 'error':
+                self.assertTrue(row['detail'], 'recoverable error must identify its cause')
+            else:
+                self.assertEqual(row['local'], os.fsencode(item['local']))
+            target = Path(item['target'])
+            self.assertTrue(target.is_file(), 'expected physical delivery missing: ' + str(target))
+            self.assertEqual(target.parent.name, item['location'])
+            self.assertEqual(target.name.partition(':2,')[2], item['flags'])
+            self.assertEqual((len(target.read_bytes()), digest(target.read_bytes())), (item['bytes'], item['sha256']))
+            if item['status'] == 'moved':
+                self.assertFalse(Path(item['source']).exists())
+        # Exact paths prevent a balanced body/count inventory hiding a wrong route.
+        actual = {os.fsdecode(bytes.fromhex(item['path_hex'])): (item['bytes'], item['sha256'])
+                  for item in body_files(self.root)}
+        wanted = {item['target']: (item['bytes'], item['sha256']) for item in [*previous, *expected]}
+        self.assertEqual(len(wanted), len(previous) + len(expected), 'expected occurrences must have distinct output paths')
+        self.assertEqual(actual, wanted)
+        artifact = self.case / ('delivery-%04d.json' % self.counts['body_inventories'])
+        artifact.write_text(json.dumps(dict(occurrences=[*previous, *expected], exact_paths=True), sort_keys=True, indent=2) + '\n')
+        self.counts['body_inventories'] += 1
+
     def test_same_filesystem_full_bytes_flags_collisions_and_reruns(self):
         self.compile()
         self.maildir(self.root/'unsorted')
@@ -186,57 +217,22 @@ class StorageTests(unittest.TestCase):
         self.inventory([(data,1) for data in bodies])
         self.clean_private()
 
-    def test_real_cross_filesystem_transfer(self):
-        self.compile()
-        if not EVIDENCE.is_dir() or EVIDENCE.stat().st_dev == self.root.stat().st_dev:
-            # The production adapter always uses the same bounded copy and
-            # publication path on either filesystem. Exercise a controlled
-            # second-chunk write failure if no second writable device was
-            # explicitly supplied, and record that this is not a real EXDEV run.
-            path = self.message('new/controlled-copy',raw=b'Subject: controlled copy\n\n'+bytes(range(256))*4096)
-            data = path.read_bytes()
-            rows = self.apply([path],7,dict(JF_TEST_FAIL='store-write',JF_TEST_FAIL_AT='2'))
-            self.assertEqual(rows[0]['status'],b'error')
-            self.assertEqual(path.read_bytes(),data)
-            self.inventory([(data,1)])
-            self.clean_private()
-            self.events.append(dict(cross_filesystem=dict(real=False,controlled_fault='store-write-at-2',
-                limitation='No explicit writable second filesystem available',source_retained=True)))
-            self.counts['controlled_cross_filesystem'] = self.counts.get('controlled_cross_filesystem',0)+1
-            return
-        owned = Path(tempfile.mkdtemp(prefix='l52-cross-source-',dir=EVIDENCE))
-        path = owned/'cross:2,FS'
-        data = b'Subject: cross device\n\n'+bytes(range(256))*4096
-        path.write_bytes(data)
-        source_device,destination_device = path.stat().st_dev,self.root.stat().st_dev
-        self.assertNotEqual(source_device,destination_device,'fixture must be a real cross-device transfer')
-        rows = self.apply([path])
-        self.assertEqual(rows[0]['status'],b'moved')
-        self.assertFalse(path.exists())
-        self.assertEqual(list(owned.iterdir()),[])
-        self.inventory([(data,1)])
-        self.clean_private()
-        self.counts['real_cross_filesystem'] += 1
-        self.events.append(dict(cross_filesystem=dict(source=str(owned),source_device=source_device,
-                                                     destination_device=destination_device,source_removed=True)))
-
-    def test_all_52_authored_apply_targets_and_actual_sieve(self):
-        target = json.loads((fixtures.FIXTURES/'target.json').read_text())
-        casing = json.loads((fixtures.FIXTURES/'casing.json').read_text())
-        groups = [(target['cases'],target['rules'],target), (target['domain_cases'],target['domain_rules'],{}),
-                  (casing['cases'],casing['rules'],casing)]
-        groups += [([case],case['rules'],{}) for case in target['isolated_domain_cases']]
+    def test_all_52_authored_apply_targets(self):
         all_bodies=[]
-        for group,(cases,rules,contacts) in enumerate(groups):
+        delivered=[]
+        for group,(cases,rules,contacts) in enumerate(fixtures.authored_groups()):
             books = {key:contacts.get(key,[]) for key in ['known','blacklist','own']}
-            product = self.compile(rules,**books)
+            self.compile(rules,**books)
             paths = [self.message(('cur/' if i%2 else 'new/')+'%d-%s:2,FS' % (group,case['id']),case['headers'])
                      for i,case in enumerate(cases)]
-            for path,case in zip(paths,cases):
-                self.oracle.expect(product/'Filters.sieve',path,case['sieve'],True,extensions='+regex')
-                self.counts['oracle_decisions'] += 1
             bodies = [p.read_bytes() for p in paths]
+            expected = []
+            for path, case in zip(paths, cases):
+                decision = fixtures.authored.PolicyTests().expected_decision(case, rules, **books)
+                expected.append(self.delivery_record(path, decision['id'], decision['local']))
             rows = self.apply(paths)
+            self.delivery_inventory(rows, expected, delivered)
+            delivered += expected
             for row,path,case,body in zip(rows,paths,cases,bodies):
                 self.assertEqual(row['status'],b'moved')
                 checked = dict(row,status=b'classified')
@@ -248,6 +244,48 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(self.counts['applied_targets'],52)
         # Some independent fixtures intentionally share message bytes.
         self.inventory(collections.Counter(all_bodies).items())
+        self.clean_private()
+
+    def test_occurrence_routes_mixed_mail_noop_and_wrong_directory_control(self):
+        rules = ['from-address winner@example.org move nested/priority',
+                 'to-address first@example.org move nested/first',
+                 'to-address second@example.org move nested/second']
+        self.compile(rules)
+        headers = [('From', 'winner@example.org'), ('To', 'second@example.org, first@example.org')]
+        a = self.message('new/body-a:2,FS', headers=headers, raw=b'From: winner@example.org\nTo: second@example.org, first@example.org\n\nbody A\x00')
+        b = self.message('cur/body-b:2,R', headers=headers, raw=b'From: winner@example.org\nTo: second@example.org, first@example.org\n\nbody B\xff')
+        c = self.message('new/recipient-overlap:2,S', headers={'To': 'second@example.org, first@example.org'})
+        malformed = self.message('new/malformed:2,F', raw=b'Subject missing colon\n\nretained body')
+        self.maildir(self.root / 'unsorted')
+        noop = self.message('new/already:2,RS', folder=self.root / 'unsorted')
+        paths = [a, b, c, malformed, noop]
+        expected = [self.delivery_record(path, fixtures.authored.explicit('from-address', 'winner@example.org', 'nested/priority'), 'nested/priority') for path in [a, b]]
+        expected += [self.delivery_record(c, fixtures.authored.explicit('to-address', 'first@example.org', 'nested/first'), 'nested/first'),
+                     self.delivery_record(malformed, None, None, 'error'),
+                     self.delivery_record(noop, 'builtin:unsorted', 'unsorted', 'noop')]
+        self.batch_paths(paths, code=7)  # Full-tree snapshot proves classify has no effects.
+        rows = self.apply(paths, code=7)
+        self.delivery_inventory(rows, expected)
+        before = body_files(self.root)
+        bad = [dict(item) for item in expected]
+        bad[0]['local'] = str(self.root / 'nested/wrong')
+        bad[0]['target'] = str(self.root / 'nested/wrong/cur' / a.name)
+        bad_rows = [dict(row) for row in rows]
+        bad_rows[0]['local'] = os.fsencode(bad[0]['local'])
+        with self.assertRaises(AssertionError) as rejected:
+            self.delivery_inventory(bad_rows, bad)
+        self.assertEqual(body_files(self.root), before, 'bad-route control must preserve all counts and hashes')
+        (self.case / 'bad-route-control.json').write_text(json.dumps(dict(
+            expected=bad, reported_status='moved', reported_local=bad[0]['local'],
+            rejection=str(rejected.exception), counts_and_hashes_unchanged=True,
+            actual=before), sort_keys=True, indent=2) + '\n')
+        print('Bad-route control: rejected false success and altered expected directory; counts/hashes unchanged')
+        # A rerun names exactly the recoverable retained message, without redelivery.
+        rerun = self.command([self.batch, '--root', self.root, '--mode', 'apply', '--maildir', self.incoming], code=7)
+        retained = self.decode(rerun)
+        self.assertEqual([row['path'] for row in retained], [os.fsencode(malformed)])
+        self.assertEqual(retained[0]['status'], b'error')
+        self.assertEqual(body_files(self.root), before)
         self.clean_private()
 
     def test_noop_does_not_change_source_bytes_flags_or_inode(self):
@@ -1121,18 +1159,6 @@ class StorageTests(unittest.TestCase):
         self.pool_names={first:a.name,second:b.name}
         self.assert_pool_bodies([first,second],alternatives={second})
 
-
-    def test_pool_real_cross_filesystem_keeps_complete_singleton_protocol(self):
-        paths,bodies=self.pool_messages(8)
-        cross=EVIDENCE/('pool-cross-'+self.case.name);cross.mkdir(parents=True)
-        self.assertNotEqual(cross.stat().st_dev,self.root.stat().st_dev,'real cross-filesystem prerequisite')
-        external=[]
-        for p in paths:
-            target=cross/p.name;target.write_bytes(p.read_bytes());p.unlink();external.append(target)
-        rows=self.apply(external)
-        self.assertEqual([r['status'] for r in rows],[b'moved']*8)
-        self.assertTrue(all(not p.exists() for p in external));self.assertEqual(list(cross.iterdir()),[]);self.assert_pool_bodies(bodies)
-        self.counts['real_cross_filesystem']+=1
 
     def test_pool_inode_alias_and_noop_dependencies_keep_singleton_attempt_semantics(self):
         self.compile();self.maildir(self.root/'unsorted')
