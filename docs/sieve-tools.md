@@ -1,9 +1,46 @@
-# Private Sieve validation tools
+# Pinned Sieve tools and runtime
 
-`make sieve-tools` builds only the extracted `sievec.c`, `sieve-test.c` and
-`sieve-tool.c` against an explicitly supplied **Dovecot/Pigeonhole 2.4.5**
-development installation. These are optional test oracles. Ordinary `make`,
-`make install` and Jaromail do not build or load Dovecot.
+A native Linux build configured with `SIEVE_DEPS_PREFIX` or the CMake cache
+path `JARO_SIEVE_DEPS_PREFIX` installs a private runtime. The compiler and
+binary loader use the packaged configuration and libraries. They run as the
+invoking user. Neither operation requires a Dovecot server or mail directory.
+
+```sh
+cmake -S . -B out/sieve -DCMAKE_BUILD_TYPE=Release \
+  -DJARO_SIEVE_DEPS_PREFIX=/absolute/private/development-prefix
+cmake --build out/sieve --parallel
+cmake --install out/sieve --prefix "/tmp/jaro install"
+runtime="/tmp/jaro install/share/jaromail/sieve"
+"$runtime/run" compile Filters.sieve Filters.svbin
+"$runtime/run" dump Filters.svbin
+"$runtime/run" identity
+```
+
+`compile` publishes the output after successful compilation. `dump` opens the
+named binary with Pigeonhole's `sieve_load` and needs no source file.
+`identity` verifies the installed byte inventory and prints the SHA256 of
+that inventory. The launcher checks it before either tool runs, then invokes
+the packaged `doveconf` with an explicit configuration, settings module and
+library directory. Pigeonhole's bytecode belongs to that host runtime.
+
+When publishing a policy, `jaro-filter-compile` resolves the runtime relative
+to its own executable. Set `JARO_SIEVE_RUNTIME` to the absolute directory
+containing `run` and `SHA256SUMS` to use an existing package. The generation
+manifest records the input fingerprint, source and executable digests, runtime
+inventory digest and profile digest. An unchanged update validates the
+published products and reuses the executable.
+
+| Distribution | Link and load dependencies |
+| --- | --- |
+| Native Linux, matched shared runtime | Private `libdovecot{,-storage,-sieve,-lda,-managesieve}.so.0`, `libpigeonhole_settings.so` and `doveconf`. The Maildir driver is compiled into `libdovecot-storage`. The qualified x86-64 glibc profile uses the host ELF loader, libc, libm, zlib and PCRE2-32. The launcher uses POSIX sh and GNU coreutils. |
+| Linux static musl, x86-64 and arm64 | Existing static helpers have no dynamic Dovecot dependency. The signed dependency recipe builds shared libraries and the settings loader uses a module. A Sieve installation on these systems requires a separately built, target-native shared runtime with its ELF loader and system libraries. Cross builds reject an explicit native runtime prefix. |
+| macOS and other native targets | The private ELF runtime build is available on Linux. |
+
+Without a Sieve prefix, CMake builds the existing application helpers. The
+standalone `make sieve-tools` target builds the pinned compiler, simulation
+tool, binary dumper and upstream Maildir frontend against the supplied
+development installation. Only the compiler and binary dumper are installed
+in the private runtime.
 
 ```sh
 SIEVE_DEPS_PREFIX=/absolute/private/development-prefix make sieve-tools
@@ -118,9 +155,7 @@ The PR workflow caches external prerequisites and ccache, then always runs
 the provisioner, `make sieve-tools` and `make test-strict`. A GitHub cache hit
 does not bypass validation. Local `make test` reports missing oracle prerequisites
 with exit 77. Strict execution fails on any such skip, wrong versions or missing
-private tools. Normal `make` and `make install` remain independent of this target;
-the application build/install regression exercises them without any Sieve prefix
-and with unusable system Sieve tools.
+private tools. The CMake runtime build uses its own fingerprinted build output.
 
 ### Optional regex oracle prerequisite
 
@@ -133,8 +168,7 @@ resolving inside the same prefix. No system installation is performed.
 
 The option uses the same signed and pinned Dovecot/Pigeonhole archives, enables
 `--with-pcre2`, and records PCRE2 header/library hashes, link flags and runtime
-search path in the build identity. The matched source-built frontends remain
-test oracles. PCRE2 support alone does not qualify POSIX ERE equivalence: an
+search path in the build identity. The fixture evaluator uses the same pinned runtime. PCRE2 support alone does not qualify POSIX ERE equivalence: an
 explicit supported subset and compiler-bound independent evidence are still
 required before a regex export profile can be admitted.
 

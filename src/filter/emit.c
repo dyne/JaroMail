@@ -12,10 +12,11 @@ static int quote_zsh(struct jf_bytes *b, const char *s)
 	return jf_bytes_text(b,"'");
 }
 
-static int quote_sieve(struct jf_bytes *b, const char *s)
+static int quote_sieve(struct jf_bytes *b, const char *s, int glob)
 {
 	if (jf_bytes_text(b,"\"")) return 3;
 	for (;*s;s++) {
+		if (glob && *s=='?' && jf_bytes_text(b,"\\\\")) return 3;
 		if ((*s=='"' || *s=='\\') && jf_bytes_text(b,"\\")) return 3;
 		if (jf_bytes_add(b,s,1)) return 3;
 	}
@@ -25,7 +26,7 @@ static int quote_sieve(struct jf_bytes *b, const char *s)
 const char *jf_kind_name(enum jf_kind kind)
 {
 	static const char *names[]={"address","domain-apex","domain-subdomains","ere",
-		"sender-contains","spam-is","always"};
+		"sender-contains","spam-is","always","glob"};
 	return (unsigned)kind<sizeof names/sizeof *names ? names[kind] : NULL;
 }
 
@@ -70,7 +71,7 @@ static int zsh(const struct jf_policy *policy, struct jf_bytes *b)
 static int action(struct jf_bytes *b, const struct jf_profile *p, const char *mailbox)
 {
 	return jf_bytes_text(b,p->create ? "fileinto :create " : "fileinto ") ||
-		quote_sieve(b,mailbox) || jf_bytes_text(b,";");
+		quote_sieve(b,mailbox,0) || jf_bytes_text(b,";");
 }
 
 int jf_emit_text(const struct jf_policy *policy, const struct jf_profile *profile,
@@ -107,10 +108,10 @@ int jf_emit_text(const struct jf_policy *policy, const struct jf_profile *profil
 			} else {
 				if (!fields) return jf_product_error(error,"E_RULE",r->line,"invalid address field mask");
 				if (jf_bytes_text(b,r->kind==JF_ERE ? "address :all :regex " : r->kind==JF_ADDRESS ? "address :all :is " :
-					r->kind==JF_DOMAIN_APEX ? "address :domain :is " : "address :domain :matches ") ||
+					r->kind==JF_GLOB ? "address :all :matches " : r->kind==JF_DOMAIN_APEX ? "address :domain :is " : "address :domain :matches ") ||
 					jf_bytes_text(b,":comparator \"i;ascii-casemap\" ") || jf_bytes_text(b,fields) || jf_bytes_text(b," ")) goto memory;
 			}
-			if (quote_sieve(b,r->predicate) || jf_bytes_text(b," { ") || action(b,profile,mailboxes[i]) ||
+			if (quote_sieve(b,r->predicate,r->kind==JF_GLOB) || jf_bytes_text(b," { ") || action(b,profile,mailboxes[i]) ||
 				jf_bytes_text(b," stop; }\n")) goto memory;
 		}
 		if (jf_bytes_text(b,"}\n")) goto memory;

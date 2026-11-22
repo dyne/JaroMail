@@ -6,7 +6,7 @@ explicit exception to the minimal Sieve extraction policy below.
 
 ## Minimal Sieve tool source extraction
 
-Only the files needed for the **sievec** and **sieve-test** command frontends
+The compiler, evaluator, binary loader and Maildir frontend sources
 are extracted from Pigeonhole 2.4.5, pinned to Git commit
 `742bb8923b5aab398f8d962e827fcde7ad4a3f73`:
 
@@ -14,6 +14,8 @@ are extracted from Pigeonhole 2.4.5, pinned to Git commit
 | --- | --- |
 | `src/sieve-tools/sievec.c` | Compiler entry point |
 | `src/sieve-tools/sieve-test.c` | Fixture evaluator entry point |
+| `src/sieve-tools/sieve-dump.c` | Loads a compiled program with `sieve_load` |
+| `src/sieve-tools/sieve-filter.c` | Mailbox storage and batch delivery frontend |
 | `src/lib-sieve-tool/sieve-tool.c` | Shared command implementation |
 | `src/lib-sieve-tool/sieve-tool.h` | Shared command interface |
 | `src/lib-sieve/util/mail-raw.h` | Private raw-message interface used by the shared implementation |
@@ -31,7 +33,7 @@ archive signature verification is not an offline test of this extraction.
 
 This is a minimal frontend source slice, **not a standalone Sieve interpreter**.
 It requires matching Dovecot core and Pigeonhole **2.4.5 development headers and
-libraries** supplied as test-build prerequisites outside the vendor tree.
+libraries** supplied as build prerequisites outside the vendor tree.
 The shared helper links to `libdovecot-sieve`, `libdovecot-storage`,
 `libdovecot-lda`, and `libdovecot`. The retained `mail-raw.h` pins the private
 raw-mail interface even when development packages omit that header. Its functions
@@ -39,17 +41,17 @@ come from the matched Sieve library, so their implementation is not duplicated.
 
 The opt-in `make sieve-tools` build checks versions and required symbols before
 compiling and uses the selected sources and matched generated development headers.
-See [the private tool build instructions](../doc/sieve-tools.md) for prerequisites,
+See [the private tool build instructions](../docs/sieve-tools.md) for prerequisites,
 fingerprints and private output paths. If development dependencies
 are built from upstream sources, keep those source/build caches outside this
 repository; never expand the vendor tree to a full distribution as a workaround.
 Additional Pigeonhole source requires a demonstrated compile/link dependency,
 per-file provenance, a reason, and an updated minimal-scope regression.
 
-The ordinary application build does not compile these tools. This development
-dependency does not add a Dovecot runtime requirement to ordinary Jaromail mail
-processing. Isolated semantic fixture configuration is covered separately from
-frontend compilation.
+Native Linux builds configured with a matched development prefix also install
+the compiler, binary loader and private runtime. Dovecot's attribution and
+license notices in `dovecot/licenses/` come from the pinned 2.4.5 core release.
+Verify their hashes with the same manifest.
 
 ## Verification and maintenance
 

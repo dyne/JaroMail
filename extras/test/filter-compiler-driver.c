@@ -148,7 +148,7 @@ int main(int argc, char **argv)
 	if (argc<3 || argc>6) return 2;
 	if (!strcmp(argv[1],"--validate") && argc==5) {
 		if (load(argv[2],&products.cache,JF_CACHE_FILE_MAX) || load(argv[3],&products.zsh,JF_CACHE_MAX) || load(argv[4],&products.sieve,JF_CACHE_MAX)) rc=3;
-		else rc=jf_cache_validate(products.cache.data,products.cache.size,&products.zsh,&products.sieve,NULL,&error);
+		else rc=jf_cache_validate(products.cache.data,products.cache.size,&products.zsh,&products.sieve,NULL,NULL,&error);
 		goto done;
 	}
 	rc=jf_snapshot_read(argv[1],argc>4 && *argv[4] ? argv[4] : NULL,

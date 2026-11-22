@@ -76,10 +76,11 @@ int main(int argc,char **argv)
 	struct jf_generation g={0}; struct jf_error error={0}; int rc,fd; char buffer[4096]; ssize_t n;
 	g.directory=-1;
 	if (argc<2 || argc>3) return 2;
-	rc=jf_generation_pin(argv[1],argc==3 ? argv[2] : NULL,&g,&error); if (rc) return rc;
+	int bytecode=argc==3 && !strcmp(argv[2],"--bytecode");
+	rc=jf_generation_pin(argv[1],argc==3 && !bytecode ? argv[2] : NULL,&g,&error); if (rc) return rc;
 	if (jf_generation_test_hook("pinned")) { jf_generation_close(&g); return 3; }
 	fwrite(g.id,1,65,stdout);
-	fd=jf_generation_open(&g,"filters.zsh"); if (fd<0) { jf_generation_close(&g); return 3; }
+	fd=jf_generation_open(&g,bytecode ? "Filters.svbin" : "filters.zsh"); if (fd<0) { jf_generation_close(&g); return 3; }
 	while ((n=read(fd,buffer,sizeof buffer))>0) if (fwrite(buffer,1,(size_t)n,stdout)!=(size_t)n) break;
 	rc=n<0 || ferror(stdout) ? 3 : 0;
 	close(fd); jf_generation_close(&g); return rc;

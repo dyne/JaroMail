@@ -152,6 +152,20 @@ class CompilerTests(unittest.TestCase):
         self.oracle.expect(out / 'Filters.sieve', message, case.get('sieve', case.get('mailbox')), create)
         COUNTS['oracle_decisions'] += 1
 
+    def test_glob_source_fields_escapes_and_lines(self):
+        pattern = r'*+Q?[x].\*\\@*.CH'
+        out, decoded = self.build(['# line 1', 'to-glob ' + json.dumps(pattern) + ' move shop',
+                                   'from-glob *+list@*.org move list'])
+        text = (out / 'Filters.sieve').read_text()
+        self.assertIn('address :all :matches :comparator "i;ascii-casemap" ["To","Cc"] ' +
+                      json.dumps(r'*+q\?[x].\*\\@*.ch'), text)
+        self.assertIn('["From","Sender"] "*+list@*.org"', text)
+        self.assertNotIn('"regex"', text)
+        glob = [r for tag, r in decoded if tag == b'R' and r[2] == b'glob']
+        self.assertEqual([(r[1], r[3], r[10]) for r in glob], [(b'3', b'3', b'3'), (b'4', b'12', b'2')])
+        for invalid in [r'x\q', 'unfinished' + chr(92)]:
+            self.build(['to-glob ' + json.dumps(invalid) + ' move folder'], error=(4, 'E_GLOB'))
+
     def test_independent_domain_corpus(self):
         target = json.loads((FIXTURES / 'target.json').read_text())
         out, _ = self.build(target['domain_rules'])

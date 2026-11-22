@@ -87,12 +87,12 @@ class ParityTests(unittest.TestCase):
         cls.compiler, cls.batch, cls.pure = (cls.objects / x for x in
                                             ('jaro-filter-compile', 'jaro-filter', 'filter-policy-driver'))
         cls.oracle = SieveOracle(cls.work / 'oracle', os.environ['SIEVE_DEPS_PREFIX'])
-        cls.events, cls.decisions, cls.mutations = [], [], []
+        cls.events, cls.decisions, cls.mutations, cls.glob_decisions = [], [], [], []
 
     @classmethod
     def tearDownClass(cls):
         (cls.work / 'commands.json').write_text(json.dumps(cls.events, indent=2) + '\n')
-        (cls.work / 'matrix.json').write_text(json.dumps({'decisions': cls.decisions, 'mutations': cls.mutations}, indent=2) + '\n')
+        (cls.work / 'matrix.json').write_text(json.dumps({'decisions': cls.decisions, 'mutations': cls.mutations, 'globs': cls.glob_decisions}, indent=2) + '\n')
         if cls.temp:
             cls.temp.cleanup()
 
@@ -256,6 +256,34 @@ class ParityTests(unittest.TestCase):
             for label, actual in (('original', root), ('imported', clone)):
                 self.evaluate(actual, cases, rules, 'regex-%d-%s' % (i, label))
 
+    def test_whole_address_globs_in_pigeonhole_before_and_after_import(self):
+        rules = ['from-glob announce*@list.org move announcements', 'to-glob *+shop@*.ch move shopping',
+                 'to-glob q?*@example.org move question', r'to-glob lit\**@example.org move star',
+                 'to-address lea+shop@example.ch move later', 'to-glob first*last@example.org move empty',
+                 'to-glob ' + json.dumps(r'*[x]*@example.org') + ' move brackets',
+                 'to-glob ' + json.dumps(r'*\\*@example.org') + ' move backslash']
+        cases = [('To', 'lea+shop@example.ch', 'shopping'), ('Cc', 'a+b+shop@mx.example.ch', 'shopping'),
+                 ('To', '+SHOP@HOST.CH', 'shopping'), ('To', 'lea@example.ch', 'unsorted'),
+                 ('To', 'lea+shopping@example.ch', 'unsorted'), ('To', 'lea+shop@example.ch.example.org', 'unsorted'),
+                 ('To', 'lea+shop@example.org, bob@example.ch', 'unsorted'), ('To', 'q?abc@example.org', 'question'),
+                 ('To', 'qxabc@example.org', 'unsorted'), ('To', 'lit*abc@example.org', 'star'),
+                 ('To', 'litabc@example.org', 'unsorted'), ('To', 'firstlast@example.org', 'empty'),
+                 ('Sender', 'ANNOUNCE@LIST.ORG', 'announcements'), ('From', 'announce-news@list.org', 'announcements'),
+                 ('From', 'lea+shop@example.ch', 'unsorted'), ('To', '"has[x]"@example.org', 'brackets'),
+                 ('To', r'"has\\slash"@example.org', 'backslash')]
+        root = self.build('original', rules, profile=CORE)
+        for location in (root, self.imported(root, 'imported')):
+            source = location / 'Filters.sieve'
+            self.assertEqual(source.read_text().splitlines()[0], 'require ["fileinto","mailbox"];')
+            self.oracle.compile(source, extensions='-regex')
+            for n, (field, address, mailbox) in enumerate(cases):
+                with self.subTest(location=location.name, address=address, field=field):
+                    message = self.case / ('message-%02d.eml' % n)
+                    message.write_text(f'{field}: {address}\n\nfixture\n')
+                    observed = self.oracle.expect(source, message, mailbox, create=True, extensions='-regex')
+                    self.glob_decisions.append(dict(variant=location.name, field=field, address=address,
+                                                    expected=mailbox, observed=observed['mailbox']))
+
     def test_core_without_regex_or_mailbox_create(self):
         rules = ['from-address exact@example.org move exact']
         cases = [
@@ -317,7 +345,9 @@ if __name__ == '__main__':
         'executed': result.testsRun, 'failed': len(result.failures) + len(result.errors),
         'skipped': len(result.skipped), 'positive_decisions_per_backend': len(getattr(ParityTests, 'decisions', [])),
         'mutation_controls': len(getattr(ParityTests, 'mutations', [])),
+        'glob_decisions': len(getattr(ParityTests, 'glob_decisions', [])),
         'all_commands_waited': True}, sort_keys=True))
     if result.wasSuccessful():
-        assert result.testsRun == 6 and len(ParityTests.decisions) == 432 and len(ParityTests.mutations) == 2
+        assert len(ParityTests.glob_decisions) == 34
+        assert result.testsRun == 7 and len(ParityTests.decisions) == 432 and len(ParityTests.mutations) == 2
     raise SystemExit(not result.wasSuccessful())

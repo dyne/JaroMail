@@ -234,6 +234,24 @@ static int action(struct parser *p,char **mailbox)
 	return next(p) || take(p,';') ? p->rc : 0;
 }
 
+/* Reverse the match-pattern layer after quoted-string decoding. Filters.txt
+ * reserves only unescaped star. A bare Sieve '?' cannot round-trip. */
+static int import_glob(char *pattern)
+{
+	char *out=pattern;
+	for (const char *s=pattern;*s;s++) {
+		if (*s=='?') return 0;
+		if (*s=='\\') {
+			s++;
+			if (*s=='*' || *s=='\\') *out++='\\';
+			else if (*s!='?') return 0;
+		}
+		*out++=*s;
+	}
+	*out=0;
+	return 1;
+}
+
 static int rule(struct parser *p,unsigned stage,unsigned *legacy_stage)
 {
 	struct strings fields={0},keys={0}; char *mailbox=NULL,*destination=NULL;
@@ -302,6 +320,9 @@ static int rule(struct parser *p,unsigned stage,unsigned *legacy_stage)
 					int wildcard=!strncmp(keys.items[i],"*.",2);
 					if ((match==2)!=wildcard) goto bad;
 					selector=stage==3 ? "from-domain" : stage==4 ? "to-domain" : "known-domain";
+				} else if (part==1 && match==2 && (stage==3 || stage==4)) {
+					if (!import_glob(keys.items[i])) goto bad;
+					selector=stage==3 ? "from-glob" : "to-glob";
 				} else if (part==1 && match==3 && (stage==3 || stage==4)) selector=stage==3 ? "from" : "to";
 				else goto bad;
 			}

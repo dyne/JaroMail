@@ -130,6 +130,19 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(first.stdout.split(b'\0')[1], second.stdout.split(b'\0')[1])
         self.assertEqual(self.snapshot(), before)
 
+    def test_glob_literal_roundtrip_and_reject_single_character_wildcard(self):
+        raw = r'*+Q?[x].\*\\@*.CH'
+        (self.source / 'Filters.txt').write_text('to-glob ' + json.dumps(raw) + ' move shopping\n')
+        self.compile(self.source)
+        self.script.write_bytes((self.source / 'Filters.sieve').read_bytes())
+        self.do_import()
+        self.assertEqual((self.root / 'Filters.sieve').read_bytes(), self.script.read_bytes())
+        self.assertEqual(self.policy(self.source), self.policy(self.root))
+        before = self.snapshot()
+        self.script.write_text(self.script.read_text().replace(r'\\?', '?'))
+        self.do_import(expected=4)
+        self.assert_restored(before)
+
     def test_comments_whitespace_tag_order_and_string_lists(self):
         text = self.script.read_text().replace('require [', '/* audit comments are irrelevant */\nReQuIrE [')
         text = text.replace('address :all :is :comparator "i;ascii-casemap"',

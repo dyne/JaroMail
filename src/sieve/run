@@ -1,0 +1,40 @@
+#!/bin/sh
+# Invoke the pinned compiler or binary loader with Jaromail's private settings.
+set -eu
+PATH=/usr/bin:/bin
+export PATH
+runtime=$(CDPATH='' cd -P -- "$(dirname -- "$0")" && pwd)
+case "${1:-}" in
+    compile) tool=sievec; [ "$#" -eq 3 ] || exit 64 ;;
+    dump) tool=sieve-dump; [ "$#" -eq 2 ] || exit 64 ;;
+    identity) tool=; [ "$#" -eq 1 ] || exit 64 ;;
+    *) echo 'usage: run compile SOURCE BINARY | dump BINARY | identity' >&2; exit 64 ;;
+esac
+shift
+if ! (cd "$runtime" && sha256sum --check --quiet SHA256SUMS >&2); then
+    echo "jaro-sieve: incomplete or changed pinned runtime in $runtime" >&2
+    exit 1
+fi
+if [ -z "$tool" ]; then
+    (cd "$runtime" && sha256sum SHA256SUMS)
+    exit
+fi
+run_tool() {
+    env -i PATH=/usr/bin:/bin HOME="${HOME:-/}" USER="$(id -un)" \
+        LD_LIBRARY_PATH="$runtime/lib" CONFIG_MODULES="$runtime/lib/libpigeonhole_settings.so" \
+        "$runtime/bin/doveconf" -c "$runtime/dovecot.conf" -F "$runtime/bin/$tool" -- "$@"
+}
+if [ "$tool" = sieve-dump ]; then
+    run_tool "$1"
+    exit
+fi
+# sievec can return success even if sieve_save_as failed. Publish only new bytes.
+stage=$(mktemp -d -- "$(dirname -- "$2")/.jaro-sievec.XXXXXXXX")
+trap 'rm -rf -- "$stage"' EXIT
+trap 'exit 1' HUP INT TERM
+run_tool "$1" "$stage/program"
+if [ ! -s "$stage/program" ]; then
+    echo "jaro-sieve: compiler produced no bytecode for $1" >&2
+    exit 1
+fi
+mv -fT -- "$stage/program" "$2"

@@ -13,7 +13,33 @@
     }
   },
   "directory": "pigeonhole/upstream",
-  "programs": ["sievec", "sieve-test"],
+  "programs": ["sievec", "sieve-test", "sieve-dump", "sieve-filter"],
+  "dovecot_notices": {
+    "directory": "dovecot/licenses",
+    "archive_sha256": "868c2686a61b5f8e00a3e4721789b1ab46e6528fd773a5fbed07a6ecba7731e6",
+    "files": [
+      {
+        "path": "AUTHORS",
+        "size": 840,
+        "sha256": "ad1405153e8f0c8fef6356e65475047da55ccc29a1b5191e77447f99af13f3bc"
+      },
+      {
+        "path": "COPYING",
+        "size": 4079,
+        "sha256": "4825bf42bebc624c4ce283bd6147daa1aa2c874a12af6f7fb7b07a2c793cc131"
+      },
+      {
+        "path": "COPYING.LGPL",
+        "size": 26530,
+        "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551"
+      },
+      {
+        "path": "COPYING.MIT",
+        "size": 1023,
+        "sha256": "52b8c95fabb19575281874b661ef7968ea47e8f5d74ba0dd40ce512e52b3fc97"
+      }
+    ]
+  },
   "external_build_dependencies": {
     "dovecot_core_version": "2.4.5",
     "pigeonhole_version": "2.4.5",
@@ -52,6 +78,18 @@
       "reason": "Sieve fixture evaluator command entry point",
       "size": 12488,
       "sha256": "e5477ac5f5fd80183271918283282676edaa765c3a73e9ea875fb50a8d440153"
+    },
+    {
+      "path": "src/sieve-tools/sieve-dump.c",
+      "reason": "Binary loader for verifying host-local compiled programs with sieve_load",
+      "size": 1890,
+      "sha256": "18efe7ef35203ea7597764b2aa79673833a3fdfebac927eecb071767bc5929fa"
+    },
+    {
+      "path": "src/sieve-tools/sieve-filter.c",
+      "reason": "Maildir storage and batch execution frontend for the local delivery adapter",
+      "size": 15960,
+      "sha256": "adfeaa570099a9dcefac89de1fb7db659ca7239711c42da67035f20964952506"
     },
     {
       "path": "src/lib-sieve-tool/sieve-tool.c",

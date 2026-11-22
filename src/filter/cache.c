@@ -136,7 +136,7 @@ int jf_products_build(const struct jf_policy *policy, const struct jf_profile *p
 	if (jf_bytes_text(&p.cache,"JFNCACHE") || u32(&p.cache,1) || u32(&p.cache,1) || u64(&p.cache,payload.size) ||
 		jf_bytes_add(&p.cache,p.fingerprint,32) || jf_bytes_add(&p.cache,pd,32) ||
 		jf_bytes_add_limit(&p.cache,payload.data,payload.size,JF_CACHE_FILE_MAX)) goto memory;
-	rc=jf_cache_validate(p.cache.data,p.cache.size,&p.zsh,&p.sieve,p.fingerprint,error);
+	rc=jf_cache_validate(p.cache.data,p.cache.size,&p.zsh,&p.sieve,p.fingerprint,NULL,error);
 	if (!rc) { *out=p; memset(&p,0,sizeof p); }
 	goto done;
 memory:
@@ -210,7 +210,7 @@ static int id(struct view v)
 }
 
 int jf_cache_validate(const unsigned char *data, size_t size, const struct jf_bytes *zsh,
-	const struct jf_bytes *sieve, const unsigned char *fingerprint, struct jf_error *error)
+	const struct jf_bytes *sieve, const unsigned char *fingerprint, struct jf_sieve_binding *binding, struct jf_error *error)
 {
 	struct view previous_role={0}, previous_path={0};
 	struct jf_sha256 hash;
@@ -219,6 +219,7 @@ int jf_cache_validate(const unsigned char *data, size_t size, const struct jf_by
 	uint32_t count;
 	int phase=0, fallback=0, bounce=0, spam=0,regex_profile=0,qualification=0,catalogue=0,normalization=0;
 	uint64_t payload=0;
+	if (binding) memset(binding,0,sizeof *binding);
 	if (size<92 || jf_cache_file_size(size-JF_CACHE_HEADER_SIZE,NULL) || memcmp(data,"JFNCACHE",8) || read32(data+8)!=1 || read32(data+12)!=1) goto bad;
 	for (i=0;i<8;i++) payload|=(uint64_t)data[16+i]<<(i*8);
 	if (payload!=size-88 || (fingerprint && memcmp(fingerprint,data+24,32))) goto bad;
@@ -259,6 +260,10 @@ int jf_cache_validate(const unsigned char *data, size_t size, const struct jf_by
 				jf_digest(f[4].data,f[4].size,digest); if (memcmp(digest,f[3].data,32)) goto bad;
 			}
 			previous_role=f[0]; previous_path=f[1];
+			if (binding && f[3].size==32) {
+				if (equal(f[0],"input.sieve-runtime")) jf_digest_hex(f[3].data,binding->runtime);
+				if (equal(f[0],"config.profile")) jf_digest_hex(f[3].data,binding->profile);
+			}
 			if (equal(f[0],"config.address-normalization")) {
 				if (f[1].size || !equal(f[2],"1") || !equal(f[4],JF_ADDRESS_NORMALIZATION)) goto bad;
 				normalization=1;
@@ -296,6 +301,12 @@ int jf_cache_validate(const unsigned char *data, size_t size, const struct jf_by
 					if (!jf_valid_domain(domain)) goto bad;
 					for (k=0;domain[k];k++) if (domain[k]>='A' && domain[k]<='Z') goto bad;
 				}
+			} else if (equal(f[2],"glob")) {
+				char pattern[JF_LINE_MAX+1];
+				if (f[5].size>JF_LINE_MAX || !jf_valid_utf8(f[5].data,f[5].size) ||
+					!((stage==3 && mask==3) || (stage==4 && mask==12))) goto bad;
+				memcpy(pattern,f[5].data,f[5].size); pattern[f[5].size]=0;
+				if (!jf_valid_glob(pattern)) goto bad;
 			} else if (equal(f[2],"ere")) {
 				char pattern[JF_LINE_MAX+1];
 				if (!regex_profile || !qualification || !catalogue || !f[5].size || f[5].size>JF_LINE_MAX ||
@@ -330,7 +341,7 @@ int jf_cache_policy(const struct jf_bytes *cache, const struct jf_allocator *all
 	if (!cache || (cache->size && !cache->data)) {
 		jf_product_error(error,"E_CACHE",0,"missing cache bytes"); return 5;
 	}
-	if ((rc=jf_cache_validate(cache->data,cache->size,NULL,NULL,NULL,error))) return rc;
+	if ((rc=jf_cache_validate(cache->data,cache->size,NULL,NULL,NULL,NULL,error))) return rc;
 	/* Validation established complete framing, record counts and order. Keep
 	 * views into the pinned bytes only until the shared policy owns its copies. */
 	for (i=0;i<read32(cache->data+88);i++) {

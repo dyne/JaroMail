@@ -56,10 +56,10 @@ with tempfile.TemporaryDirectory(prefix="jaro-sieve-build-", dir=os.environ.get(
     invoke(message="BUILT ")
     generation = (output / "current").resolve()
     record = json.loads((generation / "build.json").read_text())
-    assert len(record["commands"]) == 5
-    compile_commands, links = record["commands"][:3], record["commands"][3:]
+    assert len(record["commands"]) == 9
+    compile_commands, links = record["commands"][:5], record["commands"][5:]
     assert {Path(c[c.index("-c") + 1]).name for c in compile_commands} == {
-        "sievec.c", "sieve-test.c", "sieve-tool.c"}
+        "sievec.c", "sieve-test.c", "sieve-dump.c", "sieve-filter.c", "sieve-tool.c"}
     for command in compile_commands:
         assert "-DJARO_SIEVE_CPPFLAG=1" in command and "-DJARO_SIEVE_CFLAG=1" in command
     if shutil.which("ccache") and "CCACHE" not in os.environ and "ccache" not in env.get("CC", ""):
@@ -74,12 +74,14 @@ with tempfile.TemporaryDirectory(prefix="jaro-sieve-build-", dir=os.environ.get(
     assert vendor_dependencies == {
         "pigeonhole/upstream/src/sieve-tools/sievec.c",
         "pigeonhole/upstream/src/sieve-tools/sieve-test.c",
+        "pigeonhole/upstream/src/sieve-tools/sieve-dump.c",
+        "pigeonhole/upstream/src/sieve-tools/sieve-filter.c",
         "pigeonhole/upstream/src/lib-sieve-tool/sieve-tool.c",
         "pigeonhole/upstream/src/lib-sieve-tool/sieve-tool.h",
         "pigeonhole/upstream/src/lib-sieve/util/mail-raw.h"}
     assert str(prefix / "include/dovecot/config.h") in record["dependencies"]
     assert str(prefix / "include/dovecot/sieve/pigeonhole-config.h") in record["dependencies"]
-    for name in ("sievec", "sieve-test"):
+    for name in ("sievec", "sieve-test", "sieve-dump", "sieve-filter"):
         mapping = (generation / (name + ".map")).read_text()
         assert "mail_raw_open_file" in mapping
         for library in ("dovecot-sieve", "dovecot-storage", "dovecot-lda", "dovecot"):
@@ -93,7 +95,7 @@ with tempfile.TemporaryDirectory(prefix="jaro-sieve-build-", dir=os.environ.get(
         # --as-needed can omit lda because these entry points do not use its symbols.
         for library in ("dovecot-sieve", "dovecot-storage", "dovecot"):
             assert str(prefix / "lib/dovecot" / ("lib" + library + ".so")) in dynamic, dynamic
-    passed("exact five source/header dependencies, matched dynamic links/private symbols, both mains run")
+    passed("exact seven source/header dependencies, matched dynamic links/private symbols, four mains run")
 
     original_mtime = (generation / "bin/sievec").stat().st_mtime_ns
     invoke(message="REUSE ")
@@ -114,8 +116,8 @@ with tempfile.TemporaryDirectory(prefix="jaro-sieve-build-", dir=os.environ.get(
     if shutil.which("ccache"):
         invoke({"CC": "ccache cc", "CCACHE": ""}, message="BUILT ")
         wrapped = json.loads((output / "current/build.json").read_text())
-        assert all(Path(c[0]).name == "ccache" and c.count("ccache") == 1 for c in wrapped["commands"][:3])
-        assert all(Path(c[0]).name != "ccache" for c in wrapped["commands"][3:])
+        assert all(Path(c[0]).name == "ccache" and c.count("ccache") == 1 for c in wrapped["commands"][:5])
+        assert all(Path(c[0]).name != "ccache" for c in wrapped["commands"][5:])
         passed("caller ccache compiler is preserved once and excluded from links")
 
     invoke({"SIEVE_DEPS_PREFIX": str(root / "absent")}, 1, "sieve-tools:")
@@ -169,6 +171,58 @@ with tempfile.TemporaryDirectory(prefix="jaro-sieve-build-", dir=os.environ.get(
                1, "injected-" + phase)
         assert not (failed_output / "current").exists()
         passed("injected " + phase + " failure propagates without publication")
+
+    # Use the real install rules, then remove the entire selected development prefix.
+    (cloned / "bin").mkdir()
+    shutil.copy2(prefix / "bin/doveconf", cloned / "bin/doveconf")
+    build = root / "package build"
+    install = root / "install with spaces"
+    subprocess.run(["cmake", "-S", repo, "-B", build, "-DCMAKE_BUILD_TYPE=Release",
+                    "-DJARO_SIEVE_DEPS_PREFIX=" + str(cloned)], check=True)
+    subprocess.run(["cmake", "--build", build, "--target", "sieve-runtime"], check=True)
+    subprocess.run(["cmake", "--install", build, "--component", "sieve", "--prefix", install], check=True)
+    cloned.rename(root / "unavailable development prefix")
+    moved = root / "relocated application"
+    install.rename(moved)
+    runtime = moved / "share/jaromail/sieve"
+    assert (moved / "share/jaromail/licenses/dovecot/COPYING.MIT").is_file()
+    assert (moved / "share/jaromail/licenses/pigeonhole/COPYING.LGPL").is_file()
+    home = root / "empty home"
+    home.mkdir()
+    isolated = {"PATH": "/usr/bin:/bin", "HOME": str(home), "DOVECOT_CONFIG_FD": "wrong",
+                "DOVECONF_PATH": "/missing", "CONFIG_MODULES": "/missing"}
+    loader_env = dict(isolated, LD_LIBRARY_PATH=str(runtime / "lib"))
+    for program in [*sorted((runtime / "bin").iterdir()), runtime / "lib/libpigeonhole_settings.so"]:
+        mapping = subprocess.check_output(["ldd", program], env=loader_env, text=True)
+        assert "not found" not in mapping, mapping
+        for line in mapping.splitlines():
+            if "libdovecot" in line:
+                assert "=> " + str(runtime / "lib") + "/" in line, line
+    policy = root / "sample policy.sieve"
+    binary = root / "compiled policy.svbin"
+    policy.write_text('require "fileinto"; fileinto "shopping";\n')
+    def installed(*arguments, expected=0):
+        result = subprocess.run([runtime / "run", *arguments], env=isolated, cwd=home,
+                                text=True, capture_output=True)
+        assert (result.returncode == 0) == (expected == 0), result
+        return result
+    installed("compile", policy, binary)
+    original = binary.read_bytes()
+    policy.write_text('not-a-command;')
+    installed("compile", policy, binary, expected=1)
+    assert binary.read_bytes() == original
+    assert not list(root.glob(".jaro-sievec.*"))
+    passed("failed compilation preserves previous bytecode and removes its temporary file")
+    policy.unlink()
+    dump = installed("dump", binary).stdout
+    assert "FILEINTO" in dump and "shopping" in dump, dump
+    assert not list(home.iterdir())
+    passed("relocated staged runtime loads source-free fileinto binary from a private configuration")
+    binary.write_bytes(b"invalid binary")
+    assert "failed to load binary" in installed("dump", binary, expected=1).stderr
+    (runtime / "lib/libdovecot-storage.so.0").unlink()
+    assert "incomplete or changed pinned runtime" in installed("dump", binary, expected=1).stderr
+    passed("incompatible binary and missing installed Maildir library diagnosed")
 
     (generation / "bin/sievec").write_bytes(b"corrupt output")
     invoke(expected=1, message="cached tool/development dependencies changed")

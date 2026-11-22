@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline build of the three pinned Pigeonhole frontend translation units."""
+"""Build pinned Pigeonhole frontends and an optional relocatable Linux runtime."""
 
 import argparse
 import hashlib
@@ -41,11 +41,57 @@ def macro(path, name):
     return match.group(1)
 
 
+def runtime_inputs(prefix):
+    libdir = prefix / "lib/dovecot"
+    files = {"bin/doveconf": prefix / "bin/doveconf",
+             "lib/libpigeonhole_settings.so": libdir / "settings/libpigeonhole_settings.so",
+             "dovecot.conf": REPO / "src/sieve/dovecot.conf", "run": REPO / "src/sieve/run"}
+    for name in (*LIBRARIES, "dovecot-managesieve"):
+        soname = "lib" + name + ".so.0"
+        files["lib/" + soname] = libdir / soname
+    for target, path in files.items():
+        if not path.is_file() or (target.startswith(("bin/", "lib/")) and
+                                  not path.resolve().is_relative_to(prefix)):
+            raise ValueError("missing private runtime dependency: " + str(path))
+    for name in LIBRARIES:
+        development = libdir / ("lib" + name + ".so")
+        installed = files["lib/lib" + name + ".so.0"]
+        if not development.samefile(installed) and digest(development) != digest(installed):
+            raise ValueError("runtime SONAME differs from the linked development library: " + str(installed))
+    if b"Pigeonhole version 2.4.5 (742bb892)" not in files["lib/libpigeonhole_settings.so"].read_bytes():
+        raise ValueError("Pigeonhole settings module version/revision mismatch")
+    storage = subprocess.check_output(["nm", "-D", "--defined-only",
+                                       files["lib/libdovecot-storage.so.0"]], text=True)
+    if not re.search(r"\bmaildir_storage$", storage, re.M):
+        raise ValueError("Dovecot storage library lacks the Maildir driver")
+    return files
+
+
+def package_runtime(stage, files):
+    runtime = stage / "runtime"
+    for name, source in files.items():
+        target = runtime / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    for tool in ("sievec", "sieve-dump"):
+        os.link(stage / "bin" / tool, runtime / "bin" / tool)
+    inventory = "".join(f"{digest(path)}  {path.relative_to(runtime)}\n"
+                        for path in sorted(runtime.rglob("*")) if path.is_file())
+    (runtime / "SHA256SUMS").write_text(inventory)
+    result = subprocess.check_output([runtime / "bin/doveconf", "-c", runtime / "dovecot.conf", "-n"],
+        env={"LD_LIBRARY_PATH": str(runtime / "lib"),
+             "CONFIG_MODULES": str(runtime / "lib/libpigeonhole_settings.so")}, text=True)
+    if not (result.startswith("# 2.4.5 (") and "# Pigeonhole version 2.4.5 (742bb892)\n" in result):
+        raise ValueError("packaged Dovecot/Pigeonhole configuration ABI mismatch")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--deps-prefix", default=os.environ.get("SIEVE_DEPS_PREFIX"))
     parser.add_argument("--output", default=os.environ.get(
         "SIEVE_TOOLS_OUTPUT", str(REPO / "build/sieve-tools")))
+    parser.add_argument("--package-runtime", action="store_true")
+    parser.add_argument("--compiler", help="single compiler executable selected by CMake")
     args = parser.parse_args()
     if not args.deps_prefix:
         raise ValueError("SIEVE_DEPS_PREFIX is required (matched 2.4.5 development installation)")
@@ -82,9 +128,11 @@ def main():
     run([sys.executable, REPO / "vendor/verify.py"])
 
     upstream = REPO / "vendor/pigeonhole/upstream/src"
-    sources = [upstream / "sieve-tools/sievec.c", upstream / "sieve-tools/sieve-test.c",
-               upstream / "lib-sieve-tool/sieve-tool.c"]
-    compiler = words("CC", "cc")
+    programs = manifest["programs"]
+    sources = [upstream / "sieve-tools" / (name + ".c") for name in programs]
+    sources.append(upstream / "lib-sieve-tool/sieve-tool.c")
+    runtime_files = runtime_inputs(prefix) if args.package_runtime else {}
+    compiler = [args.compiler] if args.compiler else words("CC", "cc")
     if not compiler:
         raise ValueError("CC must name a compiler")
     launcher = words("CCACHE") if "CCACHE" in os.environ else (
@@ -99,6 +147,7 @@ def main():
     includes = [upstream / "lib-sieve-tool", upstream / "lib-sieve/util", include, sieve_include]
     inputs = [p for p in include.rglob("*") if p.is_file()]
     inputs += libraries + [REPO / "vendor/sources.json", Path(__file__).resolve()]
+    inputs += list(runtime_files.values())
     inputs += [REPO / "vendor" / manifest["directory"] / e["path"] for e in manifest["files"]]
     for part in compiler + launcher:
         located = shutil.which(part)
@@ -138,16 +187,22 @@ def main():
         obj = stage / (source.stem + ".o")
         command = launcher + compiler + ["-DHAVE_CONFIG_H"] + ["-I" + str(p) for p in includes]
         command += cppflags + cflags
+        # Upstream headers and tools require GNU C extensions (including printf %m).
+        if args.package_runtime:
+            command.append("-Wno-pedantic")
         command += ["-MD", "-MF", str(obj.with_suffix(".d")), "-c", str(source), "-o", str(obj)]
         commands.append(command)
         run(command, env=env)
-    for name in ("sievec", "sieve-test"):
-        command = linker + ldflags + ["-Wl,--export-dynamic", "-Wl,-rpath," + libdir,
+    for name in programs:
+        rpath = "$ORIGIN/../lib" if args.package_runtime else libdir
+        command = linker + ldflags + ["-Wl,--export-dynamic", "-Wl,-rpath," + rpath,
             "-Wl,-Map," + str(stage / (name + ".map")), "-o", str(stage / "bin" / name),
             str(stage / (name + ".o")), str(stage / "sieve-tool.o")]
         command += list(map(str, libraries)) + ldlibs
         commands.append(command)
         run(command, env=env)
+    if runtime_files:
+        package_runtime(stage, runtime_files)
     # GCC dependency output quotes spaces with backslashes. Parse after joining continuations.
     dependencies = {}
     for depfile in stage.glob("*.d"):

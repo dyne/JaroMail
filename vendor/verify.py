@@ -15,7 +15,7 @@ def verify(root):
         raise ValueError("unsupported abook source manifest")
     expected = {"README.md", "sources.json", "verify.py", "abook/README.md", "abook/sources.json"}
     entries = []
-    for source in (manifest, abook):
+    for source in (manifest, manifest["dovecot_notices"], abook):
         directory = PurePosixPath(source["directory"])
         if directory.is_absolute() or ".." in directory.parts:
             raise ValueError("unsafe extraction directory")
@@ -51,8 +51,8 @@ def verify(root):
         data = target.read_bytes()
         if len(data) != entry["size"] or hashlib.sha256(data).hexdigest() != entry["sha256"]:
             raise ValueError("upstream source differs: " + entry["path"])
-    print("PASS: {} pinned upstream files ({} Sieve, {} abook), {} bytes; no extra vendor payload".format(
-        len(entries), len(manifest["files"]), len(abook["files"]), sum(entry["size"] for _, entry in entries)))
+    print("PASS: {} pinned upstream files ({} Sieve, {} Dovecot notices, {} abook), {} bytes; no extra vendor payload".format(
+        len(entries), len(manifest["files"]), len(manifest["dovecot_notices"]["files"]), len(abook["files"]), sum(entry["size"] for _, entry in entries)))
 
 
 if __name__ == "__main__":
