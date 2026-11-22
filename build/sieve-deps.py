@@ -235,7 +235,9 @@ def main():
     execute(["make", "install"] + make_options, core, "core-install")
     execute(["./configure", "--prefix=" + str(prefix), "--with-dovecot=" + str(prefix / "lib/dovecot")]
             + SIEVE_OPTIONS, sieve, "pigeonhole-configure")
-    for directory in ("src/lib-sieve", "src/lib-managesieve", "src/plugins/settings"):
+    # The private test server loads the delivery plugin for LMTP. The local
+    # application's packaged runtime continues to select its own components.
+    for directory in ("src/lib-sieve", "src/lib-managesieve", "src/plugins/settings", "src/plugins/lda-sieve"):
         name = directory.split("/")[-1]
         execute(["make", "-j" + str(args.jobs), "-C", directory] + make_options, sieve, name + "-build")
         execute(["make", "-C", directory, "install"] + make_options, sieve, name + "-install")

@@ -15,7 +15,72 @@ jaro-filter-compile --root ROOT --import-sieve FILE [--legacy-generated]
 jaro-sieve-filter --from INCOMING --to BASE [--dry-run] SCRIPT
 ```
 
-`--root` is required and nonempty. Helpers do not infer roots from cwd/HOME.
+The standalone delivery frontend requires absolute source and destination
+roots. It processes regular messages immediately inside `--from/cur` and
+`--from/new`. Its selection excludes `tmp` and nested Maildirs. A dry run
+evaluates a private snapshot. The default invocation applies the script,
+checks the saved destination, and then removes the claimed source.
+
+```sh
+jaro-sieve-filter --dry-run --from /mail/incoming --to /mail /policy/Filters.sieve
+jaro-sieve-filter --from /mail/incoming --to /mail /policy/Filters.sieve
+```
+
+The local folder profile accepts conditionals, tests, literal `fileinto`
+with optional `:create`, explicit or implicit `keep`, and `stop`. Validation
+rejects other actions, including `redirect`, `discard`, `reject` and
+`vacation`, even in branches that would never execute. Local `keep` retains
+the source. With the example roots, a `fileinto "INBOX"` saves to
+`/mail/INBOX`, `fileinto "Spam"` to `/mail/Spam`, and
+`fileinto "Projects/Letters"` to `/mail/Projects/Letters`. Delivery to the
+source mailbox itself keeps the original occurrence. A generated or
+hand-authored source file compiles once per standalone invocation. A source
+inside a verified generation loads its bound binary once for the batch.
+
+For server delivery, transfer the exported `Filters.sieve` to an active
+script location configured by the server administrator. A Sieve-enabled
+Dovecot LMTP service, including the Pigeonhole delivery plugin, must run
+after the MTA. The source defines logical mailbox names. The server
+qualification uses a Maildir namespace with a slash separator,
+`mailbox_list_layout = fs`, `mail_path` pointing to the mailbox root and
+`mail_inbox_path` pointing to the INBOX beneath that root. The tested
+Dovecot 2.4.5 configuration enables the `sieve` mail plugin for LMTP and
+uses a file-backed personal `sieve_script`. Each host owns its compiled
+binary. Verify every extension in the script's `require` declaration.
+
+A Dovecot 2.4.5 administrator can use the following settings with an
+existing LMTP service, user database and Maildir namespace. Install the
+export at the indicated path and allow the delivery user to write its
+compiled binary there.
+
+```text
+protocol lmtp {
+  mail_plugins {
+    sieve = yes
+  }
+}
+sieve_script personal {
+  driver = file
+  path = ~/policy/Filters.sieve
+}
+```
+
+LMTP receives the SMTP envelope directly. For already delivered mail the
+local frontend looks for the sender in Return-Path, Sender, then From and
+the recipient in Envelope-To, then To. Pigeonhole uses its tool defaults
+(`sender@example.com`, `recipient@example.com`) when no address is available.
+It uses the inferred final recipient as the original recipient. Generated
+shopping rules test To and Cc headers. The strict LMTP fixture sends
+identical CRLF messages with matching envelope context, checks complete
+body bytes in the authored folders, and records LMTP's added transport headers.
+
+The qualified local package is the native Linux shared-runtime build with
+the pinned release, Python 3, procfs and Linux Landlock ABI 3. The signed
+development prefix supplies the separate LMTP server and delivery plugin
+for the interoperability test. Static and cross packages need a separate
+target-native runtime. See [packaging and supported targets](sieve-tools.md).
+
+For policy compilation, `--root` is required and nonempty.
 Wrappers resolve JAROMAILDIR, JAROWORKDIR and JAROACCOUNT as today, passing
 explicit arguments. Defaults are ROOT/Accounts and ROOT/FilterProfile.txt.
 An absent or empty profile uses built-in `pigeonhole-2.4.5-posix-ere-v1`
@@ -126,6 +191,12 @@ For example, `to-address team@example.org move "Project People"` is one route;
 Destinations are relative UTF8 Maildir paths: no absolute path, empty/dot/dotdot
 component, NUL/control byte or CR/LF. Spaces are allowed via quoting.
 
+`to-glob *+shop@*.ch move shopping` emits a whole-address
+`address :all :matches :comparator "i;ascii-casemap"` test across To and Cc,
+followed by `fileinto :create "shopping"` under the default profile.
+`from-glob` uses From and Sender. An unescaped star matches zero or more
+characters within one address. See [the glob examples](filter-policy.md).
+
 Use the policy's stage order. Retain the last definition of an identical
 selector/canonical predicate, at that definition's position. Normalize save to
 move before identity generation. For EREs, canonical predicate means original
@@ -213,9 +284,8 @@ ERE fails with status 4 and a migration diagnostic. Qualification is not a
 blanket assertion that every POSIX regex/comparator behaves equivalently.
 The qualification digest must match an installed, compiler-version-bound
 qualification catalogue; a caller-supplied hash cannot assert new equivalence.
-Runtime validation is native structural/profile validation. The independently
-pinned sievec/sieve-test tools remain build/test oracles, not application
-dependencies.
+The installed compiler calls pinned `sievec` and opens the result for
+validation. The independent `sieve-test` executable serves as a test oracle.
 
 The installed [qualification catalogue](filter-regex-qualification.json) binds
 compiler `jaromail-filter-compiler-v2`, normalization v2 and the independent
@@ -228,9 +298,8 @@ Qualification uses signed 2.4.5 sources configured with PCRE2-32 and
 too. A backend without that configuration is outside this profile's assurance.
 An explicit profile override must declare regex capability and the exact installed
 catalogue SHA256; built-in defaults select both internally, and unused regex
-requires are omitted. Maildir is the vendored test environment's storage driver,
-not a Sieve extension. Runtime never invokes
-Dovecot tools. Unsupported syntax reports status 4 with the rule's source line,
+requires are omitted. Dovecot's Maildir storage driver performs delivery.
+Unsupported rule syntax reports status 4 with the rule's source line,
 preserving the prior generation/export.
 
 ## Cache and publication
@@ -285,7 +354,7 @@ An unchanged verified book can reuse its last generation's stored export bytes;
 include their digest in the new fingerprint. Never trust mtime alone. Snapshot
 all inputs under a shared publication lock, release that lock, build in an owned
 private sibling staging directory, validate the
-binary, literal-safe compatibility arrays and capability-qualified Sieve, then
+executable, provenance and capability-qualified Sieve, then
 recheck source content/membership under the compiler's exclusive publication
 lock. Retry a changing snapshot at most twice, then status 6. A no-change hit
 still validates selected output integrity and schema before returning changed=0.
@@ -374,7 +443,8 @@ Generated v1 Sieve is an optional require declaration, seven top-level
 `if true { STAGE-RULES }` blocks in fixed policy stage order, then one fallback
 fileinto. Empty stages retain empty blocks. Each rule is `if TEST { FILEINTO;
 stop; }`; test forms are address :all :is (typed address), address :domain :is
-(apex), address :domain :matches "*.domain" (subdomains), qualified address
+(apex), address :domain :matches "*.domain" (subdomains), address :all :matches
+(whole-address glob), qualified address
 :regex (legacy ERE), Sender header :contains mailman-bounce (bounce), or
 X-Spam-Flag header :is YES (spam). Header lists/keys are quoted strings or lists;
 From-stage fields are From/Sender, To/own are To/Cc, blacklist/known are From.

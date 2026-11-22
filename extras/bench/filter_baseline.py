@@ -153,10 +153,17 @@ def delivery_benchmark(args):
     args.scratch.mkdir(parents=True, exist_ok=False)
     args.output.mkdir(parents=True, exist_ok=True)
     assert not any(args.output.iterdir()), 'output directory must be empty'
-    compiler, batch = [args.work / 'bin' / n for n in ('jaro-filter-compile', 'jaro-sieve-filter')]
+    compiler = args.work / 'bin/jaro-filter-compile'
+    sieve = args.delivery_runtime == 'sieve'
+    batch = args.work / 'bin' / ('jaro-sieve-filter' if sieve else 'jaro-filter')
     cli = args.work.parents[1] / 'bin/jaro'
     assert all(p.is_file() for p in (compiler, batch, cli))
-    metadata = dict(schema=2, source_root=str(args.repo), runtime=str(args.work),
+    references = {}
+    if args.reference_fixtures:
+        references = {item['workload']: item for item in json.loads(args.reference_fixtures.read_bytes())}
+    metadata = dict(schema=3, source_root=str(args.repo), runtime=str(args.work),
+                    engine=args.delivery_runtime,
+                    reference_fixtures_sha256=sha(args.reference_fixtures.read_bytes()) if args.reference_fixtures else None,
                     runtime_sha256={str(p): sha(p.read_bytes()) for p in (compiler, batch, cli)},
                     source_revision=args.revision, host=platform.platform(), cpus=os.cpu_count(),
                     environment={key: os.environ.get(key) for key in ('PATH', 'LD_LIBRARY_PATH', 'CCACHE_DIR', 'CFLAGS')},
@@ -205,11 +212,13 @@ def delivery_benchmark(args):
                         inventory = [dict(source=str(path.relative_to(source)), destination='receipts/cur/' + path.name,
                                           sha256=sha(raw), bytes=len(raw), flags='FS') for path, raw in zip(paths, payloads)]
                         identity = sha(json.dumps(dict(policy=sha(policy.encode()), inventory=inventory), sort_keys=True).encode())
-                        fixtures.append(dict(workload=label, input_sha256=identity, policy_sha256=sha(policy.encode()),
-                                             inventory=inventory, source_device=source.stat().st_dev, destination_device=root.stat().st_dev))
+                        fixture = dict(workload=label, input_sha256=identity, policy_sha256=sha(policy.encode()),
+                                       inventory=inventory, source_device=source.stat().st_dev, destination_device=root.stat().st_dev)
+                        if args.reference_fixtures:
+                            assert fixture == references[label], f'input inventory or filesystem differs for {label}'
+                        fixtures.append(fixture)
                         write_json(args.output / 'fixtures.json', fixtures)
-                        env = dict(os.environ, PATH=metadata['command_path'], JAROMAILDIR=str(root), JAROWORKDIR=str(args.work), JAROACCOUNT=str(root / 'Accounts'), JARO_FILTER_ENGINE='native')
-                        empty = root / 'empty.paths'; empty.write_bytes(b'')
+                        env = dict(os.environ, PATH=metadata['command_path'], JAROMAILDIR=str(root), JAROWORKDIR=str(args.work), JAROACCOUNT=str(root / 'Accounts'), JARO_FILTER_ENGINE=args.delivery_runtime)
 
                         def restore():
                             for path in paths:
@@ -232,6 +241,13 @@ def delivery_benchmark(args):
                             publication_before = generation_snapshot(root) if phase != 'cold-compile' else None
                             commands = [[str(compiler), '--root', str(root), '--accounts-dir', str(root / 'Accounts'), '--report0']]
                             if phase == 'readonly-check': commands[0].append('--check')
+                            elif not sieve and phase == 'pin-validation':
+                                empty = root / 'empty.paths'
+                                empty.write_bytes(b'')
+                                commands = [[str(batch), '--root', str(root), '--files0-from', str(empty)]]
+                            elif not sieve and phase in ('classify', 'helper-apply'):
+                                head = [str(batch), '--root', str(root), '--mode', 'classify' if phase == 'classify' else 'apply']
+                                commands = [head + ['--', str(path)] for path in paths] if mode == 'single' else [head + ['--maildir', str(paths[0].parent.parent)]]
                             elif phase in ('pin-validation', 'classify', 'helper-apply'):
                                 generation = (root / 'cache/filter-engine/current').resolve()
                                 sources = [path.parent.parent for path in paths] if mode == 'single' else [paths[0].parent.parent]
@@ -247,6 +263,13 @@ def delivery_benchmark(args):
                             results = []
                             for invocation, command in enumerate(commands):
                                 result = run_command(command, env, args.repo, args.output / f'{label}-{phase}-{invocation:05d}')
+                                if phase in ('cold-compile', 'unchanged-update', 'readonly-check'):
+                                    magic, pinned, changed, directory, trailer = Path(result['stdout']).read_bytes().split(b'\0')
+                                    assert magic == b'JFC1' and trailer == b''
+                                    assert changed == (b'1' if phase == 'cold-compile' else b'0')
+                                    current = (root / 'cache/filter-engine/current').resolve()
+                                    assert pinned == os.fsencode(current.name)
+                                    assert directory == (b'' if phase == 'readonly-check' else os.fsencode(current))
                                 if phase in ('classify', 'helper-apply'):
                                     fields = Path(result['stdout']).read_bytes().split(b'\0')
                                     assert fields[0] == b'JFD1' and fields[-1] == b''
@@ -270,7 +293,8 @@ def delivery_benchmark(args):
                                                 device=device, mode=mode, repeat=repeat+1, phase=phase, input_sha256=identity,
                                                 wall_seconds=wall, messages_per_second=count/wall if phase in ('classify', 'helper-apply', 'jaro-filter') else None,
                                                 maxrss=max(r['maxrss'] for r in results), cpu_seconds=sum(r['user_seconds']+r['system_seconds'] for r in results),
-                                                database_bytes=sum(p.stat().st_size for p in products.rglob('*') if p.name == 'Filters.svbin'),
+                                                database_bytes=sum(p.stat().st_size for p in products.rglob('*')
+                                                                   if p.name in ('Filters.svbin', 'policy.bin', 'rules.cdb')),
                                                 generation_product_bytes=sum(p.stat().st_size for p in products.rglob('*') if p.is_file()),
                                                 publication_sha256=sha(json.dumps(publication_after, sort_keys=True).encode()), publication_unchanged=publication_before is not None,
                                                 commands=results, verified_occurrences=count))
@@ -304,6 +328,10 @@ def main():
     parser.add_argument("--no-profile", action="store_true")
     parser.add_argument("--engine", choices=("legacy", "native", "sieve"), default="sieve")
     parser.add_argument('--delivery', action='store_true', help='Run the common literal-route delivery baseline')
+    parser.add_argument('--delivery-runtime', choices=('sieve', 'native'), default='sieve',
+                        help='Installed Sieve runtime (default) or historical native installation')
+    parser.add_argument('--reference-fixtures', type=Path,
+                        help='Require matching reference inventories, message digests and device IDs')
     parser.add_argument('--message-bytes', type=int, default=1024)
     parser.add_argument('--delivery-devices', nargs='+', choices=('same', 'cross'), default=['same'])
     parser.add_argument('--delivery-modes', nargs='+', choices=('single', 'batch'), default=['single', 'batch'])

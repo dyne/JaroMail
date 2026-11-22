@@ -1,9 +1,9 @@
 # Reproducing filter benchmarks
 
-Published native and shell measurements below describe earlier revisions.
-On the current branch the harness invokes Pigeonhole for all selectors.
-Record new measurements in a fresh output directory and keep the recorded
-baseline data with its original revision and executable identities.
+The physical-delivery benchmark compares the installed Pigeonhole workflow
+with the original native engine on identical rules and Maildir messages.
+The shell and bounded-worker measurements later in this document describe
+earlier revisions and different workloads.
 
 The common physical-delivery baseline uses literal typed rules on both the
 original native engine and later candidates. Supply a separately built Release
@@ -11,7 +11,7 @@ runtime and its matching source tree; the harness itself can come from the
 candidate checkout:
 
 ```sh
-python3 extras/bench/filter_baseline.py --delivery \
+python3 extras/bench/filter_baseline.py --delivery --delivery-runtime native \
   --repo /absolute/base-source \
   --work /absolute/base-prefix/share/jaromail \
   --revision c973e5f8456827bb98ed56a8d9cff75d184e410a \
@@ -52,6 +52,131 @@ explicit accounts root, so internal/external account identity cannot cause an
 accidental rebuild during the nominally unchanged workload. Both phases also
 resolve the installed runtime's bundled abook first; changing the exporter
 binary legitimately invalidates a compiled generation.
+
+## Installed Pigeonhole delivery qualification
+
+Use an uninstrumented Release install of JaroMail with its matched Sieve
+runtime. The historical comparison used native revision
+`c973e5f8456827bb98ed56a8d9cff75d184e410a`. The installed Sieve runtime came
+from `2c034ef8d4df72800270ffd369505730c6cefb06`. Both builds used GCC
+14.2.0 with `-O3 -DNDEBUG` on the same Linux host. The timings use warm OS
+caches. Cold compilation starts with an absent application generation and
+includes publication and binary validation. The empty-Maildir phase includes
+the installed launcher's startup, source and runtime verification, and binary
+load. Each delivery phase includes its normal filesystem writes and syncs.
+
+Run from the JaroMail checkout. Set `work` to the installed
+`share/jaromail`, `out` to a fresh private directory on ext4, `cross` to a
+fresh private directory on the second filesystem, and `reference` to the
+directory containing the four L1.2 reports. A matching reference checks the
+entire per-message inventory, policy digest and source/destination device IDs.
+Omit `--reference-fixtures` for a new host with different device numbers.
+
+```sh
+bench() {
+    name=$1
+    shift
+    python3 extras/bench/filter_baseline.py --delivery --delivery-runtime sieve \
+        --repo "$PWD" --work "$work" --revision "$(git rev-parse HEAD)" \
+        --scratch "$out/$name-fixtures" --output "$out/$name" --runs 5 \
+        --reference-fixtures "$reference/$name/fixtures.json" "$@"
+}
+bench common-final --sizes 1000 --messages 100 --message-bytes 1024 \
+    --delivery-devices same cross --cross-root "$cross"
+bench small-policy-final --sizes 10 --messages 100 --message-bytes 1024
+bench large-batch-final --sizes 1000 --messages 1000 --message-bytes 1024 --delivery-modes batch
+bench large-body-final --sizes 10 --messages 1 --message-bytes 1048576
+```
+
+After all timed runs finish, replay one of the saved batch fixtures on a
+private copy of the install. The following command uses the Debian x86-64
+glibc audit module to count calls into Pigeonhole. It retains a trace per
+process, compiler and worker output, and `counts.json`. The source-only
+control exercises the worker's code generator with the same Sieve text.
+
+```sh
+python3 extras/bench/filter_sieve_counts.py --work "$work" \
+    --fixture "$out/common-final-fixtures/r1000-m100-b1024-same-batch-1" \
+    --fixtures-json "$out/common-final/fixtures.json" --output "$out/profile" \
+    --audit /usr/lib/x86_64-linux-gnu/audit/sotruss-lib.so
+```
+
+### Recorded delivery results
+
+The 315 phase samples include 4,770 successful commands and 56,070 checks
+of message occurrences across phases. All 45 input inventories match L1.2
+byte for byte, including flags, destination paths, source and destination
+devices, and SHA-256 digests of complete messages. The five repetitions
+per row used ext4 for the destination and either ext4 (same) or tmpfs
+(cross) for the source. Full command observations, including CPU and RSS,
+are in each report's `samples.json`; `summary.json` gives the five-sample
+spread for every phase. The retained qualification reports are under
+`.gestalt/maildir-filter-checks/l5/bench/` in the planning workspace,
+with the old reports under `l1/` and paired results in `bench/comparison.json`.
+
+Each pair below gives **native / Sieve** median elapsed seconds.
+The common workload has 1,000 rules and 100 one-KiB messages. The small
+policy has 10 rules, the large batch has 1,000 messages, and the large-body
+control has 10 rules and one one-MiB message. Single mode sums 100 process
+intervals for the common and small-policy delivery phases. Each setup phase,
+including the empty-Maildir binary open, runs once per repetition in both modes.
+
+| Workload | Device | Mode | Cold compile | Unchanged update | Read-only check | Empty open |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| Common | Same | Batch | 0.162 / 0.224 | 0.062 / 0.057 | 0.018 / 0.031 | 0.008 / 0.108 |
+| Common | Same | Single | 0.179 / 0.219 | 0.065 / 0.057 | 0.015 / 0.030 | 0.007 / 0.108 |
+| Common | Cross | Batch | 0.206 / 0.236 | 0.051 / 0.056 | 0.022 / 0.030 | 0.011 / 0.109 |
+| Common | Cross | Single | 0.199 / 0.227 | 0.046 / 0.055 | 0.019 / 0.031 | 0.008 / 0.107 |
+| Small policy | Same | Batch | 0.086 / 0.186 | 0.029 / 0.049 | 0.004 / 0.025 | 0.001 / 0.068 |
+| Small policy | Same | Single | 0.160 / 0.196 | 0.030 / 0.050 | 0.004 / 0.025 | 0.001 / 0.068 |
+| Large batch | Same | Batch | 0.117 / 0.222 | 0.041 / 0.058 | 0.013 / 0.031 | 0.006 / 0.108 |
+| Large body | Same | Batch | 0.083 / 0.185 | 0.028 / 0.054 | 0.004 / 0.024 | 0.001 / 0.067 |
+| Large body | Same | Single | 0.090 / 0.187 | 0.028 / 0.049 | 0.004 / 0.025 | 0.001 / 0.068 |
+
+Preview and helper apply use the installed delivery helper, with its workflow
+report enabled for per-message checks. The last three columns describe the
+complete installed `jaro filter` command. CPU is user plus system seconds.
+RSS is the median peak in KiB, including the launcher floor.
+
+| Workload | Device | Mode | Preview | Helper apply | jaro filter | CPU | RSS KiB |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Common | Same | Batch | 0.018 / 0.128 | 1.093 / 1.463 | 1.134 / 1.530 | 0.202 / 0.339 | 25,564 / 26,800 |
+| Common | Same | Single | 0.676 / 10.953 | 7.393 / 13.819 | 12.876 / 20.904 | 5.789 / 16.924 | 24,164 / 26,380 |
+| Common | Cross | Batch | 0.021 / 0.129 | 0.802 / 1.428 | 0.907 / 1.521 | 0.174 / 0.335 | 31,284 / 36,808 |
+| Common | Cross | Single | 0.977 / 10.960 | 6.495 / 11.923 | 14.809 / 19.142 | 7.443 / 16.795 | 31,284 / 36,808 |
+| Small policy | Same | Batch | 0.008 / 0.079 | 1.002 / 1.410 | 0.994 / 1.480 | 0.209 / 0.290 | 25,904 / 27,140 |
+| Small policy | Same | Single | 0.113 / 6.764 | 7.069 / 10.278 | 16.196 / 16.660 | 4.259 / 13.010 | 25,196 / 27,140 |
+| Large batch | Same | Batch | 0.069 / 1.255 | 7.871 / 15.263 | 7.890 / 15.451 | 1.847 / 3.491 | 29,144 / 32,140 |
+| Large body | Same | Batch | 0.001 / 0.068 | 0.085 / 0.109 | 0.128 / 0.178 | 0.059 / 0.132 | 24,464 / 25,320 |
+| Large body | Same | Single | 0.001 / 0.067 | 0.074 / 0.109 | 0.129 / 0.171 | 0.061 / 0.130 | 24,464 / 25,320 |
+
+The common same-device end-to-end batch median rose 35%, from 1.134 to
+1.530 seconds. Its five-run ranges were 1.087–1.276 and 1.505–1.569 seconds.
+The large batch rose 96%, from 7.890 to 15.451 seconds, with ranges of
+7.841–8.267 and 15.128–15.884. All nine end-to-end medians increased.
+The 3% increase for small-policy single calls fell within the historical
+10.779–21.393 second range. Repeated startup was particularly visible in
+common single-message preview, which rose from 0.676 to 10.953 seconds in
+total. These observations cover the pinned local runtime, synthetic messages,
+and this storage configuration. The phases leave parsing, validation,
+filesystem work and runtime startup combined.
+
+The common same-device batch used 110,553 bytes of Sieve bytecode, compared
+with 329,958 bytes of native policy. The corresponding small-policy batch
+used 1,745 and 10,526 bytes. These sizes cover the executable policy product.
+Each sample separately records all generation products.
+
+The independent common batch profile recorded one `sievec` process on cold
+publication. Its first `sieve_compile` lookup tried named storage and the
+second resolved the file. It saved one binary and `sieve-dump` loaded it once.
+The warm update and read-only check recorded zero compile or load calls.
+Each of preview, helper apply and public `jaro filter` loaded one binary,
+ran the interpreter 100 times, and made zero per-message compilation calls.
+The empty-source open loaded once and the source-only control called the
+code generator once. All eight profiled phases checked the physical
+inventory. The trace counts the tools' calls into the shared Sieve library.
+
+## Correctness and historical workloads
 
 Local correctness coverage runs without a Sieve dependency prefix:
 

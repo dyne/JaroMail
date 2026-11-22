@@ -1425,7 +1425,7 @@ built-in defaults enable fileinto, automatic mailbox creation and the qualified
 legacy `from`/`to` ERE subset. Regex is declared only when a rule uses it.
 Partial-address rules work without adding `*` or `.*`; `save` and `move` are
 aliases. An optional profile can override capabilities or mailbox mappings.
-Pigeonhole executes local filters. The default and the `sieve`, `native` and
+The default and the `sieve`, `native` and
 `legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
 Run `jaro update` to migrate an older generation from your existing
 `Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
@@ -1439,19 +1439,39 @@ See
 [migration and compatibility](filter-compatibility.md) for domain examples,
 known corrections, compare observations and tested platform limits.
 
-In the mail directory a file named `Filters.txt` is filled in with
-filtering rules referencing the contents of the **From:** or **To:**
-fields.
+Add this rule to `Filters.txt` to file shopping mail addressed to a Swiss
+domain. It matches complete addresses in To and Cc. Both `lea+shop@example.ch`
+and `a+b+shop@mx.example.ch` match. The plus and dot are literal.
 
-The format of the filters configurarion is pretty easy and self
-explanatory, just have a look at this file and when something changes
-update the filter engine using `jaro update`.
+```text
+to-glob *+shop@*.ch move shopping
+```
 
-Then use `jaro filter any-maildir/` and the mails contained in
-`any-maildir` will be moved according to the updated filter rules.
+Run `jaro update`, inspect the result with `jaro -n filter`, then run
+`jaro filter` on incoming mail or `jaro filter any-maildir/` for a chosen
+Maildir. The standalone command can also use a generated or hand-authored
+Sieve file. Give it absolute roots and an existing source Maildir.
 
-Beware that filtering is a lengthy operation, especially on big
-maildirs.
+```sh
+jaro-sieve-filter --dry-run --from /mail/incoming --to /mail /policy/Filters.sieve
+jaro-sieve-filter --from /mail/incoming --to /mail /policy/Filters.sieve
+```
+
+The command processes messages in `cur` and `new`. Matching shopping mail
+lands in `/mail/shopping`. A Sieve mailbox called `Projects/Letters`
+maps to `/mail/Projects/Letters`. Explicit or implicit `keep` leaves the
+message in the incoming Maildir. The local profile accepts folder delivery,
+conditions and `stop`. Other actions such as redirect or discard fail
+validation before processing.
+
+To use the same rules on a server, give its administrator the exported
+`Filters.sieve`. Enable Pigeonhole for delivery, for example through Dovecot
+LMTP after Postfix, and make the source active for the recipient. Each host
+compiles the script with its own runtime and required extensions. JaroMail's
+Linux shared-runtime package and the independent Dovecot/Pigeonhole 2.4.5
+LMTP fixture were qualified together. The server controls its mailbox layout
+and may add delivery headers. A server with a different version or set of
+extensions needs its own qualification. See [the filtering interface](filter-interfaces.md).
 
 ### Merge maildirs
 
