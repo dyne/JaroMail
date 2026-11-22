@@ -1,0 +1,245 @@
+#!/usr/bin/python3 -I
+"""Bind explicit Maildirs and an immutable local Sieve program for one process."""
+
+import argparse
+from contextlib import ExitStack
+import hashlib
+import fcntl
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+
+
+def directory(path, stack):
+    path = Path(path)
+    if not path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"expected an absolute directory: {path}")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    fd = os.open("/", flags)
+    try:
+        for component in path.parts[1:]:
+            child = os.open(component, flags, dir_fd=fd)
+            os.close(fd)
+            fd = child
+    except BaseException:
+        os.close(fd)
+        raise
+    stack.callback(os.close, fd)
+    return fd
+
+
+def product(path, limit):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError(f"expected a regular file: {path}")
+        data = stream.read(limit + 1)
+        if len(data) > limit:
+            raise ValueError(f"file too large: {path}")
+        return data
+
+
+def snapshot(script, home, runtime, runtime_id):
+    # Resolve the directory once, including a published generation symlink.
+    parent = script.parent.resolve(strict=True)
+    source = product(parent / script.name, 128 << 20)
+    (home / "script").write_bytes(source)
+    if not (script.name == "Filters.sieve"
+            and parent.parts[-4:-1] == ("cache", "filter-engine", "generations")
+            and re.fullmatch("[0-9a-f]{64}", parent.name)):
+        return False
+    with (home / "binary").open("xb") as binary:
+        subprocess.run([runtime.parent / "bin/sieve-generation-read", parent.parents[3],
+                        parent.name, hashlib.sha256(source).hexdigest(), runtime_id],
+                       stdout=binary, check=True)
+    return True
+
+
+def identity(st):
+    return st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns
+
+
+def source_entries(dirs):
+    entries = []
+    for folder in ("cur", "new"):
+        with os.scandir(dirs[folder]) as children:
+            for entry in sorted(children, key=lambda item: os.fsencode(item.name)):
+                if entry.name.startswith("."):
+                    continue
+                st = entry.stat(follow_symlinks=False)
+                if not stat.S_ISREG(st.st_mode):
+                    raise ValueError(f"expected a regular Maildir message: {folder}/{entry.name}")
+                # Dovecot identifies mail by basename before :2,. Give every
+                # physical occurrence its own UID even across duplicate names.
+                entries.append((folder, entry.name, str(len(entries)), identity(st)))
+    return entries
+
+
+def restore(claim_fd, key, directory, name):
+    # Never replace mail delivered under the original name during this batch.
+    os.link(key, name, src_dir_fd=claim_fd, dst_dir_fd=directory, follow_symlinks=False)
+    os.fsync(directory)
+    os.unlink(key, dir_fd=claim_fd)
+
+
+def run_batch(command, env, home, source, dirs, fds, preview):
+    entries = source_entries(dirs)
+    tmp = Path(f"/proc/self/fd/{dirs['tmp']}")
+    work = home / "preview" if preview else tmp / ".jaro-sieve-transaction"
+    read_fd, write_fd = os.pipe()
+    try:
+        worker = subprocess.Popen([*command, str(write_fd)], env=env, cwd=home,
+                                  pass_fds=(*fds, *dirs.values(), write_fd), stdin=subprocess.PIPE)
+    finally:
+        os.close(write_fd)
+    handles = ExitStack()
+    work_fd = None
+    stages = {}
+    failed = False
+    claimed = []
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        with os.fdopen(read_fd, "rb") as ready:
+            if ready.read(1) != b"R":
+                return worker.wait() or 1
+        try:
+            work.mkdir(mode=0o700)
+        except FileExistsError:
+            raise ValueError(f"unfinished Maildir transaction: inspect {source / 'tmp' / work.name}")
+        work_fd = os.open(work, flags)
+        handles.callback(os.close, work_fd)
+        work_stat = os.fstat(work_fd)
+        (home / "batch-identity").write_text(f"{work_stat.st_dev} {work_stat.st_ino}\n")
+        for child in ("cur", "new", "tmp"):
+            os.mkdir(child, mode=0o700, dir_fd=work_fd)
+            stages[child] = os.open(child, flags, dir_fd=work_fd)
+            handles.callback(os.close, stages[child])
+        (home / "batch").symlink_to(work)
+        inventory_fd = os.open("inventory.jsonl", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600, dir_fd=work_fd)
+        with (home / "names").open("wb") as names, os.fdopen(inventory_fd, "w") as inventory:
+            for folder, name, key, expected in entries:
+                dev, ino, size, mtime = expected
+                names.write(os.fsencode(name) + b"\0")
+                names.write(f"{dev} {ino} {size} {mtime // 1000000000} {mtime % 1000000000}\n".encode())
+                inventory.write(json.dumps([key, folder, name, expected]) + "\n")
+            inventory.flush()
+            os.fsync(inventory.fileno())
+        os.fsync(work_fd)
+        if not preview:
+            os.fsync(dirs["tmp"])
+        for folder, name, key, expected in entries:
+            try:
+                if preview:
+                    os.symlink(f"/proc/self/fd/{dirs[folder]}/{name}", key, dir_fd=stages["cur"])
+                else:
+                    os.rename(name, key, src_dir_fd=dirs[folder], dst_dir_fd=stages["cur"])
+                    claimed.append(("cur", key, folder, name))
+            except OSError as error:
+                print(f"jaro-sieve-filter: {error}", file=sys.stderr)
+                failed = True
+                continue
+            try:
+                info = os.stat(key, dir_fd=stages["cur"], follow_symlinks=preview)
+                if not stat.S_ISREG(info.st_mode) or identity(info) != expected:
+                    raise ValueError(f"changed source: {folder}/{name}")
+            except (OSError, ValueError) as error:
+                print(f"jaro-sieve-filter: {error}", file=sys.stderr)
+                failed = True
+                if preview:
+                    os.unlink(key, dir_fd=stages["cur"])
+                else:
+                    os.rename(key, key, src_dir_fd=stages["cur"], dst_dir_fd=stages["tmp"])
+                    claimed[-1] = ("tmp", key, folder, name)
+        if not preview:
+            for fd in (stages["cur"], stages["tmp"], dirs["cur"], dirs["new"]):
+                os.fsync(fd)
+        worker.stdin.write(b"G")
+        worker.stdin.close()
+        status = worker.wait()
+    finally:
+        if worker.poll() is None:
+            worker.terminate()
+            worker.wait()
+        if not worker.stdin.closed:
+            worker.stdin.close()
+        try:
+            for stage, key, folder, name in claimed:
+                try:
+                    restore(stages[stage], key, dirs[folder], name)
+                except FileNotFoundError:
+                    pass  # Dovecot expunged this occurrence after delivering it.
+                except OSError as error:
+                    failed = True
+                    retained = source / "tmp" / work.name / stage / key
+                    print(f"jaro-sieve-filter: {error}; retained {retained}", file=sys.stderr)
+            if work_fd is not None and not preview and not any(os.listdir(fd) for fd in stages.values()):
+                if os.path.samestat(os.fstat(work_fd), work.lstat()):
+                    try:
+                        os.unlink("inventory.jsonl", dir_fd=work_fd)
+                    except FileNotFoundError:
+                        pass
+                    for sub in stages:
+                        os.rmdir(sub, dir_fd=work_fd)
+                    work.rmdir()
+                    os.fsync(dirs["tmp"])
+        finally:
+            handles.close()
+    return 128 - status if status < 0 else status or (7 if failed else 0)
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="jaro-sieve-filter")
+    parser.add_argument("--from", required=True, dest="incoming")
+    parser.add_argument("--to", required=True, dest="base")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("script", type=Path)
+    args = parser.parse_args()
+    runtime = Path(__file__).resolve().parent
+    runtime_id = subprocess.check_output([runtime / "run", "identity"], text=True).split()[0]
+    source, base = Path(args.incoming), Path(args.base)
+    with ExitStack() as roots, tempfile.TemporaryDirectory(prefix="jaro-sieve-") as temporary:
+        source_fd, base_fd = directory(source, roots), directory(base, roots)
+        dirs = {}
+        fcntl.flock(source_fd, (fcntl.LOCK_SH if args.dry_run else fcntl.LOCK_EX) | fcntl.LOCK_NB)
+        for name in ("cur", "new", "tmp"):
+            fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=source_fd)
+            roots.callback(os.close, fd)
+            dirs[name] = fd
+        home = Path(temporary).resolve()
+        cached = snapshot(args.script, home, runtime, runtime_id)
+        (home / "incoming").mkdir()
+        (home / "incoming/mail").symlink_to(f"/proc/self/fd/{source_fd}")
+        (home / "folders").symlink_to(f"/proc/self/fd/{base_fd}")
+        # A source already visible in the destination namespace must have the
+        # same Dovecot identity when fileinto names that very mailbox.
+        source_box = ".jaro-source/mail"
+        if source != base and base in source.parents:
+            relative = source.relative_to(base)
+            if (relative.parts[0] != ".jaro-source" and
+                    (str(relative).upper() != "INBOX" or str(relative) == "INBOX")):
+                source_box = str(relative)
+        command = [runtime / "bin/doveconf", "-c", runtime / "maildir.conf", "-F",
+                   runtime / "bin/maildir-filter", "--", source_box,
+                   "preview" if args.dry_run else "apply", "cached" if cached else "source"]
+        env = {"PATH": "/usr/bin:/bin", "USER": pwd.getpwuid(os.geteuid()).pw_name,
+               "HOME": str(home), "LD_LIBRARY_PATH": str(runtime / "lib"),
+               "CONFIG_MODULES": str(runtime / "lib/libpigeonhole_settings.so")}
+        return run_batch(command, env, home, source, dirs, (source_fd, base_fd), args.dry_run)
+
+
+if __name__ == "__main__":
+    def interrupt(signum, frame):
+        raise SystemExit(128 + signum)
+    for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, interrupt)
+    try:
+        sys.exit(main())
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        sys.exit(f"jaro-sieve-filter: {error}")

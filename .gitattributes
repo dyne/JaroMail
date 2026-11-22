@@ -1,1 +1,4 @@
 .git_archival.txt export-subst
+# A unified diff carries context markers. The pinned source retains upstream indentation.
+src/sieve/maildir-save.patch -whitespace
+vendor/dovecot/upstream/maildir-save.c whitespace=-space-before-tab

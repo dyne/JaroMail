@@ -14,6 +14,19 @@
   },
   "directory": "pigeonhole/upstream",
   "programs": ["sievec", "sieve-test", "sieve-dump", "sieve-filter"],
+  "dovecot_maildir": {
+    "directory": "dovecot/upstream",
+    "archive_sha256": "868c2686a61b5f8e00a3e4721789b1ab46e6528fd773a5fbed07a6ecba7731e6",
+    "files": [
+      {
+        "path": "maildir-save.c",
+        "upstream_path": "src/lib-storage/index/maildir/maildir-save.c",
+        "reason": "Private Maildir save transaction for byte-preserving, no-clobber publication of already-delivered mail",
+        "size": 30550,
+        "sha256": "f371f3fa6fd610687b572fadbd4213ae7a3e775a6d72cd824245a81b73b105a6"
+      }
+    ]
+  },
   "dovecot_notices": {
     "directory": "dovecot/licenses",
     "archive_sha256": "868c2686a61b5f8e00a3e4721789b1ab46e6528fd773a5fbed07a6ecba7731e6",

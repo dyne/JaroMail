@@ -38,6 +38,17 @@ def authored_groups():
             [([case], case['rules'], {}) for case in target['isolated_domain_cases']])
 
 
+def write_policy_fixture(root, rules, known=(), blacklist=(), own=(), profile=PROFILE):
+    (root / 'Filters.txt').write_text('\n'.join(rules) + '\n')
+    (root / 'Aliases.txt').write_text('\n'.join(json.dumps(v) for v in own))
+    for filename, values in [('whitelist.abook', known), ('blacklist.abook', blacklist)]:
+        text = '[format]\nprogram=abook\nversion=0.6.0\n'
+        for i, address in enumerate(values):
+            text += '\n[%d]\nname=Fixture\nemail=%s\n' % (i, address)
+        (root / filename).write_text(text if values else '')
+    (root / 'FilterProfile.txt').write_text(profile)
+
+
 def tree(path):
     """Complete raw-path/mode/type/content snapshot; reads may update atime."""
     base = os.fsencode(path)
@@ -123,14 +134,7 @@ class BatchTests(unittest.TestCase):
         artifact.write_text(json.dumps(dict(root=str(self.root),rows=rows,after_equal=True),sort_keys=True)+'\n')
 
     def compile(self, rules=(), known=(), blacklist=(), own=(), profile=PROFILE):
-        (self.root / 'Filters.txt').write_text('\n'.join(rules) + '\n')
-        (self.root / 'Aliases.txt').write_text('\n'.join(json.dumps(v) for v in own))
-        for filename, values in [('whitelist.abook', known), ('blacklist.abook', blacklist)]:
-            text = '[format]\nprogram=abook\nversion=0.6.0\n'
-            for i, address in enumerate(values):
-                text += '\n[%d]\nname=Fixture\nemail=%s\n' % (i, address)
-            (self.root / filename).write_text(text if values else '')
-        (self.root / 'FilterProfile.txt').write_text(profile)
+        write_policy_fixture(self.root, rules, known, blacklist, own, profile)
         output = self.command([self.compiler, '--root', self.root, '--report0']).stdout.split(b'\0')
         self.generation = output[1]
         self.product = Path(os.fsdecode(output[3]))

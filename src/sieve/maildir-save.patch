@@ -1,0 +1,150 @@
+--- maildir-save.c
++++ maildir-save.c
+@@ -25,11 +25,15 @@
+ #include <utime.h>
+ #include <sys/stat.h>
+ 
++/* Original Maildir filename for the current local delivery. */
++extern const char *jaro_sieve_filename;
++void jaro_sieve_published(const char *path, const struct stat *st);
++
+ #define MAILDIR_FILENAME_FLAG_MOVED 0x10000000
+ 
+ struct maildir_filename {
+ 	struct maildir_filename *next;
+-	const char *tmp_name, *dest_basename;
++	const char *tmp_name, *dest_basename, *local_name;
+ 	const char *pop3_uidl, *guid;
+ 
+ 	uoff_t size, vsize;
+@@ -87,20 +91,44 @@
+ 		t_strconcat(ctx->newdir, "/", destname, NULL) :
+ 		t_strconcat(ctx->curdir, "/", destname, NULL);
+ 
+-	/* maildir spec says we should use link() + unlink() here. however
+-	   since our filename is guaranteed to be unique, rename() works just
+-	   as well, except faster. even if the filename wasn't unique, the
+-	   problem could still happen if the file was already moved from
+-	   new/ to cur/, so link() doesn't really provide any safety anyway.
+-
+-	   Besides the small temporary performance benefits, this rename() is
+-	   almost required with OSX's HFS+ filesystem, since it implements
+-	   hard links in a pretty ugly way, which makes the performance crawl
+-	   when a lot of hard links are used. */
+-	if (rename(tmp_path, new_path) == 0) {
+-		mf->flags |= MAILDIR_FILENAME_FLAG_MOVED;
+-		return 0;
+-	} else if (ENOQUOTA(errno)) {
++	/* The source name may already exist. Keep an unrelated publication and
++	   retain our final name for Dovecot's uidlist, fsync and rollback. */
++	struct stat staged;
++	if (lstat(tmp_path, &staged) < 0) {
++		mailbox_set_critical(&ctx->mbox->box, "stat(%s) failed: %m", tmp_path);
++		return -1;
++	}
++	for (unsigned int attempt = 0; attempt < 64; attempt++) {
++		if (renameat2(AT_FDCWD, tmp_path, AT_FDCWD, new_path, RENAME_NOREPLACE) == 0) {
++			mf->flags |= MAILDIR_FILENAME_FLAG_MOVED;
++			jaro_sieve_published(new_path, &staged);
++			return 0;
++		}
++		if (errno != EEXIST || attempt == 63)
++			break;
++		const char *suffix = strstr(jaro_sieve_filename, ":2,");
++		if (suffix == NULL)
++			suffix = "";
++		errno = 0;
++		long limit = pathconf(ctx->curdir, _PC_NAME_MAX);
++		if (limit < 0 && errno != 0)
++			break;
++		size_t maximum = limit < 0 ? 255 : (size_t)limit;
++		if (strlen(suffix) >= maximum) {
++			errno = EEXIST;
++			break;
++		}
++		const char *fresh = t_strconcat("jaro.", maildir_filename_generate(), NULL);
++		if (strlen(fresh) > maximum - strlen(suffix)) {
++			/* Put the varying digit first when only a short stem fits. */
++			const char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
++			fresh = t_strdup_printf("%c%s", alphabet[attempt % (sizeof(alphabet)-1)], fresh);
++			fresh = t_strndup(fresh, maximum - strlen(suffix));
++		}
++		mf->local_name = p_strconcat(ctx->pool, fresh, suffix, NULL);
++		new_path = t_strconcat(ctx->curdir, "/", mf->local_name, NULL);
++	}
++	if (ENOQUOTA(errno)) {
+ 		mail_storage_set_error(storage, MAIL_ERROR_NOQUOTA,
+ 				       MAIL_ERRSTR_NO_QUOTA);
+ 		return -1;
+@@ -163,6 +191,7 @@
+ 	mf = p_new(ctx->pool, struct maildir_filename, 1);
+ 	mf->tmp_name = mf->dest_basename = p_strdup(ctx->pool, tmp_fname);
+ 	mf->flags = mdata->flags;
++	mf->local_name = p_strdup(ctx->pool, jaro_sieve_filename);
+ 	mf->size = UOFF_T_MAX;
+ 	mf->vsize = UOFF_T_MAX;
+ 
+@@ -235,37 +264,9 @@
+ 			  struct maildir_filename *mf,
+ 			  const char **fname_r)
+ {
+-	const char *basename = mf->dest_basename;
+-
+-	if (mf->size != UOFF_T_MAX && !mf->preserve_filename) {
+-		basename = t_strdup_printf("%s,%c=%"PRIuUOFF_T, basename,
+-					   MAILDIR_EXTRA_FILE_SIZE, mf->size);
+-	}
+-
+-	if (mf->vsize != UOFF_T_MAX && !mf->preserve_filename) {
+-		basename = t_strdup_printf("%s,%c=%"PRIuUOFF_T, basename,
+-					   MAILDIR_EXTRA_VIRTUAL_SIZE,
+-					   mf->vsize);
+-	}
+-
+-	if (!array_is_created(&mf->keywords) || array_count(&mf->keywords) == 0) {
+-		if ((mf->flags & MAIL_FLAGS_MASK) == MAIL_RECENT) {
+-			*fname_r = basename;
+-			return TRUE;
+-		}
+-
+-		*fname_r = maildir_filename_flags_set(basename,
+-					mf->flags & MAIL_FLAGS_MASK);
+-		return FALSE;
+-	}
+-
+-	i_assert(ctx->keywords_sync_ctx != NULL ||
+-		 !array_is_created(&mf->keywords) || array_count(&mf->keywords) == 0);
+-	*fname_r = maildir_filename_flags_kw_set(ctx->keywords_sync_ctx,
+-						 basename,
+-						 mf->flags & MAIL_FLAGS_MASK,
+-						 &mf->keywords);
+-	return FALSE;
++	(void)ctx;
++	*fname_r = mf->local_name;
++	return FALSE; /* JaroMail publishes moved mail in cur/ with its original flags. */
+ }
+ 
+ static const char *maildir_mf_get_path(struct maildir_save_context *ctx,
+@@ -348,7 +349,7 @@
+ 		   useless. */
+ 		old_mask = umask(0777 & ~perm->file_create_mode);
+ 		fd = open(str_c(path),
+-			  O_WRONLY | O_CREAT | O_TRUNC | O_EXCL | O_NOFOLLOW, 0777);
++			  O_WRONLY | O_CREAT | O_TRUNC | O_EXCL | O_NOFOLLOW, 0600);
+ 		umask(old_mask);
+ 	} while (fd == -1 && errno == EEXIST);
+ 
+@@ -405,10 +406,9 @@
+ 		if (ctx->fd == -1)
+ 			ctx->failed = TRUE;
+ 		else {
+-			if (ctx->mbox->storage->storage.set->mail_save_crlf)
+-				ctx->input = i_stream_create_crlf(input);
+-			else
+-				ctx->input = i_stream_create_lf(input);
++			/* Already delivered mail must retain every octet across filesystems. */
++			ctx->input = input;
++			i_stream_ref(input);
+ 			mf = maildir_save_add(_ctx, fname, NULL);
+ 			if (_ctx->data.guid != NULL) {
+ 				maildir_save_set_dest_basename(_ctx, mf,
