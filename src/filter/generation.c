@@ -214,15 +214,14 @@ static int selector(struct location *l,char id[65])
 
 static int manifest(const struct jf_generation *g,struct jf_bytes *out)
 {
-	unsigned char digest[32]; char c[65],z[65],s[65],binary[65],text[768];
-	jf_digest(g->cache.data,g->cache.size,digest); jf_digest_hex(digest,c);
-	jf_digest(g->zsh.data,g->zsh.size,digest); jf_digest_hex(digest,z);
-	jf_digest(g->sieve.data,g->sieve.size,digest); jf_digest_hex(digest,s);
-	if (*g->binding.runtime) {
-		jf_digest(g->bytecode.data,g->bytecode.size,digest); jf_digest_hex(digest,binary);
-		snprintf(text,sizeof text,"{\"schema\":2,\"generation\":\"%s\",\"policy_sha256\":\"%s\",\"zsh_sha256\":\"%s\",\"sieve_sha256\":\"%s\","
-			"\"svbin_sha256\":\"%s\",\"runtime_sha256\":\"%s\",\"profile_sha256\":\"%s\"}\n",g->id,c,z,s,binary,g->binding.runtime,g->binding.profile);
-	} else snprintf(text,sizeof text,"{\"schema\":1,\"generation\":\"%s\",\"policy_sha256\":\"%s\",\"zsh_sha256\":\"%s\",\"sieve_sha256\":\"%s\"}\n",g->id,c,z,s);
+	unsigned char digest[32]; char deps[65],map[65],sieve[65],binary[65],text[768];
+	jf_digest(g->cache.data,g->cache.size,digest); jf_digest_hex(digest,deps);
+	jf_digest(g->provenance.data,g->provenance.size,digest); jf_digest_hex(digest,map);
+	jf_digest(g->sieve.data,g->sieve.size,digest); jf_digest_hex(digest,sieve);
+	jf_digest(g->bytecode.data,g->bytecode.size,digest); jf_digest_hex(digest,binary);
+	snprintf(text,sizeof text,"{\"schema\":4,\"generation\":\"%s\",\"dependencies_sha256\":\"%s\",\"provenance_sha256\":\"%s\","
+		"\"sieve_sha256\":\"%s\",\"svbin_sha256\":\"%s\",\"runtime_sha256\":\"%s\",\"profile_sha256\":\"%s\"}\n",
+		g->id,deps,map,sieve,binary,g->binding.runtime,g->binding.profile);
 	return jf_bytes_text(out,text);
 }
 
@@ -235,21 +234,21 @@ static int validate_directory(int fd,const char *id,struct jf_generation *g,stru
 	copy=dup(fd); if (copy<0 || !(dir=fdopendir(copy))) { rc=3; goto done; }
 	copy=-1; errno=0;
 	while ((ent=readdir(dir))) {
-		unsigned bit=!strcmp(ent->d_name,"policy.bin") ? 1 : !strcmp(ent->d_name,"filters.zsh") ? 2 :
+		unsigned bit=!strcmp(ent->d_name,"dependencies") ? 1 :
 			!strcmp(ent->d_name,"Filters.sieve") ? 4 : !strcmp(ent->d_name,"manifest.json") ? 8 :
-			!strcmp(ent->d_name,"Filters.svbin") ? 16 : 0;
+			!strcmp(ent->d_name,"Filters.svbin") ? 16 : !strcmp(ent->d_name,"provenance") ? 32 : 0;
 		if (!strcmp(ent->d_name,".") || !strcmp(ent->d_name,"..")) continue;
 		if (!bit || found&bit) goto done;
 		found|=bit; errno=0;
 	}
 	if (errno) { rc=3; goto done; }
-	if (found!=15 && found!=31) goto done;
+	if (found!=61) goto done;
 	closedir(dir); dir=NULL;
-	if ((rc=load(fd,"policy.bin",&g->cache,JF_CACHE_FILE_MAX)) || (rc=load(fd,"filters.zsh",&g->zsh,JF_CACHE_MAX)) ||
+	if ((rc=load(fd,"dependencies",&g->cache,JF_CACHE_FILE_MAX)) ||
 		(rc=load(fd,"Filters.sieve",&g->sieve,JF_CACHE_MAX)) || (rc=load(fd,"manifest.json",&actual,4096))) goto done;
-	if ((rc=jf_cache_validate(g->cache.data,g->cache.size,&g->zsh,&g->sieve,NULL,&g->binding,error))) goto done;
-	if ((found==31)!=(*g->binding.runtime!=0)) { rc=5; goto done; }
-	if (found==31 && (rc=load(fd,"Filters.svbin",&g->bytecode,JF_CACHE_MAX))) goto done;
+	if ((rc=load(fd,"Filters.svbin",&g->bytecode,JF_CACHE_MAX)) || (rc=load(fd,"provenance",&g->provenance,JF_CACHE_MAX))) goto done;
+	if ((rc=jf_cache_validate(g->cache.data,g->cache.size,&g->provenance,&g->sieve,NULL,&g->binding,error))) goto done;
+	if (!*g->binding.runtime || !g->bytecode.size || !g->provenance.size) { rc=5; goto done; }
 	{ char hex[65]; jf_digest_hex(g->cache.data+24,hex); if (strcmp(hex,id)) { rc=5; goto done; } }
 	if ((rc=manifest(g,&expected))) goto done;
 	if (actual.size!=expected.size || memcmp(actual.data,expected.data,actual.size)) { rc=5; goto done; }
@@ -266,14 +265,15 @@ done:
 void jf_generation_close(struct jf_generation *g)
 {
 	if (g->directory>=0) close(g->directory);
-	jf_bytes_free(&g->cache); jf_bytes_free(&g->zsh); jf_bytes_free(&g->sieve); jf_bytes_free(&g->bytecode);
+	jf_bytes_free(&g->cache); jf_bytes_free(&g->sieve); jf_bytes_free(&g->bytecode);
+	jf_bytes_free(&g->provenance);
 	memset(g,0,sizeof *g); g->directory=-1;
 }
 
 int jf_generation_open(const struct jf_generation *g,const char *name)
 {
 	int fd;
-	if (strcmp(name,"policy.bin") && strcmp(name,"filters.zsh") && strcmp(name,"Filters.sieve") &&
+	if (strcmp(name,"dependencies") && strcmp(name,"provenance") && strcmp(name,"Filters.sieve") &&
 		strcmp(name,"Filters.svbin") && strcmp(name,"manifest.json")) { errno=EINVAL; return -1; }
 	fd=openat(g->directory,name,O_RDONLY|O_NOFOLLOW|O_NONBLOCK);
 	if (fd>=0 && !regular(fd)) { close(fd); fd=-1; errno=EINVAL; }
@@ -289,12 +289,43 @@ static int unfinished(struct location *l)
 	return (exists(l->engine,"journal")!=0 || exists(l->engine,"import.journal")!=0) && !committed_journal(l,id);
 }
 
-static int public_status(struct location *l,const struct jf_generation *g)
+static int public_status(struct location *l,const struct jf_generation *g,int private)
 {
 	struct jf_bytes public={0};
-	int rc=load(l->root,"Filters.sieve",&public,JF_CACHE_MAX);
+	int rc=load_mode(l->root,"Filters.sieve",&public,JF_CACHE_MAX,private,NULL);
 	if (!rc && (public.size!=g->sieve.size || memcmp(public.data,g->sieve.data,public.size))) rc=5;
 	jf_bytes_free(&public); return rc;
+}
+
+/* An old classifier is never opened. Its immutable Sieve export identifies
+ * the prior public view for journal recovery and explicit recompilation. */
+static int previous_format(struct location *l,const char *id)
+{
+	int fd=directory(l->generations,id,0);
+	if (fd<0) return 0;
+	struct stat st;
+	int old=!fstatat(fd,"policy.bin",&st,AT_SYMLINK_NOFOLLOW) && S_ISREG(st.st_mode) &&
+		exists(fd,"dependencies")==0;
+	close(fd);
+	return old;
+}
+
+static int previous_export(struct location *l,const char *id)
+{
+	struct jf_generation old={0};
+	struct jf_bytes manifest_bytes={0};
+	int fd=directory(l->generations,id,0),rc=5;
+	unsigned char digest[32]; char hex[65],expected[96];
+	if (fd<0) return rc;
+	if (load(fd,"Filters.sieve",&old.sieve,JF_CACHE_MAX) || load(fd,"manifest.json",&manifest_bytes,4096) ||
+		jf_bytes_add(&manifest_bytes,"",1)) goto done;
+	snprintf(expected,sizeof expected,"\"generation\":\"%s\"",id);
+	if (!strstr((char *)manifest_bytes.data,expected)) goto done;
+	jf_digest(old.sieve.data,old.sieve.size,digest); jf_digest_hex(digest,hex);
+	snprintf(expected,sizeof expected,"\"sieve_sha256\":\"%s\"",hex);
+	if (strstr((char *)manifest_bytes.data,expected)) rc=public_status(l,&old,0);
+done:
+	jf_bytes_free(&manifest_bytes); jf_bytes_free(&old.sieve); close(fd); return rc;
 }
 
 static int pin_locked(struct location *l,const char *requested,struct jf_generation *g,struct jf_error *error)
@@ -306,12 +337,12 @@ static int pin_locked(struct location *l,const char *requested,struct jf_generat
 	fd=directory(l->generations,id,0); if (fd<0) return 5;
 	rc=validate_directory(fd,id,g,error); close(fd);
 	if (!rc && transaction) {
-		if (!strcmp(id,committed)) rc=public_status(l,g);
+		if (!strcmp(id,committed)) rc=public_status(l,g,1);
 		else {
 			struct jf_generation current={0}; current.directory=-1;
 			fd=directory(l->generations,committed,0);
 			rc=fd<0 ? 5 : validate_directory(fd,committed,&current,error);
-			if (!rc) rc=public_status(l,&current);
+			if (!rc) rc=public_status(l,&current,1);
 			if (fd>=0) close(fd);
 			jf_generation_close(&current);
 		}
@@ -471,7 +502,9 @@ static int recover(struct location *l)
 	if (exists(l->engine,"committed")) {
 		struct jf_generation committed={0}; committed.directory=-1;
 		if (load(l->engine,"committed",&marker,64) || marker.size!=64 || memcmp(marker.data,next,64)) goto done;
-		rc=pin_locked(l,NULL,&committed,NULL);
+		char selected[65];
+		if (selector(l,selected) || strcmp(selected,next)) goto done;
+		rc=previous_format(l,selected) ? previous_export(l,selected) : pin_locked(l,NULL,&committed,NULL);
 		if (rc) { jf_generation_close(&committed); goto done; }
 		jf_generation_close(&committed);
 	} else {
@@ -530,7 +563,7 @@ done:
 
 static void discard_stage(int engine,const char *name)
 {
-	static const char *files[]={"policy.bin","filters.zsh","Filters.sieve","Filters.svbin","manifest.json"};
+	static const char *files[]={"dependencies","Filters.sieve","Filters.svbin","manifest.json","provenance"};
 	size_t i; int fd=directory(engine,name,0);
 	if (fd<0) return;
 	for (i=0;i<sizeof files/sizeof *files;i++) (void)unlinkat(fd,files[i],0);
@@ -547,9 +580,10 @@ static int stage(struct location *l,const char *engine_path,const char *runtime,
 	if (hook("stage-name")) goto done;
 	*name=strdup(strrchr(path,'/')+1); if (!*name) goto done;
 	fd=directory(l->engine,*name,0); if (fd<0) goto done;
-	strcpy(g.id,p->id); g.cache=p->cache; g.zsh=p->zsh; g.sieve=p->sieve;
-	if (save(fd,"policy.bin",p->cache.data,p->cache.size,"write-product") ||
-		save(fd,"filters.zsh",p->zsh.data,p->zsh.size,"write-zsh") ||
+	strcpy(g.id,p->id); g.cache=p->cache; g.sieve=p->sieve;
+	g.provenance=p->provenance;
+	if (save(fd,"dependencies",p->cache.data,p->cache.size,"write-product") ||
+		save(fd,"provenance",p->provenance.data,p->provenance.size,"write-provenance") ||
 		save(fd,"Filters.sieve",p->sieve.data,p->sieve.size,"write-sieve") ||
 		hook("sieve-compile") || run_sieve(runtime,fd,"compile",error) ||
 		run_sieve(runtime,fd,"dump",error) || load(fd,"Filters.svbin",&g.bytecode,JF_CACHE_MAX)) goto done;
@@ -559,7 +593,7 @@ static int stage(struct location *l,const char *engine_path,const char *runtime,
 		int failed=syncfd(binfd,"fsync-bytecode");
 		if (close(binfd) || failed) goto done;
 	}
-	if (jf_cache_validate(g.cache.data,g.cache.size,&g.zsh,&g.sieve,NULL,&g.binding,error) || !*g.binding.runtime ||
+	if (jf_cache_validate(g.cache.data,g.cache.size,&g.provenance,&g.sieve,NULL,&g.binding,error) || !*g.binding.runtime ||
 		manifest(&g,&info) ||
 		save(fd,"manifest.json",info.data,info.size,"write-manifest") || syncfd(fd,"fsync-stage") ||
 		hook("validate") || validate_directory(fd,p->id,&verified,error)) goto done;
@@ -574,21 +608,6 @@ done:
 void jf_compile_result_free(struct jf_compile_result *r)
 {
 	free(r->directory); jf_bytes_free(&r->warnings); memset(r,0,sizeof *r);
-}
-
-int jf_generation_legacy_run(const char *root,char *const argv[])
-{
-	struct location l={-1,-1,-1,-1}; int rc,held;
-	if ((rc=locate(root,1,&l)) || (rc=lock(&l,1)) || (rc=recover(&l))) goto done;
-	/* POSIX locks survive exec, but not fork. Replace this process while keeping
-	 * the non-CLOEXEC lock descriptor open: no supervising parent can die and
-	 * release the lock while an orphan continues to publish a legacy export. */
-	held=l.lock; l.lock=-1; location_close(&l);
-	execvp(argv[0],argv);
-	rc=errno==ENOENT ? 127 : 126;
-	close(held);
-done:
-	location_close(&l); return rc;
 }
 
 int jf_compile_import(const char *root,const char *accounts,const char *profile,const char *compiler,
@@ -679,7 +698,7 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 	}
 	if (!strcmp(old,products.id) && !count) {
 		struct jf_generation same={0}; same.sieve=products.sieve;
-		rc=public_status(&l,&same);
+		rc=public_status(&l,&same,1);
 		if (rc==5) { rc=publish(&l,old,&products); if (!rc) result->changed=1; }
 	} else { rc=publish(&l,old,&products); if (!rc) result->changed=1; }
 	if (!rc) strcpy(result->id,products.id);
@@ -720,7 +739,9 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 			if ((rc=lock(&l,1)) || (rc=recover(&l))) goto done;
 		}
 		if ((rc=selector(&l,old))) goto done;
-		if (*old) {
+		if (*old && previous_format(&l,old)) {
+			if ((rc=previous_export(&l,old))) goto done;
+		} else if (*old) {
 			if ((rc=pin_locked(&l,NULL,&previous,error)) ||
 				(rc=jf_cache_dependencies(&previous.cache,&prior.dependencies,&prior.dependency_count))) goto done;
 		}
@@ -751,7 +772,7 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 			if (!rc && memcmp(again,fingerprint,32)) { rc=6; retry=1; }
 			if (!rc) rc=pin_locked(&l,NULL,&warm,error);
 			if (!rc && strcmp(warm.id,id)) { rc=6; retry=1; }
-			if (!rc) { rc=public_status(&l,&warm); if (rc==5) repair=1; }
+			if (!rc) { rc=public_status(&l,&warm,1); if (rc==5) repair=1; }
 			jf_generation_close(&warm);
 			unlock(&l);
 			if (!repair) {
@@ -794,9 +815,10 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 		} else {
 			struct jf_generation existing={0}; int fd=directory(l.generations,products.id,0); existing.directory=-1;
 			rc=fd<0 ? 5 : validate_directory(fd,products.id,&existing,error);
-			if (!rc && (existing.cache.size!=products.cache.size || existing.zsh.size!=products.zsh.size ||
+			if (!rc && (existing.cache.size!=products.cache.size ||
+				existing.provenance.size!=products.provenance.size ||
+				memcmp(existing.provenance.data,products.provenance.data,products.provenance.size) ||
 				existing.sieve.size!=products.sieve.size || memcmp(existing.cache.data,products.cache.data,products.cache.size) ||
-				memcmp(existing.zsh.data,products.zsh.data,products.zsh.size) ||
 				memcmp(existing.sieve.data,products.sieve.data,products.sieve.size))) rc=5;
 			if (fd>=0) close(fd);
 			jf_generation_close(&existing); if (rc) goto iteration;
@@ -811,7 +833,7 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 		}
 		if (!strcmp(old,products.id)) {
 			struct jf_generation same={0}; same.sieve=products.sieve;
-			rc=public_status(&l,&same);
+			rc=public_status(&l,&same,1);
 			if (rc==5) { rc=publish(&l,old,&products); if (!rc) result->changed=1; }
 		} else {
 			rc=publish(&l,old,&products);

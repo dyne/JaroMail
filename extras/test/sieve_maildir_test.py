@@ -8,7 +8,6 @@ from pathlib import Path
 import shutil
 import re
 import select
-import shlex
 import signal
 import stat
 import subprocess
@@ -264,9 +263,8 @@ if header :is "Subject" "explicit" { keep; stop; }
             # Distinguish rules that intentionally share a mailbox. In a second
             # pass label every fileinto with its rule ID, retaining the generated
             # tests, order and stop statements. Expected IDs come from L1.
-            ids_line, = [line for line in (product / "filters.zsh").read_text().splitlines()
-                         if line.startswith("filter_rule_ids=(")]
-            ids = iter(shlex.split(ids_line[len("filter_rule_ids=("):-1]))
+            from filter_compiler_test import provenance
+            ids = (rule.decode() for _, rule, _, _ in provenance(product))
             witness = re.sub(r'fileinto :create "[^"]+";', lambda m: f'fileinto :create "{next(ids)}";',
                              (product / "Filters.sieve").read_text())
             self.assertIsNone(next(ids, None))
@@ -446,6 +444,42 @@ if header :is "Subject" "explicit" { keep; stop; }
         self.assertEqual([(r[0], r[1], r[2]) for r in rows], [("0", "new", "a"), ("1", "new", "b")])
         self.assertEqual((txn / "cur/1").read_bytes(), keep)
         self.assertIn(b"unfinished Maildir transaction", self.invoke(success=False).stderr)
+
+    def test_modified_claim_after_classification_retains_edited_source(self):
+        original = message("selected", "message before delivery")
+        edited = message("changed", "body changed while saving")
+        selected = self.source / "new/edited:2,S"
+        selected.write_bytes(original)
+        with self.held_save():
+            (self.source / "tmp/.jaro-sieve-transaction/cur/0").write_bytes(edited)
+        self.assertNotEqual(self.held_result.returncode, 0)
+        self.assertEqual(selected.read_bytes(), edited)
+        self.assertEqual((self.base / "INBOX/cur/edited:2,S").read_bytes(), original)
+
+    def test_published_replacement_retains_source_and_foreign_mail(self):
+        original = message("selected", "original complete body")
+        foreign = message("other", "replacement after publication")
+        selected = self.source / "cur/keep:2,F"
+        selected.write_bytes(original)
+        destination = self.base / "INBOX/cur/keep:2,F"
+        with self.held_save(after_publish=True):
+            replacement = destination.parent.parent / "tmp/foreign"
+            replacement.write_bytes(foreign)
+            replacement.replace(destination)
+        self.assertNotEqual(self.held_result.returncode, 0)
+        self.assertEqual(destination.read_bytes(), foreign)
+        self.assertEqual(selected.read_bytes(), original)
+
+    def test_foreign_transaction_directory_blocks_before_claim(self):
+        selected = self.source / "new/message"
+        selected.write_bytes(message("selected", "entire body"))
+        private = self.source / "tmp/.jaro-sieve-transaction"
+        private.mkdir()
+        (private / "sentinel").write_bytes(b"foreign data")
+        before = tree(self.root)
+        result = self.invoke(success=False)
+        self.assertIn(b'unfinished Maildir transaction', result.stderr)
+        self.assertEqual(tree(self.root), before)
 
     def test_hard_kill_leaves_durable_source_inventory(self):
         selected = self.source / "new/a"

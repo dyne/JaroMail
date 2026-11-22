@@ -1,5 +1,10 @@
 # Reproducing filter benchmarks
 
+Published native and shell measurements below describe earlier revisions.
+On the current branch the harness invokes Pigeonhole for all selectors.
+Record new measurements in a fresh output directory and keep the recorded
+baseline data with its original revision and executable identities.
+
 The common physical-delivery baseline uses literal typed rules on both the
 original native engine and later candidates. Supply a separately built Release
 runtime and its matching source tree; the harness itself can come from the
@@ -33,7 +38,7 @@ phase time is the sum of its command intervals. Every command records its
 exit, wall/CPU time, descendant peak RSS and UTC observation. RSS includes the
 Python launcher floor. No timing wrappers or durability shortcuts are used.
 `summary.json` reports medians, min/max spread, throughput and native store bytes
-(`policy.bin` or `rules.cdb`); individual samples also retain all generation
+(`Filters.svbin` for Sieve and `policy.bin` or `rules.cdb` for historical builds). Individual samples also retain all generation
 product bytes and unchanged-publication evidence.
 `samples.json` retains every invocation. `fixtures.json` records exact 1 KiB
 message digests, policy digest, per-occurrence destination/flags and devices.

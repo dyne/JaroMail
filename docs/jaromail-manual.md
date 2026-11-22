@@ -175,7 +175,7 @@ Normal reports contain the following stable IDs, including unavailable checks:
 | `paths`, `runtime`, `version` | Resolved paths, core modules and assigned version metadata. |
 | `command.NAME` | Required `zsh`, `fetchmail`, `msmtp`, `gpg`, `pinentry`, `notmuch`, `maddr`, `mdeliver`, `mpick`, `openssl`, `awk`, `sed`, `grep`, `find`, `hostname`, `sqlite3`; `command.mutt` accepts Mutt or NeoMutt. |
 | `optional.NAME` | Optional `pass`, `secret-tool`, `wipe`, `srm`, `alot`, `mixmaster`, `nc`, `tomb`. A selected keyring can separately require one of these. |
-| `helper.NAME` | Native `fetchaddr`, `parsedate`, `dotlock`, `gpgewrap`, `abook`, `jaro-filter-compile`, `jaro-filter-legacy`, `jaro-filter`, `jaro-outbox`. |
+| `helper.NAME` | Native `fetchaddr`, `parsedate`, `dotlock`, `gpgewrap`, `abook`, `jaro-filter-compile`, `jaro-sieve-filter`, `jaro-outbox`. |
 | `mail.root`, `maildirs` | Mail-root access and discovered Maildir layouts/permissions. |
 | `account`, `trust`, `keyring` | Data validation and offline configuration checks, without account values or credential retrieval. |
 | `filters`, `index`, `outbox` | Generation/index presence and queue inspection. |
@@ -362,11 +362,11 @@ Mail, here they are listed in order of priority
 
   Folder             What goes in there
   ------------------ --------------------------------------------------
-  **known**          Mails whose sender is known (Whitelist)
+  **INBOX**          New mail from whitelisted senders
   **priv**           Unknown sender, we are among explicit recipients
   **unsorted**       Unknown sender, we are not among recipients
   **zz.blacklist**   Mails whose sender is not desired (Blacklist)
-  **zz.spam**        Mails that are tagged as spam (server-side)
+  **Spam**           New mail tagged as spam
   **zz.bounces**     Mail bounces like mailman and similar
 
 The advantage using such a folder organization is that every time we
@@ -411,7 +411,7 @@ addresses reached by the mail (From: To: and Cc: fields) use the same
 letter capitalized pressing shift \[ **A** \].
 
 All addresses selected this way will have the privilege of ending up in
-your **known/** folder, plus their name and e-mail will be completed
+your **INBOX/** folder, plus their name and e-mail will be completed
 automatically when composing a new email, pressing the **Tab** key while
 indicating them among the recipients.
 
@@ -1416,7 +1416,7 @@ identify
 
 ## Filters
 
-Native is the default engine. Fresh `jaro init` installs a policy with commented
+Pigeonhole executes local filters. Fresh `jaro init` installs a policy with commented
 typed examples and no active explicit routes; blacklist, bounce, known-contact,
 spam, own-address and unsorted builtins remain active. Use `jaro sieve` to publish,
 then `jaro -n filter` or `jaro filter --explain` to inspect without moving mail.
@@ -1425,8 +1425,17 @@ built-in defaults enable fileinto, automatic mailbox creation and the qualified
 legacy `from`/`to` ERE subset. Regex is declared only when a rule uses it.
 Partial-address rules work without adding `*` or `.*`; `save` and `move` are
 aliases. An optional profile can override capabilities or mailbox mappings.
-`JARO_FILTER_ENGINE=legacy` retains the transition
-rollback and original legacy fresh template. See
+Pigeonhole executes local filters. The default and the `sieve`, `native` and
+`legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
+Run `jaro update` to migrate an older generation from your existing
+`Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
+report the required update before touching messages or starting transport.
+An unsuccessful migration preserves the last coherent policy and all mail.
+Historical messages stay in `known` and `zz.spam`. New known and spam deliveries
+use `INBOX` and `Spam` by default. Custom Sieve mailbox mappings apply locally
+and to the exported script. Existing files in the destination Maildir are preserved.
+
+See
 [migration and compatibility](filter-compatibility.md) for domain examples,
 known corrections, compare observations and tested platform limits.
 

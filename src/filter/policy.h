@@ -98,17 +98,5 @@ struct jf_message {
 	const struct jf_text *spam_flags;
 	size_t spam_count;
 };
-struct jf_match_stats { size_t index_comparisons, regex_checks; };
-/* Pure classification: no IO, processes, policy mutation or per-call policy
- * allocations/regex compilation. *winner borrows every decision/provenance
- * field from policy until policy_free. On error it is NULL. Return 0, 3 for a
- * resource/regex execution error, or 7 for invalid/oversized parsed input.
- * Every address is validated before selecting a winner; malformed data never
- * becomes an otherwise valid early-stage result. Unsupported domain syntax
- * (including non-ASCII domains) is an explicit E_MESSAGE_ADDRESS error.
- * Stats are optional, caller-owned deterministic work counters.
- */
-int jf_policy_classify(const struct jf_policy *, const struct jf_message *,
-	const struct jf_rule **winner, struct jf_error *, struct jf_match_stats *);
 
 #endif

@@ -16,7 +16,6 @@ import sys
 import tempfile
 import unittest
 sys.dont_write_bytecode = True
-from filter_compiler_test import records
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURE = json.loads((REPO / 'extras/test/fixtures/filter-policy/roundtrip.json').read_text())
@@ -96,9 +95,7 @@ class ImportTests(unittest.TestCase):
 
     def policy(self, root):
         generation = (root / 'cache/filter-engine/current').resolve(strict=True)
-        # Ignore IDs and source lines, but compare every behavioral field/order.
-        return [tuple(row[i] for i in (1, 2, 3, 5, 6, 7, 8, 11))
-                for tag, row in records((generation / 'policy.bin').read_bytes()) if tag == b'R']
+        return (generation / "Filters.sieve").read_bytes()
 
     def snapshot(self):
         result = {}
@@ -354,11 +351,11 @@ class ImportTests(unittest.TestCase):
         result = self.do_import(args=('--legacy-generated',))
         self.assertIn(b'W_LEGACY_SIEVE', result.stderr)
         semantic = self.policy(self.root)
-        routes = [(x[0], x[3], x[4]) for x in semantic if x[0] in (b'3', b'4')]
-        self.assertEqual(routes, [(b'3', b'list@example.org', b'lists'), (b'4', b'team@example.org', b'team')])
+        self.assertIn(b'"list@example.org" { fileinto :create "lists"', self.policy(self.root))
+        self.assertIn(b'"team@example.org" { fileinto :create "team"', self.policy(self.root))
         self.assertEqual((self.root / 'Aliases.txt').read_text(), '"alias@example.org"\n')
-        self.assertEqual(sum(x[0] == b'1' for x in semantic), 1)
-        self.assertEqual(sum(x[0] == b'5' for x in semantic), 1)
+        self.assertEqual(semantic.count(b'"blocked@example.org"'), 1)
+        self.assertEqual(semantic.count(b'"known@example.org"'), 1)
         before = self.snapshot()
         self.do_import(args=('--legacy-generated',))
         self.assertEqual(self.snapshot(), before)
@@ -370,8 +367,8 @@ class ImportTests(unittest.TestCase):
         self.script.write_bytes((REPO / 'extras/test/fixtures/filter-policy/legacy-generated.txt').read_bytes())
         (self.root / 'FilterProfile.txt').unlink()
         self.do_import(args=('--legacy-generated',))
-        routes = [(row[0], row[3], row[4]) for row in self.policy(self.root) if row[0] in (b'3', b'4')]
-        self.assertEqual(routes, [(b'3', b'list@example.org', b'lists'), (b'4', b'team@example.org', b'team')])
+        self.assertIn(b'"list@example.org" { fileinto :create "lists"', self.policy(self.root))
+        self.assertIn(b'"team@example.org" { fileinto :create "team"', self.policy(self.root))
         before = self.snapshot()
         self.do_import(args=('--legacy-generated',))
         self.assertEqual(self.snapshot(), before)
@@ -389,7 +386,7 @@ class ImportTests(unittest.TestCase):
         (self.root / 'FilterProfile.txt').write_text('')
         self.script.write_text('require ["fileinto", "mailbox", "variables"];\nfileinto :create "unsorted";\n')
         self.do_import(args=('--legacy-generated',))
-        self.assertEqual(len(self.policy(self.root)), 3)
+        self.assertEqual(self.policy(self.root).count(b"fileinto :create"), 3)
         self.compile()
         before = self.snapshot()
         for text in ('require ["fileinto","mailbox","variables"]; set "name" "value"; fileinto :create "unsorted";',

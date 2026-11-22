@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import shutil
 import signal
 import stat
 import subprocess
@@ -46,7 +47,7 @@ def product(path, limit):
         return data
 
 
-def snapshot(script, home, runtime, runtime_id):
+def snapshot(script, home, runtime, runtime_id, generation):
     # Resolve the directory once, including a published generation symlink.
     parent = script.parent.resolve(strict=True)
     source = product(parent / script.name, 128 << 20)
@@ -54,10 +55,15 @@ def snapshot(script, home, runtime, runtime_id):
     if not (script.name == "Filters.sieve"
             and parent.parts[-4:-1] == ("cache", "filter-engine", "generations")
             and re.fullmatch("[0-9a-f]{64}", parent.name)):
+        if generation:
+            raise ValueError("workflow requires a pinned Sieve generation; run jaro update")
         return False
+    if generation and generation != parent.name:
+        raise ValueError("selected Sieve generation changed; run jaro update")
+    extra = [home / "provenance"] if generation else []
     with (home / "binary").open("xb") as binary:
         subprocess.run([runtime.parent / "bin/sieve-generation-read", parent.parents[3],
-                        parent.name, hashlib.sha256(source).hexdigest(), runtime_id],
+                        parent.name, hashlib.sha256(source).hexdigest(), runtime_id, *extra],
                        stdout=binary, check=True)
     return True
 
@@ -66,19 +72,20 @@ def identity(st):
     return st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns
 
 
-def source_entries(dirs):
+def source_entries(dirs, selected):
     entries = []
     for folder in ("cur", "new"):
-        with os.scandir(dirs[folder]) as children:
-            for entry in sorted(children, key=lambda item: os.fsencode(item.name)):
-                if entry.name.startswith("."):
-                    continue
-                st = entry.stat(follow_symlinks=False)
-                if not stat.S_ISREG(st.st_mode):
-                    raise ValueError(f"expected a regular Maildir message: {folder}/{entry.name}")
-                # Dovecot identifies mail by basename before :2,. Give every
-                # physical occurrence its own UID even across duplicate names.
-                entries.append((folder, entry.name, str(len(entries)), identity(st)))
+        if selected and folder != selected[0]:
+            continue
+        names = (selected[1],) if selected else sorted(
+            (name for name in os.listdir(dirs[folder]) if not name.startswith(".")), key=os.fsencode)
+        for name in names:
+            st = os.stat(name, dir_fd=dirs[folder], follow_symlinks=False)
+            if not stat.S_ISREG(st.st_mode):
+                raise ValueError(f"expected a regular Maildir message: {folder}/{name}")
+            # Dovecot identifies mail by basename before :2,. Give every
+            # physical occurrence its own UID even across duplicate names.
+            entries.append((folder, name, str(len(entries)), identity(st)))
     return entries
 
 
@@ -89,8 +96,7 @@ def restore(claim_fd, key, directory, name):
     os.unlink(key, dir_fd=claim_fd)
 
 
-def run_batch(command, env, home, source, dirs, fds, preview):
-    entries = source_entries(dirs)
+def run_batch(command, env, home, source, dirs, fds, preview, entries):
     tmp = Path(f"/proc/self/fd/{dirs['tmp']}")
     work = home / "preview" if preview else tmp / ".jaro-sieve-transaction"
     read_fd, write_fd = os.pipe()
@@ -194,17 +200,95 @@ def run_batch(command, env, home, source, dirs, fds, preview):
     return 128 - status if status < 0 else status or (7 if failed else 0)
 
 
+def records(path):
+    data = path.read_bytes().split(b"\0")
+    if data.pop() or len(data) % 4:
+        raise ValueError(f"incomplete Sieve {path.name}")
+    return zip(*[iter(data)] * 4)
+
+
+def report(home, entries, source, base, args, source_box):
+    provenance = {int(line): (rule, path, authored)
+                  for line, rule, path, authored in records(home / "provenance")}
+    decisions = {int(index): (int(status), location, mailbox)
+                 for index, status, location, mailbox in records(home / "decisions")}
+    output = sys.stdout.buffer
+    output.write(b"JFD1\0" + args.report0.encode("ascii") + b"\0")
+    for index, (folder, name, _, _) in enumerate(entries):
+        path = args.message or source / folder / name
+        status, location, mailbox = decisions.get(index, (-1, b"", b""))
+        line = re.search(rb"(?:^|: )line ([0-9]+)$", location)
+        winner = provenance.get(int(line[1])) if line else None
+        rule, origin, authored = winner or (b"", b"", b"0")
+        if status < 0:
+            action = [b"none", b"", b"", b"", b"error", origin, authored, b"E_SIEVE_DELIVERY"]
+        else:
+            if not winner or not mailbox:
+                raise ValueError(f"missing Sieve action provenance at {location!r}")
+            if mailbox.upper() == b"INBOX":
+                mailbox = b"INBOX"
+            noop = mailbox == os.fsencode(source_box)
+            outcome = b"noop" if noop else b"classified" if args.dry_run else b"moved"
+            action = [b"none" if noop else b"move", mailbox, os.fsencode(base / os.fsdecode(mailbox)),
+                      mailbox, outcome, origin, authored, b""]
+        output.write(b"\0".join([str(index + 1).encode(), os.fsencode(path), rule, *action]) + b"\0")
+
+
+def lock_workflow(base_fd, stack):
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    cache = os.open("cache", flags, dir_fd=base_fd)
+    stack.callback(os.close, cache)
+    engine = os.open("filter-engine", flags, dir_fd=cache)
+    stack.callback(os.close, engine)
+    fd = os.open("batch.lock", os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CREAT,
+                 0o600, dir_fd=engine)
+    stack.callback(os.close, fd)
+    st = os.fstat(fd)
+    if (not stat.S_ISREG(st.st_mode) or stat.S_IMODE(st.st_mode) != 0o600
+            or st.st_uid != os.geteuid() or st.st_nlink != 1):
+        raise ValueError("invalid workflow batch.lock")
+    fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    if not os.path.samestat(st, os.stat("batch.lock", dir_fd=engine, follow_symlinks=False)):
+        raise ValueError("workflow batch.lock changed")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="jaro-sieve-filter")
     parser.add_argument("--from", required=True, dest="incoming")
     parser.add_argument("--to", required=True, dest="base")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--report0", metavar="GENERATION")
+    parser.add_argument("--message", type=Path)
     parser.add_argument("script", type=Path)
     args = parser.parse_args()
     runtime = Path(__file__).resolve().parent
     runtime_id = subprocess.check_output([runtime / "run", "identity"], text=True).split()[0]
     source, base = Path(args.incoming), Path(args.base)
     with ExitStack() as roots, tempfile.TemporaryDirectory(prefix="jaro-sieve-") as temporary:
+        home = Path(temporary).resolve()
+        selected = None
+        if args.message:
+            if not args.dry_run or not args.message.is_absolute():
+                parser.error("--message requires --dry-run and an absolute path")
+            if args.message.parent.parent == source and args.message.parent.name in ("cur", "new"):
+                selected = (args.message.parent.name, args.message.name)
+            elif args.message.parent == source:
+                parent = directory(source, roots)
+                fd = os.open(args.message.name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=parent)
+                with os.fdopen(fd, "rb") as original:
+                    before = os.fstat(fd)
+                    if not stat.S_ISREG(before.st_mode):
+                        raise ValueError("expected a regular saved message")
+                    source = home / "saved"
+                    for name in ("new", "cur", "tmp"):
+                        (source / name).mkdir(parents=True)
+                    with (source / "new/message").open("xb") as copy:
+                        shutil.copyfileobj(original, copy)
+                    if identity(before) != identity(os.fstat(fd)):
+                        raise ValueError("saved message changed during explain")
+                selected = ("new", "message")
+            else:
+                parser.error("selected message must belong to --from")
         source_fd, base_fd = directory(source, roots), directory(base, roots)
         dirs = {}
         fcntl.flock(source_fd, (fcntl.LOCK_SH if args.dry_run else fcntl.LOCK_EX) | fcntl.LOCK_NB)
@@ -212,8 +296,11 @@ def main():
             fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=source_fd)
             roots.callback(os.close, fd)
             dirs[name] = fd
-        home = Path(temporary).resolve()
-        cached = snapshot(args.script, home, runtime, runtime_id)
+        if args.report0 and args.script != base / "cache/filter-engine/generations" / args.report0 / "Filters.sieve":
+            raise ValueError("workflow policy must belong to its selected mail root")
+        cached = snapshot(args.script, home, runtime, runtime_id, args.report0)
+        if args.report0 and not args.dry_run:
+            lock_workflow(base_fd, roots)
         (home / "incoming").mkdir()
         (home / "incoming/mail").symlink_to(f"/proc/self/fd/{source_fd}")
         (home / "folders").symlink_to(f"/proc/self/fd/{base_fd}")
@@ -225,13 +312,18 @@ def main():
             if (relative.parts[0] != ".jaro-source" and
                     (str(relative).upper() != "INBOX" or str(relative) == "INBOX")):
                 source_box = str(relative)
+        mode = "preview" if args.dry_run else "apply"
         command = [runtime / "bin/doveconf", "-c", runtime / "maildir.conf", "-F",
                    runtime / "bin/maildir-filter", "--", source_box,
-                   "preview" if args.dry_run else "apply", "cached" if cached else "source"]
+                   mode + ("-report" if args.report0 else ""), "cached" if cached else "source"]
         env = {"PATH": "/usr/bin:/bin", "USER": pwd.getpwuid(os.geteuid()).pw_name,
                "HOME": str(home), "LD_LIBRARY_PATH": str(runtime / "lib"),
                "CONFIG_MODULES": str(runtime / "lib/libpigeonhole_settings.so")}
-        return run_batch(command, env, home, source, dirs, (source_fd, base_fd), args.dry_run)
+        entries = source_entries(dirs, selected)
+        status = run_batch(command, env, home, source, dirs, (source_fd, base_fd), args.dry_run, entries)
+        if args.report0 and (home / "decisions").exists():
+            report(home, entries, source, base, args, source_box)
+        return status
 
 
 if __name__ == "__main__":
@@ -241,5 +333,8 @@ if __name__ == "__main__":
         signal.signal(sig, interrupt)
     try:
         sys.exit(main())
+    except BlockingIOError as error:
+        print(f"jaro-sieve-filter: batch locked: {error}", file=sys.stderr)
+        sys.exit(6)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         sys.exit(f"jaro-sieve-filter: {error}")

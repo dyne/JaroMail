@@ -37,33 +37,24 @@ release tags, with the v6.0.0 development baseline when no v6 tag exists.
 
 ## Filter engine selection
 
-`JARO_FILTER_ENGINE=legacy|native` selects compilation and filter/fetch dispatch;
-unset selects native. Explicit `JARO_FILTER_ENGINE=legacy` selects rollback.
-Empty/unknown values fail. Native `update`/`sieve` invoke the installed compiler
-with explicit mail/account roots and return its failures without fallback.
-No profile file is required: built-in defaults enable fileinto, automatic mailbox
-creation and the qualified legacy ERE subset. Regex is declared only when used;
-partial addresses keep matching without wildcard suffixes. Unsupported ERE
-exports fail with a source-line diagnostic. Explicit legacy rejects typed/domain records. Sieve
-generation writes the local export only, without remote deployment.
+Pigeonhole executes local filters. The default and the `sieve`, `native` and
+`legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
+Run `jaro update` to migrate an older generation from your existing
+`Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
+report the required update before touching messages or starting transport.
+An unsuccessful migration preserves the last coherent policy and all mail.
+Historical messages stay in `known` and `zz.spam`. New known and spam deliveries
+use `INBOX` and `Spam` by default. Custom Sieve mailbox mappings apply locally
+and to the exported script. Existing files in the destination Maildir are preserved.
 
-Native `filter [MAILDIR]` compiles/verifies once and applies one pinned batch.
-The default Maildir is `$JAROMAILDIR/incoming`. Native `fetch` uses the same
-batch after transport and refreshes the index once, even after partial failure;
-batch errors remain nonzero. Filter itself does not index. Native Sieve import
-accepts the bounded Jaromail-generated grammar described below.
-
-Fresh `init` under unset/explicit native installs a comment-only typed-example
-policy with builtins active. Explicit legacy keeps the original 14 ERE defaults.
-Existing policies are never replaced or translated. Supported legacy EREs need
-no profile configuration; patterns outside the qualified subset need a deliberate
-rewrite. `save` and `move` are aliases. Invalid selectors or
-missing required templates fail before bootstrap configuration writes.
-
-Native `filter --explain [MAILDIR]` and `-n filter [MAILDIR]` classify only,
-checking the selected generation against current policy without publishing.
-Missing/stale generations return 5 and request an explicit `jaro update`.
-Native `-n fetch` explains local incoming mail without transport or indexing.
+`jaro sieve` publishes the shared local generation and portable Sieve export.
+`jaro filter [MAILDIR]` applies it to incoming mail. `jaro fetch` applies it
+after transport and refreshes the index once after the batch, including partial
+failures. Filter alone does not index. `jaro filter --explain [MAILDIR|MESSAGE]`,
+`jaro -n filter` and `jaro -n fetch` inspect the selected generation without
+publication, delivery or indexing. A missing or stale generation requires
+`jaro update` before preview. A fresh `jaro init` installs commented typed
+examples and active builtins. Supported legacy EREs work with the default profile.
 
 Native `filter --compare FILE [MAILDIR]` compares retained actual final legacy
 observations against native classification. It never applies either engine.
@@ -202,10 +193,10 @@ first line may set `#mode individual`, `#mode cc`/`#mode carboncopy`, or
 
 `filter` apply filters to a maildir.
 
-`sieve` regenerate `Filters.sieve` only.
+`sieve` publish the shared filter generation and its portable `Filters.sieve` export.
 
 `sieve-import FILE` import a Jaromail-generated Sieve file into local
-filter/addressbook files. With `JARO_FILTER_ENGINE=native`, the bounded token
+filter/addressbook files. The bounded token
 parser validates and stages the complete import before publication. `-n`
 validates without writes; `--legacy-generated` explicitly recovers older generated
 header-contains scripts with a migration diagnostic. Arbitrary provider scripts

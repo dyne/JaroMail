@@ -77,49 +77,6 @@ static int bounds(void)
 	return 0;
 }
 
-struct fault_allocator { size_t calls,fail,live; };
-static void *fault_allocate(void *context,size_t size)
-{
-	struct fault_allocator *f=context;
-	void *p;
-	if (++f->calls==f->fail) return NULL;
-	p=malloc(size); if (p) f->live++;
-	return p;
-}
-static void fault_release(void *context,void *p)
-{
-	struct fault_allocator *f=context;
-	if (p) { f->live--; free(p); }
-}
-static int restore(const char *path)
-{
-	struct jf_bytes cache={0}; struct jf_error error={0};
-	struct jf_policy *policy=NULL;
-	size_t fail;
-	int rc=load(path,&cache,JF_CACHE_FILE_MAX);
-	if (rc) return rc;
-	for (fail=1;fail<10000;fail++) {
-		struct fault_allocator fault={0,fail,0};
-		struct jf_allocator allocator={&fault,fault_allocate,fault_release};
-		const struct jf_rule *winner=NULL;
-		struct jf_message empty={0};
-		rc=jf_cache_policy(&cache,&allocator,&policy,&error);
-		if (rc) {
-			if (rc!=3 || policy || fault.live) { rc=1; break; }
-			continue;
-		}
-		/* The returned policy owns all strings; no cache-backed views escape. */
-		memset(cache.data,0,cache.size);
-		rc=jf_policy_classify(policy,&empty,&winner,&error,NULL);
-		if (rc || !winner || strcmp(winner->id,"builtin:unsorted")) rc=1;
-		jf_policy_free(policy); policy=NULL;
-		if (fault.live) rc=1;
-		printf("cache reconstruction: %zu allocator failures; independent owned model\n",fail-1);
-		break;
-	}
-	jf_bytes_free(&cache); return fail==10000 ? 1 : rc;
-}
-
 /* Simulate a valid prior-generation identity from another compiler recipe.
  * Test-only: no policy or runtime configuration hook is introduced. */
 static int prior_identity(struct jf_snapshot *s, const char *role)
@@ -144,11 +101,10 @@ int main(int argc, char **argv)
 	const char *path="";
 	int dir=-1,rc=2;
 	if (argc==2 && !strcmp(argv[1],"--bounds")) return bounds();
-	if (argc==3 && !strcmp(argv[1],"--restore")) return restore(argv[2]);
 	if (argc<3 || argc>6) return 2;
 	if (!strcmp(argv[1],"--validate") && argc==5) {
-		if (load(argv[2],&products.cache,JF_CACHE_FILE_MAX) || load(argv[3],&products.zsh,JF_CACHE_MAX) || load(argv[4],&products.sieve,JF_CACHE_MAX)) rc=3;
-		else rc=jf_cache_validate(products.cache.data,products.cache.size,&products.zsh,&products.sieve,NULL,NULL,&error);
+		if (load(argv[2],&products.cache,JF_CACHE_FILE_MAX) || load(argv[3],&products.provenance,JF_CACHE_MAX) || load(argv[4],&products.sieve,JF_CACHE_MAX)) rc=3;
+		else rc=jf_cache_validate(products.cache.data,products.cache.size,&products.provenance,&products.sieve,NULL,NULL,&error);
 		goto done;
 	}
 	rc=jf_snapshot_read(argv[1],argc>4 && *argv[4] ? argv[4] : NULL,
@@ -168,7 +124,7 @@ int main(int argc, char **argv)
 		path=rule ? rule->source : snapshot.profile_path; goto done;
 	}
 	dir=open(argv[2],O_RDONLY|O_DIRECTORY|O_NOFOLLOW);
-	if (dir<0 || save(dir,"filters.zsh",&products.zsh) || save(dir,"Filters.sieve",&products.sieve) || save(dir,"policy.bin",&products.cache)) { rc=3; goto done; }
+	if (dir<0 || save(dir,"provenance",&products.provenance) || save(dir,"Filters.sieve",&products.sieve) || save(dir,"dependencies",&products.cache)) { rc=3; goto done; }
 	fwrite(products.id,1,65,stdout);
 	rc=ferror(stdout) ? 3 : 0;
 done:

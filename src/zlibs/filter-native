@@ -120,6 +120,7 @@ native_filter_observations() {
 }
 
 native_filter_maildir() {
+    sieve_generation_ready || return $?
     setopt localoptions extendedglob
     local LC_ALL=C native_filter_input=${1:-$MAILDIRS/incoming}
     local native_filter_readonly=0 mode=apply selected stream result
@@ -143,10 +144,21 @@ native_filter_maildir() {
     fi
     # Keep all helper bytes, including invalid trailing LF. Removing only our
     # final sentinel also preserves NUL fields and paths ending in LF/SOH.
+    local from=${native_filter_input:a}
+    local -a sieve_args
+    [[ $native_filter_readonly == 1 ]] && sieve_args+=(--dry-run)
+    if [[ $native_filter_explain == 1 && -f $from ]]; then
+        sieve_args+=(--message "$from")
+        if [[ ${from:h:t} == (cur|new) && -d ${from:h:h}/tmp ]]; then
+            from=${from:h:h}
+        else
+            from=${from:h}
+        fi
+    fi
     stream=$(
         local capture_result=0
-        "$WORKDIR/bin/jaro-filter" --root "$MAILDIRS" --generation "$selected" \
-             --mode "$mode" --maildir "$native_filter_input" || capture_result=$?
+        "$WORKDIR/bin/jaro-sieve-filter" --from "$from" --to "${MAILDIRS:a}" --report0 "$selected" \
+             "${sieve_args[@]}" "$MAILDIRS/cache/filter-engine/generations/$selected/Filters.sieve" || capture_result=$?
         print -rn -- $'\1'
         exit $capture_result
     )

@@ -2,6 +2,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+import hashlib
+import fcntl
 import os
 import shutil
 import select
@@ -71,16 +73,33 @@ class WorkflowTests(unittest.TestCase):
 
     @classmethod
     def instrument_helpers(cls):
-        for name in ('jaro-filter-compile', 'jaro-filter', 'abook'):
+        for name in ('jaro-filter-compile', 'jaro-sieve-filter', 'abook'):
             helper = cls.runtime / 'bin' / name
             real = helper.with_name(name+'.real')
-            if helper.read_bytes()[:2] == b'#!':
+            if helper.read_bytes().startswith(b'#!/usr/bin/env python3\nimport json,os,sys'):
                 continue
             helper.replace(real)
-            helper.write_text('#!/usr/bin/env python3\nimport os,sys\n'
+            helper.write_text('#!/usr/bin/env python3\nimport json,os,sys\n'
                               'with open(os.environ["JARO_WORKFLOW_PROCESS_LOG"],"ab") as f: f.write(%r)\n'
+                              'with open(os.environ["JARO_WORKFLOW_TRACE"],"a") as f: print(json.dumps(sys.argv),file=f)\n'
                               'os.execv(%r,[%r]+sys.argv[1:])\n' % ((name+'\n').encode(), str(real), str(real)))
             helper.chmod(0o700)
+        # The worker's environment is isolated. Instrument its installed binaries
+        # at exec and bind the disposable installation's inventory to those bytes.
+        runtime = cls.runtime / 'sieve'
+        for name in ('maildir-filter', 'sievec'):
+            binary = runtime / 'bin' / name
+            if binary.read_bytes()[:2] == b'#!':
+                continue
+            real = binary.with_suffix('.real')
+            binary.replace(real)
+            binary.write_text('#!/usr/bin/python3 -I\nimport json,os,sys\n'
+                              f'with open({str(cls.work / "sieve-execs.jsonl")!r},"a") as f: print(json.dumps(sys.argv),file=f)\n'
+                              f'os.execv({str(real)!r},sys.argv)\n')
+            binary.chmod(0o700)
+        (runtime / 'SHA256SUMS').write_text(''.join(
+            f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(runtime)}\n'
+            for p in sorted(runtime.rglob('*')) if p.is_file() and p.name != 'SHA256SUMS'))
 
     @classmethod
     def tearDownClass(cls):
@@ -104,6 +123,7 @@ class WorkflowTests(unittest.TestCase):
         self.env = dict(os.environ, JAROMAILDIR=str(self.root), JAROACCOUNT=str(self.accounts),
                         JAROWORKDIR=str(self.runtime), PATH=str(self.bins)+os.pathsep+os.environ['PATH'],
                         JARO_WORKFLOW_PROCESS_LOG=str(self.processlog), JARO_WORKFLOW_INDEX_LOG=str(self.indexlog),
+                        JARO_WORKFLOW_TRACE=str(self.root.parent / 'workflows.jsonl'),
                         JARO_WORKFLOW_ACCOUNT_LOG=str(self.root.parent / 'selected-account'),
                         JARO_WORKFLOW_TRANSPORT_LOG=str(self.transportlog))
         self.env.pop('JARO_FILTER_ENGINE', None)
@@ -176,9 +196,6 @@ class WorkflowTests(unittest.TestCase):
             self.assertFalse((self.root / 'FilterProfile.txt').exists())
 
     def test_engine_selection_legacy_guard_and_missing_helper(self):
-        for engine in ('legacy',):
-            self.run_cli('sieve', engine=engine, code=4)
-            self.assertFalse((self.root / 'Filters.sieve').exists())
         for engine in ('', 'unknown'):
             self.run_cli('sieve', engine=engine, code=2)
         helper = self.runtime / 'bin/jaro-filter-compile'
@@ -189,15 +206,28 @@ class WorkflowTests(unittest.TestCase):
             self.assertFalse((self.root / 'cache/filters').exists())
         finally:
             hidden.rename(helper)
-        (self.root / 'Filters.txt').write_text('from route@example.org move First\n')
-        self.run_cli('sieve', engine='legacy')
-        self.assertIn(b'header :contains', (self.root / 'Filters.sieve').read_bytes())
-        self.assertFalse((self.root / 'cache/filter-engine/current').exists())
-        self.run_cli('sieve', engine='legacy')
-        self.message.write_bytes(b'From: route@example.org\n\nDefault engine probe.\n')
-        self.run_cli('filter', engine='legacy')
-        survivors = [p.read_bytes() for p in (self.root / 'unsorted').rglob('*') if p.is_file() and p.parent.name in ('cur','new')]
-        self.assertEqual(survivors, [b'From: route@example.org\n\nDefault engine probe.\n'])
+        original = self.message.read_bytes()
+        evidence = []
+        worker_trace = self.work / 'sieve-execs.jsonl'
+        for engine in (None, 'legacy', 'native', 'sieve'):
+            before = worker_trace.stat().st_size if worker_trace.exists() else 0
+            self.message.write_bytes(original)
+            self.run_cli('update', engine=engine)
+            self.run_cli('filter', '--explain', str(self.message), engine=engine)
+            self.run_cli('-n', 'fetch', engine=engine)
+            self.run_cli('filter', engine=engine)
+            self.assertFalse(self.message.exists())
+            self.message.write_bytes(original)
+            self.run_cli('fetch', engine=engine)
+            self.assertFalse(self.message.exists())
+            calls = [json.loads(line) for line in worker_trace.read_bytes()[before:].splitlines()]
+            workers = [call for call in calls if Path(call[0]).name == 'maildir-filter']
+            self.assertEqual(sum('apply-report' in call for call in workers), 2)
+            self.assertEqual(len(workers), 4)
+            self.assertTrue(all('cached' in call for call in workers))
+            evidence.append({'selector': engine, 'generation': self.snapshot()[0], 'commands': calls})
+        (self.root.parent / 'selector-traces.json').write_text(json.dumps(evidence, indent=2)+'\n')
+        self.assertEqual([p.read_bytes() for p in (self.root / 'First/cur').iterdir()], [original]*8)
 
     def test_errors_preserve_export_and_stop_indexing(self):
         self.run_cli('sieve')
@@ -248,40 +278,66 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse((self.root / 'Filters.sieve').exists())
         self.assertFalse((self.root / 'cache/filter-engine').exists())
 
-    def test_legacy_export_bridge_holds_native_publication_lock(self):
-        (self.root / 'Filters.txt').write_text('from route@example.org move First\n')
-        self.run_cli('sieve', engine='legacy')
-        before = (self.root / 'Filters.sieve').read_bytes()
-        notify, write = os.pipe()
-        read, release = os.pipe()
-        command = [str(self.runtime / 'bin/jaro-filter-legacy'), '--root', str(self.root), '--',
-                   'zsh', '-f', '-c', 'source "$1" source || exit $?; '
-                   'print -n -u "$2" 1; read -rk 1 -u "$3"; legacy_update_sieve',
-                   'zsh', str(self.runtime / 'bin/jaro'), str(write), str(read)]
-        child = subprocess.Popen(command, env=dict(self.env, JARO_FILTER_ENGINE='legacy'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 pass_fds=(write, read))
-        os.close(write)
-        os.close(read)
-        ready = False
-        try:
-            self.assertTrue(select.select([notify], [], [], 20)[0], 'bridge did not reach held command')
-            self.assertEqual(os.read(notify, 1), b'1')
-            ready = True
-            self.run_cli('sieve', code=6)
-            self.assertEqual((self.root / 'Filters.sieve').read_bytes(), before)
-        finally:
-            try:
-                os.write(release, b'1')
-            except BrokenPipeError:
-                pass
-            out, err = child.communicate(timeout=20)
-            os.close(notify)
-            os.close(release)
-            self.events.append({'command': command, 'cwd': str(REPO), 'exit': child.returncode,
-                                'held_ready': ready, 'settled': child.poll() is not None,
-                                'stdout_hex': out.hex(), 'stderr_hex': err.hex(),
-                                'observedAt': datetime.now(timezone.utc).isoformat()})
-        self.assertEqual(child.returncode, 0, err)
+    def test_older_generation_migrates_explicitly_without_moving_historical_mail(self):
+        old = 'a' * 64
+        cache = self.root / 'cache/filter-engine'
+        generation = cache / 'generations' / old
+        generation.mkdir(parents=True)
+        for path in (cache, cache / 'generations', generation):
+            path.chmod(0o700)
+        source = b'require ["fileinto"];\nfileinto "unsorted";\n'
+        manifest = {'schema': 1, 'generation': old, 'policy_sha256': hashlib.sha256(b'JFNCACHE').hexdigest(),
+                    'zsh_sha256': hashlib.sha256(b'exit 99\n').hexdigest(), 'sieve_sha256': hashlib.sha256(source).hexdigest()}
+        for name, data in [('policy.bin', b'JFNCACHE'), ('filters.zsh', b'exit 99\n'), ('Filters.sieve', source),
+                           ('manifest.json', json.dumps(manifest, separators=(',', ':')).encode())]:
+            (generation / name).write_bytes(data)
+            (generation / name).chmod(0o600)
+        for name, data in [('journal', f'JFT1 - 0 600 {old}\n'), ('committed', old)]:
+            path = cache / name
+            path.write_text(data)
+            path.chmod(0o600)
+        (cache / 'current').symlink_to('generations/' + old)
+        (cache / 'lock').touch(mode=0o600)
+        (self.root / 'Filters.sieve').write_bytes(source)
+        (self.root / 'Filters.sieve').chmod(0o600)
+        history = {}
+        for name in ('known', 'zz.spam', 'INBOX', 'Spam'):
+            for sub in ('new', 'cur', 'tmp'):
+                (self.root / name / sub).mkdir(parents=True)
+            p = self.root / name / 'cur/history'
+            history[p] = ('Historical mail in ' + name + '\n').encode()
+            p.write_bytes(history[p])
+        before = self.tree_snapshot()
+        for engine in (None, 'legacy', 'native', 'sieve'):
+            for args in [('filter',), ('-n', 'filter'), ('filter', '--explain', str(self.message)), ('fetch',),
+                         ('sieve',), ('sieve-import', str(self.root / 'Filters.sieve'))]:
+                result = self.run_cli(*args, code=5, engine=engine)
+                self.assertIn(b'jaro update', result.stderr)
+                self.assertEqual(self.tree_snapshot(), before)
+        self.assertFalse(self.transportlog.exists())
+        self.assertFalse(self.indexlog.exists())
+        (self.root / 'Filters.txt').write_text('invalid-rule\n')
+        self.run_cli('update', code=4)
+        self.assertEqual(self.snapshot(), ('generations/' + old, source))
+        self.assertTrue(self.message.exists())
+        (self.root / 'Filters.txt').write_text('')
+        (self.root / 'whitelist.abook').write_text('[format]\nprogram=abook\nversion=0.6.1\n[0]\nname=Known\nemail=known@example.org\n')
+        self.run_cli('update', engine='legacy')
+        selected = (cache / 'current').resolve()
+        self.assertNotEqual(selected, generation)
+        self.assertEqual({p.name for p in selected.iterdir()}, {'Filters.sieve','Filters.svbin','manifest.json','dependencies','provenance'})
+        self.message.unlink()
+        deliveries = {'INBOX': b'From: known@example.org\n\nNew known body.\n',
+                      'Spam': b'X-Spam-Flag: YES\n\nNew spam body.\n'}
+        for folder, data in deliveries.items():
+            (self.message.parent / folder).write_bytes(data)
+        self.run_cli('filter', engine='legacy')
+        self.assertEqual({p: p.read_bytes() for p in history}, history)
+        for folder, data in deliveries.items():
+            paths = [p.parent.parent.name for p in self.root.glob('*/cur/*') if p.read_bytes() == data]
+            self.assertEqual(paths, [folder])
+        for name in ('jaro-filter', 'jaro-filter-legacy'):
+            self.assertFalse((self.runtime / 'bin' / name).exists())
 
     def test_native_readonly_requires_current_generation_and_import_rejects_non_sieve(self):
         before = self.message.read_bytes()
@@ -390,9 +446,89 @@ class WorkflowTests(unittest.TestCase):
         self.run_cli('fetch', code=12)
         self.assertEqual(self.index_count(), 3)
 
+    def test_pinned_sieve_winner_preview_and_saved_message(self):
+        policy = self.root / 'Filters.txt'
+        policy.write_text('from-address other@example.org move First\nfrom-address route@example.org move First\n')
+        trace = self.work / 'sieve-execs.jsonl'
+        start = trace.stat().st_size if trace.exists() else 0
+        self.run_cli('update')
+        generation = (self.root / 'cache/filter-engine/current').resolve()
+        self.assertTrue((generation / 'Filters.svbin').stat().st_size)
+        before = self.tree_snapshot()
+        preview = self.run_cli('-n', 'filter')
+        self.assertEqual(self.tree_snapshot(), before)
+        self.assertIn(b'Filters.txt\':2', preview.stdout)
+        winner = preview.stdout.split(b' rule=')[1].split(b' source=')[0]
+        self.assertTrue(winner.startswith(b'r:'))
+        broken = self.message.with_name('malformed')
+        broken.write_bytes(b'\x00broken\n')
+        saved = self.root.parent / 'saved message.eml'
+        saved.write_bytes(self.message.read_bytes())
+        before = self.tree_snapshot()
+        for selected in (self.message, saved):
+            result = self.run_cli('filter', '--explain', str(selected))
+            self.assertIn(b'1 processed, 0 errors', result.stderr)
+            self.assertIn(b' rule='+winner+b' ', result.stdout)
+            self.assertIn(os.fsencode(selected), result.stdout)
+            self.assertIn(generation.name.encode(), result.stderr)
+            self.assertEqual(self.tree_snapshot(), before)
+        broken.unlink()
+        body = self.message.read_bytes()
+        applied = self.run_cli('filter')
+        self.assertIn(b' rule='+winner+b' ', applied.stdout)
+        self.assertEqual((self.root / 'First/cur/disposable').read_bytes(), body)
+        calls = [json.loads(s) for s in (self.root.parent/'workflows.jsonl').read_text().splitlines()]
+        sieves = [c for c in calls if Path(c[0]).name == 'jaro-sieve-filter']
+        self.assertEqual(len(sieves), 4)
+        for invocation in sieves:
+            self.assertEqual(invocation[-1], str(generation / 'Filters.sieve'))
+            self.assertEqual(invocation[invocation.index('--report0')+1], generation.name)
+        native = [json.loads(s) for s in trace.read_bytes()[start:].splitlines()]
+        self.assertEqual(sum(Path(c[0]).name == 'sievec' for c in native), 1)
+        workers = [c for c in native if Path(c[0]).name == 'maildir-filter']
+        self.assertEqual(len(workers), 4)
+        self.assertTrue(all('cached' in c for c in workers))
+        self.assertEqual(self.index_count(), 0)
+
+    def test_fetch_failed_save_retries_only_retained_input(self):
+        (self.root / 'FilterProfile.txt').write_text(
+            'version 1\nprofile core-v1\ncapability fileinto\ncreate-mailboxes no\n')
+        self.run_cli('update')
+        other = self.message.with_name('other')
+        other.write_bytes(b'From: unknown@example.net\nSubject: independent\n\nFallback.\n')
+        body = self.message.read_bytes()
+        (self.root / '.notmuch/xapian').mkdir(parents=True)
+        self.run_cli('fetch', code=7)
+        self.assertEqual(self.message.read_bytes(), body)
+        self.assertFalse(other.exists())
+        fallback = self.root / 'unsorted/cur/other'
+        self.assertTrue(fallback.exists())
+        self.assertEqual(self.index_count(), 1)
+        for component in ('new', 'cur', 'tmp'):
+            (self.root / 'First' / component).mkdir(parents=True)
+        self.run_cli('fetch')
+        self.assertFalse(self.message.exists())
+        self.assertEqual(list((self.root / 'unsorted/cur').iterdir()), [fallback])
+        self.assertEqual((self.root / 'First/cur/disposable').read_bytes(), body)
+        self.assertEqual(self.index_count(), 2)
+
+    def test_public_filter_respects_existing_batch_lock(self):
+        self.run_cli('update')
+        self.run_cli('update')  # Finish the compiler's committed publication journal.
+        lock = self.root / 'cache/filter-engine/batch.lock'
+        with lock.open('wb') as held:
+            lock.chmod(0o600)
+            before = self.tree_snapshot()
+            # Closing any descriptor for this inode releases process locks.
+            fcntl.lockf(held, fcntl.LOCK_EX)
+            self.run_cli('filter', code=6)
+            self.assertEqual(self.tree_snapshot(), before)
+        self.run_cli('filter')
+        self.assertFalse(self.message.exists())
+
     def test_native_batch_readiness_and_no_implicit_fallback(self):
         before = self.tree_snapshot()
-        helper = self.runtime / 'bin/jaro-filter'
+        helper = self.runtime / 'bin/jaro-sieve-filter'
         hidden = helper.with_name('batch-away')
         helper.rename(hidden)
         try:
@@ -406,7 +542,7 @@ class WorkflowTests(unittest.TestCase):
             self.run_cli('filter', code=2, engine=engine)
             self.run_cli('fetch', code=2, engine=engine)
         for engine in ('legacy',):
-            self.run_cli('filter', code=4, engine=engine)
+            self.run_cli('-n', 'filter', code=5, engine=engine)
         self.assertTrue(self.message.exists())
         self.assertFalse((self.root / 'cache/filters').exists())
 
@@ -422,7 +558,7 @@ class WorkflowTests(unittest.TestCase):
                  (valid.replace(b'builtin:unsorted', b'bad-id'), 0, 2),
                  (valid.replace(b'moved', b'classified'), 0, 2),
                  (b'JFD1\0'+b'0'*64+b'\0', 0, 2)]
-        helper = self.runtime / 'bin/jaro-filter'
+        helper = self.runtime / 'bin/jaro-sieve-filter'
         original = helper.read_bytes()
         (self.root / '.notmuch/xapian').mkdir(parents=True)
         body = self.message.read_bytes()
@@ -447,7 +583,7 @@ class WorkflowTests(unittest.TestCase):
             counts.append(self.processlog.read_text().splitlines())
         self.assertEqual(counts[0], counts[1])
         self.assertEqual(counts[0].count('jaro-filter-compile'), 1)
-        self.assertEqual(counts[0].count('jaro-filter'), 1)
+        self.assertEqual(counts[0].count('jaro-sieve-filter'), 1)
         for name in ('maddr', 'mpick', 'mseq', 'sort', 'uniq'):
             self.assertNotIn(name, counts[1])
 
@@ -461,7 +597,7 @@ class WorkflowTests(unittest.TestCase):
         cases = [(header+b'\n',0,2),(header+b'\n\n',0,2),(valid+b'\n',0,2),
                  (valid+b'\n\n',0,2),(header+b'1\0partial\n',0,2),
                  (header+b'\n',9,9),(valid+b'\n\n',9,9),(header+b'partial\n',9,9)]
-        helper = self.runtime / 'bin/jaro-filter'
+        helper = self.runtime / 'bin/jaro-sieve-filter'
         original = helper.read_bytes()
         before = self.tree_snapshot()
         try:
@@ -494,11 +630,11 @@ class WorkflowTests(unittest.TestCase):
             for stream,status,expected in cases:
                 with self.subTest(stream=stream,status=status):
                     helper.write_text('#!/usr/bin/env python3\nimport sys\nsys.stdout.buffer.write(%r)\nsys.exit(%d)\n' % (stream,status))
-                    count = self.processlog.read_text().splitlines().count('jaro-filter')
+                    count = self.processlog.read_text().splitlines().count('jaro-sieve-filter')
                     result = self.run_cli('filter','--explain',code=expected)
                     self.assertEqual(result.stdout,b'')
                     self.assertNotIn(b'Native filter:',result.stderr)
-                    self.assertEqual(self.processlog.read_text().splitlines().count('jaro-filter'),count)
+                    self.assertEqual(self.processlog.read_text().splitlines().count('jaro-sieve-filter'),count)
                     self.assertEqual(self.tree_snapshot(),before)
         finally:
             helper.write_bytes(original)
@@ -541,11 +677,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse((self.root / 'Applications.txt').exists())
         self.run_cli('filter', '', code=2)
         self.run_cli('filter', '--compare', code=2)
-        self.run_cli('filter', '--explain', engine='legacy', code=2)
+        self.run_cli('filter', '--explain', engine='legacy', code=5)
 
     def test_default_and_explicit_native_readonly_setup_never_materializes_inputs(self):
         before = self.tree_snapshot()
-        for engine in (None, 'native'):
+        for engine in (None, 'native', 'sieve', 'legacy'):
             for command in ('sieve', 'update'):
                 self.run_cli('-n', command, engine=engine)
                 self.assertEqual(self.tree_snapshot(), before)
@@ -567,7 +703,7 @@ class WorkflowTests(unittest.TestCase):
         selected = (self.root / 'cache/filter-engine/current').resolve()
         marker = self.root / 'legacy-cache-was-sourced'
         (self.root / 'cache/filters').write_text('print unsafe > "'+str(marker)+'"\n')
-        for name, mutation in [('policy.bin', lambda b: b[:8]+b'\0\0\0\0'+b[12:]),
+        for name, mutation in [('dependencies', lambda b: b[:8]+b'\0\0\0\0'+b[12:]),
                                ('manifest.json', lambda b: b+b'corrupt')]:
             path = selected / name
             original = path.read_bytes()
@@ -609,7 +745,7 @@ class WorkflowTests(unittest.TestCase):
         staged=stage/prefix.lstrip('/')/'share/jaromail'
         for location,cli,runtime in [('source',self.source/'src/jaro',self.runtime),
                                      ('prefix',self.cli,self.runtime),('destdir',staged/'bin/jaro',staged)]:
-            for engine in (None,'native','legacy'):
+            for engine in (None,'native','legacy','sieve'):
                 with self.subTest(location=location,engine=engine):
                     root=self.root.parent/('fresh-'+location+'-'+str(engine));home=root.parent/(root.name+'-home');home.mkdir()
                     env=dict(self.env,JAROMAILDIR=str(root),JAROWORKDIR=str(runtime),HOME=str(home),JARO_KEYRING='fixture-unused')
@@ -620,7 +756,7 @@ class WorkflowTests(unittest.TestCase):
                         self.events.append(dict(command=[str(cli),*args],cwd=str(self.root.parent),engine=engine,root=str(root),exit=r.returncode,stdout_hex=r.stdout.hex(),stderr_hex=r.stderr.hex()))
                         self.assertEqual(r.returncode,code,r.stderr+r.stdout);return r
                     run('init')
-                    expected=REPO/'docs'/('Filters.txt' if engine=='legacy' else 'Filters.native.txt')
+                    expected=REPO/'docs'/'Filters.native.txt'
                     self.assertEqual((root/'Filters.txt').read_bytes(),expected.read_bytes())
                     self.assertFalse((root/'FilterProfile.txt').exists())
                     run('sieve')
@@ -629,15 +765,15 @@ class WorkflowTests(unittest.TestCase):
                         body=(headers+'Subject: fresh '+name+'\n\nIndependent fresh body '+name+'\n').encode();bodies[name]=body
                         (root/'incoming/new'/name).write_bytes(body)
                     before={str(p.relative_to(root)):p.read_bytes() for p in root.rglob('*') if p.is_file() and not p.is_symlink()}
-                    run('-n','filter');run('filter','--explain',code=2 if engine=='legacy' else 0)
+                    run('-n','filter');run('filter','--explain',code=0)
                     after={str(p.relative_to(root)):p.read_bytes() for p in root.rglob('*') if p.is_file() and not p.is_symlink()}
-                    if engine!='legacy':self.assertEqual(after,before)
+                    self.assertEqual(after,before)
                     self.assertTrue(all((root/'incoming/new'/name).read_bytes()==body for name,body in bodies.items()))
                     run('filter')
                     files=[p for p in root.glob('*/cur/*') if p.is_file()]
                     self.assertEqual(len(files),3)
                     found={p.read_bytes():p.parent.parent.name for p in files}
-                    expected_dest={'fallback':'unsorted','bounce':'unsorted' if engine=='legacy' else 'zz.bounces','spam':'unsorted' if engine=='legacy' else 'zz.spam'}
+                    expected_dest={'fallback':'unsorted','bounce':'zz.bounces','spam':'Spam'}
                     self.assertEqual(found,{bodies[name]:dest for name,dest in expected_dest.items()})
                     self.assertEqual(list((root/'incoming/new').iterdir()),[])
 
@@ -647,8 +783,8 @@ class WorkflowTests(unittest.TestCase):
             env=dict(self.env,JAROMAILDIR=str(root),JARO_FILTER_ENGINE=engine)
             r=subprocess.run([str(self.cli),'init'],cwd=self.root.parent,env=env,capture_output=True,timeout=30)
             self.assertEqual(r.returncode,2,r.stderr);self.assertFalse(root.exists())
-        for engine in (None,'native','legacy'):
-            template=self.runtime/('Filters.txt' if engine=='legacy' else 'Filters.native.txt');hidden=template.with_suffix('.hidden')
+        for engine in (None,'native','legacy','sieve'):
+            template=self.runtime/'Filters.native.txt';hidden=template.with_suffix('.hidden')
             root=self.root.parent/('missing-init-'+str(engine));template.rename(hidden)
             try:
                 env=dict(self.env,JAROMAILDIR=str(root))
@@ -678,7 +814,7 @@ class WorkflowTests(unittest.TestCase):
                             'observedAt': datetime.now(timezone.utc).isoformat()})
         self.assertEqual(result.returncode, 0)
         runtime = stage / prefix.lstrip('/') / 'share/jaromail'
-        self.assertTrue((runtime / 'bin/jaro-filter').is_file())
+        self.assertTrue((runtime / 'bin/jaro-sieve-filter').is_file())
         env = dict(self.env, JAROWORKDIR=str(runtime))
         body = self.message.read_bytes()
         result = subprocess.run([str(runtime / 'bin/jaro'), 'filter'], cwd=self.root.parent, env=env, capture_output=True)
@@ -690,18 +826,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((self.root.parent / 'selected-account').read_text(), 'selected\n')
 
     def test_compare_retained_actual_legacy_observation_is_decision_only(self):
-        # Run the actual retained engine on a disposable copy. The independently
-        # recorded baseline says From falls through to unsorted; native routes it.
+        # The historical observation was recorded before retiring the shell matcher.
         (self.root / 'Filters.txt').write_text('from route@example.org move First\n')
         self.message.write_bytes(b'From: route@example.org\n\nIndependent From-only fixture.\n')
-        legacy_root = self.root.parent / 'legacy observation mail'
-        shutil.copytree(self.root, legacy_root)
-        env = dict(self.env, JAROMAILDIR=str(legacy_root), JARO_FILTER_ENGINE='legacy')
-        result = subprocess.run([str(self.cli), 'filter'], env=env, cwd=self.root.parent, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        found = [p for p in legacy_root.glob('*/cur/*') if p.read_bytes() == self.message.read_bytes()]
-        self.assertEqual([p.parent.parent.name for p in found], ['unsorted'])
-        import hashlib
         qualification = hashlib.sha256((REPO / 'docs/filter-regex-qualification.json').read_bytes()).hexdigest()
         (self.root / 'FilterProfile.txt').write_text('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\ncapability mailbox\ncapability regex\nregex-qualification '+qualification+'\n')
         self.run_cli('sieve')
@@ -728,19 +855,7 @@ class WorkflowTests(unittest.TestCase):
         for case in cases:
             headers = {'Message-ID': '<%s@fixtures.invalid>' % case['id'], 'Subject':case['id'], **case['headers']}
             (self.message.parent / case['id']).write_bytes(('\n'.join('%s: %s' % pair for pair in headers.items())+'\n\nFull corpus body.\n').encode())
-        legacy_root = self.root.parent / 'legacy corpus'
-        shutil.copytree(self.root, legacy_root)
-        env = dict(self.env, JAROMAILDIR=str(legacy_root), JARO_FILTER_ENGINE='legacy')
-        result = subprocess.run([str(self.cli), 'filter'], env=env, cwd=self.root.parent, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        actual = {}
-        for path in legacy_root.glob('*/cur/*'):
-            data = path.read_bytes()
-            ident = next(line[13:-18].decode() for line in data.splitlines() if line.startswith(b'Message-ID: <'))
-            actual[ident] = path.parent.parent.name
-            self.assertEqual(data, (self.message.parent / ident).read_bytes())
-        self.assertEqual(actual, retained)
-        import hashlib
+        actual = retained
         qualification = hashlib.sha256((REPO / 'docs/filter-regex-qualification.json').read_bytes()).hexdigest()
         (self.root / 'FilterProfile.txt').write_text('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\ncapability mailbox\ncapability regex\nregex-qualification '+qualification+'\n')
         self.run_cli('sieve')
@@ -754,7 +869,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(comparisons), 23)
         for case in cases:
             line = next(line for line in comparisons if ("/"+case['id']+"'").encode() in line)
-            self.assertTrue(line.endswith(("legacy=$'%s' native=$'%s'" % (retained[case['id']], case['local'])).encode()), line)
+            self.assertTrue(line.endswith(("legacy=$'%s' native=$'%s'" % (retained[case['id']], case['sieve'])).encode()), line)
         self.assertEqual(self.tree_snapshot(), before)
         self.assertEqual(self.index_count(), 0)
         observations.write_bytes(observations.read_bytes().replace(b'observed', b'ambiguous'))
@@ -766,11 +881,15 @@ class WorkflowTests(unittest.TestCase):
     def test_install_removes_stale_zsh_module_caches(self):
         module = self.runtime / 'zlibs/filters'
         original, metadata = module.read_bytes(), module.stat()
-        module.write_text('filter_engine() { REPLY=legacy; }\nupdate_filters() { return 42; }\n')
+        module.write_bytes(original + b'\nupdate_filters() { return 42; }\n')
         subprocess.run(['zsh', '-f', '-c', 'zcompile "$1"', 'zsh', str(module)], check=True)
         module.write_bytes(original)
         os.utime(module, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
         self.run_cli('sieve', code=42)
+        obsolete = [self.runtime / 'bin' / name for name in ('jaro-filter', 'jaro-filter-legacy')]
+        for path in obsolete:
+            path.write_bytes(b'retired executable')
+            path.chmod(0o700)
         command = ['make', 'install', 'PREFIX='+str(self.prefix)]
         with (self.work / 'reinstall.log').open('wb') as log:
             result = subprocess.run(command, cwd=self.source, env=self.build_env, stdout=log, stderr=subprocess.STDOUT)
@@ -778,6 +897,8 @@ class WorkflowTests(unittest.TestCase):
                             'exit': result.returncode, 'observedAt': datetime.now(timezone.utc).isoformat()})
         self.assertEqual(result.returncode, 0)
         self.assertFalse(Path(str(module)+'.zwc').exists())
+        self.assertFalse(any(path.exists() for path in obsolete))
+        self.instrument_helpers()
         self.run_cli('sieve')
 
 

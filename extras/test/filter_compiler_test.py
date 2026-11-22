@@ -29,7 +29,7 @@ def sha(data):
 
 def records(data):
     """Independent v1 decoder including fingerprint and canonical framing."""
-    assert len(data) >= 92 and data[:8] == b'JFNCACHE'
+    assert len(data) >= 92 and data[:8] == b'JFDEPS01'
     assert struct.unpack_from('<IIQ', data, 8) == (1, 1, len(data)-88)
     assert data[56:88] == sha(data[88:])
     count, = struct.unpack_from('<I', data, 88)
@@ -38,7 +38,7 @@ def records(data):
         start = pos
         tag, fields = data[pos:pos+1], struct.unpack_from('<I', data, pos+1)[0]
         pos += 5
-        assert fields == {b'M': 7, b'D': 5, b'R': 12}[tag]
+        assert fields == {b'M': 7, b'D': 5}[tag]
         row = []
         for _ in range(fields):
             size, = struct.unpack_from('<I', data, pos)
@@ -54,11 +54,14 @@ def records(data):
     assert result[0][0] == b'M'
     keys = [(r[0], r[1]) for t, r in result if t == b'D']
     assert keys == sorted(set(keys))
-    rows = [r for t, r in result if t == b'R']
-    assert [r[0] for r in rows] == [str(i+1).encode() for i in range(len(rows))]
-    assert [int(r[1]) for r in rows] == sorted(int(r[1]) for r in rows)
     COUNTS['cache_decodes'] += 1
     return result
+
+
+def provenance(generation):
+    fields = (generation / 'provenance').read_bytes().split(b'\0')
+    assert fields.pop() == b'' and len(fields) % 4 == 0
+    return list(zip(*[iter(fields)] * 4))
 
 
 class CompilerTests(unittest.TestCase):
@@ -135,11 +138,11 @@ class CompilerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, b'')
         self.assertEqual(len(result.stdout), 65)
-        data = (out / 'policy.bin').read_bytes()
+        data = (out / 'dependencies').read_bytes()
         decoded = records(data)
         metadata = decoded[0][1]
         self.assertEqual(metadata[3:5], [b'ascii-mailbox-casemap-v1', b'i;ascii-casemap'])
-        self.assertEqual(metadata[5], sha((out / 'filters.zsh').read_bytes()))
+        self.assertEqual(metadata[5], sha((out / 'provenance').read_bytes()))
         self.assertEqual(metadata[6], sha((out / 'Filters.sieve').read_bytes()))
         self.assertEqual(data[24:56].hex().encode()+b'\0', result.stdout)
         return out, decoded
@@ -161,8 +164,8 @@ class CompilerTests(unittest.TestCase):
                       json.dumps(r'*+q\?[x].\*\\@*.ch'), text)
         self.assertIn('["From","Sender"] "*+list@*.org"', text)
         self.assertNotIn('"regex"', text)
-        glob = [r for tag, r in decoded if tag == b'R' and r[2] == b'glob']
-        self.assertEqual([(r[1], r[3], r[10]) for r in glob], [(b'3', b'3', b'3'), (b'4', b'12', b'2')])
+        locations = [int(authored) for _, rule, _, authored in provenance(out) if rule.startswith(b'r:')]
+        self.assertEqual(locations, [3, 2])
         for invalid in [r'x\q', 'unfinished' + chr(92)]:
             self.build(['to-glob ' + json.dumps(invalid) + ' move folder'], error=(4, 'E_GLOB'))
 
@@ -203,39 +206,13 @@ class CompilerTests(unittest.TestCase):
         for ident, headers, expected in cases:
             self.expect(out, {'id': ident, 'headers': headers, 'sieve': expected})
 
-    def test_literal_zsh_values_attributes_order_and_no_execution(self):
-        marker = self.case / 'MUST-NOT-EXIST'
-        destinations = ['Mixed CASE', 'Dollar$(touch %s)' % marker, "single'quote", 'back\\slash', '`touch %s`' % marker]
+    def test_literal_destinations_remain_data(self):
+        destinations = ['Mixed CASE', 'Dollar$(touch marker)', "single'quote", 'back\\slash', '`touch marker`']
         rules = ['from-address person%d@example.org move %s' % (i, json.dumps(v)) for i, v in enumerate(destinations)]
-        # Replacing a duplicate keeps its last source position.
-        rules += ['from-address first@example.org move old', 'from-address first@example.org save Final']
-        out, decoded = self.build(rules, own=['"a b"@example.org'])
-        script = self.case / 'load.zsh'
-        script.write_text('''typeset -gAl filter_from filter_to
-typeset -galU filter_own filter_whitelist filter_blacklist
-typeset -g unrelated=KeepMe
-exec {jfd}<"$1"
-source /dev/fd/$jfd
-exec {jfd}<&-
-[[ $unrelated == KeepMe ]] || exit 9
-for variable in filter_rule_ids filter_rule_kinds filter_rule_patterns filter_rule_destinations filter_rule_stages filter_rule_masks filter_own; do
-  for value in "${(@P)variable}"; do printf '%s\\0' "$value"; done
-done
-printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
-''')
-        # A stale .zwc is present; the already-open source descriptor wins.
-        (out / 'filters.zsh.zwc').write_bytes(b'stale invalid compiled cache')
-        result = subprocess.run(['zsh', '-f', str(script), str(out / 'filters.zsh')], capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(marker.exists())
-        values = result.stdout.split(b'\0')
-        self.assertEqual(values.pop(), b'')
-        rows = [r for t, r in decoded if t == b'R']
-        columns = [values[i*len(rows):(i+1)*len(rows)] for i in range(6)]
-        for index, field in enumerate((4, 2, 5, 7, 1, 3)):
-            self.assertEqual(columns[index], [r[field] for r in rows])
-        self.assertEqual(values[6*len(rows):], [b'"a b"@example.org', b'association', b'array'])
-        self.assertIn(destinations[0].encode(), columns[3])
+        out, _ = self.build(rules)
+        self.oracle.compile(out / 'Filters.sieve')
+        for i, dest in enumerate(destinations):
+            self.expect(out, {'id': str(i), 'headers': {'From': f'person{i}@example.org'}, 'sieve': dest})
 
     def test_quoted_local_and_spam_whitespace_oracle(self):
         out, _ = self.build(['from-address ' + json.dumps('"a b"@example.org') + ' move quoted',
@@ -258,7 +235,7 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
         self.expect(out, {'id': 'mapped-spam', 'headers': {'X-Spam-Flag': 'YES'}, 'sieve': 'Junk Mail'}, False)
         self.expect(out, {'id': 'mapped-known', 'headers': {'From': 'known@example.org'}, 'sieve': 'Folders.unsorted'}, False)
         second, _ = self.build(['to-address team@example.org move Project/People'], profile=profile)
-        for name in ('policy.bin', 'Filters.sieve', 'filters.zsh'):
+        for name in ('dependencies', 'Filters.sieve', 'provenance'):
             self.assertEqual((out / name).read_bytes(), (second / name).read_bytes())
 
     def test_rejected_profiles_and_legacy_source_diagnostics(self):
@@ -301,7 +278,7 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
     def test_empty_accounts_and_profile_input_limits(self):
         (self.root / 'Accounts').mkdir()
         out, decoded = self.build('')
-        self.assertEqual(len([r for t, r in decoded if t == b'R']), 3)
+        self.assertEqual(len(provenance(out)), 3)
         self.oracle.compile(out / 'Filters.sieve')
         self.expect(out, {'id': 'empty-policy', 'headers': {}, 'sieve': 'unsorted'})
         self.build(profile='version 1\nprofile core-v1\n' + '#' * 65537, error=(4, 'E_LINE_LIMIT'))
@@ -311,13 +288,13 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
         # records, not user predicates. Decode and validate every serialized row.
         rules = ''.join('known-domain d%d.example.org\n' % i for i in range(100000))
         out, decoded = self.build(rules)
-        rows = [r for t, r in decoded if t == b'R']
+        rows = provenance(out)
         self.assertEqual(len(rows), 100003)
-        self.assertEqual(sum(r[2] == b'domain-apex' for r in rows), 100000)
-        self.assertEqual({r[4] for r in rows if r[4].startswith(b'builtin:')},
+        self.assertEqual(sum(r[1].startswith(b'r:') for r in rows), 100000)
+        self.assertEqual({r[1] for r in rows if r[1].startswith(b'builtin:')},
                          {b'builtin:bounce', b'builtin:spam', b'builtin:unsorted'})
-        result = subprocess.run([str(self.driver), '--validate', str(out / 'policy.bin'),
-                                 str(out / 'filters.zsh'), str(out / 'Filters.sieve')], capture_output=True)
+        result = subprocess.run([str(self.driver), '--validate', str(out / 'dependencies'),
+                                 str(out / 'provenance'), str(out / 'Filters.sieve')], capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'')
         self.build(rules + 'known-domain extra.example.org\n', error=(4, 'E_RULE_LIMIT'))
@@ -331,7 +308,7 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
         for name in ('whitelist.abook', 'blacklist.abook'):
             (self.root / name).touch()
         out, decoded = self.build('')
-        rows = [r for t, r in decoded if t == b'R']
+        rows = provenance(out)
         self.assertEqual(len(rows), 3)
         for tag, row in decoded:
             if tag == b'D' and row[0] in (b'export.whitelist', b'export.blacklist'):
@@ -340,9 +317,9 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
 
     def test_cache_rejects_corrupt_and_incompatible_products(self):
         out, _ = self.build('known-domain example.org')
-        original = (out / 'policy.bin').read_bytes()
+        original = (out / 'dependencies').read_bytes()
         corrupt = self.case / 'corrupt.bin'
-        command = [str(self.driver), '--validate', str(corrupt), str(out / 'filters.zsh'), str(out / 'Filters.sieve')]
+        command = [str(self.driver), '--validate', str(corrupt), str(out / 'provenance'), str(out / 'Filters.sieve')]
         variants = [b'', original[:87], original + b'extra']
         for offset, byte in [(0, 88), (8, 0), (12, 99), (24, original[24] ^ 1),
                              (56, original[56] ^ 1), (88, 255), (92, ord('X'))]:
@@ -358,7 +335,7 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
             self.assertEqual(result.stdout, b'')
             self.assertIn(b'E_CACHE', result.stderr)
         corrupt.write_bytes(original)
-        (out / 'filters.zsh').write_bytes(b'changed')
+        (out / 'provenance').write_bytes(b'changed')
         self.assertEqual(subprocess.run(command, capture_output=True).returncode, 5)
 
     def traced_abook(self):
@@ -387,9 +364,9 @@ printf '%s\\0' ${(t)filter_from} ${(t)filter_own}
         counter = self.traced_abook()
         out, decoded = self.build(['known-domain *.example.org'], known=['"a b"@example.org'], accounts=accounts, reuse=True)
         self.assertEqual(counter.read_bytes(), b'export\n', 'unchanged book re-exported on snapshot recheck')
-        rows = [r for t, r in decoded if t == b'R']
-        self.assertIn(os.fsencode(self.root / 'Filters.txt'), [r[9] for r in rows])
-        self.assertIn(b'own:' + hashlib.sha256(b'own@example.org').hexdigest().encode(), [r[4] for r in rows])
+        rows = provenance(out)
+        self.assertIn(os.fsencode(self.root / 'Filters.txt'), [r[2] for r in rows])
+        self.assertIn(b'own:' + hashlib.sha256(b'own@example.org').hexdigest().encode(), [r[1] for r in rows])
         dependencies = {(r[0], r[1]): r for t, r in decoded if t == b'D'}
         self.assertIn((b'link.input.account', os.fsencode(accounts / 'linked account')), dependencies)
         exported = dependencies[b'export.whitelist', os.fsencode(self.root / 'whitelist.abook')]

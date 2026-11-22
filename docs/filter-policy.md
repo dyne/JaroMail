@@ -14,8 +14,8 @@ Evaluate stages in this order, stopping at the first matching rule:
 2. Bounce: **Sender** header contains `mailman-bounce` -> `zz.bounces`.
 3. Explicit From routes: parsed **From and Sender** addresses.
 4. Explicit To routes: parsed **To and Cc** addresses.
-5. Known addresses and known domains: parsed **From** addresses -> `known`.
-6. Spam: **X-Spam-Flag** equals `YES`, ASCII case-insensitive -> `zz.spam`.
+5. Known addresses and known domains: parsed **From** addresses -> `INBOX`.
+6. Spam: **X-Spam-Flag** equals `YES`, ASCII case-insensitive -> `Spam`.
 7. Own account/alias addresses: parsed **To and Cc** -> `priv`.
 8. Fallback -> `unsorted`.
 
@@ -84,8 +84,7 @@ domains retain the ASCII restrictions above. This corrects the earlier native
 assumption that redundant quotes/escapes were meaningful mailbox bytes.
 It follows minimum-quoting equivalence in
 [RFC 5321 section 4.1.2](https://datatracker.ietf.org/doc/html/rfc5321#section-4.1.2)
-and pinned Pigeonhole's `smtp_address_encode` serialization. It does not change
-the separately retained legacy shell engine's spelling behavior.
+and pinned Pigeonhole's `smtp_address_encode` serialization. The retired shell engine is represented by historical observations.
 An exact address is not an address glob. This refines the earlier draft's
 local-part-sensitive choice so core Sieve can use one equivalent whole-address
 predicate: `address :all :is :comparator "i;ascii-casemap"`. Never combine
@@ -101,10 +100,9 @@ shell's CASE_MATCH-off baseline. Domain grammar still folds ASCII labels only.
 decisions for casing and cross-address negatives; these are future native/Sieve
 expectations, not claims that legacy implements them.
 
-Logical `known` maps to local `known` and Sieve `INBOX`; logical `spam` maps to
-local `zz.spam` and Sieve `Spam`. Other logical destinations retain their name
-under the local mail root or configured Sieve namespace. The fixture's `local`
-field uses the actual local name, including `zz.spam`. Empty rule/contact sets
+Logical `known` maps to `INBOX` and logical spam to `Spam` by default on both
+local and server delivery. Explicit mailbox mappings apply to both. The
+fixture's `local` field records the pre-cutover target. Empty rule/contact sets
 still retain builtin stages and fallback. An empty Maildir is a successful no-op.
 Empty/malformed messages must be reported safely and retained recoverably;
 legacy empty-file deletion is an intended correction, not target behavior.
@@ -118,24 +116,9 @@ with rule/source-line migration diagnostics and leave the previous generation
 usable; never omit or weaken a rule. Capabilities and mailbox mappings are
 configurable. No remote provider compatibility is claimed.
 
-The legacy characterization checks generated text separately from native
-semantic proof. `zsh extras/test/test-filter-parity.sh` now drives the independently
-authored winners through the pure C policy/header path, immutable-generation
-batch classification, and actual pinned Pigeonhole `sieve-test` simulation.
-It checks all 52 original targets, 17 independently authored mapping/escaping
-targets, four empty-policy cases, and 141 qualified regex cases both before and
-after bounded import; four additional core/no-create decisions give 432 positive
-decisions per backend. Native rule IDs are calculated from the authored winning
-record, never selected from cache/backend output. Sieve actions are compared
-through the authored server mapping, with no implicit keep or delivery.
-
-Two mutation controls require failure: a source destination mutation makes all
-three executable authorities agree on the wrong result, which the authored
-expectation rejects; swapping From/To Sieve stages produces an independently
-detected priority error. Full interpreter traces and exact commands are retained
-with matrix evidence. The old `test-filtering.sh` also applies native policy to
-nine disposable named messages and asserts blacklist, bounce, From/Sender, To,
-known, private, spam and fallback destinations with exact body preservation.
-Set `JARO_FILTER_PARITY_WORK` to a new absolute directory to retain the complete
-matrix, exact command logs, copied oracle inputs and interpreter traces; otherwise
-the suite removes its disposable work after reporting counts.
+The parity suite exercises the authored winners using the installed local
+frontend and the pinned independent `sieve-test` oracle. It repeats the cases
+after bounded import and includes wrong-destination and wrong-priority
+mutation controls. Physical delivery tests compare occurrence paths, body
+digests and modes against independent inventories. Set `JARO_FILTER_PARITY_WORK`
+to retain the parity matrix, command logs, oracle inputs and traces.

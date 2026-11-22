@@ -6,8 +6,7 @@
 
 struct jf_entry {
 	struct jf_rule rule;
-	regex_t regex;
-	int compiled, discard;
+	int discard;
 	size_t order, input_index;
 };
 struct jf_policy {
@@ -15,17 +14,7 @@ struct jf_policy {
 	struct jf_entry *entries;
 	size_t count, capacity;
 	locale_t locale;
-	struct jf_entry **index, **legacy;
-	size_t index_count, legacy_count;
-	int has_glob;
-	const struct jf_entry *bounce, *spam, *fallback;
 };
-int jf_policy_build_index(struct jf_policy *, struct jf_error *);
-/* Canonical cache R fields, borrowed only during reconstruction. The cache
- * validator must have accepted the complete product before this is called. */
-struct jf_cached_rule { struct jf_text fields[12]; };
-int jf_policy_restore(const struct jf_cached_rule *, size_t,
-	const struct jf_allocator *, struct jf_policy **, struct jf_error *);
 int jf_valid_glob(const char *);
 int jf_valid_domain(const char *);
 int jf_valid_utf8(const unsigned char *, size_t);

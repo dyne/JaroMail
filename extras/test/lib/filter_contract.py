@@ -81,7 +81,7 @@ def main():
     for e in fixture["invocations"] + fixture["import_examples"]:
         assert e["expected_exit"] in (0, 2, 3, 4, 5, 6, 7, 127)
     for e in fixture["cache_header_examples"]:
-        assert e["compatible_header"] == (e["magic"] == "JFNCACHE" and e["cache_version"] == e["policy_version"] == 1)
+        assert e["compatible_header"] == (e["magic"] == "JFDEPS01" and e["cache_version"] == e["policy_version"] == 1)
     casing = json.loads((Path(sys.argv[1]).parents[1] / "filter-policy/casing.json").read_text())
     assert casing["address_case"] == "ascii-mailbox-casemap-v1"
     assert casing["sieve_comparator"] == "i;ascii-casemap"

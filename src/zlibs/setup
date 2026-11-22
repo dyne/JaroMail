@@ -33,7 +33,7 @@ cmd_update() {
     ACCOUNTS=${JAROACCOUNT:-"$MAILDIRS/Accounts"}
     read_account || return $?
     filter_engine || return $?
-    [[ $DRYRUN == 1 && $REPLY == native ]] || mblaze_setup || return $?
+    [[ $DRYRUN == 1 ]] || mblaze_setup || return $?
     update_filters || return $?
     update_sieve || return $?
     [[ $DRYRUN == 1 ]] || update_notmuch || return $?
@@ -43,7 +43,7 @@ cmd_update() {
 cmd_sieve() {
     read_account || return $?
     filter_engine || return $?
-    [[ $DRYRUN == 1 && $REPLY == native ]] || mblaze_setup || return $?
+    [[ $DRYRUN == 1 ]] || mblaze_setup || return $?
     update_filters || return $?
     update_sieve || return $?
     notice "Sieve filters updated in $MAILDIRS"
@@ -52,16 +52,9 @@ cmd_sieve() {
 cmd_sieve_import() {
     (( ${#option_params} == 1 )) || { error "sieve-import requires one generated Sieve file"; return 2; }
     filter_engine || return $?
-    if [[ "$REPLY" == native ]]; then
-        local -a import_args
-        import_args=()
-        option.is_set -L && import_args+=(--legacy-generated)
-        [[ $DRYRUN == 1 ]] && import_args+=(--check)
-        "$WORKDIR/bin/jaro-filter-compile" --root "$MAILDIRS" --accounts-dir "$ACCOUNTS" --import-sieve "${option_params[1]}" "${import_args[@]}"
-        return $?
-    fi
-    option.is_set -L && { error "--legacy-generated requires JARO_FILTER_ENGINE=native"; return 2; }
-    [[ $DRYRUN == 1 ]] && { error "Legacy sieve-import has no dry-run; select native bounded import"; return 2; }
-    sieve_import ${option_params}
-    exitcode=$?
+    local -a import_args
+    import_args=()
+    option.is_set -L && import_args+=(--legacy-generated)
+    [[ $DRYRUN == 1 ]] && import_args+=(--check)
+    "$WORKDIR/bin/jaro-filter-compile" --root "$MAILDIRS" --accounts-dir "$ACCOUNTS" --import-sieve "${option_params[1]}" "${import_args[@]}"
 }

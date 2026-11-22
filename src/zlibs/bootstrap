@@ -205,9 +205,8 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 
 # Native filtering requires explicit existing policy. In particular, a read-only
 # request must not materialize defaults before the option parser has run.
-[[ "$1" = "source" || ${@[(Ie)serve]} -gt 0 || ( ${JARO_FILTER_ENGINE-native} != legacy &&
-    ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 || ${@[(Ie)sieve-import]} -gt 0 ||
-      ${@[(Ie)sieve]} -gt 0 || ${@[(Ie)update]} -gt 0 ) ) ]] || {
+[[ "$1" = "source" || ${@[(Ie)serve]} -gt 0 || ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 || ${@[(Ie)sieve-import]} -gt 0 ||
+      ${@[(Ie)sieve]} -gt 0 || ${@[(Ie)update]} -gt 0 ) ]] || {
     # Validate selector/template before any bootstrap configuration write.
     filter_policy_template || exit $?
     filter_bootstrap_template=$REPLY
@@ -319,17 +318,18 @@ check_bin() {
     case "$cmd" in
         update|sieve|fetch|filter|sieve-import)
             filter_engine || return $?
-            if [[ "$REPLY" == native ]]; then
-                [[ -x "$WORKDIR/bin/jaro-filter-compile" ]] || {
-                    error "Missing native compiler: $WORKDIR/bin/jaro-filter-compile"
+            [[ -x "$WORKDIR/bin/jaro-filter-compile" ]] || {
+                error "Missing native compiler: $WORKDIR/bin/jaro-filter-compile"
+                return 127
+            }
+            if [[ $cmd != update ]]; then
+                sieve_generation_ready || return $?
+            fi
+            if [[ $cmd == filter || $cmd == fetch ]]; then
+                [[ -x "$WORKDIR/bin/jaro-sieve-filter" ]] || {
+                    error "Missing Sieve batch helper: $WORKDIR/bin/jaro-sieve-filter"
                     return 127
                 }
-                if [[ $cmd == filter || $cmd == fetch ]]; then
-                    [[ -x "$WORKDIR/bin/jaro-filter" ]] || {
-                        error "Missing native batch helper: $WORKDIR/bin/jaro-filter"
-                        return 127
-                    }
-                fi
             fi
             ;;
     esac
@@ -356,7 +356,7 @@ check_bin() {
 
     case "$cmd" in
         fetch)
-            [[ $DRYRUN == 1 && ${JARO_FILTER_ENGINE-native} == native ]] && return 0
+            [[ $DRYRUN == 1 ]] && return 0
             check_required_bins pinentry fetchmail gpg
             ensure_gnupg_dir
             check_keyring

@@ -13,7 +13,7 @@ import sys
 import tempfile
 import unittest
 sys.dont_write_bytecode = True
-from filter_batch_test import FIELDS as BATCH_FIELDS, PROFILE, tree
+from filter_batch_test import FIELDS as BATCH_FIELDS, PROFILE, install_sieve, report_args, tree
 from filter_native_test import ascii_fold, explicit
 from sieve_oracle import SieveOracle
 
@@ -81,11 +81,10 @@ class ParityTests(unittest.TestCase):
             cls.temp = tempfile.TemporaryDirectory(prefix='jaro-parity-', dir=os.environ.get('JARO_FILTER_TEST_TMP') or os.environ.get('TMPDIR'))
             cls.work = Path(cls.temp.name)
         cls.objects = cls.work / 'objects'
-        subprocess.run(['make', '-f', 'build/filter-core.mk', '-j2', 'filter-compile', 'filter-policy-driver',
+        subprocess.run(['make', '-f', 'build/filter-core.mk', '-j2', 'filter-compile',
                         'FILTER_BUILD_DIR=' + str(cls.objects), 'CFLAGS=' + os.environ.get(
                             'JARO_FILTER_COMPILER_CFLAGS', '-O2 -Wall -Wextra -Werror -pedantic')], cwd=REPO, check=True)
-        cls.compiler, cls.batch, cls.pure = (cls.objects / x for x in
-                                            ('jaro-filter-compile', 'jaro-filter', 'filter-policy-driver'))
+        cls.compiler, cls.batch = cls.objects / 'jaro-filter-compile', install_sieve(cls.objects)
         cls.oracle = SieveOracle(cls.work / 'oracle', os.environ['SIEVE_DEPS_PREFIX'])
         cls.events, cls.decisions, cls.mutations, cls.glob_decisions = [], [], [], []
 
@@ -139,28 +138,7 @@ class ParityTests(unittest.TestCase):
         self.assertEqual((target / 'Filters.sieve').read_bytes(), first)
         return target
 
-    def sources(self, root):
-        args = ['filters', 'Filters.txt', str(root / 'Filters.txt'), str(root / 'Filters.txt')]
-        aliases = root / 'Aliases.txt'
-        if aliases.exists():
-            args += ['aliases', 'Aliases.txt', str(aliases), str(aliases)]
-        for key, name in (('known', 'whitelist.abook'), ('blacklist', 'blacklist.abook')):
-            book = root / name
-            exported = self.case / ('%s-%s.txt' % (root.name, key))
-            raw = b''
-            if book.exists() and book.stat().st_size:
-                result = self.command(['abook', '--config', '/dev/null', '--datafile', book, '--mutt-query', ''])
-                for line in result.stdout.splitlines():
-                    if not line:
-                        continue
-                    self.assertIn(b'\t', line)
-                    raw += line.split(b'\t')[0] + b'\n'
-            exported.write_bytes(raw)
-            args += [key, name, str(book), str(exported)]
-        return args
-
     def evaluate(self, root, cases, rules, variant, extensions='+regex', create=True, script=None, mutation=False):
-        sources = self.sources(root)
         incoming = root / 'incoming'
         incoming.mkdir(exist_ok=True)
         paths = []
@@ -173,35 +151,30 @@ class ParityTests(unittest.TestCase):
                              b'Body immutable\x00\xff\nFrom: blocked@example.org\n')
             paths.append(path)
         before = tree(root)
-        output = self.command([self.batch, '--root', root, '--files0-from', '-'],
-                              data=b''.join(os.fsencode(p) + b'\0' for p in paths)).stdout.split(b'\0')
-        self.assertEqual(output[:2], [b'JFD1', (root / 'cache/filter-engine/current').resolve().name.encode()])
-        self.assertEqual(output[-1], b'')
-        self.assertEqual(len(output[2:-1]), len(cases)*11)
+        generation = (root / 'cache/filter-engine/current').resolve()
         script = script or root / 'Filters.sieve'
         self.oracle.compile(script, extensions=extensions)
         results = []
         for i, (case, path) in enumerate(zip(cases, paths)):
             want = expected(case, rules)
-            pure = self.command([self.pure, '--headers', path, *sources]).stdout.split(b'\0')
-            self.assertEqual(len(pure), 17)
-            native = dict(zip(('rule_id', 'action', 'logical', 'local'),
-                              (pure[j].decode() for j in (0, 3, 4, 5))))
-            row = dict(zip(BATCH_FIELDS, output[2+i*11:2+(i+1)*11]))
+            output = self.command(report_args(self.batch, root, incoming, generation,
+                                              '--dry-run', '--message', path)).stdout.split(b'\0')
+            self.assertEqual(output[:2], [b'JFD1', generation.name.encode()])
+            self.assertEqual(len(output), 14)
+            row = dict(zip(BATCH_FIELDS, output[2:-1]))
+            want['logical'] = want['local'] = want['sieve']
             self.assertEqual(row['path'], os.fsencode(path))
-            self.assertEqual(row['index'], str(i+1).encode())
+            self.assertEqual(row['index'], b'1')
             self.assertEqual((row['status'], row['detail']), (b'classified', b''))
             batch = {k: row[k].decode() for k in ('rule_id', 'action', 'logical', 'sieve')}
             batch['local'] = os.path.relpath(os.fsdecode(row['local']), root)
             sieve = self.oracle.evaluate(script, path, extensions=extensions)
             failures = {}
-            if native != {k: want[k] for k in native}:
-                failures['pure'] = native
             if batch != want:
                 failures['batch'] = batch
             if sieve != {'action': 'fileinto', 'mailbox': want['sieve'], 'create': create}:
                 failures['sieve'] = sieve
-            result = {'id': case['id'], 'variant': variant, 'expected': want, 'pure': native,
+            result = {'id': case['id'], 'variant': variant, 'expected': want,
                       'batch': batch, 'sieve': sieve, 'mismatches': failures,
                       'message_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
                       'trace': str(self.oracle.work / ('case-%03d/trace.txt' % self.oracle.sequence))}
@@ -304,8 +277,8 @@ class ParityTests(unittest.TestCase):
         wrong[0] = wrong[0].replace('frombucket', 'deliberately-wrong')
         root = self.build('shared-wrong', wrong, target)
         result = self.evaluate(root, [case], original, 'shared-destination-mutation', mutation=True)[0]
-        self.assertEqual(set(result['mismatches']), {'pure', 'batch', 'sieve'})
-        self.assertEqual(result['pure']['local'], 'deliberately-wrong')
+        self.assertEqual(set(result['mismatches']), {'batch', 'sieve'})
+        self.assertEqual(result['batch']['local'], 'deliberately-wrong')
         self.assertEqual(result['batch']['local'], 'deliberately-wrong')
         self.assertEqual(result['sieve']['mailbox'], 'deliberately-wrong')
         root = self.build('baseline', original, target)
@@ -320,8 +293,12 @@ class ParityTests(unittest.TestCase):
 
     def test_empty_batch_has_complete_header_and_no_delivery(self):
         root = self.build('empty', [], profile=CORE)
+        incoming = root / 'incoming'
+        for folder in ('new', 'cur', 'tmp'):
+            (incoming / folder).mkdir(parents=True)
+        generation = (root / 'cache/filter-engine/current').resolve()
         before = tree(root)
-        output = self.command([self.batch, '--root', root, '--files0-from', '-'], data=b'').stdout
+        output = self.command(report_args(self.batch, root, incoming, generation, '--dry-run')).stdout
         self.assertEqual(output, b'JFD1\0' + (root / 'cache/filter-engine/current').resolve().name.encode() + b'\0')
         self.assertEqual(tree(root), before)
 

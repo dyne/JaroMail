@@ -96,7 +96,6 @@ jobs:
           if [[ "$TARGET_ARCH" == arm64 ]]; then emulator=(qemu-aarch64); fi
           "${emulator[@]}" out/static/bin/jaro-filter-compile --version
           "${emulator[@]}" out/static/bin/jaro-filter-compile --check-address person@example.org
-          "${emulator[@]}" out/static/bin/jaro-filter --help
           "${emulator[@]}" out/static/bin/abook --help | grep -Fx 'abook v0.6.2'
           printf 'alias fixture Static Test <static.person.with.a.long.address@example.org>\n' > out/abook-aliases
           "${emulator[@]}" out/static/bin/abook --config /dev/null --convert \

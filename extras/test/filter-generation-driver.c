@@ -80,7 +80,7 @@ int main(int argc,char **argv)
 	rc=jf_generation_pin(argv[1],argc==3 && !bytecode ? argv[2] : NULL,&g,&error); if (rc) return rc;
 	if (jf_generation_test_hook("pinned")) { jf_generation_close(&g); return 3; }
 	fwrite(g.id,1,65,stdout);
-	fd=jf_generation_open(&g,bytecode ? "Filters.svbin" : "filters.zsh"); if (fd<0) { jf_generation_close(&g); return 3; }
+	fd=jf_generation_open(&g,bytecode ? "Filters.svbin" : "Filters.sieve"); if (fd<0) { jf_generation_close(&g); return 3; }
 	while ((n=read(fd,buffer,sizeof buffer))>0) if (fwrite(buffer,1,(size_t)n,stdout)!=(size_t)n) break;
 	rc=n<0 || ferror(stdout) ? 3 : 0;
 	close(fd); jf_generation_close(&g); return rc;

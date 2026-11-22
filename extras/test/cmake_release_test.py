@@ -158,7 +158,7 @@ exec "$JARO_REAL_CC" "$@"
         self.assertIn('-lm', self.buildlog)
         if shutil.which('ccache') and 'CCACHE' not in os.environ:
             self.assertIn('ccache', self.buildlog)
-        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-outbox','jaro-snapshot','jaro-filter','jaro-filter-compile','jaro-filter-legacy','abook'):
+        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-outbox','jaro-snapshot','jaro-filter-compile','abook'):
             self.assertTrue(os.access(self.binary/'bin'/name, os.X_OK))
         result = run([sys.executable, self.source/'build/check-static.py', '--bin-dir', self.binary/'bin', '--arch',self.arch], succeeds=False)
         self.assertNotEqual(result.returncode, 0)
@@ -372,7 +372,8 @@ exec "$JARO_REAL_CC" "$@"
         with tarfile.open(archive) as bundle:bundle.extractall(extracted,filter='data')
         root=extracted/('jaromail-6.7.8-linux-'+self.arch)
         self.assertEqual(run([root/'bin/jaro','--version'],env=self.env).stdout,'Jaro Mail v6.7.8\n')
-        self.assertTrue((root/'share/jaromail/bin/jaro-filter').is_file())
+        self.assertFalse((root/'share/jaromail/bin/jaro-filter').exists())
+        self.assertFalse((root/'share/jaromail/bin/jaro-filter-legacy').exists())
         self.assertTrue((root/'share/jaromail/bin/jaro-snapshot').is_file())
         self.assertFalse((root/'share/jaromail/bin/jaro-snapshot-test').exists())
         self.assertIn('abook v0.6.2',run([root/'share/jaromail/bin/abook','--help'],env=self.env).stdout)

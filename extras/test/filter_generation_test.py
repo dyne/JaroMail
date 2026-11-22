@@ -168,7 +168,8 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(first[1], 1)
         self.assertEqual(self.selected(), 'generations/' + first[0])
         self.assertEqual(self.run_compile('--check'), (first[0], 0, None))
-        self.assertEqual(set(p.name for p in first[2].iterdir()), {'policy.bin', 'filters.zsh', 'Filters.sieve', 'Filters.svbin', 'manifest.json'})
+        self.assertEqual(set(p.name for p in first[2].iterdir()),
+                         {'dependencies', 'Filters.sieve', 'Filters.svbin', 'provenance', 'manifest.json'})
         self.assertEqual(stat.S_IMODE(first[2].stat().st_mode), 0o700)
         for path in first[2].iterdir():
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
@@ -190,6 +191,7 @@ class GenerationTests(unittest.TestCase):
         original = binary.read_bytes()
         manifest = json.loads((first[2] / 'manifest.json').read_text())
         for field, path in [('svbin_sha256', binary), ('sieve_sha256', first[2] / 'Filters.sieve'),
+                            ('provenance_sha256', first[2] / 'provenance'),
                             ('runtime_sha256', runtime / 'SHA256SUMS')]:
             self.assertEqual(manifest[field], hashlib.sha256(path.read_bytes()).hexdigest())
         self.assertEqual(manifest['profile_sha256'], hashlib.sha256(b'').hexdigest())
@@ -303,7 +305,7 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(ids[3], ids[5])
         self.assertEqual(len(list((self.engine / 'generations').iterdir())), 6)
 
-    def test_pinned_reader_survives_publication_and_stale_zwc(self):
+    def test_pinned_reader_survives_publication_and_returns_original_source(self):
         old = self.run_compile()
         held = Held(self, 'pinned', [str(self.reader), str(self.root)])
         held.ready()
@@ -315,32 +317,18 @@ class GenerationTests(unittest.TestCase):
         held.resume()
         code, out, err = held.finish()
         self.assertEqual(code, 0, err)
-        self.assertEqual(out, old[0].encode()+b'\0'+(old[2] / 'filters.zsh').read_bytes())
+        self.assertEqual(out, old[0].encode()+b'\0'+(old[2] / 'Filters.sieve').read_bytes())
         binary_reader.resume()
         code, out, err = binary_reader.finish()
         self.assertEqual(code, 0, err)
         self.assertEqual(out, old[0].encode()+b'\0'+(old[2] / 'Filters.svbin').read_bytes())
         self.assertNotEqual(out[65:], (new[2] / 'Filters.svbin').read_bytes())
-        source = new[2] / 'filters.zsh'
-        original, metadata = source.read_bytes(), source.stat()
-        source.write_text('filter_rule_destinations=(Stale)\n')
-        subprocess.run(['zsh', '-f', '-c', 'zcompile "$1"', 'zsh', str(source)], check=True)
-        source.write_bytes(original)
-        os.utime(source, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
-        # Exact immutable inventory detects an unexpected sibling cache.
-        self.assertEqual(subprocess.run([str(self.reader), str(self.root)], capture_output=True).returncode, 5)
-        stale = subprocess.run(['zsh', '-f', '-c', 'source "$1"; print -r -- $filter_rule_destinations',
-                                'zsh', str(source)], capture_output=True)
-        self.assertEqual(stale.stdout.strip(), b'Stale')
-        result = subprocess.run(['zsh', '-f', '-c', 'exec {fd}<"$1"; source /dev/fd/$fd; exec {fd}<&-; print -r -- $filter_rule_destinations',
-                                 'zsh', str(new[2] / 'filters.zsh')], capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(b'Second', result.stdout)
-        (new[2] / 'filters.zsh.zwc').unlink()
+        self.assertNotEqual((new[2] / "Filters.sieve").read_bytes(), (old[2] / "Filters.sieve").read_bytes())
 
     def test_corruption_version_and_output_symlink_rejected(self):
-        for name, mutation in [('policy.bin', lambda b: b[:8]+b'\0\0\0\0'+b[12:]),
-                               ('filters.zsh', lambda b: b+b'changed'), ('Filters.svbin', lambda b: b[:-1]), ('manifest.json', lambda b: b+b'extra')]:
+        for name, mutation in [('dependencies', lambda b: b[:8]+b'\0\0\0\0'+b[12:]),
+                               ('provenance', lambda b: b[:-1]),
+                               ('Filters.svbin', lambda b: b[:-1]), ('manifest.json', lambda b: b+b'extra')]:
             current = self.run_compile()
             path = current[2] / name
             original = path.read_bytes()
@@ -363,7 +351,7 @@ class GenerationTests(unittest.TestCase):
     def test_faults_restore_prior_selector_and_export(self):
         self.run_compile()
         before = self.snapshot()
-        phases = ['stage-name', 'write-product', 'write-zsh', 'write-sieve', 'sieve-compile', 'fsync-bytecode', 'write-manifest', 'fsync-file', 'fsync-stage',
+        phases = ['stage-name', 'write-product', 'write-sieve', 'write-provenance', 'sieve-compile', 'fsync-bytecode', 'write-manifest', 'fsync-file', 'fsync-stage',
                   'validate', 'rename-generation', 'fsync-generations', 'write-backup', 'write-export',
                   'write-journal', 'fsync-journal', 'prepared', 'rename-export', 'export-renamed',
                   'rename-current', 'selector-renamed', 'fsync-root', 'fsync-engine', 'write-commit',
@@ -372,6 +360,39 @@ class GenerationTests(unittest.TestCase):
             self.rules.write_text('to-address person%d@example.org move Dest%d\n' % (index, index))
             self.run_compile(expected=3, extra={'JF_TEST_FAIL': phase})
             self.assert_old(before)
+
+    def test_failed_old_format_migration_restores_publication_and_mail(self):
+        old = 'a' * 64
+        generation = self.engine / 'generations' / old
+        generation.mkdir(parents=True)
+        for directory in (self.engine, generation.parent, generation):
+            directory.chmod(0o700)
+        source = b'require "fileinto"; fileinto "prior";\n'
+        manifest = {'schema': 1, 'generation': old, 'policy_sha256': hashlib.sha256(b'JFNCACHE').hexdigest(),
+                    'zsh_sha256': hashlib.sha256(b'').hexdigest(), 'sieve_sha256': hashlib.sha256(source).hexdigest()}
+        for path, contents in [(generation / 'policy.bin', b'JFNCACHE'), (generation / 'filters.zsh', b''),
+                               (generation / 'Filters.sieve', source),
+                               (self.root / 'Filters.sieve', source),
+                               (generation / 'manifest.json', json.dumps(manifest, separators=(',', ':')).encode())]:
+            path.write_bytes(contents)
+            path.chmod(0o600)
+        (self.root / 'Filters.sieve').chmod(0o640)
+        current = self.engine / 'current'
+        current.symlink_to('generations/' + old)
+        inbox = self.root / 'incoming/new/message'
+        inbox.parent.mkdir(parents=True)
+        original = b'From: first@example.org\n\nRetain the entire body.\n'
+        inbox.write_bytes(original)
+        for phase in ('sieve-compile', 'export-renamed', 'selector-renamed'):
+            self.run_compile(expected=3, extra={'JF_TEST_FAIL': phase})
+            self.assertEqual(current.resolve(), generation)
+            self.assertEqual((self.root / 'Filters.sieve').read_bytes(), source)
+            self.assertEqual(stat.S_IMODE((self.root / 'Filters.sieve').stat().st_mode), 0o640)
+            self.assertEqual(inbox.read_bytes(), original)
+        _, _, published = self.run_compile()
+        self.assertEqual(current.resolve(), published)
+        self.assertNotEqual(published, generation)
+        self.assertEqual(inbox.read_bytes(), original)
 
     def test_interruption_journal_refusal_and_recovery(self):
         self.run_compile()
@@ -519,7 +540,7 @@ class GenerationTests(unittest.TestCase):
             check = self.run_compile('--check')
             first = self.run_compile()
             dependencies = {(row[0], row[1]): row for tag, row in
-                            records((first[2] / 'policy.bin').read_bytes()) if tag == b'D'}
+                            records((first[2] / 'dependencies').read_bytes()) if tag == b'D'}
             for path, raw in before.items():
                 role = b'whitelist' if path.name == 'whitelist.abook' else b'blacklist'
                 self.assertEqual(dependencies[b'input.' + role, os.fsencode(path)][3],
@@ -818,8 +839,8 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(warm, (first[0], 0, first[2]))
         self.assertIn('W_ADDRESS', self.events[-1]['stderr'])
         self.assertIn('original addressbook unchanged', self.events[-1]['stderr'])
-        decoded = records((first[2] / 'policy.bin').read_bytes())
-        predicates = [row[5] for tag, row in decoded if tag == b'R']
+        decoded = records((first[2] / 'dependencies').read_bytes())
+        predicates = (first[2] / 'Filters.sieve').read_bytes()
         self.assertIn(b'known@example.org', predicates)
         self.assertIn(b'blocked@example.org', predicates)
         self.assertNotIn(b'person@invalid.example...', predicates)

@@ -69,7 +69,7 @@ def make_fixture(root, rules, messages):
         (root / "incoming" / ("cur" if i % 2 else "new") / (ident + ":2,S")).write_bytes(data)
         payloads[ident] = sha(data)
         expected[ident] = f"route-{n % 2}" if kind in ("match", "conflict") else "unsorted"
-        target[ident] = "from-routes" if kind == "conflict" else "known" if kind == "known-only" else expected[ident]
+        target[ident] = "from-routes" if kind == "conflict" else "INBOX" if kind == "known-only" else expected[ident]
     paths = [p for p in sorted(root.rglob("*")) if p.is_file()]
     inputs = {str(p.relative_to(root)): sha(p.read_bytes()) for p in paths}
     return {"rules": rules, "contacts": rules, "messages": messages,
@@ -153,7 +153,7 @@ def delivery_benchmark(args):
     args.scratch.mkdir(parents=True, exist_ok=False)
     args.output.mkdir(parents=True, exist_ok=True)
     assert not any(args.output.iterdir()), 'output directory must be empty'
-    compiler, batch = [args.work / 'bin' / n for n in ('jaro-filter-compile', 'jaro-filter')]
+    compiler, batch = [args.work / 'bin' / n for n in ('jaro-filter-compile', 'jaro-sieve-filter')]
     cli = args.work.parents[1] / 'bin/jaro'
     assert all(p.is_file() for p in (compiler, batch, cli))
     metadata = dict(schema=2, source_root=str(args.repo), runtime=str(args.work),
@@ -232,10 +232,16 @@ def delivery_benchmark(args):
                             publication_before = generation_snapshot(root) if phase != 'cold-compile' else None
                             commands = [[str(compiler), '--root', str(root), '--accounts-dir', str(root / 'Accounts'), '--report0']]
                             if phase == 'readonly-check': commands[0].append('--check')
-                            elif phase == 'pin-validation': commands = [[str(batch), '--root', str(root), '--files0-from', str(empty)]]
-                            elif phase in ('classify', 'helper-apply'):
-                                head = [str(batch), '--root', str(root), '--mode', 'classify' if phase == 'classify' else 'apply']
-                                commands = [head + ['--', str(path)] for path in paths] if mode == 'single' else [head + ['--maildir', str(paths[0].parent.parent)]]
+                            elif phase in ('pin-validation', 'classify', 'helper-apply'):
+                                generation = (root / 'cache/filter-engine/current').resolve()
+                                sources = [path.parent.parent for path in paths] if mode == 'single' else [paths[0].parent.parent]
+                                if phase == 'pin-validation':
+                                    blank = root / 'empty'
+                                    maildir(root, 'empty')
+                                    sources = [blank]
+                                commands = [[str(batch), '--from', str(box), '--to', str(root),
+                                             '--report0', generation.name, *(['--dry-run'] if phase != 'helper-apply' else []),
+                                             str(generation / 'Filters.sieve')] for box in sources]
                             elif phase == 'jaro-filter':
                                 commands = [[str(cli), 'filter', str(path.parent.parent)] for path in paths] if mode == 'single' else [[str(cli), 'filter', str(paths[0].parent.parent)]]
                             results = []
@@ -264,7 +270,7 @@ def delivery_benchmark(args):
                                                 device=device, mode=mode, repeat=repeat+1, phase=phase, input_sha256=identity,
                                                 wall_seconds=wall, messages_per_second=count/wall if phase in ('classify', 'helper-apply', 'jaro-filter') else None,
                                                 maxrss=max(r['maxrss'] for r in results), cpu_seconds=sum(r['user_seconds']+r['system_seconds'] for r in results),
-                                                database_bytes=sum(p.stat().st_size for p in products.rglob('*') if p.name in ('policy.bin', 'rules.cdb')),
+                                                database_bytes=sum(p.stat().st_size for p in products.rglob('*') if p.name == 'Filters.svbin'),
                                                 generation_product_bytes=sum(p.stat().st_size for p in products.rglob('*') if p.is_file()),
                                                 publication_sha256=sha(json.dumps(publication_after, sort_keys=True).encode()), publication_unchanged=publication_before is not None,
                                                 commands=results, verified_occurrences=count))
@@ -296,7 +302,7 @@ def main():
     parser.add_argument("--messages", type=int, nargs="+", default=[100, 1000])
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--no-profile", action="store_true")
-    parser.add_argument("--engine", choices=("legacy", "native"), default="legacy")
+    parser.add_argument("--engine", choices=("legacy", "native", "sieve"), default="sieve")
     parser.add_argument('--delivery', action='store_true', help='Run the common literal-route delivery baseline')
     parser.add_argument('--message-bytes', type=int, default=1024)
     parser.add_argument('--delivery-devices', nargs='+', choices=('same', 'cross'), default=['same'])
@@ -329,7 +335,7 @@ def main():
             (profile_work / path.name).symlink_to(path, target_is_directory=path.is_dir())
     for path in (args.work / "bin").iterdir():
         target = profile_work / "bin" / path.name
-        if path.name in ("jaro-filter-compile", "jaro-filter", "jaro-filter-legacy"):
+        if path.name in ("jaro-filter-compile", "jaro-sieve-filter"):
             target.write_text("#!/bin/sh\nprintf '%s\\n' " + shlex.quote(path.name) + " >> \"$JARO_BENCH_EXEC_LOG\"\nexec " + shlex.quote(str(path)) + ' "$@"\n')
             target.chmod(0o700)
         else:
@@ -351,7 +357,7 @@ def main():
     write_json(args.output / "environment.json", metadata)
     metadata["engine"] = args.engine
     metadata["compiler_flags"]["scope"] = "All normal GNU/Linux application helpers including native filter helpers; default -O3"
-    metadata["native_binary_sha256"] = {name: sha((args.work / "bin" / name).read_bytes()) for name in ("jaro-filter-compile", "jaro-filter") if (args.work / "bin" / name).exists()}
+    metadata["native_binary_sha256"] = {name: sha((args.work / "bin" / name).read_bytes()) for name in ("jaro-filter-compile", "jaro-sieve-filter") if (args.work / "bin" / name).exists()}
     metadata["profiler"]["limitations"] += " Installed absolute native/legacy helper invocations are additionally wrapped in a separate runtime; uninstrumented runtime remains untouched."
     write_json(args.output / "environment.json", metadata)
     records, manifests = [], []
@@ -370,19 +376,18 @@ def main():
                     assert all(sha((root / path).read_bytes()) == value for path, value in fixture["inputs"].items())
                     env = dict(os.environ, JAROMAILDIR=str(root), JAROWORKDIR=str(args.work))
                     env["JARO_FILTER_ENGINE"] = args.engine
-                    if args.engine == "native":
-                        qualification = sha((args.repo / "docs/filter-regex-qualification.json").read_bytes())
-                        profile = ('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\ncapability mailbox\ncapability regex\nregex-qualification ' + qualification + '\n')
-                        (root / "FilterProfile.txt").write_text(profile)
-                        metadata["supplemental_profile"] = {"sha256": sha(profile.encode()), "regex_qualification": qualification,
-                            "reason": "Explicit export capability for unchanged baseline ERE inputs; original input-file hashes remain identical"}
-                        write_json(args.output / "environment.json", metadata)
+                    qualification = sha((args.repo / "docs/filter-regex-qualification.json").read_bytes())
+                    profile = ('version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\ncapability fileinto\ncapability mailbox\ncapability regex\nregex-qualification ' + qualification + '\n')
+                    (root / "FilterProfile.txt").write_text(profile)
+                    metadata["supplemental_profile"] = {"sha256": sha(profile.encode()), "regex_qualification": qualification,
+                        "reason": "Explicit export capability for unchanged baseline ERE inputs; original input-file hashes remain identical"}
+                    write_json(args.output / "environment.json", metadata)
                     if profiled:
                         env["PATH"] = str(wrappers) + os.pathsep + env["PATH"]
                         env["JAROWORKDIR"] = str(profile_work)
                     before = scan(root)
                     for phase in PHASES:
-                        publication_before = generation_snapshot(root) if args.engine == "native" and phase != "update_filters-cold" else None
+                        publication_before = generation_snapshot(root) if phase != "update_filters-cold" else None
                         prefix = args.output / (label + "-" + phase)
                         clock = prefix.with_suffix(".clock")
                         exec_log = prefix.with_suffix(".exec")
@@ -404,12 +409,6 @@ def main():
                         result["selected_exec_counts"] = dict(Counter(exec_log.read_text().splitlines())) if exec_log.exists() else None
                         result.update(workload=name, rules=rules, contacts=rules, messages=count,
                                       repeat=repeat + 1, phase=phase, profiled=profiled, input_sha256=fixture["input_sha256"])
-                        if phase.startswith("update_filters") and args.engine == "legacy":
-                            cache = (root / "cache/filters").read_text()
-                            assert len(re.findall(r"^filter_(?:from|to)\+=", cache, re.M)) == rules
-                            assert len(re.findall(r"^filter_whitelist\+=", cache, re.M)) == rules
-                            if profiled:
-                                assert result["selected_exec_counts"].get("cat", 0) >= rules
                         if phase in ("sieve-emission", "jaro-sieve-unchanged"):
                             emitted = (root / "Filters.sieve").read_text()
                             assert sum(emitted.count(f'"^to{i:04d}@example[.]org$"') for i in range(rules // 2)) == rules // 2
@@ -418,38 +417,28 @@ def main():
                         now = scan(root)
                         if phase == "classification-dry":
                             assert now == before, "dry classification changed messages, names or destinations"
-                            if args.engine == "native":
-                                result["verified_decisions"] = native_decisions(result, fixture)
-                            else:
-                                trace = Path(result["stderr"]).read_text() + Path(result["stdout"]).read_text()
-                                assert len(re.findall(r"-> route-[01]", trace)) == count // 2
-                                assert len(re.findall(r"-> unsorted", trace)) == count
-                                result["dry_trace"] = {"route_proposals": count // 2, "fallback_proposals": count,
-                                                       "meaning": "legacy dry-run continues after route proposal; not one decision per message"}
-                                if profiled:
-                                    assert result["selected_exec_counts"].get("maddr", 0) >= 2 * count
+                            result["verified_decisions"] = native_decisions(result, fixture)
                         if phase in ("application", "index-cold", "index-unchanged"):
-                            assert now[0] == fixture["target_expected" if args.engine == "native" else "legacy_expected"], "wrong destination/ID accounting"
+                            assert now[0] == fixture["target_expected"], "wrong destination/ID accounting"
                             assert now[1] == fixture["payload_sha256"], "message content changed"
                             result["verified_destinations"] = dict(Counter(now[0].values()))
                         if phase.startswith("index"):
                             found = subprocess.check_output(["notmuch", "--config=" + str(root / "notmuch-config"), "count", "*"], env=env, text=True)
                             assert int(found) == count, (phase, found, count)
                             result["indexed_count"] = int(found)
-                        if args.engine == "native":
-                            publication_after = generation_snapshot(root)
-                            assert publication_after, "missing native generation"
-                            result["publication_sha256"] = sha(json.dumps(publication_after, sort_keys=True).encode())
-                            if publication_before is not None:
-                                if publication_before != publication_after:
-                                    write_json(prefix.with_suffix('.publication-changes.json'), {
-                                        'before': publication_before, 'after': publication_after})
-                                assert publication_before == publication_after, "unchanged input unexpectedly republished"
-                                result["publication_unchanged"] = True
-                            if profiled and phase in ("classification-dry", "application"):
-                                assert result["selected_exec_counts"].get("jaro-filter") == 1
-                                assert result["selected_exec_counts"].get("jaro-filter-compile") == 1
-                                assert not any(result["selected_exec_counts"].get(t, 0) for t in ("maddr", "mseq", "mpick"))
+                        publication_after = generation_snapshot(root)
+                        assert publication_after, "missing native generation"
+                        result["publication_sha256"] = sha(json.dumps(publication_after, sort_keys=True).encode())
+                        if publication_before is not None:
+                            if publication_before != publication_after:
+                                write_json(prefix.with_suffix('.publication-changes.json'), {
+                                    'before': publication_before, 'after': publication_after})
+                            assert publication_before == publication_after, "unchanged input unexpectedly republished"
+                            result["publication_unchanged"] = True
+                        if profiled and phase in ("classification-dry", "application"):
+                            assert result["selected_exec_counts"].get("jaro-sieve-filter") == 1
+                            assert result["selected_exec_counts"].get("jaro-filter-compile") == 1
+                            assert not any(result["selected_exec_counts"].get(t, 0) for t in ("maddr", "mseq", "mpick"))
                         result["verified_messages"] = count
                         records.append(result)
                         write_json(args.output / "samples.json", records)
@@ -466,7 +455,7 @@ def main():
                        "profile_runs": len(profiles), "selected_exec_counts": [r["selected_exec_counts"] for r in profiles]}
             summaries.append(summary)
     write_json(args.output / "summary.json", summaries)
-    if args.engine == "native" and not args.no_profile:
+    if not args.no_profile:
         for phase in PHASES:
             counts = [r["selected_exec_counts"] for r in records if r["profiled"] and r["phase"] == phase]
             assert all(c == counts[0] for c in counts), ("selected subprocess growth", phase, counts)
