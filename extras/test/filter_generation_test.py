@@ -168,7 +168,7 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(first[1], 1)
         self.assertEqual(self.selected(), 'generations/' + first[0])
         self.assertEqual(self.run_compile('--check'), (first[0], 0, None))
-        self.assertEqual(set(p.name for p in first[2].iterdir()), {'policy.bin', 'filters.zsh', 'Filters.sieve', 'manifest.json'})
+        self.assertEqual(set(p.name for p in first[2].iterdir()), {'policy.bin', 'filters.zsh', 'Filters.sieve', 'Filters.svbin', 'manifest.json'})
         self.assertEqual(stat.S_IMODE(first[2].stat().st_mode), 0o700)
         for path in first[2].iterdir():
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
@@ -180,6 +180,33 @@ class GenerationTests(unittest.TestCase):
         message.write_text('From: FIRST@EXAMPLE.ORG\n\nBody unchanged.\n')
         self.oracle.compile(first[2] / 'Filters.sieve')
         self.oracle.expect(first[2] / 'Filters.sieve', message, 'First', True)
+
+    def test_runtime_binding_and_bytecode_reuse(self):
+        runtime = self.case / 'runtime'
+        shutil.copytree(self.objects / 'jaro-sieve-runtime', runtime)
+        self.env['JARO_SIEVE_RUNTIME'] = str(runtime)
+        first = self.run_compile()
+        binary = first[2] / 'Filters.svbin'
+        original = binary.read_bytes()
+        manifest = json.loads((first[2] / 'manifest.json').read_text())
+        for field, path in [('svbin_sha256', binary), ('sieve_sha256', first[2] / 'Filters.sieve'),
+                            ('runtime_sha256', runtime / 'SHA256SUMS')]:
+            self.assertEqual(manifest[field], hashlib.sha256(path.read_bytes()).hexdigest())
+        self.assertEqual(manifest['profile_sha256'], hashlib.sha256(b'').hexdigest())
+        self.assertEqual(self.run_compile(extra={'JF_TEST_FAIL': 'sieve-compile'}), (first[0], 0, first[2]))
+        # A valid different runtime at the same path must invalidate the warm result.
+        config = runtime / 'dovecot.conf'
+        old_digest = hashlib.sha256(config.read_bytes()).hexdigest()
+        config.write_bytes(config.read_bytes() + b'\n# updated runtime configuration\n')
+        sums = runtime / 'SHA256SUMS'
+        sums.write_text(sums.read_text().replace(old_digest, hashlib.sha256(config.read_bytes()).hexdigest()))
+        self.run_compile(expected=3, extra={'JF_TEST_FAIL': 'sieve-compile'})
+        self.assertEqual(binary.read_bytes(), original)
+        second = self.run_compile()
+        self.assertNotEqual(first[0], second[0])
+        config.unlink()
+        self.assertIn(b'E_SIEVE_RUNTIME', self.run_compile(expected=3).stderr)
+        self.assertEqual(self.selected(), 'generations/' + second[0])
 
     def test_production_build_ignores_test_fault_environment_and_cli_errors(self):
         command = [str(self.native), '--root', str(self.root), '--report0']
@@ -280,6 +307,8 @@ class GenerationTests(unittest.TestCase):
         old = self.run_compile()
         held = Held(self, 'pinned', [str(self.reader), str(self.root)])
         held.ready()
+        binary_reader = Held(self, 'pinned', [str(self.reader), str(self.root), '--bytecode'])
+        binary_reader.ready()
         self.rules.write_text('from-address second@example.org move Second\n')
         new = self.run_compile()
         self.assertNotEqual(old[0], new[0])
@@ -287,6 +316,11 @@ class GenerationTests(unittest.TestCase):
         code, out, err = held.finish()
         self.assertEqual(code, 0, err)
         self.assertEqual(out, old[0].encode()+b'\0'+(old[2] / 'filters.zsh').read_bytes())
+        binary_reader.resume()
+        code, out, err = binary_reader.finish()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out, old[0].encode()+b'\0'+(old[2] / 'Filters.svbin').read_bytes())
+        self.assertNotEqual(out[65:], (new[2] / 'Filters.svbin').read_bytes())
         source = new[2] / 'filters.zsh'
         original, metadata = source.read_bytes(), source.stat()
         source.write_text('filter_rule_destinations=(Stale)\n')
@@ -306,7 +340,7 @@ class GenerationTests(unittest.TestCase):
 
     def test_corruption_version_and_output_symlink_rejected(self):
         for name, mutation in [('policy.bin', lambda b: b[:8]+b'\0\0\0\0'+b[12:]),
-                               ('filters.zsh', lambda b: b+b'changed'), ('manifest.json', lambda b: b+b'extra')]:
+                               ('filters.zsh', lambda b: b+b'changed'), ('Filters.svbin', lambda b: b[:-1]), ('manifest.json', lambda b: b+b'extra')]:
             current = self.run_compile()
             path = current[2] / name
             original = path.read_bytes()
@@ -329,7 +363,7 @@ class GenerationTests(unittest.TestCase):
     def test_faults_restore_prior_selector_and_export(self):
         self.run_compile()
         before = self.snapshot()
-        phases = ['stage-name', 'write-product', 'write-zsh', 'write-sieve', 'write-manifest', 'fsync-file', 'fsync-stage',
+        phases = ['stage-name', 'write-product', 'write-zsh', 'write-sieve', 'sieve-compile', 'fsync-bytecode', 'write-manifest', 'fsync-file', 'fsync-stage',
                   'validate', 'rename-generation', 'fsync-generations', 'write-backup', 'write-export',
                   'write-journal', 'fsync-journal', 'prepared', 'rename-export', 'export-renamed',
                   'rename-current', 'selector-renamed', 'fsync-root', 'fsync-engine', 'write-commit',

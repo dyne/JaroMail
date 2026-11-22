@@ -350,6 +350,16 @@ static int append(struct parser *p, const struct jf_source *s, const char *selec
 	return 0;
 }
 
+int jf_valid_glob(const char *s)
+{
+	if (!*s) return 0;
+	for (;*s;s++) {
+		if ((unsigned char)*s<32 || *s==127) return 0;
+		if (*s=='\\' && *++s!='*' && *s!='\\') return 0;
+	}
+	return 1;
+}
+
 static int parse_line(struct parser *p, const struct jf_source *s,
 	const unsigned char *line, size_t n, char *buffer)
 {
@@ -390,6 +400,7 @@ static int parse_line(struct parser *p, const struct jf_source *s,
 		if (known || !strcmp(t[0],"from-domain") || !strcmp(t[0],"to-domain")) {
 			kind=JF_DOMAIN_APEX;
 		} else if (!strcmp(t[0],"from-address") || !strcmp(t[0],"to-address")) kind=JF_ADDRESS;
+		else if (!strcmp(t[0],"from-glob") || !strcmp(t[0],"to-glob")) kind=JF_GLOB;
 		else if (!strcmp(t[0],"from") || !strcmp(t[0],"to")) kind=JF_ERE;
 		else return fail(p,"E_SELECTOR",t[0]);
 		if (count!=(known ? 2u : 4u)) return fail(p,"E_FIELDS","wrong rule field count");
@@ -400,6 +411,9 @@ static int parse_line(struct parser *p, const struct jf_source *s,
 			const char *d=t[1];
 			if (!strncmp(d,"*.",2)) { kind=JF_DOMAIN_SUBDOMAINS; d+=2; }
 			if (!jf_valid_domain(d)) return fail(p,"E_DOMAIN","invalid ASCII domain");
+			fold(t[1]);
+		} else if (kind==JF_GLOB) {
+			if (!jf_valid_glob(t[1])) return fail(p,"E_GLOB","invalid glob escape or control byte");
 			fold(t[1]);
 		} else if (kind==JF_ADDRESS) {
 			if (!jf_normalize_mailbox(t[1])) return fail(p,"E_ADDRESS","invalid exact mailbox");
@@ -650,7 +664,7 @@ int jf_policy_restore(const struct jf_cached_rule *records, size_t count,
 		memcpy(kind,f[2].data,f[2].size); kind[f[2].size]=0;
 		r->kind=!strcmp(kind,"address") ? JF_ADDRESS : !strcmp(kind,"domain-apex") ? JF_DOMAIN_APEX :
 			!strcmp(kind,"domain-subdomains") ? JF_DOMAIN_SUBDOMAINS : !strcmp(kind,"ere") ? JF_ERE :
-			!strcmp(kind,"sender-contains") ? JF_SENDER_CONTAINS : !strcmp(kind,"spam-is") ? JF_SPAM_IS : JF_ALWAYS;
+			!strcmp(kind,"glob") ? JF_GLOB : !strcmp(kind,"sender-contains") ? JF_SENDER_CONTAINS : !strcmp(kind,"spam-is") ? JF_SPAM_IS : JF_ALWAYS;
 		r->stage=(unsigned)cached_number(f[1]); r->fields=(unsigned)cached_number(f[3]);
 		r->line=cached_number(f[10]); r->occurrence=1; entry->order=i;
 		memcpy(r->id,f[4].data,f[4].size); r->id[f[4].size]=0;

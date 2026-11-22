@@ -55,8 +55,9 @@ int jf_products_build(const struct jf_policy *, const struct jf_profile *,
 void jf_products_free(struct jf_products *);
 /* Validate binary framing, canonical records and both product digests.
  * Does not use manifest.json as an authority. Returns 0 or status 5. */
+struct jf_sieve_binding { char runtime[65], profile[65]; };
 int jf_cache_validate(const unsigned char *, size_t, const struct jf_bytes *,
-	const struct jf_bytes *, const unsigned char *, struct jf_error *);
+	const struct jf_bytes *, const unsigned char *, struct jf_sieve_binding *, struct jf_error *);
 /* Reconstruct the shared indexed model from canonical R records, preserving
  * serialized IDs, order, provenance and mapped destinations. Never reads source
  * inputs. On failure *out is NULL; returns 3 for resources or 5 for bad cache. */

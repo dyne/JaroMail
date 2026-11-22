@@ -27,9 +27,9 @@ struct jf_snapshot {
 int jf_snapshot_read(const char *root, const char *accounts, const char *profile,
 	const char *compiler, const struct jf_snapshot *prior,
 	struct jf_snapshot *, struct jf_error *);
-int jf_snapshot_collect(const char *, const char *, const char *, const char *,
+int jf_snapshot_collect(const char *, const char *, const char *, const char *, const char *,
 	const struct jf_snapshot *, struct jf_snapshot *, struct jf_error *);
-int jf_snapshot_overlay(const char *, const char *, const char *, const char *,
+int jf_snapshot_overlay(const char *, const char *, const char *, const char *, const char *,
 	const struct jf_input_override *, size_t, struct jf_snapshot *, struct jf_error *);
 int jf_snapshot_parse(struct jf_snapshot *, struct jf_error *);
 void jf_snapshot_free(struct jf_snapshot *);

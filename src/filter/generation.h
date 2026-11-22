@@ -4,7 +4,8 @@
 struct jf_generation {
 	int directory;
 	char id[65];
-	struct jf_bytes cache,zsh,sieve;
+	struct jf_bytes cache,zsh,sieve,bytecode;
+	struct jf_sieve_binding binding;
 };
 struct jf_compile_result { char id[65]; char *directory; int changed; struct jf_bytes warnings; };
 /* Read-only; takes shared lock, rejects unfinished journals and pins a verified

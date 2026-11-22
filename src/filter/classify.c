@@ -35,6 +35,7 @@ int jf_policy_build_index(struct jf_policy *p, struct jf_error *e)
 		switch (p->entries[i].rule.kind) {
 		case JF_ADDRESS: case JF_DOMAIN_APEX: case JF_DOMAIN_SUBDOMAINS: indexed++; break;
 		case JF_ERE: legacy++; break;
+		case JF_GLOB: p->has_glob=1; break;
 		case JF_SENDER_CONTAINS: p->bounce=&p->entries[i]; break;
 		case JF_SPAM_IS: p->spam=&p->entries[i]; break;
 		case JF_ALWAYS: p->fallback=&p->entries[i]; break;
@@ -128,6 +129,7 @@ int jf_policy_classify(const struct jf_policy *p, const struct jf_message *messa
 	if (!p || !message || (message->address_count && !message->addresses) ||
 		(message->sender_count && !message->senders) || (message->spam_count && !message->spam_flags))
 		return error(e,"E_MESSAGE_ARGUMENT","invalid policy/parsed message",7);
+	if (p->has_glob) return error(e,"E_SIEVE_REQUIRED","address glob policies require the Pigeonhole delivery engine",4);
 	if (message->address_count>JF_HEADERS_MAX || message->sender_count>JF_HEADERS_MAX ||
 		message->spam_count>JF_HEADERS_MAX)
 		return error(e,"E_MESSAGE_LIMIT","too many parsed message fields",7);

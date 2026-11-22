@@ -1,7 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 700
 #include "generation.h"
 #include "import.h"
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -24,6 +26,43 @@ static char *join(const char *a,const char *b)
 	size_t n=strlen(a),m=strlen(b); char *s;
 	if (n>SIZE_MAX-m-2) return NULL;
 	s=malloc(n+m+2); if (s) { memcpy(s,a,n); s[n]='/'; memcpy(s+n+1,b,m+1); } return s;
+}
+
+/* Installed compilers resolve the private runtime alongside bin/. Build-tree
+ * compilers have a sibling link created by the same CMake target. */
+static char *runtime_directory(const char *compiler)
+{
+	const char *override=getenv("JARO_SIEVE_RUNTIME");
+	char *path,*base,*slash;
+	if (override && *override) return *override=='/' ? realpath(override,NULL) : NULL;
+	base=realpath(compiler,NULL); if (!base) return NULL;
+	slash=strrchr(base,'/'); if (!slash) { free(base); return NULL; }
+	*slash=0; path=join(base,"jaro-sieve-runtime");
+	if (!path || access(path,F_OK)) { free(path); path=join(base,"../sieve"); }
+	free(base); return path;
+}
+
+static int run_sieve(const char *runtime,int directory,const char *operation,struct jf_error *error)
+{
+	char *program=runtime ? join(runtime,"run") : NULL;
+	pid_t child=-1,waited; int status=0;
+	if (program && access(program,X_OK)==0) child=fork();
+	if (child==0) {
+		int output=open("/dev/null",O_WRONLY);
+		if (output<0 || dup2(output,STDOUT_FILENO)<0 || (directory>=0 && fchdir(directory))) _exit(126);
+		if (output!=STDOUT_FILENO) close(output);
+		if (!strcmp(operation,"compile")) execl(program,program,operation,"Filters.sieve","Filters.svbin",(char *)NULL);
+		else if (!strcmp(operation,"dump")) execl(program,program,operation,"Filters.svbin",(char *)NULL);
+		else execl(program,program,operation,(char *)NULL);
+		_exit(126);
+	}
+	free(program);
+	if (child>0) {
+		do waited=waitpid(child,&status,0); while (waited<0 && errno==EINTR);
+		if (waited==child && WIFEXITED(status) && WEXITSTATUS(status)==0) return 0;
+	}
+	jf_product_error(error,"E_SIEVE_RUNTIME",0,"pinned Sieve runtime unavailable or failed to compile/load the program");
+	return 3;
 }
 
 static int valid_id(const char *s)
@@ -175,11 +214,15 @@ static int selector(struct location *l,char id[65])
 
 static int manifest(const struct jf_generation *g,struct jf_bytes *out)
 {
-	unsigned char digest[32]; char c[65],z[65],s[65],text[400];
+	unsigned char digest[32]; char c[65],z[65],s[65],binary[65],text[768];
 	jf_digest(g->cache.data,g->cache.size,digest); jf_digest_hex(digest,c);
 	jf_digest(g->zsh.data,g->zsh.size,digest); jf_digest_hex(digest,z);
 	jf_digest(g->sieve.data,g->sieve.size,digest); jf_digest_hex(digest,s);
-	snprintf(text,sizeof text,"{\"schema\":1,\"generation\":\"%s\",\"policy_sha256\":\"%s\",\"zsh_sha256\":\"%s\",\"sieve_sha256\":\"%s\"}\n",g->id,c,z,s);
+	if (*g->binding.runtime) {
+		jf_digest(g->bytecode.data,g->bytecode.size,digest); jf_digest_hex(digest,binary);
+		snprintf(text,sizeof text,"{\"schema\":2,\"generation\":\"%s\",\"policy_sha256\":\"%s\",\"zsh_sha256\":\"%s\",\"sieve_sha256\":\"%s\","
+			"\"svbin_sha256\":\"%s\",\"runtime_sha256\":\"%s\",\"profile_sha256\":\"%s\"}\n",g->id,c,z,s,binary,g->binding.runtime,g->binding.profile);
+	} else snprintf(text,sizeof text,"{\"schema\":1,\"generation\":\"%s\",\"policy_sha256\":\"%s\",\"zsh_sha256\":\"%s\",\"sieve_sha256\":\"%s\"}\n",g->id,c,z,s);
 	return jf_bytes_text(out,text);
 }
 
@@ -193,17 +236,20 @@ static int validate_directory(int fd,const char *id,struct jf_generation *g,stru
 	copy=-1; errno=0;
 	while ((ent=readdir(dir))) {
 		unsigned bit=!strcmp(ent->d_name,"policy.bin") ? 1 : !strcmp(ent->d_name,"filters.zsh") ? 2 :
-			!strcmp(ent->d_name,"Filters.sieve") ? 4 : !strcmp(ent->d_name,"manifest.json") ? 8 : 0;
+			!strcmp(ent->d_name,"Filters.sieve") ? 4 : !strcmp(ent->d_name,"manifest.json") ? 8 :
+			!strcmp(ent->d_name,"Filters.svbin") ? 16 : 0;
 		if (!strcmp(ent->d_name,".") || !strcmp(ent->d_name,"..")) continue;
 		if (!bit || found&bit) goto done;
 		found|=bit; errno=0;
 	}
 	if (errno) { rc=3; goto done; }
-	if (found!=15) goto done;
+	if (found!=15 && found!=31) goto done;
 	closedir(dir); dir=NULL;
 	if ((rc=load(fd,"policy.bin",&g->cache,JF_CACHE_FILE_MAX)) || (rc=load(fd,"filters.zsh",&g->zsh,JF_CACHE_MAX)) ||
 		(rc=load(fd,"Filters.sieve",&g->sieve,JF_CACHE_MAX)) || (rc=load(fd,"manifest.json",&actual,4096))) goto done;
-	if ((rc=jf_cache_validate(g->cache.data,g->cache.size,&g->zsh,&g->sieve,NULL,error))) goto done;
+	if ((rc=jf_cache_validate(g->cache.data,g->cache.size,&g->zsh,&g->sieve,NULL,&g->binding,error))) goto done;
+	if ((found==31)!=(*g->binding.runtime!=0)) { rc=5; goto done; }
+	if (found==31 && (rc=load(fd,"Filters.svbin",&g->bytecode,JF_CACHE_MAX))) goto done;
 	{ char hex[65]; jf_digest_hex(g->cache.data+24,hex); if (strcmp(hex,id)) { rc=5; goto done; } }
 	if ((rc=manifest(g,&expected))) goto done;
 	if (actual.size!=expected.size || memcmp(actual.data,expected.data,actual.size)) { rc=5; goto done; }
@@ -220,14 +266,15 @@ done:
 void jf_generation_close(struct jf_generation *g)
 {
 	if (g->directory>=0) close(g->directory);
-	jf_bytes_free(&g->cache); jf_bytes_free(&g->zsh); jf_bytes_free(&g->sieve);
+	jf_bytes_free(&g->cache); jf_bytes_free(&g->zsh); jf_bytes_free(&g->sieve); jf_bytes_free(&g->bytecode);
 	memset(g,0,sizeof *g); g->directory=-1;
 }
 
 int jf_generation_open(const struct jf_generation *g,const char *name)
 {
 	int fd;
-	if (strcmp(name,"policy.bin") && strcmp(name,"filters.zsh") && strcmp(name,"Filters.sieve") && strcmp(name,"manifest.json")) { errno=EINVAL; return -1; }
+	if (strcmp(name,"policy.bin") && strcmp(name,"filters.zsh") && strcmp(name,"Filters.sieve") &&
+		strcmp(name,"Filters.svbin") && strcmp(name,"manifest.json")) { errno=EINVAL; return -1; }
 	fd=openat(g->directory,name,O_RDONLY|O_NOFOLLOW|O_NONBLOCK);
 	if (fd>=0 && !regular(fd)) { close(fd); fd=-1; errno=EINVAL; }
 	return fd;
@@ -483,14 +530,14 @@ done:
 
 static void discard_stage(int engine,const char *name)
 {
-	static const char *files[]={"policy.bin","filters.zsh","Filters.sieve","manifest.json"};
+	static const char *files[]={"policy.bin","filters.zsh","Filters.sieve","Filters.svbin","manifest.json"};
 	size_t i; int fd=directory(engine,name,0);
 	if (fd<0) return;
-	for (i=0;i<4;i++) (void)unlinkat(fd,files[i],0);
+	for (i=0;i<sizeof files/sizeof *files;i++) (void)unlinkat(fd,files[i],0);
 	close(fd); (void)unlinkat(engine,name,AT_REMOVEDIR);
 }
 
-static int stage(struct location *l,const char *engine_path,const struct jf_products *p,char **name,struct jf_error *error)
+static int stage(struct location *l,const char *engine_path,const char *runtime,const struct jf_products *p,char **name,struct jf_error *error)
 {
 	char *path=join(engine_path,".building-XXXXXX"); struct jf_generation g={0},verified={0};
 	struct jf_bytes info={0}; int fd=-1,rc=3,created=0;
@@ -501,16 +548,26 @@ static int stage(struct location *l,const char *engine_path,const struct jf_prod
 	*name=strdup(strrchr(path,'/')+1); if (!*name) goto done;
 	fd=directory(l->engine,*name,0); if (fd<0) goto done;
 	strcpy(g.id,p->id); g.cache=p->cache; g.zsh=p->zsh; g.sieve=p->sieve;
-	if (manifest(&g,&info) || save(fd,"policy.bin",p->cache.data,p->cache.size,"write-product") ||
+	if (save(fd,"policy.bin",p->cache.data,p->cache.size,"write-product") ||
 		save(fd,"filters.zsh",p->zsh.data,p->zsh.size,"write-zsh") ||
 		save(fd,"Filters.sieve",p->sieve.data,p->sieve.size,"write-sieve") ||
+		hook("sieve-compile") || run_sieve(runtime,fd,"compile",error) ||
+		run_sieve(runtime,fd,"dump",error) || load(fd,"Filters.svbin",&g.bytecode,JF_CACHE_MAX)) goto done;
+	{
+		int binfd=openat(fd,"Filters.svbin",O_RDONLY|O_NOFOLLOW);
+		if (binfd<0) goto done;
+		int failed=syncfd(binfd,"fsync-bytecode");
+		if (close(binfd) || failed) goto done;
+	}
+	if (jf_cache_validate(g.cache.data,g.cache.size,&g.zsh,&g.sieve,NULL,&g.binding,error) || !*g.binding.runtime ||
+		manifest(&g,&info) ||
 		save(fd,"manifest.json",info.data,info.size,"write-manifest") || syncfd(fd,"fsync-stage") ||
 		hook("validate") || validate_directory(fd,p->id,&verified,error)) goto done;
 	rc=0;
 done:
 	if (fd>=0) close(fd);
 	if (created && !*name) (void)unlinkat(l->engine,strrchr(path,'/')+1,AT_REMOVEDIR);
-	free(path); jf_bytes_free(&info); jf_generation_close(&verified);
+	free(path); jf_bytes_free(&g.bytecode); jf_bytes_free(&info); jf_generation_close(&verified);
 	return rc;
 }
 
@@ -543,9 +600,10 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 	struct jf_input_override overrides[4]; char *paths[4]={0},*temporary=NULL,*engine=join(root,"cache/filter-engine");
 	int present[4]={0},changed[4]={0},rc=3,fd=-1,prepared=0,stage_ready=0; mode_t modes[4]={0600,0600,0600,0600};
 	unsigned char fingerprint[32],again[32]; char old[65]; size_t i,count=0;
-	struct stat st;
+	struct stat st; char *runtime=runtime_directory(compiler);
 	memset(result,0,sizeof *result); *error_path=NULL; if (error) memset(error,0,sizeof *error);
-	if (!engine) goto done;
+	if (!engine || (rc=run_sieve(runtime,-1,"identity",error))) goto done;
+	rc=3;
 	/* Snapshot the source descriptor; never modify or remove the import file. */
 	fd=open(script,O_RDONLY|O_NONBLOCK);
 	if (fd<0 || fstat(fd,&st) || !S_ISREG(st.st_mode)) goto script_error;
@@ -562,7 +620,7 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 	if (rc && !(check && rc==5)) goto done;
 	if (!rc && ((rc=lock(&l,!check)) || (check ? unfinished(&l) ? (rc=5) : 0 : (rc=recover(&l))))) goto done;
 	if (l.root>=0 && !same_root(&l,root)) { rc=6; goto done; }
-	if ((rc=jf_snapshot_read(root,accounts,profile,compiler,NULL,&before,error))) goto source_error;
+	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,NULL,&before,error)) || (rc=jf_snapshot_parse(&before,error))) goto source_error;
 	if ((rc=jf_sieve_import(&input,legacy,&before.profile,&imported,error))) goto script_error;
 	if (legacy) fputs("W_LEGACY_SIEVE recovered generated header-contains rules; policy-v1 parsed-address/ERE semantics replace legacy substring behavior\n",stderr);
 	/* Read complete originals for byte-preserving merge and rollback. Import
@@ -581,19 +639,20 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 		changed[i]=original[i].size!=output[i].size || (original[i].size && memcmp(original[i].data,output[i].data,original[i].size));
 		if (changed[i]) { overrides[count].path=paths[i]; overrides[count++].bytes=&output[i]; }
 	}
-	if ((rc=jf_snapshot_overlay(root,accounts,profile,compiler,overrides,count,&after,error)) ||
+	if ((rc=jf_snapshot_overlay(root,accounts,profile,compiler,runtime,overrides,count,&after,error)) ||
 		(rc=jf_snapshot_parse(&after,error)) ||
 		(rc=jf_products_build(after.policy,&after.profile,after.dependencies,after.dependency_count,&products,error))) goto source_error;
 	if ((rc=jf_dependencies_fingerprint(before.dependencies,before.dependency_count,fingerprint)) ||
-		(rc=jf_snapshot_collect(root,accounts,profile,compiler,&before,&recheck,error)) ||
+		(rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&before,&recheck,error)) ||
 		(rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) goto source_error;
 	if (memcmp(fingerprint,again,32)) { rc=6; goto done; }
 	if (check) { strcpy(result->id,products.id); rc=0; goto done; }
-	if ((rc=selector(&l,old)) || (rc=stage(&l,engine,&products,&temporary,error))) goto done;
-	stage_ready=1;
+	if ((rc=selector(&l,old))) goto done;
 	if (!same_root(&l,root)) { rc=6; goto done; }
 	if (exists(l.generations,products.id)==0) {
-		if (hook("rename-generation") || renameat(l.engine,temporary,l.generations,products.id)) { rc=3; goto done; }
+		if ((rc=stage(&l,engine,runtime,&products,&temporary,error))) goto done;
+		stage_ready=1;
+		if (!stage_ready || hook("rename-generation") || renameat(l.engine,temporary,l.generations,products.id)) { rc=3; goto done; }
 		stage_ready=0;
 	} else {
 		struct jf_generation existing={0}; int directory_fd=directory(l.generations,products.id,0); existing.directory=-1;
@@ -606,7 +665,7 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 	/* Staging/exporter work may take time. Recheck the complete original
 	 * inventory immediately before preparing any input publication. */
 	jf_snapshot_free(&recheck);
-	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,&before,&recheck,error)) ||
+	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&before,&recheck,error)) ||
 		(rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) goto source_error;
 	if (memcmp(fingerprint,again,32)) { rc=6; goto done; }
 	{
@@ -640,17 +699,17 @@ done:
 	if (fd>=0) close(fd);
 	for (i=0;i<4;i++) { free(paths[i]); jf_bytes_free(&original[i]); jf_bytes_free(&output[i]); }
 	jf_bytes_free(&input); jf_policy_free(imported); jf_snapshot_free(&before); jf_snapshot_free(&after); jf_snapshot_free(&recheck);
-	jf_products_free(&products); free(temporary); free(engine); location_close(&l); return rc;
+	jf_products_free(&products); free(temporary); free(engine); free(runtime); location_close(&l); return rc;
 }
 
 int jf_compile(const char *root,const char *accounts,const char *profile,const char *compiler,int check,
 	struct jf_compile_result *result,struct jf_error *error,char **error_path)
 {
 	struct location l={-1,-1,-1,-1}; struct jf_generation previous={0}; struct jf_snapshot prior={0};
-	char *cache_path=join(root,"cache/filter-engine"),old[65]; int rc,attempt;
+	char *runtime=runtime_directory(compiler),*cache_path=join(root,"cache/filter-engine"),old[65]; int rc,attempt;
 	memset(result,0,sizeof *result); *error_path=NULL; previous.directory=-1;
 	if (error) memset(error,0,sizeof *error);
-	if (!cache_path) { rc=3; goto final; }
+	if (!cache_path || (rc=run_sieve(runtime,-1,"identity",error))) { rc=3; goto final; }
 	rc=locate(root,!check,&l);
 	if (rc && !(check && rc==5)) goto final;
 	if (!rc) {
@@ -674,7 +733,7 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 		if (l.engine>=0 && (rc=lock(&l,0))) goto iteration;
 		if (l.engine>=0 && !same_root(&l,root)) { rc=6; retry=1; goto iteration; }
 		if (l.engine>=0 && unfinished(&l)) { rc=5; goto iteration; }
-		rc=jf_snapshot_collect(root,accounts,profile,compiler,&prior,&snapshot,error);
+		rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&prior,&snapshot,error);
 		if (!rc) collected=1;
 		if (rc==6) retry=1;
 		if (l.engine>=0) unlock(&l);
@@ -686,7 +745,7 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 			struct jf_generation warm={0}; warm.directory=-1;
 			int repair=0;
 			if ((rc=lock(&l,0))) goto iteration;
-			rc=jf_snapshot_collect(root,accounts,profile,compiler,&snapshot,&recheck,error);
+			rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&snapshot,&recheck,error);
 			if (!rc) rechecked=1;
 			if (!rc) rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again);
 			if (!rc && memcmp(again,fingerprint,32)) { rc=6; retry=1; }
@@ -711,24 +770,26 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 			(rc=jf_products_build(snapshot.policy,&snapshot.profile,snapshot.dependencies,snapshot.dependency_count,&products,error))) goto iteration;
 		if (check) {
 			if (l.engine>=0 && (rc=lock(&l,0))) goto iteration;
-			rc=jf_snapshot_collect(root,accounts,profile,compiler,&snapshot,&recheck,error);
+			rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&snapshot,&recheck,error);
 			if (!rc) rechecked=1;
 			if (!rc) rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again);
 			if (!rc && memcmp(again,fingerprint,32)) { rc=6; retry=1; }
 			if (!rc) strcpy(result->id,products.id);
 			goto iteration;
 		}
-		if ((rc=stage(&l,cache_path,&products,&temporary,error))) goto iteration;
-		stage_ready=1;
+		if (!exists(l.generations,products.id)) {
+			if ((rc=stage(&l,cache_path,runtime,&products,&temporary,error))) goto iteration;
+			stage_ready=1;
+		}
 		if ((rc=lock(&l,1)) || (rc=recover(&l))) goto iteration;
 		if (!same_root(&l,root)) { rc=6; retry=1; goto iteration; }
-		rc=jf_snapshot_collect(root,accounts,profile,compiler,&snapshot,&recheck,error);
+		rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&snapshot,&recheck,error);
 		if (!rc) rechecked=1;
 		if (rc || (rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) { if (recheck.changed) retry=1; goto iteration; }
 		if (memcmp(fingerprint,again,32)) { rc=6; retry=1; goto iteration; }
 		if ((rc=selector(&l,old))) goto iteration;
 		if (exists(l.generations,products.id)==0) {
-			if (hook("rename-generation") || renameat(l.engine,temporary,l.generations,products.id) || syncfd(l.generations,"fsync-generations")) { rc=3; goto iteration; }
+			if (!stage_ready || hook("rename-generation") || renameat(l.engine,temporary,l.generations,products.id) || syncfd(l.generations,"fsync-generations")) { rc=3; goto iteration; }
 			stage_ready=0;
 		} else {
 			struct jf_generation existing={0}; int fd=directory(l.generations,products.id,0); existing.directory=-1;
@@ -782,6 +843,6 @@ done:
 	location_close(&l);
 final:
 	if (rc && error && !error->code) jf_product_error(error,rc==6 ? "E_BUSY_OR_CHANGED" : rc==5 ? "E_GENERATION" : "E_IO",0,"native generation unavailable or publication failed");
-	jf_generation_close(&previous); jf_snapshot_free(&prior); free(cache_path);
+	jf_generation_close(&previous); jf_snapshot_free(&prior); free(cache_path); free(runtime);
 	return rc;
 }

@@ -15,6 +15,7 @@ manifest = json.loads((source / 'sources.json').read_text())
 expected = {
     'AUTHORS', 'COPYING', 'COPYING.LGPL',
     'src/sieve-tools/sievec.c', 'src/sieve-tools/sieve-test.c',
+    'src/sieve-tools/sieve-filter.c', 'src/sieve-tools/sieve-dump.c',
     'src/lib-sieve-tool/sieve-tool.c', 'src/lib-sieve-tool/sieve-tool.h',
     'src/lib-sieve/util/mail-raw.h',
 }

@@ -168,6 +168,33 @@ if(JARO_BUILD_TEST_DRIVERS)
 endif()
 
 set(JARO_RUNTIME_DIR "${CMAKE_INSTALL_DATADIR}/jaromail")
+set(_sieve_prefix "")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT JARO_STATIC AND NOT CMAKE_CROSSCOMPILING)
+  set(_sieve_prefix "$ENV{SIEVE_DEPS_PREFIX}")
+endif()
+set(JARO_SIEVE_DEPS_PREFIX "${_sieve_prefix}" CACHE PATH "Matched development prefix for the native Linux Sieve runtime")
+if(JARO_SIEVE_DEPS_PREFIX)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR JARO_STATIC OR CMAKE_CROSSCOMPILING)
+    message(FATAL_ERROR "The Sieve runtime requires a target-native Linux shared-library build")
+  endif()
+  set(_sieve_output "${CMAKE_BINARY_DIR}/sieve")
+  add_custom_target(sieve-runtime ALL
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/build/sieve-tools.py" --package-runtime
+      --compiler "${CMAKE_C_COMPILER}" --deps-prefix "${JARO_SIEVE_DEPS_PREFIX}" --output "${_sieve_output}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "${_sieve_output}/current/runtime"
+      "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/jaro-sieve-runtime"
+    USES_TERMINAL VERBATIM)
+  add_dependencies(jaro-filter-compile sieve-runtime)
+  if(TARGET jaro-filter-compile-test)
+    add_dependencies(jaro-filter-compile-test sieve-runtime)
+  endif()
+  install(DIRECTORY "${_sieve_output}/current/runtime/" DESTINATION "${JARO_RUNTIME_DIR}/sieve"
+    USE_SOURCE_PERMISSIONS COMPONENT sieve)
+  install(FILES vendor/pigeonhole/upstream/AUTHORS vendor/pigeonhole/upstream/COPYING
+    vendor/pigeonhole/upstream/COPYING.LGPL DESTINATION "${JARO_RUNTIME_DIR}/licenses/pigeonhole" COMPONENT sieve)
+  install(DIRECTORY vendor/dovecot/licenses/ DESTINATION "${JARO_RUNTIME_DIR}/licenses/dovecot" COMPONENT sieve)
+endif()
 add_subdirectory(cmake/abook)
 file(RELATIVE_PATH JARO_BIN_TO_SHARE "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}" "${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}")
 configure_file(cmake/jaro.in generated/jaro @ONLY)
@@ -191,6 +218,9 @@ add_custom_target(install-system
     -P "${PROJECT_SOURCE_DIR}/cmake/InstallSystem.cmake"
   DEPENDS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-filter-compile jaro-filter-legacy jaro-filter abook
   USES_TERMINAL VERBATIM)
+if(TARGET sieve-runtime)
+  add_dependencies(install-system sieve-runtime)
+endif()
 
 find_program(ZSH_EXECUTABLE zsh)
 if(ZSH_EXECUTABLE)

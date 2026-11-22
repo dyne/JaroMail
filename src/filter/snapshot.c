@@ -395,7 +395,7 @@ done:
 }
 
 static int collect(const char *root, const char *accounts_arg, const char *profile_arg,
-	const char *compiler, const struct jf_snapshot *prior, const struct jf_input_override *overrides,
+	const char *compiler, const char *runtime, const struct jf_snapshot *prior, const struct jf_input_override *overrides,
 	size_t override_count, struct jf_snapshot *out, struct jf_error *error)
 {
 	struct jf_snapshot s={0};
@@ -424,6 +424,11 @@ static int collect(const char *root, const char *accounts_arg, const char *profi
 	/* Executable bytes, not version text or mtime, bind compiler identity. */
 	if (!compiler || input(&s,"input.compiler",compiler,1,&execbytes)) goto io;
 	jf_bytes_free(&execbytes);
+	if (runtime) {
+		path=join(runtime,"SHA256SUMS");
+		if (!path || input(&s,"input.sieve-runtime",path,1,&bytes)) goto io;
+		jf_bytes_free(&bytes); free(path); path=NULL;
+	}
 	path=join(root,"Filters.txt"); if (!path) goto memory;
 	if (input(&s,"input.filters",path,1,&bytes)) goto io;
 	if (source(&s,JF_FILTERS,"Filters.txt",path,&bytes)) goto memory;
@@ -506,16 +511,16 @@ done:
 }
 
 int jf_snapshot_collect(const char *root, const char *accounts, const char *profile,
-	const char *compiler, const struct jf_snapshot *prior, struct jf_snapshot *out, struct jf_error *error)
+	const char *compiler, const char *runtime, const struct jf_snapshot *prior, struct jf_snapshot *out, struct jf_error *error)
 {
-	return collect(root,accounts,profile,compiler,prior,NULL,0,out,error);
+	return collect(root,accounts,profile,compiler,runtime,prior,NULL,0,out,error);
 }
 
 int jf_snapshot_overlay(const char *root, const char *accounts, const char *profile,
-	const char *compiler, const struct jf_input_override *overrides, size_t count,
+	const char *compiler, const char *runtime, const struct jf_input_override *overrides, size_t count,
 	struct jf_snapshot *out, struct jf_error *error)
 {
-	return collect(root,accounts,profile,compiler,NULL,overrides,count,out,error);
+	return collect(root,accounts,profile,compiler,runtime,NULL,overrides,count,out,error);
 }
 
 int jf_snapshot_parse(struct jf_snapshot *s, struct jf_error *error)
@@ -529,6 +534,6 @@ int jf_snapshot_parse(struct jf_snapshot *s, struct jf_error *error)
 int jf_snapshot_read(const char *root, const char *accounts, const char *profile,
 	const char *compiler, const struct jf_snapshot *prior, struct jf_snapshot *out, struct jf_error *error)
 {
-	int rc=jf_snapshot_collect(root,accounts,profile,compiler,prior,out,error);
+	int rc=jf_snapshot_collect(root,accounts,profile,compiler,NULL,prior,out,error);
 	return rc ? rc : jf_snapshot_parse(out,error);
 }
