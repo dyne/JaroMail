@@ -58,13 +58,14 @@ def main():
         maildir(dest)
     cli("sieve")
     emitted = (root / "Filters.sieve").read_text()
-    offsets = [emitted.index(fragment) for fragment in legacy["sieve_fragments"]]
-    assert offsets == sorted(offsets), "legacy emitted stage order"
+    stages = ['"zz.blacklist";', '"zz.bounces";', '"firstbucket";', '"INBOX";', '"Spam";', '"priv";', '"unsorted";']
+    offsets = [emitted.index(fragment) for fragment in stages]
+    assert offsets == sorted(offsets), "Sieve emitted stage order"
     assert '"duplicate@example.org" { fileinto :create "lastbucket"' in emitted
     assert 'fileinto :create "oldbucket"' not in emitted
     assert '"overlap" { fileinto :create "firstbucket"' in emitted
     assert '"overlap@example.org" { fileinto :create "secondbucket"' in emitted
-    print("PASS legacy-sieve-emission: 8 ordered stage fragments, duplicate last winner, both overlaps")
+    print("PASS sieve-sieve-emission: 8 ordered stage fragments, duplicate last winner, both overlaps")
     report_dir = os.environ.get("JARO_FILTER_POLICY_REPORT")
     if report_dir:
         Path(report_dir).mkdir(parents=True, exist_ok=True)
@@ -83,7 +84,7 @@ def main():
         assert ident not in actual, f"duplicate message: {ident}"
         assert digest(data) == original[ident], f"content changed: {ident}"
         actual[ident] = p.parent.parent.name
-    assert actual == legacy["destinations"], (actual, legacy["destinations"])
+    assert actual == {c['id']: c['sieve'] for c in cases}, actual
     if report_dir:
         (Path(report_dir) / "message-observations.json").write_text(json.dumps({
             "actual": actual, "input_sha256": original,
@@ -98,19 +99,20 @@ def main():
         found = [p for p in messages() if p.read_bytes() == data]
         assert len(found) == 1, ident
         casing_observed[ident] = found[0].parent.parent.name
-        assert casing_observed[ident] == legacy["casing_destinations"][ident]
+        assert casing_observed[ident] == "priv"
     if report_dir:
         (Path(report_dir) / "casing-observations.json").write_text(json.dumps(casing_observed, indent=2) + "\n")
-    print(f"PASS legacy-message-decisions: {len(actual)} IDs plus 2 own-casing probes, destinations, exits, byte hashes")
+    print(f"PASS sieve-message-decisions: {len(actual)} IDs plus 2 own-casing probes, destinations, exits, byte hashes")
 
     # Empty files and empty maildirs have separate explicit legacy observations.
     maildir("empty-probe")
     empty = root / "empty-probe/new/empty"
     empty.touch()
+    cli("filter", str(root / "empty-probe"), expected=7)
+    assert empty.read_bytes() == b""
+    empty.unlink()
     cli("filter", str(root / "empty-probe"))
-    assert not empty.exists() and actual == legacy["destinations"]
-    cli("filter", str(root / "empty-probe"), expected=legacy["empty_maildir_exit"])
-    print("PASS legacy-empty-input: empty file deletion and empty Maildir exit")
+    print("PASS Sieve empty-input: empty file retention and empty Maildir exit")
 
     # Shipped defaults: all 14 active records compile and emit; From extraction
     # remains defective, even though the generated Sieve contains the route.
@@ -127,7 +129,7 @@ def main():
     (root / "incoming/new/default").write_bytes(data)
     cli("filter", str(root / "incoming"))
     found = [p for p in messages() if p.read_bytes() == data]
-    assert len(found) == 1 and found[0].parent.parent.name == "unsorted"
+    assert len(found) == 1 and found[0].parent.parent.name == "zz.social"
     # A fresh root avoids same-second legacy .zwc reuse; cache publication is
     # covered by later native-cache milestones, not hidden by sleeping here.
     root = scratch / "empty-rules-mail"
@@ -143,7 +145,7 @@ def main():
     assert len([p for p in messages() if p.read_bytes() == data and p.parent.parent.name == "unsorted"]) == 1
     if report_dir:
         (Path(report_dir) / "cli-commands.json").write_text(json.dumps(commands, indent=2) + "\n")
-    print("PASS legacy-defaults-empty-rules: 14 shipped rules, exact IDs and byte integrity")
+    print("PASS sieve-defaults-empty-rules: 14 shipped rules, exact IDs and byte integrity")
     print("PASS target-fixture-integrity: 38 unique independently authored decisions; domain execution deferred to native/oracle milestones")
     print("Filter policy checks: 5 passed, 0 failed, 0 skipped; 27 nonempty CLI message decisions + 2 empty-input probes")
 

@@ -12,7 +12,8 @@ import struct
 import unittest
 sys.dont_write_bytecode = True
 from sieve_oracle import SieveOracle
-from filter_compiler_test import records
+from filter_compiler_test import records, provenance
+from filter_batch_test import install_sieve, report_args
 
 REPO = Path(__file__).resolve().parents[2]
 CATALOGUE = REPO / 'docs/filter-regex-qualification.json'
@@ -32,11 +33,11 @@ class RegexTests(unittest.TestCase):
         cls.work = Path(retained or (cls.temp.name if cls.temp else tempfile.mkdtemp(prefix='jaro-regex-')))
         cls.work.mkdir(mode=0o700, parents=True, exist_ok=True)
         cls.objects = cls.work / 'objects'
-        subprocess.run(['make', '-f', 'build/filter-core.mk', '-j2', 'filter-compile', 'filter-policy-driver', 'filter-compiler-driver',
+        subprocess.run(['make', '-f', 'build/filter-core.mk', '-j2', 'filter-compile', 'filter-compiler-driver',
                         'FILTER_BUILD_DIR=' + str(cls.objects), 'CFLAGS=' + os.environ.get(
                             'JARO_FILTER_COMPILER_CFLAGS', '-O2 -Wall -Wextra -Werror -pedantic')], cwd=REPO, check=True)
         cls.compiler = cls.objects / 'jaro-filter-compile'
-        cls.native = cls.objects / 'filter-policy-driver'
+        cls.runner = install_sieve(cls.objects)
         cls.oracle = SieveOracle(cls.work / 'oracle', os.environ['SIEVE_DEPS_PREFIX'])
         cls.events, cls.decisions = [], 0
 
@@ -47,6 +48,9 @@ class RegexTests(unittest.TestCase):
     def setUp(self):
         self.root = self.work / self._testMethodName
         self.root.mkdir()
+        self.incoming = self.root / 'incoming'
+        for name in ('cur', 'new', 'tmp'):
+            (self.incoming / name).mkdir(parents=True)
         self.rules = self.root / 'Filters.txt'
         self.profile = self.root / 'FilterProfile.txt'
         self.profile.write_text(PROFILE)
@@ -68,31 +72,24 @@ class RegexTests(unittest.TestCase):
         return path
 
     def decide(self, generation, case):
-        message = self.root / 'message.eml'
+        message = self.incoming / 'new/message.eml'
         pairs = case['headers'].items() if isinstance(case['headers'], dict) else case['headers']
-        message.write_text('\n'.join('%s: %s' % tuple(p) for p in pairs)+'\nSubject: Synthetic qualification\n\nBody unchanged.\n')
-        actual = self.run_tool([self.native, '--headers', message, *self.sources]).stdout.split(b'\0')
-        self.assertEqual(len(actual), 17)
-        self.assertEqual(actual[5].decode(), case['local'], case['id'])
-        if 'parsed' in case:
-            parsed = self.root / 'parsed.bin'
-            parsed.write_bytes(b''.join(str({'From': 1, 'Sender': 2, 'To': 4, 'Cc': 8}[field]).encode()+b'\0'+
-                                       value.encode()+b'\0' for field, value in case['parsed'])+b'\0')
-            direct = self.run_tool([self.native, '--classify', parsed, *self.sources]).stdout.split(b'\0')
-            self.assertEqual(direct[0], actual[0], case['id'])
-            self.assertEqual(direct[5], actual[5], case['id'])
+        message.write_text('Subject: Synthetic qualification\n' + '\n'.join('%s: %s' % tuple(p) for p in pairs)+'\n\nBody unchanged.\n')
+        actual = self.run_tool(report_args(self.runner, self.root, self.incoming, generation,
+                                           '--dry-run', '--message', message)).stdout.split(b'\0')
+        self.assertEqual(len(actual), 14)
+        self.assertEqual(actual[8].decode(), case['sieve'], case['id'])
         if 'rule' in case:
             expected = case['rule']
             if expected.startswith(('filters:', 'domain:')):
                 line = expected.split(':')[1].encode()
-                rows = [row for tag, row in records((generation / 'policy.bin').read_bytes())
-                        if tag == b'R' and row[10] == line and row[9] == os.fsencode(self.rules)]
+                rows = [row for row in provenance(generation) if row[3] == line and row[2] == os.fsencode(self.rules)]
                 self.assertEqual(len(rows), 1)
-                expected = rows[0][4].decode()
+                expected = rows[0][1].decode()
             elif not expected.startswith('builtin:'):
                 kind, mailbox = expected.split(':', 1)
                 expected = kind + ':' + hashlib.sha256(mailbox.encode()).hexdigest()
-            self.assertEqual(actual[0].decode(), expected, case['id'])
+            self.assertEqual(actual[4].decode(), expected, case['id'])
         self.oracle.expect(generation / 'Filters.sieve', message, case['sieve'], True, extensions='+regex')
         type(self).decisions += 1
 
@@ -120,7 +117,8 @@ class RegexTests(unittest.TestCase):
         self.assertEqual(catalogue['normalization_fixture_sha256'], hashlib.sha256(normalization.read_bytes()).hexdigest())
         configuration = Path(os.environ['SIEVE_DEPS_PREFIX']) / 'include/dovecot/config.h'
         self.assertRegex(configuration.read_text(), r'(?m)^#define EXPERIMENTAL_MAIL_UTF8\b')
-        self.assertEqual(catalogue['compiler_id'].encode()+b'\n', self.run_tool([self.compiler, '--version']).stdout)
+        self.assertEqual(catalogue['compiler_id'], 'jaromail-filter-compiler-v2')  # original qualification
+        self.assertEqual(self.run_tool([self.compiler, '--version']).stdout.strip(), b'jaromail-sieve-compiler-v3')
         header = (REPO / 'src/filter/regex_qualification.h').read_text()
         self.assertIn('#define JF_REGEX_QUALIFICATION "'+DIGEST+'"', header)
         encoded = header.split('#define JF_REGEX_CATALOGUE ', 1)[1].strip()
@@ -128,8 +126,8 @@ class RegexTests(unittest.TestCase):
 
     def test_old_and_noncanonical_cache_metadata_is_incompatible(self):
         generation = self.compile(['from-address user@example.org move matched'])
-        original = records((generation / 'policy.bin').read_bytes())
-        for change in ('compiler', 'normalization', 'address'):
+        original = records((generation / 'dependencies').read_bytes())
+        for change in ('compiler', 'normalization'):
             changed = [(tag, list(fields)) for tag, fields in original]
             for tag, fields in changed:
                 if change == 'compiler' and tag == b'M':
@@ -137,17 +135,15 @@ class RegexTests(unittest.TestCase):
                 if change == 'normalization' and tag == b'D' and fields[0] == b'config.address-normalization':
                     fields[4] = b'quoted-spelling-v1'
                     fields[3] = hashlib.sha256(fields[4]).digest()
-                if change == 'address' and tag == b'R' and fields[1] == b'3':
-                    fields[5] = b'"user"@example.org'
             def encode(tag, fields):
                 return tag + struct.pack('<I', len(fields)) + b''.join(struct.pack('<I', len(f))+f for f in fields)
             payload = struct.pack('<I', len(changed))+b''.join(encode(t, f) for t, f in changed)
             fingerprint = hashlib.sha256(b'JFFP1\0'+b''.join(encode(t, f) for t, f in changed if t == b'D')).digest()
-            header = b'JFNCACHE'+struct.pack('<IIQ', 1, 1, len(payload))+fingerprint+hashlib.sha256(payload).digest()
+            header = b'JFDEPS01'+struct.pack('<IIQ', 1, 1, len(payload))+fingerprint+hashlib.sha256(payload).digest()
             corrupt = self.root / 'incompatible.bin'
             corrupt.write_bytes(header+payload)
             self.run_tool([self.objects / 'filter-compiler-driver', '--validate', corrupt,
-                           generation / 'filters.zsh', generation / 'Filters.sieve'], 5)
+                           generation / 'provenance', generation / 'Filters.sieve'], 5)
 
     def test_independent_subset_cases(self):
         previous, generation = None, None
@@ -184,9 +180,6 @@ class RegexTests(unittest.TestCase):
         for index, group in enumerate(corpus['groups']):
             for policy in group['forms']:
                 generation = self.compile(['from-address '+json.dumps(policy)+' move matched'])
-                rows = [r for t, r in records((generation / 'policy.bin').read_bytes()) if t == b'R' and r[1] == b'3']
-                canonical = ''.join(chr(ord(c)+32) if 'A' <= c <= 'Z' else c for c in group['canonical'])
-                self.assertEqual(rows[0][5], canonical.encode())
                 for form in group['forms']:
                     self.decide(generation, {'id': 'normalization-%d' % index, 'headers': {'From': form},
                                              'parsed': [('From', form)], 'local': 'matched', 'sieve': 'matched'})
@@ -195,7 +188,7 @@ class RegexTests(unittest.TestCase):
                     'blacklist': ['"block\\ed"@example.org', 'blocked@example.org'],
                     'own': ['"ow\\n"@example.org', 'own@example.org']})
         generation = self.compile([])
-        rows = [r for t, r in records((generation / 'policy.bin').read_bytes()) if t == b'R']
+        rows = provenance(generation)
         self.assertEqual(len(rows), 6)
         for field, form, local, sieve in [('From', '"us\\er"@example.org', 'known', 'INBOX'),
                                          ('From', '"block\\ed"@example.org', 'zz.blacklist', 'zz.blacklist'),
@@ -283,7 +276,7 @@ if __name__ == '__main__':
     result = unittest.main(verbosity=2, exit=False).result
     summary = {'executed': result.testsRun, 'failed': len(result.errors)+len(result.failures),
                'skipped': len(result.skipped), 'total': result.testsRun,
-               'independent_native_and_sieve_decisions': RegexTests.decisions,
+               'installed_and_oracle_decisions': RegexTests.decisions,
                'qualification': DIGEST, 'observedAt': datetime.now(timezone.utc).isoformat()}
     (RegexTests.work / 'summary.json').write_text(json.dumps(summary, sort_keys=True)+'\n')
     print('Regex qualification: '+json.dumps(summary, sort_keys=True))

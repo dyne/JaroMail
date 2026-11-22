@@ -249,33 +249,24 @@ Current policy for this branch:
 - default maintenance and regression checks focus on the core CLI path:
   `init`, `update`, `filter`, `search`, `fetch`, `send`, and addressbook flows.
 
-`JARO_FILTER_ENGINE=legacy|native` selects compilation and batch filtering.
-Unset selects native; an empty or unknown value fails. Set
-`JARO_FILTER_ENGINE=legacy` for explicit rollback with compatible legacy inputs.
-`jaro update`, `jaro sieve`, `jaro filter` and `jaro fetch` propagate native
-errors without fallback. The normal build/install includes both helpers and the legacy export
-lock bridge; neither needs Dovecot. Custom `JAROMAILDIR`, `JAROWORKDIR` and
-`JAROACCOUNT` paths are passed explicitly. Sieve generation never deploys rules
-to a server. Indexing remains in the existing update/fetch workflows.
+Local filtering on Linux requires a build configured with the signed Dovecot and
+Pigeonhole dependency prefix. The private runtime and its shared libraries are
+installed together. See [Sieve runtime prerequisites](docs/sieve-tools.md).
 
-Native compilation needs no `FilterProfile.txt`: built-in defaults support typed
-address/domain rules and the independently qualified legacy `from`/`to` ERE
-subset. Sieve declares `fileinto`, `mailbox` for automatic folder creation, and
-`regex` only when regex rules are present. For example,
-`from mute@metamute move pol.newsletters` keeps partial-address matching;
-`save` remains an alias of `move`, and no wildcard suffix is needed. Explicit legacy
-also rejects typed/domain records rather than discarding them. Native batch
-filtering retains failed messages and reports partial outcomes. Native import
-accepts only the bounded Jaromail-generated Sieve grammar. Existing roots need
-explicit compatible policy inputs; filtering commands do not create defaults.
-Fresh `jaro init` under unset/explicit native installs `Filters.native.txt`,
-with no active explicit routes and typed examples in comments; builtins remain
-active. Explicit legacy initialization retains the original 14 ERE defaults.
-Initialization never translates or replaces an existing policy. Shipped legacy
-defaults compile without creating a profile file or rewriting their patterns.
-Use `jaro sieve` to publish, then `jaro -n filter` or `jaro filter --explain`
-to inspect the current generation without moving mail. See the
-[migration guide](docs/filter-compatibility.md#migration-and-installed-workflow-qualification)
+Pigeonhole executes local filters. The default and the `sieve`, `native` and
+`legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
+Run `jaro update` to migrate an older generation from your existing
+`Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
+report the required update before touching messages or starting transport.
+An unsuccessful migration preserves the last coherent policy and all mail.
+Historical messages stay in `known` and `zz.spam`. New known and spam deliveries
+use `INBOX` and `Spam` by default. Custom Sieve mailbox mappings apply locally
+and to the exported script. Existing files in the destination Maildir are preserved.
+
+Fresh `jaro init` installs commented typed examples and active builtins. Existing
+`Filters.txt` edits and supported legacy EREs survive updates. Preview a selected
+generation with `jaro -n filter` or `jaro filter --explain [MAILDIR|MESSAGE]`.
+See the [migration guide](docs/filter-compatibility.md#migration-and-installed-workflow-qualification)
 and [interface contract](docs/filter-interfaces.md).
 
 An optional `FilterProfile.txt` can customize mailbox mappings and namespaces or

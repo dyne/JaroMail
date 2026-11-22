@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
 set -euo pipefail
-export JARO_FILTER_ENGINE=legacy # independent retained legacy observations
+export JARO_FILTER_ENGINE=legacy # historical selector now uses the installed Sieve engine
 
 script_dir="${0:A:h}"
 source "${script_dir}/lib/test_helpers.zsh"
@@ -50,8 +50,6 @@ deliver_msg() {
     "Date: Thu, 01 Jan 1970 00:00:00 +0000" >/dev/null
 }
 
-# Retain independently observed legacy behavior. The native probes below must
-# assert the intended destinations for every stage instead of this fallthrough.
 deliver_msg "Black Person <black@example.org>" "reader@example.org" "blacklist"
 deliver_msg "Mailman <mailman-bounce@example.org>" "reader@example.org" "bounce"
 deliver_msg "From Rule <fromrule@example.org>" "reader@example.org" "from-rule"
@@ -67,10 +65,11 @@ count_new() {
   find "${1}" -maxdepth 2 -type f | wc -l | tr -d ' '
 }
 
-assert_equal "$(count_new "${mail_root}/tobucket")" "1" "to-rule routed"
-assert_equal "$(count_new "${mail_root}/unsorted")" "6" "fallback to unsorted"
-assert_contains "${filter_log}" "Filtering maildir: ${mail_root}/incoming (7 mails)" "filter summary line"
-assert_contains "${filter_log}" "-> tobucket" "to-rule progress line"
+for folder in zz.blacklist zz.bounces frombucket tobucket INBOX; do
+  assert_equal "$(count_new "${mail_root}/$folder")" "1" "$folder routed"
+done
+assert_equal "$(count_new "${mail_root}/unsorted")" "2" "fallback to unsorted"
+assert_contains "${filter_log}" 'tobucket' 'to-rule progress line'
 
 # Run actual native apply on fresh named messages with the same real books.
 # A qualified profile preserves these legacy ERE rule bytes without weakening
@@ -103,9 +102,9 @@ native_probe bounce zz.bounces 'From: unrelated@example.org' 'Sender: list-mailm
 native_probe from-rule frombucket 'From: From Rule <fromrule@example.org>'
 native_probe sender-rule frombucket 'From: unrelated@example.org' 'Sender: fromrule@example.org'
 native_probe to-rule tobucket 'To: torule@example.org'
-native_probe whitelist known 'From: White Person <white@example.org>'
+native_probe whitelist INBOX 'From: White Person <white@example.org>'
 native_probe private priv 'Cc: NATIVE-OWN@EXAMPLE.ORG'
-native_probe spam zz.spam 'X-Spam-Flag: yes'
+native_probe spam Spam 'X-Spam-Flag: yes'
 native_probe fallback unsorted 'From: unknown@example.org'
 JARO_FILTER_ENGINE=native jaro_source filter "$mail_root/incoming" >/dev/null
 for id in "${native_ids[@]}"; do

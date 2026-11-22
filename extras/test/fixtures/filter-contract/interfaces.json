@@ -135,40 +135,38 @@
       "expected_exit": 2
     },
     {
-      "id": "empty-path-argument",
+      "id": "missing-source",
       "argv": [
-        "jaro-filter",
-        "--root",
+        "jaro-sieve-filter",
+        "--to",
         "/mail",
-        "--",
-        ""
+        "policy.sieve"
       ],
       "expected_exit": 2
     },
     {
-      "id": "mixed-selection",
+      "id": "missing-destination",
       "argv": [
-        "jaro-filter",
-        "--root",
-        "/mail",
-        "--maildir",
+        "jaro-sieve-filter",
+        "--from",
         "/mail/incoming",
-        "--files0-from",
-        "-"
+        "policy.sieve"
       ],
       "expected_exit": 2
     },
     {
-      "id": "leading-dash-path",
+      "id": "leading-dash-script",
       "argv": [
-        "jaro-filter",
-        "--root",
+        "jaro-sieve-filter",
+        "--from",
+        "/mail/incoming",
+        "--to",
         "/mail",
         "--",
-        "-message"
+        "-script"
       ],
       "expected_exit": 0,
-      "note": "Assumes valid selected generation and message; invocation grammar only"
+      "note": "Assumes valid Maildirs and readable Sieve source"
     },
     {
       "id": "invalid-rule-action",
@@ -210,21 +208,21 @@
   "cache_header_examples": [
     {
       "id": "v1-header-only",
-      "magic": "JFNCACHE",
+      "magic": "JFDEPS01",
       "cache_version": 1,
       "policy_version": 1,
       "compatible_header": true
     },
     {
       "id": "old-version",
-      "magic": "JFNCACHE",
+      "magic": "JFDEPS01",
       "cache_version": 0,
       "policy_version": 1,
       "compatible_header": false
     },
     {
       "id": "future-policy",
-      "magic": "JFNCACHE",
+      "magic": "JFDEPS01",
       "cache_version": 1,
       "policy_version": 2,
       "compatible_header": false

@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
 set -euo pipefail
-export JARO_FILTER_ENGINE=legacy # native import belongs to its later milestone
+export JARO_FILTER_ENGINE=legacy # compatibility selector
 
 script_dir="${0:A:h}"
 source "${script_dir}/lib/test_helpers.zsh"
@@ -71,20 +71,20 @@ if header :contains [ "To","Cc" ]  [
 fileinto :create "unsorted";
 EOF
 
-jaro_source sieve-import "${sieve_file}" >/dev/null
-jaro_source sieve-import "${sieve_file}" >/dev/null
+jaro_source sieve-import --legacy-generated "${sieve_file}" >/dev/null
+jaro_source sieve-import --legacy-generated "${sieve_file}" >/dev/null
 
 filters="$(grep -v '^#' "${mail_root}/Filters.txt" | grep -v '^$' | sort)"
-assert_equal "${filters}" $'from list@example.org move lists\nto team@example.org move team' "import filters"
+assert_equal "${filters}" $'from "list@example.org" move "lists"\nto "team@example.org" move "team"' "import filters"
 
 alias_lines="$(grep -v '^#' "${mail_root}/Aliases.txt" | grep -v '^$' | sort)"
-assert_equal "${alias_lines}" "alias@example.org" "import aliases"
+assert_equal "${alias_lines}" '"alias@example.org"' "import aliases"
 
 whitelist="$(jaro_source addr 2>/dev/null | sort)"
-assert_equal "${whitelist}" "Known Person <known@example.org>" "import whitelist"
+assert_equal "${whitelist}" "Imported Sieve <known@example.org>" "import whitelist"
 
 blacklist="$(jaro_source -l blacklist addr 2>/dev/null | sort)"
-assert_equal "${blacklist}" "blocked <blocked@example.org>" "import blacklist"
+assert_equal "${blacklist}" "Imported Sieve <blocked@example.org>" "import blacklist"
 
 jaro_source update >/dev/null
 

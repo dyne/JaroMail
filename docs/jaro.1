@@ -33,49 +33,36 @@ baseline when no v6 tag exists.
 .PP
 \f[CR]\-f\f[R] force mode for selected operations.
 .SS Filter engine selection
-\f[CR]JARO_FILTER_ENGINE=legacy|native\f[R] selects compilation and
-filter/fetch dispatch; unset selects native.
-Explicit \f[CR]JARO_FILTER_ENGINE=legacy\f[R] selects rollback.
-Empty/unknown values fail.
-Native \f[CR]update\f[R]/\f[CR]sieve\f[R] invoke the installed compiler
-with explicit mail/account roots and return its failures without
-fallback.
-No profile file is required: built\-in defaults enable fileinto,
-automatic mailbox creation and the qualified legacy ERE subset.
-Regex is declared only when used; partial addresses keep matching
-without wildcard suffixes.
-Unsupported ERE exports fail with a source\-line diagnostic.
-Explicit legacy rejects typed/domain records.
-Sieve generation writes the local export only, without remote
-deployment.
+Pigeonhole executes local filters.
+The default and the \f[CR]sieve\f[R], \f[CR]native\f[R] and
+\f[CR]legacy\f[R] values of \f[CR]JARO_FILTER_ENGINE\f[R] select the
+same installed runtime.
+Run \f[CR]jaro update\f[R] to migrate an older generation from your
+existing \f[CR]Filters.txt\f[R], aliases, accounts and addressbooks.
+Until then, filter and fetch report the required update before touching
+messages or starting transport.
+An unsuccessful migration preserves the last coherent policy and all
+mail.
+Historical messages stay in \f[CR]known\f[R] and \f[CR]zz.spam\f[R].
+New known and spam deliveries use \f[CR]INBOX\f[R] and \f[CR]Spam\f[R]
+by default.
+Custom Sieve mailbox mappings apply locally and to the exported script.
+Existing files in the destination Maildir are preserved.
 .PP
-Native \f[CR]filter [MAILDIR]\f[R] compiles/verifies once and applies
-one pinned batch.
-The default Maildir is \f[CR]$JAROMAILDIR/incoming\f[R].
-Native \f[CR]fetch\f[R] uses the same batch after transport and
-refreshes the index once, even after partial failure; batch errors
-remain nonzero.
-Filter itself does not index.
-Native Sieve import accepts the bounded Jaromail\-generated grammar
-described below.
-.PP
-Fresh \f[CR]init\f[R] under unset/explicit native installs a
-comment\-only typed\-example policy with builtins active.
-Explicit legacy keeps the original 14 ERE defaults.
-Existing policies are never replaced or translated.
-Supported legacy EREs need no profile configuration; patterns outside
-the qualified subset need a deliberate rewrite.
-\f[CR]save\f[R] and \f[CR]move\f[R] are aliases.
-Invalid selectors or missing required templates fail before bootstrap
-configuration writes.
-.PP
-Native \f[CR]filter \-\-explain [MAILDIR]\f[R] and
-\f[CR]\-n filter [MAILDIR]\f[R] classify only, checking the selected
-generation against current policy without publishing.
-Missing/stale generations return 5 and request an explicit
-\f[CR]jaro update\f[R].
-Native \f[CR]\-n fetch\f[R] explains local incoming mail without
-transport or indexing.
+\f[CR]jaro sieve\f[R] publishes the shared local generation and portable
+Sieve export.
+\f[CR]jaro filter [MAILDIR]\f[R] applies it to incoming mail.
+\f[CR]jaro fetch\f[R] applies it after transport and refreshes the index
+once after the batch, including partial failures.
+Filter alone does not index.
+\f[CR]jaro filter \-\-explain [MAILDIR|MESSAGE]\f[R],
+\f[CR]jaro \-n filter\f[R] and \f[CR]jaro \-n fetch\f[R] inspect the
+selected generation without publication, delivery or indexing.
+A missing or stale generation requires \f[CR]jaro update\f[R] before
+preview.
+A fresh \f[CR]jaro init\f[R] installs commented typed examples and
+active builtins.
+Supported legacy EREs work with the default profile.
 .PP
 Native \f[CR]filter \-\-compare FILE [MAILDIR]\f[R] compares retained
 actual final legacy observations against native classification.
@@ -231,12 +218,13 @@ learning/query/completion helpers.
 .PP
 \f[CR]filter\f[R] apply filters to a maildir.
 .PP
-\f[CR]sieve\f[R] regenerate \f[CR]Filters.sieve\f[R] only.
+\f[CR]sieve\f[R] publish the shared filter generation and its portable
+\f[CR]Filters.sieve\f[R] export.
 .PP
 \f[CR]sieve\-import FILE\f[R] import a Jaromail\-generated Sieve file
 into local filter/addressbook files.
-With \f[CR]JARO_FILTER_ENGINE=native\f[R], the bounded token parser
-validates and stages the complete import before publication.
+The bounded token parser validates and stages the complete import before
+publication.
 \f[CR]\-n\f[R] validates without writes;
 \f[CR]\-\-legacy\-generated\f[R] explicitly recovers older generated
 header\-contains scripts with a migration diagnostic.

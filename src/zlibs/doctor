@@ -74,6 +74,9 @@ doctor_helper() {
     # A source checkout keeps built helpers outside src/.
     if [[ ! -x $REPLY && -r "$WORKDIR/../CMakeLists.txt" ]]; then
         REPLY="$WORKDIR/../build/gnu/$1"
+        if [[ $1 == jaro-sieve-filter ]]; then
+            REPLY="$WORKDIR/../build/gnu/jaro-sieve-runtime/filter"
+        fi
     fi
     [[ -f $REPLY && -x $REPLY ]]
 }
@@ -248,7 +251,7 @@ doctor_run() {
         if (( $+commands[$command_name] )); then doctor_check "optional.$command_name" ok "Optional command $command_name is available." ''
         else doctor_check "optional.$command_name" warning "Optional command $command_name is unavailable." ''; fi
     done
-    for command_name in fetchaddr parsedate dotlock gpgewrap abook jaro-filter-compile jaro-filter-legacy jaro-filter jaro-outbox; do
+    for command_name in fetchaddr parsedate dotlock gpgewrap abook jaro-filter-compile jaro-sieve-filter jaro-outbox; do
         if doctor_helper "$command_name"; then doctor_check "helper.$command_name" ok "Native helper $command_name is available." ''
         else doctor_check "helper.$command_name" blocker "Native helper $command_name is missing." 'Build or reinstall Jaromail.'; fi
     done
@@ -273,13 +276,11 @@ doctor_run() {
     doctor_keyring
     if [[ ! -r "$MAILDIRS/Filters.txt" || ! -f "$MAILDIRS/Filters.txt" ]]; then
         doctor_check filters blocker 'Filter policy is missing or unreadable.' 'Run jaro init for a new root; review existing policy before jaro update.'
-    elif [[ ${JARO_FILTER_ENGINE-native} == native ]]; then
+    elif [[ ${JARO_FILTER_ENGINE-sieve} == (native|legacy|sieve) ]]; then
         if [[ -r "$MAILDIRS/cache/filter-engine/current/manifest.json" ]]; then
-            doctor_check filters unknown 'Native generation manifest exists; content validity and freshness were not checked.' 'Run jaro -n filter --explain or jaro update after reviewing policy.'
-        else doctor_check filters warning 'No readable native generation manifest.' 'Run jaro update after reviewing policy.'; fi
-    elif [[ ${JARO_FILTER_ENGINE-native} == legacy ]]; then
-        doctor_check filters unknown 'Legacy policy exists; generated cache validity was not checked.' 'Run jaro update after reviewing policy.'
-    else doctor_check filters blocker 'Invalid filter engine selection (value redacted).' 'Set JARO_FILTER_ENGINE to native or legacy.'; fi
+            doctor_check filters unknown 'Sieve generation manifest exists; content validity and freshness were not checked.' 'Run jaro -n filter --explain or jaro update after reviewing policy.'
+        else doctor_check filters warning 'No readable Sieve generation manifest.' 'Run jaro update after reviewing policy.'; fi
+    else doctor_check filters blocker 'Invalid filter engine selection (value redacted).' 'Set JARO_FILTER_ENGINE to sieve, native or legacy.'; fi
     if [[ -d "$MAILDIRS/.notmuch/xapian" ]]; then
         doctor_check index unknown 'Search index exists; index freshness was not assessed.' 'Run jaro index if an index refresh is needed.'
     else doctor_check index warning 'Search index is absent.' 'Run jaro index after configuring mail.'; fi

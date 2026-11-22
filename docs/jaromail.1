@@ -408,8 +408,7 @@ T{
 T}@T{
 Native \f[CR]fetchaddr\f[R], \f[CR]parsedate\f[R], \f[CR]dotlock\f[R],
 \f[CR]gpgewrap\f[R], \f[CR]abook\f[R], \f[CR]jaro\-filter\-compile\f[R],
-\f[CR]jaro\-filter\-legacy\f[R], \f[CR]jaro\-filter\f[R],
-\f[CR]jaro\-outbox\f[R].
+\f[CR]jaro\-sieve\-filter\f[R], \f[CR]jaro\-outbox\f[R].
 T}
 T{
 \f[CR]mail.root\f[R], \f[CR]maildirs\f[R]
@@ -644,9 +643,9 @@ What goes in there
 T}
 _
 T{
-\f[B]known\f[R]
+\f[B]INBOX\f[R]
 T}@T{
-Mails whose sender is known (Whitelist)
+New mail from whitelisted senders
 T}
 T{
 \f[B]priv\f[R]
@@ -664,9 +663,9 @@ T}@T{
 Mails whose sender is not desired (Blacklist)
 T}
 T{
-\f[B]zz.spam\f[R]
+\f[B]Spam\f[R]
 T}@T{
-Mails that are tagged as spam (server\-side)
+New mail tagged as spam
 T}
 T{
 \f[B]zz.bounces\f[R]
@@ -716,7 +715,7 @@ If you want to add all addresses reached by the mail (From: To: and Cc:
 fields) use the same letter capitalized pressing shift [ \f[B]A\f[R] ].
 .PP
 All addresses selected this way will have the privilege of ending up in
-your \f[B]known/\f[R] folder, plus their name and e\-mail will be
+your \f[B]INBOX/\f[R] folder, plus their name and e\-mail will be
 completed automatically when composing a new email, pressing the
 \f[B]Tab\f[R] key while indicating them among the recipients.
 .SS Blacklist
@@ -2094,7 +2093,7 @@ convert address list to a format (default vcard)
 T}
 .TE
 .SS Filters
-Native is the default engine.
+Pigeonhole executes local filters.
 Fresh \f[CR]jaro init\f[R] installs a policy with commented typed
 examples and no active explicit routes; blacklist, bounce,
 known\-contact, spam, own\-address and unsorted builtins remain active.
@@ -2108,8 +2107,22 @@ Regex is declared only when a rule uses it.
 Partial\-address rules work without adding \f[CR]*\f[R] or
 \f[CR].*\f[R]; \f[CR]save\f[R] and \f[CR]move\f[R] are aliases.
 An optional profile can override capabilities or mailbox mappings.
-\f[CR]JARO_FILTER_ENGINE=legacy\f[R] retains the transition rollback and
-original legacy fresh template.
+Pigeonhole executes local filters.
+The default and the \f[CR]sieve\f[R], \f[CR]native\f[R] and
+\f[CR]legacy\f[R] values of \f[CR]JARO_FILTER_ENGINE\f[R] select the
+same installed runtime.
+Run \f[CR]jaro update\f[R] to migrate an older generation from your
+existing \f[CR]Filters.txt\f[R], aliases, accounts and addressbooks.
+Until then, filter and fetch report the required update before touching
+messages or starting transport.
+An unsuccessful migration preserves the last coherent policy and all
+mail.
+Historical messages stay in \f[CR]known\f[R] and \f[CR]zz.spam\f[R].
+New known and spam deliveries use \f[CR]INBOX\f[R] and \f[CR]Spam\f[R]
+by default.
+Custom Sieve mailbox mappings apply locally and to the exported script.
+Existing files in the destination Maildir are preserved.
+.PP
 See migration and compatibility for domain examples, known corrections,
 compare observations and tested platform limits.
 .PP

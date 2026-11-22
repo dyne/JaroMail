@@ -19,7 +19,10 @@
 #include "sieve-code.h"
 #include "sieve-dump.h"
 #include "sieve-extensions.h"
+#include "sieve-execute.h"
 #include "sieve-generator.h"
+#include "sieve-interpreter.h"
+#include "sieve-result.h"
 #include "sieve-script.h"
 #include "sieve-tool.h"
 
@@ -35,6 +38,13 @@
 const char *jaro_sieve_filename;
 static const char *source_name, *batch_path;
 static volatile sig_atomic_t stopping;
+static FILE *decisions;
+
+struct decision {
+	const char *mailbox, *location;
+	unsigned int index;
+	bool identified;
+};
 
 static void stop_batch(int signum)
 {
@@ -241,9 +251,50 @@ static struct sieve_binary *open_program(struct sieve_instance *svinst,
 	return binary;
 }
 
+/* Inspect the actual result before executing it. Generated programs have one
+ * fileinto per winner; the interpreter supplies both mailbox and source line. */
+static int report_action(struct sieve_binary *binary, const struct sieve_message_data *msg,
+	struct sieve_script_env *env, struct sieve_error_handler *errors, bool preview,
+	struct decision *decision)
+{
+	pool_t pool = pool_alloconly_create("JaroMail Sieve result", 4096);
+	struct sieve_execute_env execution;
+	struct sieve_instance *svinst = sieve_binary_svinst(binary);
+	sieve_execute_init(&execution, svinst, pool, msg, env, SIEVE_EXECUTE_FLAG_NOGLOBAL);
+	struct sieve_result *result = sieve_result_create(svinst, pool, &execution);
+	struct sieve_interpreter *interp = sieve_interpreter_create(binary, NULL, &execution, errors);
+	int ret = SIEVE_EXEC_BIN_CORRUPT;
+	if (interp != NULL) {
+		ret = sieve_interpreter_run(interp, result);
+		sieve_interpreter_free(&interp);
+	}
+	if (ret == SIEVE_EXEC_OK) {
+		struct sieve_result_iterate_context *it = sieve_result_iterate_init(result);
+		const struct sieve_action *action = sieve_result_iterate_next(it, NULL);
+		if (action == NULL || action->def != &act_store || action->context == NULL ||
+		    action->location == NULL || sieve_result_iterate_next(it, NULL) != NULL)
+			ret = SIEVE_EXEC_FAILURE;
+		else {
+			const struct act_store_context *store = action->context;
+			decision->mailbox = t_strdup(store->mailbox);
+			decision->location = t_strdup(action->location);
+		}
+	}
+	if (!preview && ret == SIEVE_EXEC_OK) {
+		struct sieve_result_execution *actions = sieve_result_execution_create(result, pool);
+		ret = sieve_result_execute(actions, ret, TRUE, errors, NULL);
+		sieve_result_execution_destroy(&actions);
+		sieve_execute_finish(&execution, ret);
+	}
+	sieve_result_unref(&result);
+	sieve_execute_deinit(&execution);
+	pool_unref(&pool);
+	return ret;
+}
+
 static int filter_message(struct sieve_binary *binary, struct mail *mail,
 	struct sieve_script_env *env, struct sieve_error_handler *errors,
-	struct ostream *preview)
+	struct ostream *preview, struct decision *decision)
 {
 	struct istream *input;
 	if (mail_get_stream(mail, NULL, NULL, &input) < 0)
@@ -268,7 +319,8 @@ static int filter_message(struct sieve_binary *binary, struct mail *mail,
 	(void)mail_get_message_id(mail, &msg.id);
 	sieve_tool_get_envelope_data(&msg, mail, NULL, NULL, NULL);
 	env->exec_status = &status;
-	int ret = preview == NULL ?
+	int ret = decisions != NULL ? report_action(binary, &msg, env, errors, preview != NULL, decision) :
+		preview == NULL ?
 		sieve_execute(binary, &msg, env, errors, errors, SIEVE_EXECUTE_FLAG_NOGLOBAL) :
 		sieve_test(binary, &msg, env, errors, preview, SIEVE_EXECUTE_FLAG_NOGLOBAL);
 	env->exec_status = NULL;
@@ -354,7 +406,7 @@ static bool check_publications(const char *path)
 
 static int filter_uid(struct mailbox *box, uint32_t uid, struct sieve_binary *binary,
 	struct sieve_script_env *env, struct sieve_error_handler *errors, struct ostream *preview,
-	const ARRAY_TYPE(source_entry) *names)
+	const ARRAY_TYPE(source_entry) *names, struct decision *decision)
 {
 	struct mailbox_transaction_context *t = mailbox_transaction_begin(box, 0, "jaro-sieve-filter message");
 	struct mail *mail = mail_alloc(t, 0, NULL);
@@ -365,12 +417,14 @@ static int filter_uid(struct mailbox *box, uint32_t uid, struct sieve_binary *bi
 	if (mail_set_uid(mail, uid) && mail_get_special(mail, MAIL_FETCH_STORAGE_ID, &id) == 0 &&
 	    str_to_uint(id, &index) == 0 && index < array_count(names)) {
 		const struct source_entry *entry = array_idx(names, index);
+		decision->index = index;
+		decision->identified = TRUE;
 		jaro_sieve_filename = entry->name;
 		path = t_strconcat(batch_path, "/cur/", id, NULL);
 		if (!source_unchanged(path, entry, preview != NULL)) {
 			i_error("Source %s changed before delivery; retained", entry->name);
 		} else {
-			result = filter_message(binary, mail, env, errors, preview);
+			result = filter_message(binary, mail, env, errors, preview, decision);
 			bool saved = result > 0 || array_count(&publications) > 0;
 			if (saved && (!check_publications(path) || !source_unchanged(path, entry, FALSE))) {
 				i_error("Incomplete or changed delivery for %s; inspect both copies", entry->name);
@@ -432,7 +486,14 @@ static int filter_mailbox(struct mailbox *box, struct sieve_binary *binary,
 		if (stopping)
 			break;
 		T_BEGIN {
-			if (filter_uid(box, uid, binary, env, errors, preview, names) < 0)
+			struct decision decision = { 0 };
+			int outcome = filter_uid(box, uid, binary, env, errors, preview, names, &decision);
+			if (outcome < 0)
+				ret = -1;
+			if (decisions != NULL && decision.identified &&
+			    fprintf(decisions, "%u%c%d%c%s%c%s%c", decision.index, 0, outcome, 0,
+				    decision.location == NULL ? "" : decision.location, 0,
+				    decision.mailbox == NULL ? "" : decision.mailbox, 0) < 0)
 				ret = -1;
 		} T_END;
 	}
@@ -452,7 +513,12 @@ int main(int argc, char **argv)
 	if (sieve_tool_getopt(sieve_tool) > 0 || argc - optind != 4)
 		i_fatal("Invalid private frontend arguments");
 	source_name = argv[optind];
-	bool preview = strcmp(argv[optind + 1], "preview") == 0;
+	const char *mode = argv[optind + 1];
+	bool preview = !strcmp(mode, "preview") || !strcmp(mode, "preview-report");
+	if (!strcmp(mode, "preview-report") || !strcmp(mode, "apply-report")) {
+		decisions = fopen("decisions", "wbx");
+		if (decisions == NULL) i_fatal("Cannot open workflow report: %m");
+	}
 	int ready_fd;
 	if (str_to_int(argv[optind + 3], &ready_fd) < 0 || ready_fd <= STDERR_FILENO)
 		i_fatal("Missing readiness descriptor");
@@ -517,6 +583,7 @@ int main(int argc, char **argv)
 		i_fatal("Cannot initialize Sieve delivery: %s", errstr);
 	env.default_mailbox = source_name;
 	int ret = filter_mailbox(box, binary, &env, errors, preview, &names);
+	if (decisions != NULL && fclose(decisions) < 0) ret = -1;
 	if (ret < 0)
 		i_error("Maildir batch contains incomplete deliveries");
 	mailbox_free(&box);

@@ -1,2 +1,2 @@
 #!/bin/sh
-exec "$(dirname -- "$(realpath -- "$0")")/@JARO_BIN_TO_SHARE@/sieve/filter" "$@"
+exec "$(dirname -- "$(realpath -- "$0")")/@JARO_SIEVE_RELATIVE_PATH@" "$@"

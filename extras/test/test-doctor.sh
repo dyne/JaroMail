@@ -19,7 +19,7 @@ repo = Path(sys.argv[1])
 zsh = shutil.which('zsh')
 required = 'fetchmail msmtp gpg pinentry notmuch maddr mdeliver mpick openssl awk sed grep find hostname sqlite3 neomutt'.split()
 optional = 'pass secret-tool wipe srm alot mixmaster nc tomb gnome-keyring-daemon'.split()
-helpers = 'fetchaddr parsedate dotlock gpgewrap abook jaro-filter-compile jaro-filter-legacy jaro-filter'.split()
+helpers = 'fetchaddr parsedate dotlock gpgewrap abook jaro-filter-compile jaro-sieve-filter'.split()
 cases = 0
 
 def manifest(root):
@@ -119,7 +119,7 @@ with tempfile.TemporaryDirectory(prefix='jaro-doctor-', dir=os.environ.get('TMPD
     run(f, includes=('ok [account]', 'ok [keyring]', 'eligible=0 held=0 local-recovery=0 invalid=0', 'Version: 6.0.0'))
     f = fixture('configured-json')
     document, checks = structured(f)
-    assert len(checks) == 45, checks.keys()
+    assert len(checks) == 44, checks.keys()
     assert checks['trust']['status'] == 'unknown' and checks['index']['status'] == 'warning'
     # Both renderers carry exactly the same findings and suggested actions.
     human = run(f)
@@ -138,8 +138,8 @@ with tempfile.TemporaryDirectory(prefix='jaro-doctor-', dir=os.environ.get('TMPD
     (f[3] / 'zlibs/accounts').unlink()
     (f[3] / 'zlibs/zuper').unlink()
     (f[3] / 'VERSION').unlink()
-    (f[3] / 'bin/jaro-filter').unlink()
-    run(f, 1, includes=('blocker [runtime]', 'blocker [version]', 'blocker [helper.jaro-filter]', 'blocker [account]', 'unknown [trust]'))
+    (f[3] / 'bin/jaro-sieve-filter').unlink()
+    run(f, 1, includes=('blocker [runtime]', 'blocker [version]', 'blocker [helper.jaro-sieve-filter]', 'blocker [account]', 'unknown [trust]'))
     f = fixture('all-dependencies-absent')
     for path in f[4].iterdir():
         if path.name != 'zsh': path.unlink()
@@ -209,11 +209,11 @@ with tempfile.TemporaryDirectory(prefix='jaro-doctor-', dir=os.environ.get('TMPD
     for name in required: (f[4] / name).unlink()
     for name in optional: (f[4] / name).unlink()
     (f[3] / 'VERSION').unlink()
-    (f[3] / 'bin/jaro-filter').unlink()
+    (f[3] / 'bin/jaro-sieve-filter').unlink()
     (f[5] / 'default').write_text('MARKER-UNKNOWN-DIRECTIVE MARKER-SECRET\n')
     (f[2] / 'Filters.txt').unlink()
     document, checks = structured(f, 1)
-    for name in ('command.fetchmail', 'command.msmtp', 'command.mutt', 'version', 'helper.jaro-filter', 'account', 'filters', 'keyring'):
+    for name in ('command.fetchmail', 'command.msmtp', 'command.mutt', 'version', 'helper.jaro-sieve-filter', 'account', 'filters', 'keyring'):
         assert checks[name]['status'] == 'blocker', (name, checks[name])
     assert checks['outbox']['status'] == 'ok' and checks['trust']['status'] == 'unknown'
     assert 'MARKER-' not in json.dumps(document)

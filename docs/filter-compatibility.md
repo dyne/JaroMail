@@ -1,29 +1,10 @@
 # Legacy filter compatibility baseline
 
-Native compiler v2 corrects a representation assumption from the initial shared
-core: equivalent quoted locals now use minimal quoting before matching and
-identity generation. Necessary quotes/escapes survive. Thus the anchored
-benchmark pattern matches `"from0000"@example.org`, and `github.com` matches
-`"git\hub.com"@example.org`, as the pinned Sieve parser does. Regex patterns
-themselves are unchanged; one newly authored probe whose pattern explicitly
-requires redundant quotes now correctly misses. The original 52 target winners
-are unchanged. The independent normalization fixture records the equivalent
-spellings, including UTF8 locals under the qualified SMTPUTF8 build. This is a
-narrow native policy correction; the retained legacy shell engine and recorded
-baseline observations are unchanged.
-
-Native classify and apply regressions now exercise all original 52 authored
-target winners, stable IDs and provenance against actual immutable generations,
-and the same generation's Sieve against the pinned regex/SMTPUTF8 oracle. The
-table below remains a legacy baseline: native blacklist, bounce, From/Sender,
-spam, own-casing and domain results follow its explicitly approved corrections.
-Native empty or malformed messages remain in place with status 7, and an empty
-batch emits a zero-record success stream. Native is the CLI default;
-explicit `JARO_FILTER_ENGINE=legacy` retains the rollback workflow.
-Native `-n`/`--explain` require an up-to-date selected generation and never
-publish. `--compare FILE` compares complete retained actual legacy observations
-without applying either engine. It rejects ambiguous proposal text; see the
-[CLI and observation contract](filter-interfaces.md#rollout-and-bounded-import).
+The table records the former shell engine's clean-Zsh/mblaze observations.
+The independent target fixtures define the corrected Sieve behavior. Current
+local filtering executes the same generated rules through Pigeonhole. Use
+`jaro filter --compare` with retained, final observations to compare with
+historical deliveries without changing mail.
 
 Baseline application revision: `165e61e`; preparation revision `7161a2e` changes
 only the minimal vendor extraction. Observations below use the real `jaro`
@@ -146,128 +127,20 @@ still stops compilation; it is not silently treated as an empty addressbook.
 
 ## Migration and installed-workflow qualification
 
-The application default is **native**. Explicit `JARO_FILTER_ENGINE=native`
-selects the same workflow; `JARO_FILTER_ENGINE=legacy` selects rollback.
-Work on an existing initialized mail root and retain its original
-policy/contact inputs before migration. `JAROMAILDIR` selects that root;
-`JAROWORKDIR` selects the installed runtime. Direct C helpers always require
-`--root` and do not infer it from cwd or HOME. Installed tests exercise detached
-working directories and paths containing spaces.
+Pigeonhole executes local filters. The default and the `sieve`, `native` and
+`legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
+Run `jaro update` to migrate an older generation from your existing
+`Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
+report the required update before touching messages or starting transport.
+An unsuccessful migration preserves the last coherent policy and all mail.
+Historical messages stay in `known` and `zz.spam`. New known and spam deliveries
+use `INBOX` and `Spam` by default. Custom Sieve mailbox mappings apply locally
+and to the exported script. Existing files in the destination Maildir are preserved.
 
-Fresh `jaro init` chooses `Filters.native.txt` for unset/explicit native: no
-explicit routes are active, and typed address/domain examples are commented.
-Blacklist, bounce, known, spam, own-address and unsorted builtins remain active.
-Explicit legacy initialization keeps the original `Filters.txt` with 14 ERE
-rules. Selector and needed-template validation precedes bootstrap writes.
-Every existing policy is retained byte for byte; initialization does not add
-a profile file or translate patterns. Normal compilation automatically uses
-the built-in qualified regex configuration, so the shipped legacy rules and
-partial-address patterns such as `from mute@metamute move pol.newsletters`
-work without `FilterProfile.txt`. `save` and `move` remain aliases. No wildcard
-suffix is needed for partial matching.
-
-The same defaults support typed exact and domain predicates. `fileinto` and
-mailbox creation are enabled; `regex` is declared only for policies that use it.
-An existing explicit `core-v1` override still restricts exports to typed rules;
-remove that override to use normal defaults, retaining any wanted custom
-mapping/namespace settings in a qualified override. An unsupported ERE reports status 4 with source-line
-migration diagnostics and preserves the preceding generation/export. The
-trusted compiler-version-bound catalogue qualifies only its declared subset;
-a caller-supplied hash cannot add regex equivalence. See the complete
-[profile and qualification contract](filter-interfaces.md#commands-and-statuses).
-
-For example, these are policy-file records, not shell commands:
-
-```text
-from-address sender@example.org move Senders
-from-domain example.org move DomainApex
-from-domain *.example.org move DomainDescendants
-```
-
-The apex rule matches that domain itself; the wildcard requires a proper
-descendant, including deeper subdomains. Both test parsed mailbox domains.
-Typed address rules use whole-mailbox ASCII case folding, and source order is
-deterministic. These are intentional corrections relative to the legacy table.
-
-After choosing the policy/profile, publish explicitly, then inspect without
-applying messages (replace `root` with the existing root):
-
-```sh
-root=/absolute/existing/mail-root
-JAROMAILDIR="$root" JARO_FILTER_ENGINE=native jaro sieve
-JAROMAILDIR="$root" JARO_FILTER_ENGINE=native jaro -n filter "$root/incoming"
-JAROMAILDIR="$root" JARO_FILTER_ENGINE=native jaro filter --explain "$root/incoming"
-```
-
-Read-only dry/explain commands require an up-to-date selected generation;
-changed valid inputs request an explicit update with status 5. They do not publish or create
-default inputs. `--compare OBSERVATIONS` accepts complete retained actual legacy
-observations for an unchanged corpus under the documented
-[observation contract](filter-interfaces.md#rollout-and-bounded-import), including
-its provenance/body-retention obligations. Ambiguous legacy dry-run proposals
-are rejected. No legacy apply runs automatically during comparison.
-
-To choose legacy for a subsequent workflow, set `JARO_FILTER_ENGINE=legacy`.
-Keep legacy-compatible policy inputs for that choice: typed/domain records are
-diagnosed before the old compiler can silently ignore them. Native and legacy
-cache formats remain separate; a failed native compile, missing helper, corrupt
-cache or partial batch never silently switches engines. Existing approved
-blacklist/bounce/From/known/spam/own-address corrections remain visible in the
-comparison table and independent targets.
-
-### Tested build and assurance scope
-
-The pre-rollout L7.2 checkpoint on 2026-11-06 used GNU/Linux x86_64, kernel
-`6.12.113+deb13-amd64`, glibc 2.41, GCC 14.2.0, GNU Make 4.4.1 and Zsh 5.9.
-`make test`, normal `make test-strict`, and native-scoped ASan/UBSan
-`make test-strict` each executed all 36 discovered scripts and 215 native named
-tests with zero failures/skips. The sanitizer claim covers the selected native
-sources, production batch/worker and installed workflow helpers; ordinary
-legacy/oracle builds are outside a global instrumentation claim. Current worker
-TSan evidence covers 78 storage/batch tests, including cancellation, hooks and
-dependencies. Controlled child operations are settled and source/no-change
-snapshots remain checked.
-
-Ordinary GNU build/install, the explicit native `-j4` graph, header dependencies,
-unchanged builds, clean targets, space-containing PREFIX/DESTDIR, and both real
-installed selectors passed. The two install locations each compiled, dry-ran,
-applied and indexed the unchanged authored eight-message fixture under both
-selectors: 32 installed-message results, exact IDs/destinations/body bytes and
-index counts. Local static glibc inputs also supported a native-helper static
-link and eight-message smoke. That check does not establish a self-contained
-static application. Musl and other OS build/runtime paths were not executed.
-The normal installed native binaries remain byte-identical to the performance
-candidate; these documentation updates do not invalidate its measurements.
-
-The pinned source-built Dovecot/Pigeonhole 2.4.5 frontends were freshly built
-and then reused through verified cache checks. Minimal vendor scope, each
-upstream byte digest, modified/missing/extra/symlink rejection and pristine
-vendor bytes/modes passed. Oracle outputs stay outside upstream sources and
-are not installed as application helpers. No Dovecot daemon or live mail service
-is needed. Server/provider capabilities are explicit profile declarations;
-these local simulations do not establish deployment compatibility with an
-unqueried provider. The qualified regex/SMTPUTF8 scope remains the matched
-PCRE2-32 plus experimental-mail-UTF8 build documented in
-[sieve-tools.md](sieve-tools.md).
-
-Complete local commands, environments, selected identities, process summaries,
-source snapshots and artifact hashes for this checkpoint are retained under
-`.gestalt/evidence/native-filter-execution/l7/l72/` in the planning workspace.
-The native-default rollout checks and row-by-row compatibility audit are retained
-under `.gestalt/evidence/native-filter-execution/l7/l73/`. Whole-branch acceptance
-and terminal review remain separate from these local checks.
-
-The current native-default refresh repeats `make test`, normal strict and
-native-scoped ASAN/UBSAN strict: each passes 36 scripts and 223 native named tests,
-zero failures/skips. Worker TSan's 80 storage/batch tests remain current by exact
-C/header/build/thread-test identity, including forced pending/consumed signal
-schedules; ordinary legacy/oracle binaries are outside global instrumentation.
-Each workflow suite additionally exercises nine source/PREFIX/DESTDIR fresh-init
-flows across unset/native/legacy, with 27 authored message outcomes, exact
-template bytes, no-write selector/template failures and retained legacy-policy
-migration diagnostics. Current packaging passes 38 checks, 48 installed selector
-outcomes and the eight-message static glibc helper smoke. Other OS/musl/provider
-execution remains unverified; the OSX packaging template copy is a source change,
-not an executed OSX qualification. All 22 compatibility rows have current
-evidence with unchanged independent golden files. Full commands and hashes are
-under `.gestalt/evidence/native-filter-execution/l7/l73/release/`.
+Use `jaro -n update` to check authored inputs and `jaro update` to publish.
+`jaro sieve-import --legacy-generated FILE` recovers the bounded older
+Jaromail export grammar. A failed import leaves the original policy, books
+and public export in place. `jaro -n sieve-import FILE` previews an import.
+The [interface contract](filter-interfaces.md) describes the supported policy,
+publication and observation formats. See [Sieve tools](sieve-tools.md) for
+installation and platform prerequisites.

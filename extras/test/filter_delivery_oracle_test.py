@@ -6,11 +6,10 @@ import unittest
 
 sys.dont_write_bytecode = True
 import filter_batch_test as fixtures
-import filter_storage_test as storage
 from sieve_oracle import SieveOracle
 
 
-class OracleTests(storage.StorageTests):
+class OracleTests(fixtures.BatchTests):
     work_variable = 'JARO_FILTER_ORACLE_WORK'
     batch_paths = fixtures.BatchTests.batch_paths
     snapshot = fixtures.BatchTests.snapshot
@@ -41,7 +40,7 @@ class OracleTests(storage.StorageTests):
                 self.assert_target(dict(row, status=b'classified'), case, rules, books)
                 if apply:
                     self.assertFalse(path.exists())
-                    self.assertEqual((self.root / case['local'] / 'cur' / path.name).read_bytes(), body)
+                    self.assertEqual((self.root / case['sieve'] / 'cur' / path.name).read_bytes(), body)
         self.assertEqual(count, 52)
 
     def test_original_52_batch_sieve_comparisons(self):

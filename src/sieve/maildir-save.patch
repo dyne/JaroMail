@@ -148,3 +148,28 @@
  			mf = maildir_save_add(_ctx, fname, NULL);
  			if (_ctx->data.guid != NULL) {
  				maildir_save_set_dest_basename(_ctx, mf,
+@@ -934,18 +934,21 @@
+ 		ret = maildir_uidlist_sync_next_uid(ctx->uidlist_sync_ctx,
+ 						    dest, uid, flags, &rec);
+ 		i_assert(ret > 0);
+-		i_assert(rec != NULL);
+-		if (mf->guid != NULL) {
++		/* The private uidlist intentionally omits CR/LF filenames.
++		   Their original bytes have already been published and will
++		   be verified before source expunge. */
++		i_assert(rec != NULL || strpbrk(dest, "\r\n") != NULL);
++		if (rec != NULL && mf->guid != NULL) {
+ 			maildir_uidlist_sync_set_ext(ctx->uidlist_sync_ctx, rec,
+ 				MAILDIR_UIDLIST_REC_EXT_GUID, mf->guid);
+ 		}
+-		if (mf->pop3_uidl != NULL) {
++		if (rec != NULL && mf->pop3_uidl != NULL) {
+ 			maildir_uidlist_sync_set_ext(ctx->uidlist_sync_ctx, rec,
+ 				MAILDIR_UIDLIST_REC_EXT_POP3_UIDL,
+ 				mf->pop3_uidl);
+ 		}
+-		if (mf->pop3_order > 0) {
++		if (rec != NULL && mf->pop3_order > 0) {
+ 			maildir_uidlist_sync_set_ext(ctx->uidlist_sync_ctx, rec,
+ 				MAILDIR_UIDLIST_REC_EXT_POP3_ORDER,
+ 				t_strdup_printf("%u", mf->pop3_order));

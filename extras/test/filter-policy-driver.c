@@ -34,102 +34,6 @@ static void write_rule(const struct jf_rule *r)
 /* Test protocol: field-number NUL parsed-value NUL; empty field-number ends
  * each message. These are authored parsed values, never raw RFC822 headers.
  */
-static int classify_file(const struct jf_policy *policy, const char *path)
-{
-	FILE *f=fopen(path,"rb");
-	unsigned char *data=NULL;
-	struct jf_mailbox *addresses=NULL;
-	struct jf_text *senders=NULL, *spam=NULL;
-	struct jf_message message={0};
-	struct jf_error error;
-	long size;
-	size_t pos=0, capacity;
-	int rc=3;
-	if (!f) return 3;
-	if (fseek(f,0,SEEK_END) || (size=ftell(f))<0 || (unsigned long)size>JF_INPUT_MAX || fseek(f,0,SEEK_SET)) goto done;
-	data=malloc(size ? (size_t)size : 1);
-	capacity=(size_t)size/2+1;
-	addresses=calloc(capacity,sizeof *addresses);
-	senders=calloc(capacity,sizeof *senders); spam=calloc(capacity,sizeof *spam);
-	if (!data || !addresses || !senders || !spam) goto done;
-	if (fread(data,1,(size_t)size,f)!=(size_t)size) goto done;
-	message.addresses=addresses; message.senders=senders; message.spam_flags=spam;
-	rc=2;
-	while (pos<(size_t)size) {
-		unsigned char *end=memchr(data+pos,0,(size_t)size-pos), *value_end;
-		unsigned field;
-		struct jf_text value;
-		if (!end) goto done;
-		if (end==data+pos) {
-			const struct jf_rule *winner=NULL;
-			struct jf_match_stats stats;
-			rc=jf_policy_classify(policy,&message,&winner,&error,&stats);
-			if (rc) { fprintf(stderr,"%s %s\n",error.code,error.detail); goto done; }
-			write_rule(winner); number(stats.index_comparisons); number(stats.regex_checks);
-			message.address_count=message.sender_count=message.spam_count=0;
-			pos++; rc=2; continue;
-		}
-		if (!strcmp((const char *)data+pos,"1")) field=JF_FROM;
-		else if (!strcmp((const char *)data+pos,"2")) field=JF_SENDER;
-		else if (!strcmp((const char *)data+pos,"4")) field=JF_TO;
-		else if (!strcmp((const char *)data+pos,"8")) field=JF_CC;
-		else if (!strcmp((const char *)data+pos,"16")) field=JF_SPAM;
-		else if (!strcmp((const char *)data+pos,"32")) field=32;
-		else goto done;
-		pos=(size_t)(end-data)+1;
-		value_end=memchr(data+pos,0,(size_t)size-pos);
-		if (!value_end) goto done;
-		value.data=data+pos; value.size=(size_t)(value_end-value.data);
-		if (field==32) senders[message.sender_count++]=value;
-		else if (field==JF_SPAM) spam[message.spam_count++]=value;
-		else { addresses[message.address_count].field=field; addresses[message.address_count++].value=value; }
-		pos=(size_t)(value_end-data)+1;
-	}
-	if (!message.address_count && !message.sender_count && !message.spam_count) rc=0;
-done:
-	if (fclose(f) && !rc) rc=3;
-	free(data); free(addresses); free(senders); free(spam);
-	return rc;
-}
-
-static int header_file(const struct jf_policy *policy, const char *path, int memory, int inspect)
-{
-	struct jf_headers *headers=NULL;
-	struct jf_error error;
-	const struct jf_message *message;
-	const struct jf_rule *winner;
-	struct jf_match_stats stats;
-	int rc, fd=open(path,O_RDONLY);
-	if (fd<0) return 3;
-	if (memory) {
-		FILE *file=fdopen(fd,"rb");
-		long n;
-		unsigned char *bytes;
-		if (!file) { close(fd); return 3; }
-		if (fseek(file,0,SEEK_END) || (n=ftell(file))<0 || (unsigned long)n>JF_INPUT_MAX || fseek(file,0,SEEK_SET)) { fclose(file); return 3; }
-		bytes=malloc(n ? (size_t)n : 1);
-		if (!bytes) { fclose(file); return 3; }
-		if (fread(bytes,1,(size_t)n,file)!=(size_t)n) { free(bytes); fclose(file); return 3; }
-		fclose(file);
-		rc=jf_headers_parse(bytes,(size_t)n,NULL,&headers,&error); free(bytes);
-	} else { rc=jf_headers_read(fd,NULL,&headers,&error); close(fd); }
-	if (rc) { fprintf(stderr,"%s line=%zu %s\n",error.code,error.line,error.detail); return rc; }
-	message=jf_headers_message(headers);
-	if (inspect) {
-		size_t i;
-		for (i=0;i<message->address_count;i++) { number(message->addresses[i].field); field((const char *)message->addresses[i].value.data); }
-		for (i=0;i<message->sender_count;i++) { number(32); field((const char *)message->senders[i].data); }
-		for (i=0;i<message->spam_count;i++) { number(16); field((const char *)message->spam_flags[i].data); }
-		number(64); number(jf_headers_wire_size(headers)); rc=0;
-	} else {
-		rc=jf_policy_classify(policy,message,&winner,&error,&stats);
-		if (rc) fprintf(stderr,"%s %s\n",error.code,error.detail);
-		else { write_rule(winner); number(stats.index_comparisons); number(stats.regex_checks); }
-	}
-	jf_headers_free(headers);
-	return rc;
-}
-
 struct fault { size_t calls, fail, live; };
 static void *fault_allocate(void *ctx, size_t n)
 {
@@ -160,12 +64,6 @@ static int selftest(void)
 	struct fault f={0,0,0};
 	struct jf_allocator a={&f,fault_allocate,fault_release};
 	struct jf_sha256 hash;
-	struct jf_mailbox address={JF_TO,{(const unsigned char *)"TEAM@example.org",16}};
-	struct jf_message message={&address,1,NULL,0,NULL,0};
-	unsigned char spam_value[]=" \tYeS\t ";
-	struct jf_text spam_text={spam_value,sizeof spam_value-1};
-	struct jf_message spam_message={NULL,0,NULL,0,&spam_text,1};
-	const struct jf_rule *winner;
 	char digest[65];
 	char many[4096];
 	char header_bytes[8192], saved_headers[8192];
@@ -188,34 +86,6 @@ static int selftest(void)
 	src.data=(const unsigned char *)many; src.size=strlen(many);
 	CHECK(jf_policy_parse(&src,1,&a,&policy,&error)==0);
 	CHECK(policy && jf_policy_count(policy)==8);
-	count=f.calls;
-	CHECK(jf_policy_classify(policy,&message,&winner,&error,NULL)==0);
-	CHECK(!strcmp(winner->logical,"team"));
-	CHECK(!memcmp(address.value.data,"TEAM@example.org",16));
-	address.field=JF_FROM;
-	address.value.data=(const unsigned char *)"LIST+@EXAMPLE.ORG";
-	address.value.size=strlen((const char *)address.value.data);
-	CHECK(jf_policy_classify(policy,&message,&winner,&error,NULL)==0);
-	CHECK(!strcmp(winner->logical,"lists"));
-	CHECK(jf_policy_classify(policy,&spam_message,&winner,&error,NULL)==0);
-	CHECK(!strcmp(winner->logical,"spam"));
-	CHECK(!memcmp(spam_value," \tYeS\t ",sizeof spam_value));
-	CHECK(f.calls==count); /* Indexed classification uses no policy allocator. */
-	address.value.size=JF_LINE_MAX+1;
-	CHECK(jf_policy_classify(policy,&message,&winner,&error,NULL)==7 && !winner);
-	address.value.size=SIZE_MAX;
-	CHECK(jf_policy_classify(policy,&message,&winner,&error,NULL)==7 && !winner);
-	address.value.size=16; address.field=JF_FROM|JF_TO;
-	CHECK(jf_policy_classify(policy,&message,&winner,&error,NULL)==7 && !winner);
-	address.field=JF_TO; message.address_count=SIZE_MAX;
-	CHECK(jf_policy_classify(policy,&message,&winner,&error,NULL)==7 && !winner);
-	message.address_count=1; address.value.data=(const unsigned char *)"bad\0@example.org";
-	CHECK(jf_policy_classify(policy,&message,&winner,&error,NULL)==7 && !winner);
-	address.value.data=NULL;
-	CHECK(jf_policy_classify(policy,&message,&winner,&error,NULL)==7 && !winner);
-	CHECK(jf_policy_classify(NULL,&message,&winner,&error,NULL)==7 && !winner);
-	CHECK(jf_policy_classify(policy,NULL,&winner,&error,NULL)==7 && !winner);
-	CHECK(jf_policy_classify(policy,&message,NULL,&error,NULL)==7);
 	CHECK(jf_policy_rule(policy,99)==NULL);
 	CHECK(uselocale((locale_t)0)==thread_locale);
 	jf_policy_free(policy); CHECK(f.live==0); count=f.calls; valid_faults=count;
@@ -288,13 +158,8 @@ int main(int argc, char **argv)
 	struct jf_policy *policy=NULL;
 	struct jf_error error;
 	size_t count, i;
-	int rc=3, first=1, header_mode=0;
-	const char *messages=NULL;
+	int rc=3, first=1;
 	if (argc==2 && !strcmp(argv[1],"--selftest")) return selftest();
-	if (argc>=3 && !strcmp(argv[1],"--classify")) { messages=argv[2]; first=3; }
-	if (argc>=3 && !strcmp(argv[1],"--headers")) { messages=argv[2]; first=3; header_mode=1; }
-	if (argc>=3 && !strcmp(argv[1],"--headers-buffer")) { messages=argv[2]; first=3; header_mode=2; }
-	if (argc>=3 && !strcmp(argv[1],"--inspect-headers")) { messages=argv[2]; first=3; header_mode=3; }
 	if ((argc-first)%4) return 2;
 	count=(size_t)(argc-first)/4;
 	sources=calloc(count ? count : 1,sizeof *sources);
@@ -323,8 +188,6 @@ int main(int argc, char **argv)
 	}
 	rc=jf_policy_parse(sources,count,NULL,&policy,&error);
 	if (rc) fprintf(stderr,"%s source=%zu line=%zu %s\n",error.code,error.source,error.line,error.detail);
-	else if (header_mode) rc=header_file(policy,messages,header_mode==2,header_mode==3);
-	else if (messages) rc=classify_file(policy,messages);
 	else for (i=0;i<jf_policy_count(policy);i++) write_rule(jf_policy_rule(policy,i));
 done:
 	jf_policy_free(policy);

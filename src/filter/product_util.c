@@ -77,6 +77,7 @@ int jf_product_error(struct jf_error *e, const char *code, size_t line, const ch
 
 void jf_products_free(struct jf_products *p)
 {
-	jf_bytes_free(&p->zsh); jf_bytes_free(&p->sieve); jf_bytes_free(&p->cache);
+	jf_bytes_free(&p->sieve); jf_bytes_free(&p->cache);
+	jf_bytes_free(&p->provenance);
 	memset(p,0,sizeof *p);
 }

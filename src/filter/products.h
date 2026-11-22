@@ -4,13 +4,13 @@
 #define JARO_FILTER_PRODUCTS_H
 #include "policy.h"
 #include <stdint.h>
-#define JF_COMPILER_ID "jaromail-filter-compiler-v2"
+#define JF_COMPILER_ID "jaromail-sieve-compiler-v3"
 #define JF_CACHE_MAX (128u * 1024u * 1024u)
 #define JF_CACHE_HEADER_SIZE 88u
 #define JF_CACHE_FILE_MAX (JF_CACHE_MAX + JF_CACHE_HEADER_SIZE)
 /* Independent inventory budget; never charged against user policy rules. */
 #define JF_DEPENDENCY_MAX 100000u
-#define JF_CACHE_RECORD_MAX (1u + JF_DEPENDENCY_MAX + JF_RULE_RECORD_MAX)
+#define JF_CACHE_RECORD_MAX (1u + JF_DEPENDENCY_MAX)
 
 struct jf_bytes { unsigned char *data; size_t size, capacity; };
 struct jf_mapping { char *logical, *mailbox; };
@@ -27,7 +27,7 @@ struct jf_dependency {
 	struct jf_bytes auxiliary;
 };
 struct jf_products {
-	struct jf_bytes zsh, sieve, cache;
+	struct jf_bytes sieve, cache, provenance;
 	unsigned char fingerprint[32];
 	char id[65];
 };
@@ -58,9 +58,4 @@ void jf_products_free(struct jf_products *);
 struct jf_sieve_binding { char runtime[65], profile[65]; };
 int jf_cache_validate(const unsigned char *, size_t, const struct jf_bytes *,
 	const struct jf_bytes *, const unsigned char *, struct jf_sieve_binding *, struct jf_error *);
-/* Reconstruct the shared indexed model from canonical R records, preserving
- * serialized IDs, order, provenance and mapped destinations. Never reads source
- * inputs. On failure *out is NULL; returns 3 for resources or 5 for bad cache. */
-int jf_cache_policy(const struct jf_bytes *, const struct jf_allocator *,
-	struct jf_policy **out, struct jf_error *);
 #endif
