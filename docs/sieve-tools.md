@@ -92,9 +92,11 @@ Dovecot public headers, `include/dovecot/sieve` including generated
 `pigeonhole-config.h` and `pigeonhole-version.h`, and the shared development
 libraries `lib/dovecot/libdovecot{,-storage,-lda,-sieve}.so`. Pigeonhole must
 match revision `742bb8923b5aab398f8d962e827fcde7ad4a3f73`. A distribution's
-2.4.1 libraries or system `sievec` binaries are not substitutes. No server
-needs to be started. Use a disposable test configuration for evaluation;
-never pass delivery/execution options against an actual mail root.
+2.4.1 libraries or system `sievec` binaries are not substitutes.
+The local delivery workflow runs without a server. The separate
+`extras/test/test-sieve-lmtp.sh` interoperability test starts a private
+Dovecot LMTP service from the development prefix on a Unix socket. Its
+synthetic recipient receives the same messages as the staged client.
 
 The offline builder checks header/library versions, revision and private
 `mail_raw_*` exports, runs `vendor/verify.py`, and links the four libraries by
@@ -245,8 +247,9 @@ and the following minimal optional-feature selection, then `make -j8` and
 
 Configure Pigeonhole with `--prefix="$sieve_prefix"`
 `--with-dovecot="$sieve_prefix/lib/dovecot" --with-dovecot-install-dirs`
-`--without-managesieve --without-ldap --disable-static`. Build/install only
-its Sieve library, configuration dependencies and public/generated headers:
+`--without-managesieve --without-ldap --disable-static`. The development
+prefix needs the Sieve library, configuration dependencies, public/generated
+headers and the delivery plugin for the LMTP fixture.
 
 ```sh
 make -j8 -C src/lib-sieve
@@ -256,6 +259,8 @@ make -j8 -C src/lib-managesieve
 make -C src/lib-managesieve install
 make -j8 -C src/plugins/settings
 make -C src/plugins/settings install
+make -j8 -C src/plugins/lda-sieve
+make -C src/plugins/lda-sieve install
 ```
 
 For these dependency compilations, use `CC='ccache gcc'` if ccache is available

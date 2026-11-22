@@ -43,12 +43,29 @@ The supported Filters.txt records are:
 from legacy-posix-ere move folder
 to legacy-posix-ere save folder
 from-address person@example.org move folder
+from-glob *@*.example.org move vendors
+to-glob *+shop@*.ch move shopping
 to-address team@example.org move folder
 known-domain example.org
 known-domain *.example.org
 from-domain vendor.example move vendors
 to-domain project.example move projects
 ```
+
+The glob selectors match one complete parsed address, using ASCII
+case-insensitive comparison. `to-glob` examines To and Cc, and `from-glob`
+examines From and Sender. A star matches zero or more characters, including
+dots. Plus, dot, question mark and square brackets match themselves.
+In an unquoted pattern, `\*` matches a literal star and `\\` matches
+a literal backslash. Inside a JSON-quoted token, double each backslash
+again. Other glob escapes produce a line diagnostic.
+
+For the shopping rule, `lea+shop@example.ch`, `a+b+shop@mx.example.ch` and
+`+shop@example.ch` select `shopping`. With empty addressbooks and the default
+policy, `lea@example.ch`, `lea+shopping@example.ch` and
+`lea+shop@example.ch.example.org` fall through to `unsorted`. A To
+address of `lea+shop@example.org` and a Cc address of `bob@example.ch`
+also fall through. Pigeonhole evaluates each address separately.
 
 Legacy four-field `from`/`to` patterns use POSIX ERE under clean Zsh semantics
 (`RE_MATCH_PCRE` off); compile each once. Regex punctuation retains its regex
@@ -115,6 +132,14 @@ translation is not an equivalent regex export. Unsupported constructs fail
 with rule/source-line migration diagnostics and leave the previous generation
 usable; never omit or weaken a rule. Capabilities and mailbox mappings are
 configurable. No remote provider compatibility is claimed.
+
+The portable policy is `Filters.sieve`. The local publisher binds the script
+and its bytecode to the inputs, runtime and profile. A server must compile
+the source with its own matching capabilities. The LMTP qualification uses
+Pigeonhole 2.4.5 with the same fileinto and mailbox extensions. When the
+server fixture disables mailbox, its script fails validation and the server
+performs an implicit keep in INBOX. A successful LMTP delivery reply can
+therefore accompany an unapplied filter. Check the server's Sieve log.
 
 The parity suite exercises the authored winners using the installed local
 frontend and the pinned independent `sieve-test` oracle. It repeats the cases

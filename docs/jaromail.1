@@ -2107,7 +2107,6 @@ Regex is declared only when a rule uses it.
 Partial\-address rules work without adding \f[CR]*\f[R] or
 \f[CR].*\f[R]; \f[CR]save\f[R] and \f[CR]move\f[R] are aliases.
 An optional profile can override capabilities or mailbox mappings.
-Pigeonhole executes local filters.
 The default and the \f[CR]sieve\f[R], \f[CR]native\f[R] and
 \f[CR]legacy\f[R] values of \f[CR]JARO_FILTER_ENGINE\f[R] select the
 same installed runtime.
@@ -2126,20 +2125,52 @@ Existing files in the destination Maildir are preserved.
 See migration and compatibility for domain examples, known corrections,
 compare observations and tested platform limits.
 .PP
-In the mail directory a file named \f[CR]Filters.txt\f[R] is filled in
-with filtering rules referencing the contents of the \f[B]From:\f[R] or
-\f[B]To:\f[R] fields.
+Add this rule to \f[CR]Filters.txt\f[R] to file shopping mail addressed
+to a Swiss domain.
+It matches complete addresses in To and Cc.
+Both \f[CR]lea+shop\[at]example.ch\f[R] and
+\f[CR]a+b+shop\[at]mx.example.ch\f[R] match.
+The plus and dot are literal.
+.IP
+.EX
+to\-glob *+shop\[at]*.ch move shopping
+.EE
 .PP
-The format of the filters configurarion is pretty easy and self
-explanatory, just have a look at this file and when something changes
-update the filter engine using \f[CR]jaro update\f[R].
+Run \f[CR]jaro update\f[R], inspect the result with
+\f[CR]jaro \-n filter\f[R], then run \f[CR]jaro filter\f[R] on incoming
+mail or \f[CR]jaro filter any\-maildir/\f[R] for a chosen Maildir.
+The standalone command can also use a generated or hand\-authored Sieve
+file.
+Give it absolute roots and an existing source Maildir.
+.IP
+.EX
+jaro\-sieve\-filter \-\-dry\-run \-\-from /mail/incoming \-\-to /mail /policy/Filters.sieve
+jaro\-sieve\-filter \-\-from /mail/incoming \-\-to /mail /policy/Filters.sieve
+.EE
 .PP
-Then use \f[CR]jaro filter any\-maildir/\f[R] and the mails contained in
-\f[CR]any\-maildir\f[R] will be moved according to the updated filter
-rules.
+The command processes messages in \f[CR]cur\f[R] and \f[CR]new\f[R].
+Matching shopping mail lands in \f[CR]/mail/shopping\f[R].
+A Sieve mailbox called \f[CR]Projects/Letters\f[R] maps to
+\f[CR]/mail/Projects/Letters\f[R].
+Explicit or implicit \f[CR]keep\f[R] leaves the message in the incoming
+Maildir.
+The local profile accepts folder delivery, conditions and
+\f[CR]stop\f[R].
+Other actions such as redirect or discard fail validation before
+processing.
 .PP
-Beware that filtering is a lengthy operation, especially on big
-maildirs.
+To use the same rules on a server, give its administrator the exported
+\f[CR]Filters.sieve\f[R].
+Enable Pigeonhole for delivery, for example through Dovecot LMTP after
+Postfix, and make the source active for the recipient.
+Each host compiles the script with its own runtime and required
+extensions.
+JaroMail\[cq]s Linux shared\-runtime package and the independent
+Dovecot/Pigeonhole 2.4.5 LMTP fixture were qualified together.
+The server controls its mailbox layout and may add delivery headers.
+A server with a different version or set of extensions needs its own
+qualification.
+See the filtering interface.
 .SS Merge maildirs
 Mblaze can safely move all e\-mails stored in one maildir to another.
 .PP

@@ -195,6 +195,12 @@ first line may set `#mode individual`, `#mode cc`/`#mode carboncopy`, or
 
 `sieve` publish the shared filter generation and its portable `Filters.sieve` export.
 
+The native Linux Sieve package also installs
+`jaro-sieve-filter [--dry-run] --from INCOMING --to ROOT SCRIPT`.
+It files messages from the source Maildir into the named mailboxes under
+ROOT. Give it absolute directories. Share the exported source with a
+Sieve-enabled delivery server so that each host compiles its own binary.
+
 `sieve-import FILE` import a Jaromail-generated Sieve file into local
 filter/addressbook files. The bounded token
 parser validates and stages the complete import before publication. `-n`
