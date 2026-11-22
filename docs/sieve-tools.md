@@ -30,6 +30,46 @@ manifest records the input fingerprint, source and executable digests, runtime
 inventory digest and profile digest. An unchanged update validates the
 published products and reuses the executable.
 
+The same native installation provides `jaro-sieve-filter`. Its launcher
+requires Python 3 and procfs. The Maildir worker uses Linux Landlock ABI 3
+or newer (Linux 6.2 or a backport) to confine the storage driver's file access.
+Its build requires Linux UAPI headers with Landlock truncate support. When
+the kernel or process sandbox cannot activate the ruleset, the command exits
+before opening the source mailbox.
+
+Run a batch with `jaro-sieve-filter [--dry-run] --from INCOMING --to BASE SCRIPT`.
+Both roots must be absolute directories. The build uses GNU patch and the
+Linux no-replace rename interface. The worker pins one executable for the
+batch. The launcher snapshots the initial regular files in `cur` and `new`
+and locks the source directory against other filter batches. Preview evaluates
+a private read-only view. Apply claims each occurrence by rename within the
+source filesystem before Pigeonhole evaluates it. A keep or fileinto naming
+the original mailbox restores the same name and bytes in the original directory.
+
+Dovecot commits each destination save before expunging the corresponding claim.
+Moves publish in the target's `cur` and preserve the source filename, flags
+and complete byte stream. Published copies have mode 0600. On a name collision, the private Maildir driver
+uses a fresh basename with the original flag suffix. A failed occurrence
+returns a nonzero batch status and leaves other completed deliveries in place.
+Ordinary failure and handled interruption return unprocessed mail to the
+source. A competing same-name arrival is preserved too.
+
+Pigeonhole reconstructs envelope tests from the delivered headers. It tries
+`Return-Path`, `Sender`, then `From` for the sender, and `Envelope-To` then
+`To` for the final recipient. Its original recipient defaults to that final
+recipient. Missing addresses fall back to `sender@example.com` and
+`recipient@example.com`. SMTP-time envelope information absent from the
+stored message cannot be reconstructed.
+
+An unhandled process death, failed restoration or interrupted source commit
+can leave recoverable files in `INCOMING/tmp/.jaro-sieve-transaction`.
+Further apply attempts stop while this directory exists. Inspect its
+`inventory.jsonl` to map each remaining numeric file in `cur` or `tmp` to
+its original directory and filename. Compare it with source and destination
+copies before restoring mail under an unoccupied name. A process death after
+destination commit can leave both copies. Once all occurrences are accounted
+for, remove the empty transaction directories and inventory before retrying.
+
 | Distribution | Link and load dependencies |
 | --- | --- |
 | Native Linux, matched shared runtime | Private `libdovecot{,-storage,-sieve,-lda,-managesieve}.so.0`, `libpigeonhole_settings.so` and `doveconf`. The Maildir driver is compiled into `libdovecot-storage`. The qualified x86-64 glibc profile uses the host ELF loader, libc, libm, zlib and PCRE2-32. The launcher uses POSIX sh and GNU coreutils. |
@@ -39,8 +79,8 @@ published products and reuses the executable.
 Without a Sieve prefix, CMake builds the existing application helpers. The
 standalone `make sieve-tools` target builds the pinned compiler, simulation
 tool, binary dumper and upstream Maildir frontend against the supplied
-development installation. Only the compiler and binary dumper are installed
-in the private runtime.
+development installation. The private runtime includes the compiler, binary
+dumper and JaroMail's Maildir adapter.
 
 ```sh
 SIEVE_DEPS_PREFIX=/absolute/private/development-prefix make sieve-tools

@@ -178,6 +178,8 @@ if(JARO_SIEVE_DEPS_PREFIX)
     message(FATAL_ERROR "The Sieve runtime requires a target-native Linux shared-library build")
   endif()
   set(_sieve_output "${CMAKE_BINARY_DIR}/sieve")
+  jaro_executable(sieve-generation-read src/sieve/generation-read.c ${_policy} ${_products} ${_generation})
+  install(TARGETS sieve-generation-read RUNTIME DESTINATION "${JARO_RUNTIME_DIR}/bin" COMPONENT sieve)
   add_custom_target(sieve-runtime ALL
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/build/sieve-tools.py" --package-runtime
       --compiler "${CMAKE_C_COMPILER}" --deps-prefix "${JARO_SIEVE_DEPS_PREFIX}" --output "${_sieve_output}"
@@ -185,6 +187,7 @@ if(JARO_SIEVE_DEPS_PREFIX)
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "${_sieve_output}/current/runtime"
       "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/jaro-sieve-runtime"
     USES_TERMINAL VERBATIM)
+  add_dependencies(sieve-runtime sieve-generation-read)
   add_dependencies(jaro-filter-compile sieve-runtime)
   if(TARGET jaro-filter-compile-test)
     add_dependencies(jaro-filter-compile-test sieve-runtime)
@@ -197,6 +200,10 @@ if(JARO_SIEVE_DEPS_PREFIX)
 endif()
 add_subdirectory(cmake/abook)
 file(RELATIVE_PATH JARO_BIN_TO_SHARE "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}" "${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}")
+if(TARGET sieve-runtime)
+  configure_file(cmake/jaro-sieve-filter.in generated/jaro-sieve-filter @ONLY)
+  install(PROGRAMS "${CMAKE_BINARY_DIR}/generated/jaro-sieve-filter" DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT sieve)
+endif()
 configure_file(cmake/jaro.in generated/jaro @ONLY)
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/generated/VERSION" CONTENT "${JARO_RESOLVED_VERSION}\n")
 install(PROGRAMS "${CMAKE_BINARY_DIR}/generated/jaro" DESTINATION "${CMAKE_INSTALL_BINDIR}")

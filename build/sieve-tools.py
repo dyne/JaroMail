@@ -45,7 +45,9 @@ def runtime_inputs(prefix):
     libdir = prefix / "lib/dovecot"
     files = {"bin/doveconf": prefix / "bin/doveconf",
              "lib/libpigeonhole_settings.so": libdir / "settings/libpigeonhole_settings.so",
-             "dovecot.conf": REPO / "src/sieve/dovecot.conf", "run": REPO / "src/sieve/run"}
+             "dovecot.conf": REPO / "src/sieve/dovecot.conf", "run": REPO / "src/sieve/run",
+             "maildir.conf": REPO / "src/sieve/maildir.conf",
+             "filter": REPO / "src/sieve/filter"}
     for name in (*LIBRARIES, "dovecot-managesieve"):
         soname = "lib" + name + ".so.0"
         files["lib/" + soname] = libdir / soname
@@ -73,7 +75,7 @@ def package_runtime(stage, files):
         target = runtime / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-    for tool in ("sievec", "sieve-dump"):
+    for tool in ("sievec", "sieve-dump", "maildir-filter"):
         os.link(stage / "bin" / tool, runtime / "bin" / tool)
     inventory = "".join(f"{digest(path)}  {path.relative_to(runtime)}\n"
                         for path in sorted(runtime.rglob("*")) if path.is_file())
@@ -131,6 +133,9 @@ def main():
     programs = manifest["programs"]
     sources = [upstream / "sieve-tools" / (name + ".c") for name in programs]
     sources.append(upstream / "lib-sieve-tool/sieve-tool.c")
+    if args.package_runtime:
+        programs = [*programs, "maildir-filter"]
+        sources.append(REPO / "src/sieve/maildir-filter.c")
     runtime_files = runtime_inputs(prefix) if args.package_runtime else {}
     compiler = [args.compiler] if args.compiler else words("CC", "cc")
     if not compiler:
@@ -146,8 +151,12 @@ def main():
     ldflags, ldlibs = words("LDFLAGS"), words("LDLIBS")
     includes = [upstream / "lib-sieve-tool", upstream / "lib-sieve/util", include, sieve_include]
     inputs = [p for p in include.rglob("*") if p.is_file()]
-    inputs += libraries + [REPO / "vendor/sources.json", Path(__file__).resolve()]
+    inputs += libraries + sources + [REPO / "vendor/sources.json", Path(__file__).resolve()]
     inputs += list(runtime_files.values())
+    maildir_source = REPO / "vendor/dovecot/upstream/maildir-save.c"
+    maildir_patch = REPO / "src/sieve/maildir-save.patch"
+    if args.package_runtime:
+        inputs += [maildir_source, maildir_patch]
     inputs += [REPO / "vendor" / manifest["directory"] / e["path"] for e in manifest["files"]]
     for part in compiler + launcher:
         located = shutil.which(part)
@@ -183,10 +192,18 @@ def main():
     libdir = str(libraries[0].parent)
     env["LD_LIBRARY_PATH"] = libdir
     commands = []
+    if args.package_runtime:
+        # Only the local worker links the adapted storage transaction. The
+        # shared runtime and server keep their upstream Maildir save behavior.
+        generated = stage / "maildir-save.c"
+        run(["patch", "--silent", "--output", generated, maildir_source, maildir_patch])
+        sources.append(generated)
     for source in sources:
         obj = stage / (source.stem + ".o")
         command = launcher + compiler + ["-DHAVE_CONFIG_H"] + ["-I" + str(p) for p in includes]
         command += cppflags + cflags
+        if args.package_runtime and source == generated:
+            command.append("-D_GNU_SOURCE")
         # Upstream headers and tools require GNU C extensions (including printf %m).
         if args.package_runtime:
             command.append("-Wno-pedantic")
@@ -199,6 +216,8 @@ def main():
             "-Wl,-Map," + str(stage / (name + ".map")), "-o", str(stage / "bin" / name),
             str(stage / (name + ".o")), str(stage / "sieve-tool.o")]
         command += list(map(str, libraries)) + ldlibs
+        if name == "maildir-filter":
+            command.insert(command.index(str(libraries[0])), str(stage / "maildir-save.o"))
         commands.append(command)
         run(command, env=env)
     if runtime_files:
@@ -209,7 +228,8 @@ def main():
         text = depfile.read_text().replace("\\\n", "")
         for name in shlex.split(text.split(":", 1)[1]):
             path = Path(name)
-            dependencies[str(path)] = digest(path)
+            if not path.is_relative_to(stage):
+                dependencies[str(path)] = digest(path)
     artifacts = {str(p.relative_to(stage)): digest(p) for p in stage.rglob("*") if p.is_file()}
     record = {"fingerprint": fingerprint, "identity": identity, "commands": commands,
               "dependencies": dependencies, "artifacts": artifacts,

@@ -79,3 +79,10 @@ Pigeonhole's [`COPYING`](pigeonhole/upstream/COPYING) declares LGPL-2.1 by defau
 subject to per-file notices. Retain [`COPYING.LGPL`](pigeonhole/upstream/COPYING.LGPL)
 and [`AUTHORS`](pigeonhole/upstream/AUTHORS). Jaromail's license does not replace
 these upstream terms.
+
+The private delivery frontend also compiles Dovecot's pinned
+`src/lib-storage/index/maildir/maildir-save.c`. Its unmodified source lives in
+`dovecot/upstream/`. The package build applies `src/sieve/maildir-save.patch`
+to a build-directory copy. This keeps Dovecot's save transaction and adapts
+filename publication, collision handling and byte-preserving stream copies for
+already-delivered messages. Only the local worker links this object.
