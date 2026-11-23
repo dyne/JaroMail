@@ -42,13 +42,16 @@ Both roots must be absolute directories. The build uses GNU patch and the
 Linux no-replace rename interface. The worker pins one executable for the
 batch. The launcher snapshots the initial regular files in `cur` and `new`
 and locks the source directory against other filter batches. Preview evaluates
-a private read-only view. Apply claims each occurrence by rename within the
+a private read-only view. A previewed save never creates a mailbox, so a
+later `mailboxexists` test can choose a different folder during apply.
+Workflow batches accept up to 100,000 messages and reject larger inventories
+before claiming mail. Apply claims each occurrence by rename within the
 source filesystem before Pigeonhole evaluates it. A keep or fileinto naming
 the original mailbox restores the same name and bytes in the original directory.
 
 Dovecot commits each destination save before expunging the corresponding claim.
 Moves publish in the target's `cur` and preserve the source filename, flags
-and complete byte stream. Published copies have mode 0600. On a name collision, the private Maildir driver
+and complete byte stream. Published copies have mode 0600 and preserve modification time to the second. On a name collision, the private Maildir driver
 uses a fresh basename with the original flag suffix. A failed occurrence
 returns a nonzero batch status and leaves other completed deliveries in place.
 Ordinary failure and handled interruption return unprocessed mail to the
@@ -73,7 +76,7 @@ for, remove the empty transaction directories and inventory before retrying.
 | Distribution | Link and load dependencies |
 | --- | --- |
 | Native Linux, matched shared runtime | Private `libdovecot{,-storage,-sieve,-lda,-managesieve}.so.0`, `libpigeonhole_settings.so` and `doveconf`. The Maildir driver is compiled into `libdovecot-storage`. The qualified x86-64 glibc profile uses the host ELF loader, libc, libm, zlib and PCRE2-32. The launcher uses POSIX sh and GNU coreutils. |
-| Linux static musl, x86-64 and arm64 | Existing static helpers have no dynamic Dovecot dependency. The signed dependency recipe builds shared libraries and the settings loader uses a module. A Sieve installation on these systems requires a separately built, target-native shared runtime with its ELF loader and system libraries. Cross builds reject an explicit native runtime prefix. |
+| Linux release archives, x86-64 and arm64 | The musl helpers are static. The same archive includes the private Sieve component built on a native Ubuntu 24.04 runner for that architecture. Filtering needs its glibc loader, Python 3, zlib, PCRE2-32 and Landlock support. |
 | macOS and other native targets | The private ELF runtime build is available on Linux. |
 
 Without a Sieve prefix, CMake builds the existing application helpers. The

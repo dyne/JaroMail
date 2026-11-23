@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import re
 import select
@@ -13,6 +14,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from filter_batch_test import authored, authored_groups, write_policy_fixture
 from filter_cross_device_test import prerequisite
@@ -140,6 +142,39 @@ class MaildirTest(unittest.TestCase):
         self.assertIn(b"store message in folder: INBOX", result.stdout)
         self.assertEqual(tree(self.root), before)
 
+    def test_workflow_limit_precedes_delivery(self):
+        (self.base / "Filters.txt").write_text("from-address user@example.org move Archive\n")
+        subprocess.run([self.compiler, "--root", self.base], check=True)
+        current = (self.base / "cache/filter-engine/current").resolve()
+        (self.source / "new/retained").write_bytes(message("limit", "retain"))
+        installed = runpy.run_path(str(self.runtime / "filter"))
+        original = os.listdir
+        def large_inventory(fd):
+            if isinstance(fd, int) and os.path.samestat(os.fstat(fd), (self.source / "new").stat()):
+                return [str(i) for i in range(100_001)]
+            return original(fd)
+        args = [str(self.cli), "--from", str(self.source), "--to", str(self.base),
+                "--report0", current.name, str(current / "Filters.sieve")]
+        with mock.patch("sys.argv", args), mock.patch("os.listdir", large_inventory):
+            with self.assertRaises(installed["FilterError"]) as error:
+                installed["main"]()
+        self.assertEqual(error.exception.status, 2)
+        self.assertEqual((self.source / "new/retained").read_bytes(), message("limit", "retain"))
+        self.assertFalse((self.base / "Archive").exists())
+
+    def test_preview_mailboxexists_uses_existing_folders(self):
+        self.script.write_text('require ["fileinto","mailbox"]; if mailboxexists "A" '
+                               '{ fileinto :create "B"; } else { fileinto :create "A"; }')
+        for name in ("first", "second"):
+            (self.source / "new" / name).write_bytes(message(name, name))
+        before = tree(self.root)
+        self.assertEqual(self.invoke("--dry-run").stdout.count(b"store message in folder: A"), 2)
+        self.assertEqual(tree(self.root), before)
+        self.invoke()
+        for name, folder in (("first", "A"), ("second", "B")):
+            self.assertEqual([p.read_bytes() for p in (self.base / folder / "cur").iterdir()],
+                             [message(name, name)])
+
     def test_mirrored_folders_and_keeps(self):
         self.source = maildir(self.base / "incoming with spaces")
         self.script.write_text("""
@@ -166,14 +201,14 @@ if header :is "Subject" "explicit" { keep; stop; }
         missing = self.root / "missing"
         for kwargs in (dict(source=missing), dict(base=missing), dict(source=self.base)):
             before = tree(self.root)
-            self.invoke(success=False, **kwargs)
+            self.assertEqual(self.invoke(success=False, **kwargs).returncode, 3)
             self.assertEqual(tree(self.root), before)
         for command in ('redirect "nobody@example.org"', "discard", 'reject "reason"',
                         'vacation "out"', "invalid-syntax"):
             self.script.write_text('require ["fileinto","mailbox"]; if true {fileinto :create "Spam"; stop;} '
                                    'if false { ' + command + '; }')
             before = tree(self.root)
-            self.invoke(success=False)
+            self.assertEqual(self.invoke(success=False).returncode, 4)
             self.assertEqual(tree(self.root), before)
 
     def test_traversal_and_symlink_destinations_preserve_sentinel(self):
@@ -214,7 +249,7 @@ if header :is "Subject" "explicit" { keep; stop; }
         subprocess.run([self.runtime / "run", "compile", self.script, foreign], check=True)
         binary.write_bytes(foreign.read_bytes())
         before = tree(self.root)
-        self.invoke(script=script, success=False)
+        self.assertEqual(self.invoke(script=script, success=False).returncode, 5)
         self.assertEqual(tree(self.root), before)
         manifest = generation / "manifest.json"
         metadata = json.loads(manifest.read_bytes())
@@ -222,6 +257,7 @@ if header :is "Subject" "explicit" { keep; stop; }
         manifest.write_text(json.dumps(metadata, separators=(",", ":")) + "\n")
         before = tree(self.root)
         failure = self.invoke(script=script, success=False)
+        self.assertEqual(failure.returncode, 5)
         self.assertIn(b"Unsupported operation in cached Sieve binary: DISCARD", failure.stderr)
         self.assertEqual(tree(self.root), before)
 
