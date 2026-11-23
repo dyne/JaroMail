@@ -80,3 +80,14 @@ set -e
 assert_equal "${backup_status}" "0" "backup exit code"
 assert_equal "$(find "${mail_root}/archive" -maxdepth 2 -type f | wc -l | tr -d ' ')" "2" "backup moves matched messages"
 assert_equal "$(find "${mail_root}/known" -maxdepth 2 -type f | wc -l | tr -d ' ')" "0" "backup removes source messages"
+
+# Leave this message unindexed to exercise raw discovery and preserve both
+# embedded newlines through the refile operation.
+odd_folder="$mail_root/"$'Backups\n2026'
+odd_name=$'part one\npart two:2,S'
+make_maildir_message "$odd_folder" cur "$odd_name" "Subject: raw-backup-token" >/dev/null
+jaro_source backup "$mail_root/archive" raw-backup-token >/dev/null
+[[ ! -e "$odd_folder/cur/$odd_name" ]]
+hits=("$mail_root/archive/cur/"*:2,S(N))
+(( ${#hits} == 1 ))
+grep -Fq raw-backup-token "$hits[1]"

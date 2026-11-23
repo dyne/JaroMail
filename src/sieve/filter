@@ -90,10 +90,18 @@ def source_entries(dirs, selected, *, limit=None):
     for folder in ("cur", "new"):
         if selected and folder != selected[0]:
             continue
-        names = (selected[1],) if selected else sorted(
-            (name for name in os.listdir(dirs[folder]) if not name.startswith(".")), key=os.fsencode)
-        if limit is not None and len(entries) + len(names) > limit:
-            raise FilterError(2, f"batch exceeds the {limit}-message workflow limit")
+        if selected:
+            names = [selected[1]]
+        else:
+            names = []
+            with os.scandir(dirs[folder]) as children:
+                for child in children:
+                    if child.name.startswith("."):
+                        continue
+                    if limit is not None and len(entries) + len(names) >= limit:
+                        raise FilterError(2, f"batch exceeds the {limit}-message workflow limit")
+                    names.append(child.name)
+            names.sort(key=os.fsencode)
         for name in names:
             st = os.stat(name, dir_fd=dirs[folder], follow_symlinks=False)
             if not stat.S_ISREG(st.st_mode):

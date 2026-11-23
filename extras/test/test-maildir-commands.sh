@@ -78,13 +78,14 @@ fi
 
 odd_folder="$mail_root/"$'Projects\n2026\n'
 maildir_fixture_ensure "$odd_folder"
+ln -s "$mail_root" "$tmp_root/mail-alias"
 listed_folders="$(
   zsh -lc '
     JAROMAILDIR="'"${mail_root}"'" \
     JAROWORKDIR="'"${work_root}"'" \
     PROGRAM=test VERSION=6.0 \
     source "'"${repo_root}"'/src/zlibs/bootstrap" source
-    maildir_list_folders "'"${mail_root}"'"
+    maildir_list_folders "'"${tmp_root}"'/mail-alias"
   ' 2>/dev/null
 )"
 folders=("${(@0)listed_folders}")

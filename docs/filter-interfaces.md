@@ -123,7 +123,9 @@ and any partial append available for inspection before retrying.
 The frontend selects regular Maildir occurrences under new and cur. It supports
 raw path bytes and an empty Maildir. The public explain command also accepts a
 single saved message. Workflow invocations supply the verified generation with
-`--report0 ID`. A read-only run uses a private temporary Maildir.
+`--report0 ID`. A workflow batch accepts up to 100,000 messages across both
+directories. A larger batch returns status 2 before it claims the first message.
+A read-only run uses a private temporary Maildir.
 
 | Exit | Meaning |
 | --- | --- |

@@ -99,7 +99,7 @@ maildir_list_folders() {
 
     [[ -d "$root" ]] || return 1
 
-    root=${root:a}
+    root=${root:A}
     if command -v mdirs >/dev/null; then
         local folders folder
         folders="$(mdirs -0 -a "$root")" || return $?
