@@ -62,7 +62,10 @@ class Booleans(ast.NodeTransformer):
 parsed = ast.literal_eval(Booleans().visit(value))
 user = parsed['servers'][0]['users'][0]
 if (state / 'deliver-sample').exists():
-    subprocess.run(user['mda'], shell=True, input=b'Subject: MDA fixture\n\nbody\n', check=True)
+    message = b'Subject: MDA fixture\n\nbody\n'
+    subprocess.run(user['mda'], shell=True, input=message, check=True)
+    incoming = pathlib.Path((state / 'deliver-sample').read_text())
+    assert [p.read_bytes() for p in (incoming / 'new').iterdir()] == [message]
 names = user['mailboxes']
 (state / 'folders.json').write_text(json.dumps(names))
 sys.exit(1 if '-c' in sys.argv else 0) # Successful empty poll, no download.
@@ -142,11 +145,11 @@ reset_calls
 cli_list
 print -rl -- "${expected_folders[@]}" > "$IMAP_TEST_STATE/expected.out"
 cmp "$IMAP_TEST_STATE/list.out" "$IMAP_TEST_STATE/expected.out"
-touch "$IMAP_TEST_STATE/deliver-sample"
+print -rn -- "$mail_root/incoming" > "$IMAP_TEST_STATE/deliver-sample"
 cli_fetch
 rm "$IMAP_TEST_STATE/deliver-sample"
-received=("$mail_root/incoming/new/"*(.N))
-assert_equal "${#received}" 1 "parsed MDA delivered to the configured root"
+received=("$mail_root"/*/cur/*(.N))
+assert_equal "${#received}" 1 "fetch filtered the delivered sample"
 grep -Fxq "Subject: MDA fixture" "$received[1]"
 assert_fetch_folders "${expected_folders[@]}"
 [[ "$(wc -l < "$IMAP_TEST_STATE/fetch-calls" | tr -d ' ')" == 1 ]]
