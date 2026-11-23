@@ -9,6 +9,8 @@
 #include <string.h>
 
 #ifdef JARO_DEDUP_TESTING
+#include "dedup/classify.h"
+
 static int
 dump(void *context, const struct jd_root *root, unsigned sub,
     const unsigned char *name, size_t length, const struct stat *metadata)
@@ -49,7 +51,8 @@ main(int argc, char **argv)
 	unsigned cache_kib = 131072, heap_kib = 393216;
 	int offset = 1, inventory_mode = 0, result = 1;
 #ifdef JARO_DEDUP_TESTING
-	int hold = 0, dump_rows = 0, allocation_failure = 0, temp_probe = 0;
+	int hold = 0, dump_rows = 0, candidates = 0, classify = 0;
+	int allocation_failure = 0, temp_probe = 0, force_digest = 0, hold_reduction = 0;
 	unsigned max_pages = 0;
 #endif
 	if (!scratch || !*scratch)
@@ -72,6 +75,10 @@ main(int argc, char **argv)
 #ifdef JARO_DEDUP_TESTING
 		if (!strcmp(option, "--test-hold")) { hold = 1; continue; }
 		if (!strcmp(option, "--test-dump")) { dump_rows = 1; continue; }
+		if (!strcmp(option, "--test-candidates")) { candidates = 1; continue; }
+		if (!strcmp(option, "--test-classify")) { classify = 1; continue; }
+		if (!strcmp(option, "--test-force-digest")) { force_digest = 1; continue; }
+		if (!strcmp(option, "--test-hold-after-reduction")) { hold_reduction = 1; continue; }
 		if (!strcmp(option, "--test-temp-probe")) { temp_probe = 1; continue; }
 		if (!strcmp(option, "--test-allocation-failure")) { allocation_failure = 1; continue; }
 		if (offset < argc && (!strcmp(option, "--test-cache-kib") ||
@@ -92,6 +99,11 @@ main(int argc, char **argv)
 	}
 	if (!inventory_mode || offset == argc)
 		goto usage;
+#ifdef JARO_DEDUP_TESTING
+	if (dump_rows + candidates + classify > 1 ||
+	    ((force_digest || hold_reduction) && !candidates && !classify))
+		goto usage;
+#endif
 	if (mail_root && !*mail_root)
 		mail_root = NULL;
 	if (jd_preflight(&inventory, mail_root, (size_t)(argc - offset), argv + offset))
@@ -102,6 +114,7 @@ main(int argc, char **argv)
 	}
 #ifdef JARO_DEDUP_TESTING
 	store.fail_allocation = allocation_failure;
+	store.force_digest = force_digest;
 	if (max_pages) {
 		char pragma[80];
 		snprintf(pragma, sizeof(pragma), "PRAGMA max_page_count=%u", max_pages);
@@ -123,6 +136,24 @@ main(int argc, char **argv)
 	}
 	if (dump_rows && (jd_store_cursor(&store, dump, NULL, &inventory) || fflush(stdout)))
 		goto cleanup;
+	if (candidates || classify) {
+		struct jd_classify_stats stats;
+		if (jd_reduce_candidates(&store, &inventory, &stats))
+			goto cleanup;
+		if (hold_reduction) {
+			fputs("candidates-ready\n", stderr);
+			if (fflush(stderr) || getchar() != 'x')
+				goto cleanup;
+		}
+		if (jd_prove_pairs(&store, &inventory, &stats))
+			goto cleanup;
+		if (classify ? (jd_prove_hashes(&store, &inventory, &stats) || jd_dump_survivors(&store)) :
+		    jd_dump_candidates(&store))
+			goto cleanup;
+		if (fflush(stdout))
+			goto cleanup;
+		jd_print_classify_stats(&stats);
+	}
 #endif
 	result = 0;
 cleanup:

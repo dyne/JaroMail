@@ -190,6 +190,38 @@ verify_bindings(const struct jd_root *root)
 }
 
 int
+jd_open_subdir(const struct jd_root *root, unsigned sub, int *parent)
+{
+	struct stat observed;
+	int fd, rootfd = open_directory(AT_FDCWD, root->path, &root->identity, &observed);
+	if (rootfd < 0)
+		return -1;
+	fd = open_directory(rootfd, subdirs[sub], &root->subdirs[sub], &observed);
+	if (fd < 0)
+		close(rootfd);
+	else
+		*parent = rootfd;
+	return fd;
+}
+
+int
+jd_verify_subdir(const struct jd_root *root, unsigned sub, int parent)
+{
+	struct stat observed;
+	if (stat(root->path, &observed) < 0)
+		return fail("stat root binding");
+	if (!same_directory(&root->identity, &observed))
+		goto changed;
+	if (fstatat(parent, subdirs[sub], &observed, 0) < 0)
+		return fail("stat subdirectory binding");
+	if (same_directory(&root->subdirs[sub], &observed))
+		return 0;
+changed:
+	errno = ESTALE;
+	return fail("directory binding changed");
+}
+
+int
 jd_scan(const struct jd_inventory *inventory, jd_emit emit, void *context)
 {
 	size_t i;

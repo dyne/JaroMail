@@ -27,6 +27,9 @@ typedef int (*jd_emit)(void *, const struct jd_root *, unsigned,
  * are never followed. The caller owns and must free the preflight result. */
 int jd_preflight(struct jd_inventory *, const char *, size_t, char *const *);
 int jd_scan(const struct jd_inventory *, jd_emit, void *);
+/* Reopen and verify the root and cur/new binding. The caller owns both fds. */
+int jd_open_subdir(const struct jd_root *, unsigned, int *);
+int jd_verify_subdir(const struct jd_root *, unsigned, int);
 void jd_inventory_free(struct jd_inventory *);
 
 #endif

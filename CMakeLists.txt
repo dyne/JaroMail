@@ -134,7 +134,8 @@ add_custom_target(filter-core DEPENDS jaro-policy)
 add_custom_target(filter-compile DEPENDS jaro-filter-compile)
 
 if(JARO_BUILD_TEST_DRIVERS)
-  jaro_executable(jaro-dedup-test src/jaro-dedup.c src/dedup/inventory.c src/dedup/store.c)
+  jaro_executable(jaro-dedup-test src/jaro-dedup.c src/dedup/inventory.c src/dedup/store.c
+    src/dedup/classify.c src/filter/sha256.c)
   target_compile_definitions(jaro-dedup-test PRIVATE JARO_DEDUP_TESTING)
   target_compile_options(jaro-dedup-test PRIVATE -Wall -Wextra -Wpedantic)
   target_link_libraries(jaro-dedup-test PRIVATE jaro-dedup-sqlite)
