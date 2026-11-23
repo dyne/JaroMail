@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the pinned Sieve extraction and complete abook release offline."""
+"""Verify the pinned Sieve, abook and SQLite source inputs offline."""
 
 import hashlib
 import json
@@ -13,9 +13,13 @@ def verify(root):
     abook = json.loads((root / "abook/sources.json").read_text())
     if abook["schema_version"] != 1 or abook["directory"] != "abook/upstream":
         raise ValueError("unsupported abook source manifest")
-    expected = {"README.md", "sources.json", "verify.py", "abook/README.md", "abook/sources.json"}
+    sqlite = json.loads((root / "sqlite/sources.json").read_text())
+    if sqlite["schema_version"] != 1 or sqlite["directory"] != "sqlite/upstream":
+        raise ValueError("unsupported SQLite source manifest")
+    expected = {"README.md", "sources.json", "verify.py", "abook/README.md", "abook/sources.json",
+                "sqlite/README.md", "sqlite/sources.json"}
     entries = []
-    for source in (manifest, manifest["dovecot_notices"], manifest["dovecot_maildir"], abook):
+    for source in (manifest, manifest["dovecot_notices"], manifest["dovecot_maildir"], abook, sqlite):
         directory = PurePosixPath(source["directory"])
         if directory.is_absolute() or ".." in directory.parts:
             raise ValueError("unsafe extraction directory")
@@ -51,8 +55,8 @@ def verify(root):
         data = target.read_bytes()
         if len(data) != entry["size"] or hashlib.sha256(data).hexdigest() != entry["sha256"]:
             raise ValueError("upstream source differs: " + entry["path"])
-    print("PASS: {} pinned upstream files ({} Sieve, {} Dovecot notices, 1 Dovecot Maildir source, {} abook), {} bytes; no extra vendor payload".format(
-        len(entries), len(manifest["files"]), len(manifest["dovecot_notices"]["files"]), len(abook["files"]), sum(entry["size"] for _, entry in entries)))
+    print("PASS: {} pinned upstream files ({} Sieve, {} Dovecot notices, 1 Dovecot Maildir source, {} abook, {} SQLite), {} bytes; no extra vendor payload".format(
+        len(entries), len(manifest["files"]), len(manifest["dovecot_notices"]["files"]), len(abook["files"]), len(sqlite["files"]), sum(entry["size"] for _, entry in entries)))
 
 
 if __name__ == "__main__":
