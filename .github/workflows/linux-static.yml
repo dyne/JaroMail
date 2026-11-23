@@ -122,6 +122,11 @@ jobs:
           package_root="out/unpacked/${archive%.tar.gz}"
           test "$("$package_root/bin/jaro" --version)" = "Jaro Mail v$ASSIGNED_VERSION"
           python3 build/check-static.py --bin-dir "$package_root/share/jaromail/bin" --arch "$TARGET_ARCH"
+          if [[ "$TARGET_ARCH" == arm64 ]]; then
+            python3 extras/test/dedup-cli-smoke.py --helper "$package_root/share/jaromail/bin/jaro-dedup" --emulator qemu-aarch64
+          else
+            python3 extras/test/dedup-cli-smoke.py --cli "$package_root/bin/jaro"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: static-base-${{ matrix.arch }}
@@ -181,6 +186,7 @@ jobs:
           (cd dist && sha256sum "$archive" > "$archive.sha256")
           tar -xzf "dist/$archive" -C relocated
           bash extras/test/release-filter-smoke.sh "$PWD/relocated/$bundle"
+          python3 extras/test/dedup-cli-smoke.py --cli "$PWD/relocated/$bundle/bin/jaro"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-static-${{ matrix.arch }}

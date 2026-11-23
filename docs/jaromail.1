@@ -2179,6 +2179,74 @@ Mblaze can safely move all e\-mails stored in one maildir to another.
 The above command will move all emails stored inside the maildir folder
 \f[CR]latest\-mails\f[R] to the other maildir folder
 \f[CR]global\-archive\f[R].
+.SS Remove exact duplicates
+For an archive with overlapping folders, list them in the order you want
+to keep mail.
+Preview the proposed changes, then apply them to the same roots.
+.IP
+.EX
+jaro \-n dedup Primary Archive
+jaro dedup Primary Archive
+.EE
+.PP
+Two regular messages match when their lengths and every stored byte
+match, including headers, MIME encoding, line endings and trailing
+bytes.
+Within the earliest listed Maildir containing a match, \f[CR]cur\f[R]
+has priority over \f[CR]new\f[R], then the smallest raw filename in
+unsigned byte order wins.
+The survivor keeps its path, flags, bytes and mode.
+You can also pass one folder to remove duplicates within it.
+Direct regular files in \f[CR]cur\f[R] and \f[CR]new\f[R] participate,
+including empty files and separate hard\-linked names.
+.PP
+Bare folder names resolve under the configured mail root.
+Use \f[CR]./Archive\f[R] for a folder in the current directory or pass
+an absolute path.
+Use \f[CR]\-\-\f[R] before a name beginning with a dash.
+Preview writes one
+\f[CR]keep \[dq]\&...\[dq] remove \[dq]\&...\[dq]\f[R] pair per line to
+standard output.
+Within each quoted path, a quote, backslash, control byte or non\-ASCII
+byte appears as \f[CR]\[rs]xHH\f[R] with two hexadecimal digits.
+The summary goes to standard error.
+\f[CR]\-q\f[R] suppresses successful summaries.
+.PP
+Apply requires stable existing entries.
+Pause clients, syncs and expunges that move, edit or remove messages.
+New deliveries under fresh names can continue.
+Two apply runs that share physical roots or message directories cannot
+proceed together.
+External writers must cooperate through the final name checks and
+unlink.
+Detected changes leave uncertain names in place.
+Conflicts and errors produce a nonzero exit.
+Completed removals stand, and rerunning inventories the surviving names
+and any new arrivals.
+.PP
+The summary counts examined files, duplicate groups encountered, removed
+names and conflicts.
+Preview also reports proposed removals.
+Logical duplicate bytes sum the lengths of removed or proposed names.
+Apply\[cq]s \f[CR]last\-link\-block\-bytes\f[R] sums allocated blocks
+for files whose last link it removed.
+Hard links, open descriptors, snapshots and shared extents can affect
+the free space recovered.
+.PP
+Use \f[CR]\-\-scratch\-dir DIR\f[R] to place the private SQLite index in
+an existing directory outside the selected Maildirs.
+The default is \f[CR]TMPDIR\f[R], then \f[CR]/tmp\f[R].
+A disk\-backed scratch directory keeps a large index off tmpfs.
+It stores metadata and comparison keys.
+After an interruption, any leftover \f[CR]jaro\-dedup\-*\f[R] scratch
+directory from that run is disposable.
+.PP
+The legacy \f[CR]jaro rmdupes\f[R] command still checks Message\-IDs
+with a bounded \f[CR]formail\f[R] cache.
+Its \f[CR]lastlog\f[R] operand calls the legacy
+\f[CR]maildirs_lastlog\f[R] provider for the destination list.
+For \f[CR]jaro dedup\f[R], \f[CR]lastlog\f[R] is an ordinary folder
+name.
 .SS Message snapshots
 \f[CR]jaro snapshot create DEST\f[R] copies messages into a
 \f[B]new\f[R] private directory.

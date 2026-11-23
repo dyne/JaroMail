@@ -1,6 +1,6 @@
 # Private Maildir inventory
 
-This feature is under development. It has no public command or deletion path.
+The installed `jaro dedup` command uses the private helper for preview and apply.
 The native fixture driver is built only with `JARO_BUILD_TEST_DRIVERS=ON`.
 
 Input paths containing `/`, plus `.` and `..`, resolve relative to the caller
@@ -38,7 +38,7 @@ conversion is involved. Order within a directory is deliberately unspecified.
 
 ## Private scratch inventory
 
-The uninstalled `jaro-dedup --inventory [--scratch-dir PATH] [--mail-root PATH]
+The private `jaro-dedup --inventory [--scratch-dir PATH] [--mail-root PATH]
 -- ROOT...` entry point builds the inventory and reports counters. It cannot
 delete mail. It defaults to `TMPDIR`, then `/tmp`; set `--scratch-dir` to an
 existing directory on local disk for large archives. A tmpfs scratch path also
@@ -54,8 +54,9 @@ success and errors close the database and remove owned scratch files. Crashes
 may leave scratch; it is disposable and never needed to find original mail.
 
 Prepared inserts commit every 1,024 rows. `occurrences` stores integer row ID,
-original input rank, cur/new rank, basename BLOB, size, decimal-text unsigned
-device/inode, and seconds/nanoseconds for modification and change times.
+original input rank, cur/new rank, basename BLOB, size, mode, link count,
+decimal-text unsigned device/inode, and seconds/nanoseconds for modification
+and change times.
 `roots.path` is also a BLOB. A completion flag remains false until enumeration,
 all commits and index creation succeed. Cursor consumers require that flag.
 The `occurrence_size(size,rank,subdir,name)` index streams rows in size and
@@ -77,3 +78,30 @@ for both native and target-static builds. No host SQLite library is searched.
 Fault controls, dump output, reduced-cache settings and the bounded inspection
 handshake exist only in `jaro-dedup-test`, built with
 `JARO_BUILD_TEST_DRIVERS=ON`. They are rejected by the production helper.
+
+## Applying exact matches
+
+Apply is a maintenance operation. Keep existing names, directory bindings and
+message contents stable throughout the run. Pause mail clients, syncs and
+expunges that move, overwrite or remove them. Delivery under fresh names can
+continue. New arrivals outside the inventory are eligible on the next run.
+Directory locks on the physical roots, `cur` and `new` serialize cooperating
+apply runs even through aliases. An overlapping run exits before deletion.
+The locks are advisory. POSIX cannot atomically check a name and conditionally
+unlink that inode, so external writers must cooperate through the final
+name checks and unlink. Timestamp granularity can also hide two same-size
+edits within one filesystem clock tick. The byte proof remains valid only
+while existing entries stay stable.
+
+The helper completes inventory, candidate reduction and exact classification of
+hash buckets before removing anything. For provisional pairs, it compares the
+opened files exactly once and holds both files and their directories through
+the final checks and unlink. For hash groups, it reopens the proved keeper and
+duplicate. Message opens never follow symlinks. Both names and directory bindings
+must match their proof snapshots just before unlinking the duplicate.
+An observed conflict leaves the uncertain entry in
+place. A scratch failure stops deletion. After a partial run, rerun the command
+on the same roots to build a fresh inventory. Each completed unlink stands on
+its own. Logical bytes sum the sizes of removed names. Last-link block bytes
+sum allocated 512-byte blocks only where the last name was unlinked. Open
+descriptors, snapshots and shared extents can delay or reduce free-space gains.

@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 
 struct jd_root {
-	char *path;
+	char *path, *operand;
 	struct stat identity;
 	struct stat subdirs[2];
 	size_t rank;
@@ -16,6 +16,16 @@ struct jd_inventory {
 	struct jd_root *roots;
 	size_t count;
 };
+
+struct jd_locks {
+	int *fds;
+	size_t count;
+};
+
+int jd_lock_inventory(const struct jd_inventory *, struct jd_locks *);
+int jd_check_scratch_parent(const struct jd_inventory *, const char *);
+void jd_unlock_inventory(struct jd_locks *);
+int jd_entry_conflict(int);
 
 /* name is borrowed, length-delimited, and valid only during the callback.
  * subdir 0 is cur, 1 is new. Nonzero callbacks abort the entire inventory. */

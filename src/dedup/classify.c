@@ -15,10 +15,39 @@
 #define READ_BLOCK (64 * 1024)
 
 static int
+write_escaped(FILE *stream, const unsigned char *bytes, size_t length)
+{
+	size_t i;
+	for (i = 0; i < length; i++) {
+		unsigned c = bytes[i];
+		if (c < 32 || c > 126 || c == '"' || c == '\\') {
+			if (fprintf(stream, "\\x%02x", c) < 0)
+				return -1;
+		} else if (fputc((int)c, stream) == EOF) {
+			return -1;
+		}
+	}
+	return 0;
+}
+
+int
+jd_write_path(FILE *stream, const struct jd_occurrence *entry)
+{
+	const char *root = entry->root->path;
+	return fputc('"', stream) == EOF ||
+	    write_escaped(stream, (const unsigned char *)root, strlen(root)) ||
+	    fputs(entry->subdir ? "/new/" : "/cur/", stream) == EOF ||
+	    write_escaped(stream, entry->name, entry->length) || fputc('"', stream) == EOF ? -1 : 0;
+}
+
+static int
 content_error(const struct jd_occurrence *entry, const char *operation)
 {
-	fprintf(stderr, "dedup content: %s (input %zu/%s): %s\n", operation,
-	    entry->root->rank, entry->subdir ? "new" : "cur", strerror(errno));
+	int saved = errno;
+	fprintf(stderr, "dedup content: %s ", operation);
+	jd_write_path(stderr, entry);
+	fprintf(stderr, ": %s\n", strerror(saved));
+	errno = saved;
 	return -1;
 }
 
@@ -26,6 +55,7 @@ static int
 matches_snapshot(const struct stat *observed, const struct stat *expected)
 {
 	return S_ISREG(observed->st_mode) && observed->st_size == expected->st_size &&
+	    observed->st_nlink == expected->st_nlink && observed->st_mode == expected->st_mode &&
 	    observed->st_dev == expected->st_dev && observed->st_ino == expected->st_ino &&
 	    observed->JD_MTIME.tv_sec == expected->JD_MTIME.tv_sec &&
 	    observed->JD_MTIME.tv_nsec == expected->JD_MTIME.tv_nsec &&
@@ -68,7 +98,11 @@ jd_message_open(struct jd_message *message, const struct jd_occurrence *entry,
 	}
 	return 0;
 error:
-	jd_message_close(message);
+	{
+		int saved = errno;
+		jd_message_close(message);
+		errno = saved;
+	}
 	return -1;
 }
 
@@ -111,8 +145,11 @@ read_at(const struct jd_message *message, unsigned char *buffer, size_t length,
 		if (got < 0 && errno == EINTR)
 			continue;
 		if (got <= 0) {
-			if (!got)
+			if (!got) {
+				if (jd_message_verify(message))
+					return -1;
 				errno = EIO;
+			}
 			return content_error(message->entry, got ? "read message" : "unexpected message EOF");
 		}
 		reads->bytes += (size_t)got;
@@ -139,8 +176,10 @@ digest_message(const struct jd_occurrence *entry, int sample,
 	off_t size = entry->metadata.st_size, offset;
 	int result = -1;
 
-	if (jd_message_open(&message, entry, reads))
+	if (jd_message_open(&message, entry, reads)) {
+		reads->conflicts += jd_entry_conflict(errno);
 		return -1;
+	}
 	jf_sha256_init(&hash);
 	if (sample) {
 		/* Only sizes above two windows use this route. */
@@ -163,6 +202,8 @@ digest_message(const struct jd_occurrence *entry, int sample,
 	jf_sha256_hex(&hash, digest);
 	result = 0;
 done:
+	if (result < 0 && jd_entry_conflict(errno))
+		reads->conflicts++;
 	jd_message_close(&message);
 	return result;
 }
@@ -198,11 +239,17 @@ compare_messages(const struct jd_occurrence *left, const struct jd_occurrence *r
 {
 	struct jd_message a, b;
 	int equal = -1;
-	if (jd_message_open(&a, left, reads))
+	if (jd_message_open(&a, left, reads)) {
+		reads->conflicts += jd_entry_conflict(errno);
 		return -1;
+	}
 	if (!jd_message_open(&b, right, reads)) {
 		equal = jd_compare_opened(&a, &b, reads);
+		if (equal < 0)
+			reads->conflicts += jd_entry_conflict(errno);
 		jd_message_close(&b);
+	} else {
+		reads->conflicts += jd_entry_conflict(errno);
 	}
 	jd_message_close(&a);
 	return equal;
@@ -214,13 +261,6 @@ struct reduction {
 	struct jd_classify_stats *stats;
 	sqlite3_stmt *save_pair, *save_sample, *save_hash;
 };
-
-static int
-prepare(struct jd_store *store, sqlite3_stmt **statement, const char *query)
-{
-	int code = sqlite3_prepare_v2(store->db, query, -1, statement, NULL);
-	return code == SQLITE_OK ? 0 : jd_store_error(store, query, code);
-}
 
 static int
 insert_done(struct jd_store *store, sqlite3_stmt *statement, int code)
@@ -295,11 +335,11 @@ reduce_sizes(struct reduction *pass)
 {
 	sqlite3_stmt *sizes = NULL, *members = NULL, *same_inode = NULL;
 	int code, result = -1;
-	if (prepare(pass->store, &sizes, "SELECT size,count(*) FROM occurrences "
+	if (jd_store_prepare(pass->store, &sizes, "SELECT size,count(*) FROM occurrences "
 	    "INDEXED BY occurrence_size GROUP BY size HAVING count(*)>1") ||
-	    prepare(pass->store, &members, "SELECT " JD_OCCURRENCE_COLUMNS
+	    jd_store_prepare(pass->store, &members, "SELECT " JD_OCCURRENCE_COLUMNS
 	    " FROM occurrences AS o INDEXED BY occurrence_size WHERE size=? ORDER BY rank,subdir,name") ||
-	    prepare(pass->store, &same_inode, "SELECT NOT EXISTS("
+	    jd_store_prepare(pass->store, &same_inode, "SELECT NOT EXISTS("
 	    " SELECT 1 FROM occurrences INDEXED BY occurrence_size WHERE size=?1 AND (device,inode)<>("
 	    " SELECT device,inode FROM occurrences INDEXED BY occurrence_size WHERE size=?1"
 	    " ORDER BY rank,subdir,name LIMIT 1))"))
@@ -354,9 +394,9 @@ reduce_samples(struct reduction *pass)
 {
 	sqlite3_stmt *keys = NULL, *members = NULL;
 	int code, result = -1;
-	if (prepare(pass->store, &keys, "SELECT size,digest,count(*) FROM samples "
+	if (jd_store_prepare(pass->store, &keys, "SELECT size,digest,count(*) FROM samples "
 	    "GROUP BY size,digest HAVING count(*)>1") ||
-	    prepare(pass->store, &members, "SELECT " JD_OCCURRENCE_COLUMNS
+	    jd_store_prepare(pass->store, &members, "SELECT " JD_OCCURRENCE_COLUMNS
 	    " FROM samples AS s JOIN occurrences AS o ON o.id=s.id"
 	    " WHERE s.size=? AND s.digest=? ORDER BY o.rank,o.subdir,o.name"))
 		goto done;
@@ -403,9 +443,9 @@ jd_reduce_candidates(struct jd_store *store, const struct jd_inventory *inventor
 	    "PRIMARY KEY(size,digest,id)) WITHOUT ROWID;"
 	    "CREATE TEMP TABLE pairs(preferred INTEGER NOT NULL,other INTEGER PRIMARY KEY);"
 	    "CREATE TEMP TABLE matches(winner INTEGER NOT NULL,duplicate INTEGER PRIMARY KEY);") ||
-	    prepare(store, &pass.save_pair, "INSERT INTO pairs VALUES(?,?)") ||
-	    prepare(store, &pass.save_sample, "INSERT INTO samples VALUES(?,?,?)") ||
-	    prepare(store, &pass.save_hash, "INSERT INTO hashes VALUES(?,?,?)") ||
+	    jd_store_prepare(store, &pass.save_pair, "INSERT INTO pairs VALUES(?,?)") ||
+	    jd_store_prepare(store, &pass.save_sample, "INSERT INTO samples VALUES(?,?,?)") ||
+	    jd_store_prepare(store, &pass.save_hash, "INSERT INTO hashes VALUES(?,?,?)") ||
 	    reduce_sizes(&pass) || reduce_samples(&pass))
 		goto done;
 	result = 0;
@@ -432,20 +472,19 @@ lookup_occurrence(struct jd_store *store, const struct jd_inventory *inventory,
 	return jd_store_read_occurrence(store, statement, inventory, entry);
 }
 
-int
-jd_pair_cursor(struct jd_store *store, const struct jd_inventory *inventory,
-    jd_emit_pair emit, void *context)
+static int
+pair_cursor(struct jd_store *store, const struct jd_inventory *inventory,
+    const char *query, jd_emit_pair provisional, jd_emit_pair proved, void *context)
 {
 	sqlite3_stmt *pairs = NULL, *preferred = NULL, *other = NULL;
 	const char *lookup = "SELECT " JD_OCCURRENCE_COLUMNS " FROM occurrences AS o WHERE id=?";
 	int code, result = -1;
-	if (prepare(store, &pairs, "SELECT p.preferred,p.other FROM pairs AS p"
-	    " JOIN occurrences AS w ON p.preferred=w.id JOIN occurrences AS d ON p.other=d.id"
-	    " ORDER BY w.rank,w.subdir,w.name,d.rank,d.subdir,d.name") ||
-	    prepare(store, &preferred, lookup) || prepare(store, &other, lookup))
+	if (jd_store_prepare(store, &pairs, query) ||
+	    jd_store_prepare(store, &preferred, lookup) || jd_store_prepare(store, &other, lookup))
 		goto done;
 	while ((code = sqlite3_step(pairs)) == SQLITE_ROW) {
 		struct jd_occurrence first, second;
+		jd_emit_pair emit = sqlite3_column_int(pairs, 2) ? proved : provisional;
 		if (lookup_occurrence(store, inventory, preferred, sqlite3_column_int64(pairs, 0), &first) ||
 		    lookup_occurrence(store, inventory, other, sqlite3_column_int64(pairs, 1), &second) ||
 		    emit(context, &first, &second))
@@ -464,6 +503,28 @@ done:
 	sqlite3_finalize(preferred);
 	sqlite3_finalize(pairs);
 	return result;
+}
+
+#define PAIR_ORDER " ORDER BY w.rank,w.subdir,w.name,d.rank,d.subdir,d.name"
+
+int
+jd_pair_cursor(struct jd_store *store, const struct jd_inventory *inventory,
+    jd_emit_pair emit, void *context)
+{
+	return pair_cursor(store, inventory, "SELECT p.preferred,p.other,0 FROM pairs AS p"
+	    " JOIN occurrences AS w ON p.preferred=w.id JOIN occurrences AS d ON p.other=d.id"
+	    PAIR_ORDER, emit, emit, context);
+}
+
+int
+jd_apply_cursor(struct jd_store *store, const struct jd_inventory *inventory,
+    jd_emit_pair provisional, jd_emit_pair proved, void *context)
+{
+	return pair_cursor(store, inventory, "WITH candidates(keeper,loser,proved) AS ("
+	    "SELECT preferred,other,0 FROM pairs UNION ALL SELECT winner,duplicate,1 FROM matches)"
+	    " SELECT c.keeper,c.loser,c.proved FROM candidates c"
+	    " JOIN occurrences w ON w.id=c.keeper JOIN occurrences d ON d.id=c.loser"
+	    PAIR_ORDER, provisional, proved, context);
 }
 
 struct proof {
@@ -497,7 +558,7 @@ jd_prove_pairs(struct jd_store *store, const struct jd_inventory *inventory,
 	struct proof pass = {store, inventory, stats, NULL};
 	int result = -1;
 	if (!jd_store_exec(store, "BEGIN") &&
-	    !prepare(store, &pass.matches, "INSERT INTO matches VALUES(?,?)") &&
+	    !jd_store_prepare(store, &pass.matches, "INSERT INTO matches VALUES(?,?)") &&
 	    !jd_pair_cursor(store, inventory, prove_pair, &pass))
 		result = 0;
 	sqlite3_finalize(pass.matches);
@@ -553,14 +614,14 @@ jd_prove_hashes(struct jd_store *store, const struct jd_inventory *inventory,
 	int code, result = -1;
 	if (jd_store_exec(store, "BEGIN; CREATE TEMP TABLE representatives("
 	    "priority INTEGER PRIMARY KEY, id INTEGER NOT NULL)") ||
-	    prepare(store, &buckets, "SELECT size,digest FROM hashes GROUP BY size,digest HAVING count(*)>1") ||
-	    prepare(store, &members, "SELECT " JD_OCCURRENCE_COLUMNS
+	    jd_store_prepare(store, &buckets, "SELECT size,digest FROM hashes GROUP BY size,digest HAVING count(*)>1") ||
+	    jd_store_prepare(store, &members, "SELECT " JD_OCCURRENCE_COLUMNS
 	    " FROM hashes AS h JOIN occurrences AS o ON o.id=h.id"
 	    " WHERE h.size=? AND h.digest=? ORDER BY o.rank,o.subdir,o.name") ||
-	    prepare(store, &representatives, "SELECT " JD_OCCURRENCE_COLUMNS
+	    jd_store_prepare(store, &representatives, "SELECT " JD_OCCURRENCE_COLUMNS
 	    " FROM representatives AS r JOIN occurrences AS o ON o.id=r.id ORDER BY r.priority") ||
-	    prepare(store, &add_representative, "INSERT INTO representatives(id) VALUES(?)") ||
-	    prepare(store, &pass.matches, "INSERT INTO matches VALUES(?,?)"))
+	    jd_store_prepare(store, &add_representative, "INSERT INTO representatives(id) VALUES(?)") ||
+	    jd_store_prepare(store, &pass.matches, "INSERT INTO matches VALUES(?,?)"))
 		goto done;
 	while ((code = sqlite3_step(buckets)) == SQLITE_ROW) {
 		code = sqlite3_bind_value(members, 1, sqlite3_column_value(buckets, 0));
@@ -616,7 +677,7 @@ jd_dump_candidates(struct jd_store *store)
 {
 	sqlite3_stmt *cursor = NULL;
 	int code;
-	if (prepare(store, &cursor, "SELECT w.rank,w.subdir,w.name,d.rank,d.subdir,d.name FROM matches AS p"
+	if (jd_store_prepare(store, &cursor, "SELECT w.rank,w.subdir,w.name,d.rank,d.subdir,d.name FROM matches AS p"
 	    " JOIN occurrences AS w ON p.winner=w.id JOIN occurrences AS d ON p.duplicate=d.id"
 	    " ORDER BY w.rank,w.subdir,w.name,d.rank,d.subdir,d.name"))
 		return -1;
@@ -630,7 +691,7 @@ jd_dump_candidates(struct jd_store *store)
 	if (code != SQLITE_DONE)
 		return jd_store_error(store, "dump direct pair matches", code);
 
-	if (prepare(store, &cursor, "WITH repeated AS (SELECT size,digest FROM hashes"
+	if (jd_store_prepare(store, &cursor, "WITH repeated AS (SELECT size,digest FROM hashes"
 	    " GROUP BY size,digest HAVING count(*)>1)"
 	    " SELECT h.size,h.digest,o.rank,o.subdir,o.name FROM repeated AS r"
 	    " JOIN hashes AS h ON h.size=r.size AND h.digest=r.digest"
@@ -653,7 +714,7 @@ jd_dump_survivors(struct jd_store *store)
 {
 	sqlite3_stmt *cursor = NULL;
 	int code;
-	if (prepare(store, &cursor, "SELECT o.rank,o.subdir,o.name,"
+	if (jd_store_prepare(store, &cursor, "SELECT o.rank,o.subdir,o.name,"
 	    " coalesce(w.rank,o.rank),coalesce(w.subdir,o.subdir),coalesce(w.name,o.name)"
 	    " FROM occurrences AS o LEFT JOIN matches AS m ON m.duplicate=o.id"
 	    " LEFT JOIN occurrences AS w ON w.id=m.winner ORDER BY o.rank,o.subdir,o.name"))

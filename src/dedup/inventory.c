@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <unistd.h>
 
 static const char *const subdirs[] = {"cur", "new"};
@@ -23,8 +24,18 @@ same_directory(const struct stat *a, const struct stat *b)
 static int
 fail(const char *operation)
 {
-	fprintf(stderr, "dedup inventory: %s: %s\n", operation, strerror(errno));
+	int saved = errno;
+	fprintf(stderr, "dedup inventory: %s: %s\n", operation, strerror(saved));
+	errno = saved;
 	return -1;
+}
+
+int
+jd_entry_conflict(int error)
+{
+	return error == ENOENT || error == ENOTDIR || error == ELOOP ||
+	    error == ESTALE || error == EACCES || error == EPERM || error == ENXIO ||
+	    error == ENODEV || error == EISDIR;
 }
 
 static int
@@ -52,17 +63,19 @@ void
 jd_inventory_free(struct jd_inventory *inventory)
 {
 	size_t i;
-	for (i = 0; i < inventory->count; i++)
+	for (i = 0; i < inventory->count; i++) {
 		free(inventory->roots[i].path);
+		free(inventory->roots[i].operand);
+	}
 	free(inventory->roots);
 	inventory->roots = NULL;
 	inventory->count = 0;
 }
 
 static char *
-resolve_input(const char *mail_root, const char *input)
+input_path(const char *mail_root, const char *input)
 {
-	char *joined, *resolved;
+	char *joined;
 	size_t prefix, length;
 	if (!*input) {
 		errno = EINVAL;
@@ -70,7 +83,7 @@ resolve_input(const char *mail_root, const char *input)
 	}
 	if (!mail_root || strchr(input, '/') || !strcmp(input, ".") ||
 	    !strcmp(input, ".."))
-		return realpath(input, NULL);
+		return strdup(input);
 	prefix = strlen(mail_root);
 	length = strlen(input);
 	if (prefix > SIZE_MAX - length - 2) {
@@ -83,9 +96,7 @@ resolve_input(const char *mail_root, const char *input)
 	memcpy(joined, mail_root, prefix);
 	joined[prefix] = '/';
 	memcpy(joined + prefix + 1, input, length + 1);
-	resolved = realpath(joined, NULL);
-	free(joined);
-	return resolved;
+	return joined;
 }
 
 int
@@ -105,7 +116,8 @@ jd_preflight(struct jd_inventory *inventory, const char *mail_root,
 		return fail("allocate roots");
 	for (i = 0; i < count; i++) {
 		int alias = 0;
-		root.path = resolve_input(mail_root, inputs[i]);
+		root.operand = input_path(mail_root, inputs[i]);
+		root.path = root.operand ? realpath(root.operand, NULL) : NULL;
 		root.rank = i;
 		if (!root.path) {
 			fail("resolve root");
@@ -154,6 +166,7 @@ jd_preflight(struct jd_inventory *inventory, const char *mail_root,
 		root.alias = alias;
 		inventory->roots[inventory->count++] = root;
 		root.path = NULL;
+		root.operand = NULL;
 	}
 	return 0;
 overlap:
@@ -165,8 +178,23 @@ error:
 	if (rootfd >= 0)
 		close(rootfd);
 	free(root.path);
+	free(root.operand);
 	jd_inventory_free(inventory);
 	return -1;
+}
+
+static int
+verify_operand(const struct jd_root *root)
+{
+	struct stat observed;
+	if (!strcmp(root->operand, root->path))
+		return 0;
+	if (stat(root->operand, &observed) < 0)
+		return fail("stat input binding");
+	if (same_directory(&root->identity, &observed))
+		return 0;
+	errno = ESTALE;
+	return fail("input binding changed");
 }
 
 static int
@@ -186,7 +214,7 @@ verify_bindings(const struct jd_root *root)
 		close(fd);
 	}
 	close(rootfd);
-	return 0;
+	return verify_operand(root);
 }
 
 int
@@ -215,10 +243,128 @@ jd_verify_subdir(const struct jd_root *root, unsigned sub, int parent)
 	if (fstatat(parent, subdirs[sub], &observed, 0) < 0)
 		return fail("stat subdirectory binding");
 	if (same_directory(&root->subdirs[sub], &observed))
-		return 0;
+		return verify_operand(root);
 changed:
 	errno = ESTALE;
 	return fail("directory binding changed");
+}
+
+struct lock_target {
+	const struct jd_root *root;
+	const struct stat *identity;
+	int sub; /* -1 selects the root itself */
+};
+
+/* Check the physical ancestors of scratch, including cur/new aliases. stat
+ * needs search permission on ancestors, without requiring directory reads. */
+int
+jd_check_scratch_parent(const struct jd_inventory *inventory, const char *path)
+{
+	struct stat current;
+	char *resolved = realpath(path, NULL), *slash;
+	int result = -1;
+	if (!resolved)
+		return fail("resolve scratch directory");
+	for (;;) {
+		size_t i;
+		if (stat(resolved, &current) < 0) {
+			fail("stat scratch ancestor");
+			break;
+		}
+		for (i = 0; i < inventory->count; i++) {
+			const struct jd_root *root = &inventory->roots[i];
+			if (same_directory(&current, &root->identity) ||
+			    same_directory(&current, &root->subdirs[0]) ||
+			    same_directory(&current, &root->subdirs[1])) {
+				fputs("dedup: choose a scratch directory outside the input Maildirs\n", stderr);
+				goto done;
+			}
+		}
+		if (!strcmp(resolved, "/")) {
+			result = 0;
+			break;
+		}
+		slash = strrchr(resolved, '/');
+		if (slash == resolved)
+			slash++;
+		*slash = '\0';
+	}
+done:
+	free(resolved);
+	return result;
+}
+
+static int
+physical_order(const void *left, const void *right)
+{
+	const struct lock_target *a = left, *b = right;
+	dev_t ad = a->identity->st_dev, bd = b->identity->st_dev;
+	ino_t ai = a->identity->st_ino, bi = b->identity->st_ino;
+	if (ad != bd)
+		return ad < bd ? -1 : 1;
+	return (ai > bi) - (ai < bi);
+}
+
+void
+jd_unlock_inventory(struct jd_locks *locks)
+{
+	while (locks->count)
+		close(locks->fds[--locks->count]);
+	free(locks->fds);
+	locks->fds = NULL;
+}
+
+int
+jd_lock_inventory(const struct jd_inventory *inventory, struct jd_locks *locks)
+{
+	struct lock_target *targets;
+	size_t i, count;
+	*locks = (struct jd_locks){0};
+	if (inventory->count > SIZE_MAX / 3 / sizeof(*targets)) {
+		errno = ENOMEM;
+		return fail("allocate lock targets");
+	}
+	count = 3 * inventory->count;
+	targets = calloc(count, sizeof(*targets));
+	locks->fds = calloc(count, sizeof(*locks->fds));
+	if (!targets || !locks->fds) {
+		fail("allocate lock targets");
+		goto error;
+	}
+	for (i = 0; i < inventory->count; i++) {
+		const struct jd_root *root = &inventory->roots[i];
+		targets[3*i] = (struct lock_target){root, &root->identity, -1};
+		targets[3*i+1] = (struct lock_target){root, &root->subdirs[0], 0};
+		targets[3*i+2] = (struct lock_target){root, &root->subdirs[1], 1};
+	}
+	qsort(targets, count, sizeof(*targets), physical_order);
+	for (i = 0; i < count; i++) {
+		struct lock_target *target = &targets[i];
+		struct stat observed;
+		int fd, parent;
+		if (i && physical_order(target-1, target) == 0)
+			continue;
+		if (target->sub < 0) {
+			fd = open_directory(AT_FDCWD, target->root->path, target->identity, &observed);
+		} else {
+			fd = jd_open_subdir(target->root, (unsigned)target->sub, &parent);
+			if (fd >= 0)
+				close(parent);
+		}
+		if (fd < 0)
+			goto error;
+		locks->fds[locks->count++] = fd;
+		if (flock(fd, LOCK_EX | LOCK_NB) < 0) {
+			fail("acquire apply lock");
+			goto error;
+		}
+	}
+	free(targets);
+	return 0;
+error:
+	free(targets);
+	jd_unlock_inventory(locks);
+	return -1;
 }
 
 int

@@ -36,7 +36,9 @@ script_dir="${JAROMAILEXEC:A:h}"
 bootstrap_path="${script_dir}/zlibs/bootstrap"
 [[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../zlibs/bootstrap"
 [[ -r "${bootstrap_path}" ]] || bootstrap_path="${script_dir}/../src/zlibs/bootstrap"
-jaro_snapshot_route() {
+jaro_early_command() {
+    local wanted="$1"
+    shift
     while (( $# )); do
         case "$1" in
             -a|-l|--account|--list) (( $# >= 2 )) || return 1; shift 2 ;;
@@ -45,26 +47,20 @@ jaro_snapshot_route() {
             *) break ;;
         esac
     done
-    [[ ${1:-} == snapshot ]]
+    [[ ${1:-} == "$wanted" ]]
 }
-if jaro_snapshot_route "$@"; then
+if jaro_early_command dedup "$@"; then
+    source "${bootstrap_path:h}/dedup" || exit 1
+    dedup_cli "$bootstrap_path" "$@"
+    exit $?
+fi
+if jaro_early_command snapshot "$@"; then
     source "${bootstrap_path:h}/snapshot" || exit 1
     snapshot_cli "$bootstrap_path" "$@"
     exit $?
 fi
 # Doctor must also work when version metadata or the normal framework is absent.
-jaro_doctor_route() {
-    while (( $# )); do
-        case "$1" in
-            -a|-l|--account|--list) (( $# >= 2 )) || return 1; shift 2 ;;
-            --) shift; break ;;
-            -*) shift ;;
-            *) break ;;
-        esac
-    done
-    [[ ${1:-} == doctor ]]
-}
-if jaro_doctor_route "$@"; then
+if jaro_early_command doctor "$@"; then
     [[ -r "${bootstrap_path:h}/doctor" ]] || {
         print -u2 -- 'doctor: diagnostic module missing; reinstall Jaromail'
         exit 2
@@ -127,6 +123,7 @@ Main commands:
  outbox inspect held messages and explicitly retry or archive an ID
  doctor diagnose local setup offline without changing files
  snapshot create, verify or restore an independent message copy
+ dedup  remove byte-identical copies in Maildir priority order
  peek   look into the [account] mailbox without downloading
  serve  run localhost IMAP over local maildirs (single-user)
  index  build or update the search index for all maildirs
@@ -187,6 +184,9 @@ a pipe | in front indicate they take an email body from stdin
 
  backup   move search results from a maildir to another one
           (string or date range matches, can use -n for dry-run)
+
+ dedup [--scratch-dir DIR] [--] MAILDIR...
+          keep the first exact copy, or use -n to preview each keep/remove pair
 
  snapshot create DEST
           copy message bytes and flags to a new private snapshot

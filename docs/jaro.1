@@ -246,7 +246,23 @@ requirements and recovery behavior.
 .PP
 \f[CR]deliver\f[R] deliver a message from stdin into a maildir.
 .PP
-\f[CR]rmdupes\f[R] remove duplicate messages.
+\f[CR]dedup [\-\-scratch\-dir DIR] [\-\-] MAILDIR...\f[R] removes extra
+copies of messages whose stored bytes match exactly, including
+duplicates in a single Maildir.
+The first listed folder wins.
+Within it, \f[CR]cur\f[R] wins over \f[CR]new\f[R], then the smallest
+filename in unsigned byte order wins.
+The survivor keeps its name and flags.
+Use \f[CR]jaro \-n dedup Primary Archive\f[R] to preview each proposed
+keep/remove pair.
+Pause clients that move or edit existing entries during apply.
+Delivery under fresh names may continue.
+See the user manual for scratch placement, output escaping, accounting
+and retry behavior.
+.PP
+\f[CR]rmdupes\f[R] uses the legacy \f[CR]formail\f[R] Message\-ID cache.
+\f[CR]rmdupes lastlog\f[R] obtains its list of destinations from
+\f[CR]maildirs_lastlog\f[R].
 .PP
 \f[CR]remember\f[R], \f[CR]replay\f[R], \f[CR]preview\f[R],
 \f[CR]edit\f[R], \f[CR]vim\f[R], \f[CR]imap\f[R], \f[CR]alot\f[R],

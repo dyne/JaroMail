@@ -1,0 +1,52 @@
+#!/usr/bin/env zsh
+
+dedup_usage() {
+    print -r -- 'Usage: jaro [-n] [-q] dedup [--scratch-dir DIR] [--] MAILDIR...'
+    print -r -- 'Keep one copy of each exact message, preferring earlier Maildirs, then cur, then filename bytes.'
+    print -r -- 'Use -n to preview. Pause clients that move, rewrite or remove existing mail while applying.'
+}
+
+dedup_cli() {
+    setopt localoptions
+    local bootstrap="$1" mode=--apply helper WORKDIR MAILDIRS
+    local -a options roots
+    shift
+    while (( $# )); do
+        case "$1" in
+            -n|--dry-run) mode=--preview ;;
+            -q|--quiet) options+=(--quiet) ;;
+            -nq|-qn) mode=--preview; options+=(--quiet) ;;
+            -h|--help) dedup_usage; return 0 ;;
+            --) shift; break ;;
+            dedup) break ;;
+            *) dedup_usage >&2; return 2 ;;
+        esac
+        shift
+    done
+    [[ ${1:-} == dedup ]] || { dedup_usage >&2; return 2; }
+    shift
+    while (( $# )); do
+        case "$1" in
+            --) shift; roots+=("$@"); break ;;
+            --scratch-dir)
+                (( $# >= 2 )) && [[ -n $2 ]] || { dedup_usage >&2; return 2; }
+                options+=(--scratch-dir "$2"); shift 2 ;;
+            -q|--quiet) options+=(--quiet); shift ;;
+            -n|--dry-run) mode=--preview; shift ;;
+            -nq|-qn) mode=--preview; options+=(--quiet); shift ;;
+            -h|--help) dedup_usage; return 0 ;;
+            -*) dedup_usage >&2; return 2 ;;
+            *) roots+=("$1"); shift ;;
+        esac
+    done
+    (( $#roots )) || { dedup_usage >&2; return 2; }
+    # Reuse bootstrap's read-only root resolution. Normal initialization can
+    # create configuration and Maildirs, which would change a preview.
+    source "$bootstrap" doctor || return 1
+    helper="${JAROWORKDIR:-${bootstrap:h:h}}/bin/jaro-dedup"
+    if [[ ! -x $helper && -r "${bootstrap:h:h}/zuper/zuper" ]]; then
+        helper="${bootstrap:h:h}/../build/gnu/jaro-dedup"
+    fi
+    [[ -x $helper ]] || { print -u2 -- 'dedup: missing jaro-dedup helper; build or reinstall Jaromail'; return 127; }
+    "$helper" "$mode" "${options[@]}" --mail-root "$MAILDIRS" -- "${roots[@]}"
+}
