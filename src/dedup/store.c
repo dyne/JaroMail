@@ -3,6 +3,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include "store.h"
+#include "profile.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -81,6 +82,9 @@ jd_store_open(struct jd_store *store, const char *parent, unsigned cache_kib,
 		store->directory = NULL;
 		goto system_error;
 	}
+#if defined(JARO_DEDUP_PROFILE) && defined(JARO_DEDUP_TESTING)
+	jd_watch_scratch(store->directory);
+#endif
 	store->old_heap_limit = sqlite3_hard_heap_limit64((sqlite3_int64)heap_kib * 1024);
 	store->heap_set = 1;
 	if (store->old_heap_limit < 0 ||
@@ -139,6 +143,7 @@ insert_occurrence(void *context, const struct jd_root *root, unsigned subdir,
 	int code = SQLITE_OK;
 	char device[32], inode[32];
 	struct timespec modified = metadata->JD_MTIME, changed = metadata->JD_CTIME;
+	JD_START(insert_start);
 #ifdef JARO_DEDUP_TESTING
 	if (store->fail_allocation) {
 		/* Force a real SQLite allocation refusal, not a simulated return code. */
@@ -174,6 +179,7 @@ insert_occurrence(void *context, const struct jd_root *root, unsigned subdir,
 			return -1;
 		store->batches++;
 	}
+	JD_END(insert_start, JD_INSERT);
 	return 0;
 }
 
@@ -205,10 +211,12 @@ jd_store_inventory(struct jd_store *store, const struct jd_inventory *inventory)
 		return jd_store_error(store, "prepare occurrences", code);
 	if (jd_store_exec(store, "BEGIN"))
 		return -1;
+	JD_START(scan_start);
 	if (jd_scan(inventory, insert_occurrence, store)) {
 		store->inventory_conflict = sqlite3_errcode(store->db) == SQLITE_OK && jd_entry_conflict(errno);
 		return -1;
 	}
+	JD_END(scan_start, JD_SCAN);
 	code = sqlite3_finalize(store->insert);
 	store->insert = NULL;
 	if (code != SQLITE_OK)

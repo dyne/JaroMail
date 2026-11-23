@@ -2,6 +2,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include "classify.h"
+#include "profile.h"
 #include "filter/sha256.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -87,6 +88,7 @@ jd_message_open(struct jd_message *message, const struct jd_occurrence *entry,
 		goto error;
 	}
 	reads->opens++;
+	JD_OPENED();
 	if (fstat(message->fd, &observed) < 0) {
 		content_error(entry, "stat message");
 		goto error;
@@ -175,6 +177,7 @@ digest_message(const struct jd_occurrence *entry, int sample,
 	unsigned char block[READ_BLOCK];
 	off_t size = entry->metadata.st_size, offset;
 	int result = -1;
+	JD_START(digest_start);
 
 	if (jd_message_open(&message, entry, reads)) {
 		reads->conflicts += jd_entry_conflict(errno);
@@ -205,6 +208,7 @@ done:
 	if (result < 0 && jd_entry_conflict(errno))
 		reads->conflicts++;
 	jd_message_close(&message);
+	JD_END(digest_start, sample ? JD_SAMPLE : JD_HASH);
 	return result;
 }
 
@@ -217,6 +221,7 @@ jd_compare_opened(const struct jd_message *a, const struct jd_message *b,
 	off_t size = left->st_size, offset;
 	int same_inode = left->st_dev == right->st_dev && left->st_ino == right->st_ino;
 	int equal = size == right->st_size;
+	JD_START(compare_start);
 
 	for (offset = 0; equal && !same_inode && offset < size;) {
 		size_t length = block_length(size - offset);
@@ -230,6 +235,7 @@ jd_compare_opened(const struct jd_message *a, const struct jd_message *b,
 		return -1;
 	if (equal && same_inode)
 		reads->inode_matches++;
+	JD_END(compare_start, JD_COMPARE);
 	return equal;
 }
 

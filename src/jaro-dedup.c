@@ -3,11 +3,27 @@
 
 /* Private native helper; the shell caller selects the operation. */
 #include "dedup/apply.h"
+#include "dedup/profile.h"
 #include <inttypes.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(JARO_DEDUP_PROFILE) && defined(JARO_DEDUP_TESTING)
+uint64_t jd_elapsed[JD_TIMERS], jd_message_opens;
+
+static void
+print_profile(void)
+{
+	uint64_t scan = jd_elapsed[JD_SCAN] - jd_elapsed[JD_INSERT];
+	fprintf(stderr, "dedup profile: scan-ns=%" PRIu64 " index-ns=%" PRIu64
+	    " sample-ns=%" PRIu64 " hash-ns=%" PRIu64 " compare-ns=%" PRIu64
+	    " unlink-ns=%" PRIu64 " message-opens=%" PRIu64 " scratch-peak-bytes=%" PRIu64 "\n", scan,
+	    jd_elapsed[JD_INVENTORY] - scan, jd_elapsed[JD_SAMPLE], jd_elapsed[JD_HASH],
+	    jd_elapsed[JD_COMPARE], jd_elapsed[JD_UNLINK], jd_message_opens, jd_scratch_peak);
+}
+#endif
 
 #ifdef JARO_DEDUP_TESTING
 static int
@@ -147,8 +163,10 @@ main(int argc, char **argv)
 			goto cleanup;
 	}
 #endif
+	JD_START(inventory_start);
 	if (jd_store_inventory(&store, &inventory))
 		goto cleanup;
+	JD_END(inventory_start, JD_INVENTORY);
 #ifdef JARO_DEDUP_TESTING
 	if (temp_probe && sqlite3_exec(store.db, "CREATE TEMP TABLE probe AS SELECT * FROM occurrences;"
 	    "CREATE INDEX temp.probe_size ON probe(size,name)", NULL, NULL, NULL) != SQLITE_OK)
@@ -201,6 +219,10 @@ cleanup:
 		sqlite3_int64 rows = store.rows, batches = store.batches, peak = sqlite3_memory_highwater(0);
 		if (jd_store_close(&store))
 			result = 1;
+#if defined(JARO_DEDUP_PROFILE) && defined(JARO_DEDUP_TESTING)
+		if (!result)
+			print_profile();
+#endif
 		jd_unlock_inventory(&locks);
 		jd_inventory_free(&inventory);
 		if (apply || applied.preview) {
