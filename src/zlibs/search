@@ -255,29 +255,30 @@ backup() {
     read_account
     nm_setup
 
-    search_results="$(search ${=expr})"
-    _search_status=$?
-    [[ $_search_status = 0 ]] || {
+    local search_results folders _md _msg i
+    local -a hits
+    search_results="$(search --format=text0 ${=expr})" || {
         error "Search failed, aborting backup"
         return 1
     }
-
-    if [[ -z "${search_results}" ]]; then
+    if [[ -n "$search_results" ]]; then
+        hits=("${(@0)search_results}")
+    else
         func "no notmuch hits, trying raw maildir content match"
-        _fallback_hits=()
-        for _md in ${(f)"$(maildir_list_folders "$MAILDIRS")"}; do
-            [[ "$_md" = "$dst" ]] && continue
-            for _msg in ${(f)"$(maildir_list_messages "$_md")"}; do
+        folders="$(maildir_list_folders "$MAILDIRS")" || return $?
+        for _md in "${(@0)folders}"; do
+            [[ -n "$_md" && "$_md" != "${dst:a}" ]] || continue
+            # mlist outputs lines. Preserve full paths here, including newlines.
+            for _msg in "$_md"/{new,cur}/*(.N); do
                 grep -qi -- "$expr" "$_msg" || continue
-                _fallback_hits+=("$_msg")
+                hits+=("$_msg")
             done
         done
-        search_results="${(F)_fallback_hits}"
     fi
 
     [[ $DRYRUN = 0 ]] && {
-        for i in ${(f)search_results}; do
-            [[ -z "$i" ]] && continue
+        for i in "${hits[@]}"; do
+            [[ -n "$i" ]] || continue
             maildir_refile "$i" "$dst"
             [[ $? = 0 ]] || {
                 # bail out on every single error

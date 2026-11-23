@@ -4,7 +4,11 @@ for dependency in zsh python3 fetchmail; do
   command -v "$dependency" >/dev/null || { print -u2 -- "SKIP: missing $dependency"; exit 77; }
 done
 real_fetchmail="$(command -v fetchmail)"
+real_mdeliver="$(command -v mdeliver || true)"
 test_setup "$0"
+mail_root="$tmp_root/mail %T with spaces"
+mkdir -p "$mail_root"
+[[ -z "$real_mdeliver" ]] || ln -sf "$real_mdeliver" "$test_bin/mdeliver"
 trap test_cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -56,7 +60,10 @@ class Booleans(ast.NodeTransformer):
             raise ValueError('unexpected name in configdump')
         return ast.Constant(node.id == 'TRUE')
 parsed = ast.literal_eval(Booleans().visit(value))
-names = parsed['servers'][0]['users'][0]['mailboxes']
+user = parsed['servers'][0]['users'][0]
+if (state / 'deliver-sample').exists():
+    subprocess.run(user['mda'], shell=True, input=b'Subject: MDA fixture\n\nbody\n', check=True)
+names = user['mailboxes']
 (state / 'folders.json').write_text(json.dumps(names))
 sys.exit(1 if '-c' in sys.argv else 0) # Successful empty poll, no download.
 EOF
@@ -135,7 +142,12 @@ reset_calls
 cli_list
 print -rl -- "${expected_folders[@]}" > "$IMAP_TEST_STATE/expected.out"
 cmp "$IMAP_TEST_STATE/list.out" "$IMAP_TEST_STATE/expected.out"
+touch "$IMAP_TEST_STATE/deliver-sample"
 cli_fetch
+rm "$IMAP_TEST_STATE/deliver-sample"
+received=("$mail_root/incoming/new/"*(.N))
+assert_equal "${#received}" 1 "parsed MDA delivered to the configured root"
+grep -Fxq "Subject: MDA fixture" "$received[1]"
 assert_fetch_folders "${expected_folders[@]}"
 [[ "$(wc -l < "$IMAP_TEST_STATE/fetch-calls" | tr -d ' ')" == 1 ]]
 [[ ! -e NEVER ]]

@@ -99,15 +99,7 @@ init_inbox() {
 
     # make sure maildirs where to put mails exist
     ${=mkdir} "$MAILDIRS"
-    maildirmake "$MAILDIRS/incoming"
-    maildirmake "$MAILDIRS/known"
-    maildirmake "$MAILDIRS/sent"
-    maildirmake "$MAILDIRS/priv"
-    maildirmake "$MAILDIRS/postponed"
-    maildirmake "$MAILDIRS/drafts"
-    maildirmake "$MAILDIRS/unsorted"
-    maildirmake "$MAILDIRS/remember"
-    maildirmake "$MAILDIRS/outbox"
+    maildirmake "$MAILDIRS"/{incoming,known,sent,priv,postponed,drafts,unsorted,remember,outbox} || return $?
 
     [[ -f "$PASSWORD_STORE_DIR/.gpg-id" ]] || {
 		[[ -r $HOME/.gnupg/gpg.conf ]] && {
