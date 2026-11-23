@@ -2,6 +2,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include "apply.h"
+#include "profile.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <signal.h>
@@ -165,11 +166,13 @@ apply_pair(struct application *app, const struct jd_occurrence *winner,
 		result = 0;
 		goto close_loser;
 	}
+	JD_START(unlink_start);
 	if (unlinkat(loser.dir, loser.name, 0) < 0) {
 		conflict = jd_entry_conflict(errno);
 		perror("dedup apply: unlink duplicate");
 		goto close_loser;
 	}
+	JD_END(unlink_start, JD_UNLINK);
 	/* Account immediately: a later stat, scratch write or signal cannot
 	 * undo this unlink. Last-link blocks exclude links retained elsewhere. */
 	stats->removed++;
