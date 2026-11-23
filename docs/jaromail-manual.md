@@ -1482,6 +1482,56 @@ Mblaze can safely move all e-mails stored in one maildir to another.
 The above command will move all emails stored inside the maildir folder
 `latest-mails` to the other maildir folder `global-archive`.
 
+### Remove exact duplicates
+
+For an archive with overlapping folders, list them in the order you want to
+keep mail. Preview the proposed changes, then apply them to the same roots.
+
+```sh
+jaro -n dedup Primary Archive
+jaro dedup Primary Archive
+```
+
+Two regular messages match when their lengths and every stored byte match,
+including headers, MIME encoding, line endings and trailing bytes. Within
+the earliest listed Maildir containing a match, `cur` has priority over
+`new`, then the smallest raw filename in unsigned byte order wins. The
+survivor keeps its path, flags, bytes and mode. You can also pass one folder
+to remove duplicates within it. Direct regular files in `cur` and `new`
+participate, including empty files and separate hard-linked names.
+
+Bare folder names resolve under the configured mail root. Use `./Archive` for
+a folder in the current directory or pass an absolute path. Use `--` before
+a name beginning with a dash. Preview writes one `keep "…" remove "…"`
+pair per line to standard output. Within each quoted path, a quote, backslash,
+control byte or non-ASCII byte appears as `\xHH` with two hexadecimal digits.
+The summary goes to standard error. `-q` suppresses successful summaries.
+
+Apply requires stable existing entries. Pause clients, syncs and expunges that
+move, edit or remove messages. New deliveries under fresh names can continue.
+Two apply runs that share physical roots or message directories cannot proceed
+together. External writers must cooperate through the final name checks and
+unlink. Detected changes leave uncertain names in place. Conflicts and errors
+produce a nonzero exit. Completed removals stand, and rerunning inventories
+the surviving names and any new arrivals.
+
+The summary counts examined files, duplicate groups encountered, removed names
+and conflicts. Preview also reports proposed removals. Logical duplicate bytes
+sum the lengths of removed or proposed names. Apply's `last-link-block-bytes`
+sums allocated blocks for files whose last link it removed. Hard links, open
+descriptors, snapshots and shared extents can affect the free space recovered.
+
+Use `--scratch-dir DIR` to place the private SQLite index in an existing
+directory outside the selected Maildirs. The default is `TMPDIR`, then `/tmp`.
+A disk-backed scratch directory keeps a large index off tmpfs. It stores
+metadata and comparison keys. After an interruption, any leftover
+`jaro-dedup-*` scratch directory from that run is disposable.
+
+The legacy `jaro rmdupes` command still checks Message-IDs with a bounded
+`formail` cache. Its `lastlog` operand calls the legacy `maildirs_lastlog`
+provider for the destination list. For `jaro dedup`, `lastlog` is an ordinary
+folder name.
+
 ### Message snapshots
 
 `jaro snapshot create DEST` copies messages into a **new** private directory.

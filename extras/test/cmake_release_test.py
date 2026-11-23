@@ -158,7 +158,7 @@ exec "$JARO_REAL_CC" "$@"
         self.assertIn('-lm', self.buildlog)
         if shutil.which('ccache') and 'CCACHE' not in os.environ:
             self.assertIn('ccache', self.buildlog)
-        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-outbox','jaro-snapshot','jaro-filter-compile','abook'):
+        for name in ('fetchaddr','parsedate','dotlock','gpgewrap','jaro-outbox','jaro-snapshot','jaro-dedup','jaro-filter-compile','abook'):
             self.assertTrue(os.access(self.binary/'bin'/name, os.X_OK))
         result = run([sys.executable, self.source/'build/check-static.py', '--bin-dir', self.binary/'bin', '--arch',self.arch], succeeds=False)
         self.assertNotEqual(result.returncode, 0)
@@ -176,6 +176,7 @@ exec "$JARO_REAL_CC" "$@"
         runtime = moved/'share/jaromail'
         self.assertTrue(os.access(runtime/'bin/jaro-outbox', os.X_OK))
         self.assertTrue(os.access(runtime/'bin/jaro-snapshot', os.X_OK))
+        run([sys.executable, REPO/'extras/test/dedup-cli-smoke.py', '--cli', moved/'bin/jaro'], env=self.env)
         self.assertIn('Usage: jaro snapshot', run([moved/'bin/jaro','snapshot','--help'],env=self.env).stdout)
         mail = self.work/'snapshot source'
         for folder in ('new', 'cur', 'tmp'):

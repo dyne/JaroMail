@@ -1,16 +1,15 @@
 #define _POSIX_C_SOURCE 200809L
 #define _FILE_OFFSET_BITS 64
 
-/* Private read-only inventory entry point. Public/apply CLI belongs to L3. */
-#include "dedup/store.h"
+/* Private native helper; the shell caller selects the operation. */
+#include "dedup/apply.h"
 #include <inttypes.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #ifdef JARO_DEDUP_TESTING
-#include "dedup/classify.h"
-
 static int
 dump(void *context, const struct jd_root *root, unsigned sub,
     const unsigned char *name, size_t length, const struct stat *metadata)
@@ -46,10 +45,13 @@ int
 main(int argc, char **argv)
 {
 	struct jd_inventory inventory;
-	struct jd_store store;
+	struct jd_store store = {0};
+	struct jd_locks locks = {0};
+	struct jd_classify_stats stats = {0};
+	struct jd_apply_stats applied = {0};
 	const char *scratch = getenv("TMPDIR"), *mail_root = getenv("JAROMAILDIR");
 	unsigned cache_kib = 131072, heap_kib = 393216;
-	int offset = 1, inventory_mode = 0, result = 1;
+	int offset = 1, inventory_mode = 0, apply = 0, quiet = 0, result = 1;
 #ifdef JARO_DEDUP_TESTING
 	int hold = 0, dump_rows = 0, candidates = 0, classify = 0;
 	int allocation_failure = 0, temp_probe = 0, force_digest = 0, hold_reduction = 0;
@@ -65,6 +67,18 @@ main(int argc, char **argv)
 			inventory_mode = 1;
 			continue;
 		}
+		if (!strcmp(option, "--apply")) {
+			apply = 1;
+			continue;
+		}
+		if (!strcmp(option, "--preview")) {
+			applied.preview = 1;
+			continue;
+		}
+		if (!strcmp(option, "--quiet")) {
+			quiet = 1;
+			continue;
+		}
 		if ((!strcmp(option, "--scratch-dir") || !strcmp(option, "--mail-root")) && offset < argc) {
 			if (!strcmp(option, "--scratch-dir"))
 				scratch = argv[offset++];
@@ -78,6 +92,11 @@ main(int argc, char **argv)
 		if (!strcmp(option, "--test-candidates")) { candidates = 1; continue; }
 		if (!strcmp(option, "--test-classify")) { classify = 1; continue; }
 		if (!strcmp(option, "--test-force-digest")) { force_digest = 1; continue; }
+		if (!strcmp(option, "--test-fail-links")) { applied.fail_links = 1; continue; }
+		if (!strcmp(option, "--test-apply-hold") && offset < argc) {
+			applied.hold_at = argv[offset++];
+			continue;
+		}
 		if (!strcmp(option, "--test-hold-after-reduction")) { hold_reduction = 1; continue; }
 		if (!strcmp(option, "--test-temp-probe")) { temp_probe = 1; continue; }
 		if (!strcmp(option, "--test-allocation-failure")) { allocation_failure = 1; continue; }
@@ -97,21 +116,27 @@ main(int argc, char **argv)
 		offset--;
 		break;
 	}
-	if (!inventory_mode || offset == argc)
+	if (inventory_mode + apply + applied.preview != 1 || offset == argc)
 		goto usage;
 #ifdef JARO_DEDUP_TESTING
-	if (dump_rows + candidates + classify > 1 ||
-	    ((force_digest || hold_reduction) && !candidates && !classify))
+	if (dump_rows + candidates + classify + apply + applied.preview > 1 ||
+	    ((force_digest || hold_reduction) && !candidates && !classify && !apply) ||
+	    ((applied.hold_at || applied.fail_links) && !apply))
 		goto usage;
 #endif
 	if (mail_root && !*mail_root)
 		mail_root = NULL;
 	if (jd_preflight(&inventory, mail_root, (size_t)(argc - offset), argv + offset))
-		return 1;
-	if (jd_store_open(&store, scratch, cache_kib, heap_kib)) {
-		jd_inventory_free(&inventory);
-		return 1;
+		goto cleanup;
+	if ((apply || applied.preview) && jd_check_scratch_parent(&inventory, scratch))
+		goto cleanup;
+	if (applied.preview && signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+		perror("dedup preview: configure report pipe");
+		goto cleanup;
 	}
+	if ((apply && jd_lock_inventory(&inventory, &locks)) ||
+	    jd_store_open(&store, scratch, cache_kib, heap_kib))
+		goto cleanup;
 #ifdef JARO_DEDUP_TESTING
 	store.fail_allocation = allocation_failure;
 	store.force_digest = force_digest;
@@ -136,38 +161,66 @@ main(int argc, char **argv)
 	}
 	if (dump_rows && (jd_store_cursor(&store, dump, NULL, &inventory) || fflush(stdout)))
 		goto cleanup;
-	if (candidates || classify) {
-		struct jd_classify_stats stats;
+#endif
+	if (apply || applied.preview
+#ifdef JARO_DEDUP_TESTING
+	    || candidates || classify
+#endif
+	    ) {
 		if (jd_reduce_candidates(&store, &inventory, &stats))
 			goto cleanup;
+#ifdef JARO_DEDUP_TESTING
 		if (hold_reduction) {
 			fputs("candidates-ready\n", stderr);
 			if (fflush(stderr) || getchar() != 'x')
 				goto cleanup;
 		}
-		if (jd_prove_pairs(&store, &inventory, &stats))
-			goto cleanup;
-		if (classify ? (jd_prove_hashes(&store, &inventory, &stats) || jd_dump_survivors(&store)) :
-		    jd_dump_candidates(&store))
+#endif
+		if (apply || applied.preview) {
+			if (jd_prove_hashes(&store, &inventory, &stats) ||
+			    jd_apply_matches(&store, &inventory, &stats, &applied))
+				goto cleanup;
+			if (applied.preview && fflush(stdout)) {
+				perror("dedup preview: flush report");
+				goto cleanup;
+			}
+		}
+#ifdef JARO_DEDUP_TESTING
+		else if (jd_prove_pairs(&store, &inventory, &stats) ||
+		    (classify ? (jd_prove_hashes(&store, &inventory, &stats) || jd_dump_survivors(&store)) :
+		    jd_dump_candidates(&store)))
 			goto cleanup;
 		if (fflush(stdout))
 			goto cleanup;
 		jd_print_classify_stats(&stats);
-	}
 #endif
+	}
 	result = 0;
 cleanup:
 	{
 		sqlite3_int64 rows = store.rows, batches = store.batches, peak = sqlite3_memory_highwater(0);
 		if (jd_store_close(&store))
 			result = 1;
+		jd_unlock_inventory(&locks);
 		jd_inventory_free(&inventory);
-		if (!result)
+		if (apply || applied.preview) {
+			applied.conflicts += store.inventory_conflict + stats.pair.conflicts +
+			    stats.proof.conflicts + stats.sample.conflicts + stats.hash.conflicts;
+			if (applied.preview && (!quiet || result))
+				fprintf(stderr, "dedup preview: examined=%" PRId64 " groups=%ju proposed=%ju"
+				    " removed=0 conflicts=%ju logical-bytes=%ju\n", (int64_t)rows,
+				    applied.groups, applied.proposed, applied.conflicts, applied.logical_bytes);
+			else if (apply && (!quiet || result))
+				fprintf(stderr, "dedup apply: examined=%" PRId64 " groups=%ju removed=%ju"
+			    " conflicts=%ju logical-bytes=%ju last-link-block-bytes=%ju\n",
+			    (int64_t)rows, applied.groups, applied.removed, applied.conflicts,
+			    applied.logical_bytes, applied.last_link_bytes);
+		} else if (!result)
 			fprintf(stderr, "inventory complete: rows=%" PRId64 " batches=%" PRId64
 			    " sqlite-peak-bytes=%" PRId64 "\n", (int64_t)rows, (int64_t)batches, (int64_t)peak);
 	}
 	return result;
 usage:
-	fputs("private inventory usage: jaro-dedup --inventory [--scratch-dir PATH] [--mail-root PATH] -- ROOT...\n", stderr);
+	fputs("private usage: jaro-dedup (--inventory|--preview|--apply) [--quiet] [--scratch-dir PATH] [--mail-root PATH] -- ROOT...\n", stderr);
 	return 2;
 }

@@ -217,7 +217,17 @@ for supported grammar, profile/mapping requirements and recovery behavior.
 
 `deliver` deliver a message from stdin into a maildir.
 
-`rmdupes` remove duplicate messages.
+`dedup [--scratch-dir DIR] [--] MAILDIR...` removes extra copies of messages
+whose stored bytes match exactly, including duplicates in a single Maildir.
+The first listed folder wins. Within it, `cur` wins over `new`, then the
+smallest filename in unsigned byte order wins. The survivor keeps its name
+and flags. Use `jaro -n dedup Primary Archive` to preview each proposed
+keep/remove pair. Pause clients that move or edit existing entries during apply.
+Delivery under fresh names may continue. See the user manual for scratch
+placement, output escaping, accounting and retry behavior.
+
+`rmdupes` uses the legacy `formail` Message-ID cache.
+`rmdupes lastlog` obtains its list of destinations from `maildirs_lastlog`.
 
 `remember`, `replay`, `preview`, `edit`, `vim`, `imap`,
 `alot`, `alot-config`, `notmuch`, `notmuch-config`, `isml`, `ismd`.

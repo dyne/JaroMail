@@ -28,6 +28,13 @@ jd_store_exec(struct jd_store *store, const char *command)
 	return code == SQLITE_OK ? 0 : jd_store_error(store, command, code);
 }
 
+int
+jd_store_prepare(struct jd_store *store, sqlite3_stmt **statement, const char *query)
+{
+	int code = sqlite3_prepare_v2(store->db, query, -1, statement, NULL);
+	return code == SQLITE_OK ? 0 : jd_store_error(store, query, code);
+}
+
 static int
 scalar(struct jd_store *store, const char *query, sqlite3_int64 expected)
 {
@@ -110,7 +117,8 @@ jd_store_open(struct jd_store *store, const char *parent, unsigned cache_kib,
 	    "CREATE TABLE occurrences(id INTEGER PRIMARY KEY, rank INTEGER NOT NULL,"
 	    "subdir INTEGER NOT NULL, name BLOB NOT NULL, size INTEGER NOT NULL,"
 	    "device TEXT NOT NULL, inode TEXT NOT NULL, mtime_sec INTEGER NOT NULL,"
-	    "mtime_nsec INTEGER NOT NULL, ctime_sec INTEGER NOT NULL, ctime_nsec INTEGER NOT NULL);"
+	    "mtime_nsec INTEGER NOT NULL, ctime_sec INTEGER NOT NULL, ctime_nsec INTEGER NOT NULL,"
+	    "nlink INTEGER NOT NULL,mode INTEGER NOT NULL);"
 	    "CREATE TABLE status(complete INTEGER NOT NULL); INSERT INTO status VALUES(0);"))
 		goto error;
 	return 0;
@@ -151,6 +159,8 @@ insert_occurrence(void *context, const struct jd_root *root, unsigned subdir,
 	BIND(sqlite3_bind_int64(store->insert, 8, modified.tv_nsec));
 	BIND(sqlite3_bind_int64(store->insert, 9, changed.tv_sec));
 	BIND(sqlite3_bind_int64(store->insert, 10, changed.tv_nsec));
+	BIND(sqlite3_bind_int64(store->insert, 11, (sqlite3_int64)metadata->st_nlink));
+	BIND(sqlite3_bind_int64(store->insert, 12, (sqlite3_int64)metadata->st_mode));
 #undef BIND
 	if (code == SQLITE_OK)
 		code = sqlite3_step(store->insert);
@@ -190,11 +200,15 @@ jd_store_inventory(struct jd_store *store, const struct jd_inventory *inventory)
 	if (sqlite3_finalize(roots) != SQLITE_OK)
 		return jd_store_error(store, "finalize roots", sqlite3_errcode(store->db));
 	code = sqlite3_prepare_v2(store->db, "INSERT INTO occurrences(rank,subdir,name,size,device,inode,"
-	    "mtime_sec,mtime_nsec,ctime_sec,ctime_nsec) VALUES(?,?,?,?,?,?,?,?,?,?)", -1, &store->insert, NULL);
+	    "mtime_sec,mtime_nsec,ctime_sec,ctime_nsec,nlink,mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", -1, &store->insert, NULL);
 	if (code != SQLITE_OK)
 		return jd_store_error(store, "prepare occurrences", code);
-	if (jd_store_exec(store, "BEGIN") || jd_scan(inventory, insert_occurrence, store))
+	if (jd_store_exec(store, "BEGIN"))
 		return -1;
+	if (jd_scan(inventory, insert_occurrence, store)) {
+		store->inventory_conflict = sqlite3_errcode(store->db) == SQLITE_OK && jd_entry_conflict(errno);
+		return -1;
+	}
 	code = sqlite3_finalize(store->insert);
 	store->insert = NULL;
 	if (code != SQLITE_OK)
@@ -227,7 +241,7 @@ jd_store_read_occurrence(struct jd_store *store, sqlite3_stmt *cursor,
 	entry->root = &inventory->roots[rank];
 	entry->subdir = (unsigned)subdir;
 	entry->id = sqlite3_column_int64(cursor, JD_OCCURRENCE_ID_COLUMN);
-	metadata.st_mode = S_IFREG;
+	metadata.st_mode = (mode_t)sqlite3_column_int64(cursor, 12);
 	metadata.st_size = (off_t)sqlite3_column_int64(cursor, 3);
 	metadata.st_dev = (dev_t)strtoumax((const char *)device, NULL, 10);
 	metadata.st_ino = (ino_t)strtoumax((const char *)inode, NULL, 10);
@@ -235,6 +249,7 @@ jd_store_read_occurrence(struct jd_store *store, sqlite3_stmt *cursor,
 	metadata.JD_MTIME.tv_nsec = (long)sqlite3_column_int64(cursor, 7);
 	metadata.JD_CTIME.tv_sec = (time_t)sqlite3_column_int64(cursor, 8);
 	metadata.JD_CTIME.tv_nsec = (long)sqlite3_column_int64(cursor, 9);
+	metadata.st_nlink = (nlink_t)sqlite3_column_int64(cursor, 11);
 	entry->metadata = metadata;
 	return 0;
 }

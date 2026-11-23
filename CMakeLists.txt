@@ -123,7 +123,9 @@ target_include_directories(jaro-dedup-sqlite PUBLIC "${PROJECT_SOURCE_DIR}/vendo
 target_compile_definitions(jaro-dedup-sqlite PRIVATE SQLITE_THREADSAFE=0 SQLITE_OMIT_LOAD_EXTENSION
   SQLITE_OMIT_WAL SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=1 SQLITE_TEMP_STORE=1
   SQLITE_MAX_MMAP_SIZE=0 SQLITE_DEFAULT_MMAP_SIZE=0)
-jaro_executable(jaro-dedup src/jaro-dedup.c src/dedup/inventory.c src/dedup/store.c)
+set(_dedup_sources src/jaro-dedup.c src/dedup/inventory.c src/dedup/store.c
+  src/dedup/classify.c src/dedup/apply.c src/filter/sha256.c)
+jaro_executable(jaro-dedup ${_dedup_sources})
 target_link_libraries(jaro-dedup PRIVATE jaro-dedup-sqlite)
 target_compile_options(jaro-dedup PRIVATE -Wall -Wextra -Wpedantic)
 # These retained helpers previously used the compiler's GNU dialect. Keep its
@@ -134,8 +136,7 @@ add_custom_target(filter-core DEPENDS jaro-policy)
 add_custom_target(filter-compile DEPENDS jaro-filter-compile)
 
 if(JARO_BUILD_TEST_DRIVERS)
-  jaro_executable(jaro-dedup-test src/jaro-dedup.c src/dedup/inventory.c src/dedup/store.c
-    src/dedup/classify.c src/filter/sha256.c)
+  jaro_executable(jaro-dedup-test ${_dedup_sources})
   target_compile_definitions(jaro-dedup-test PRIVATE JARO_DEDUP_TESTING)
   target_compile_options(jaro-dedup-test PRIVATE -Wall -Wextra -Wpedantic)
   target_link_libraries(jaro-dedup-test PRIVATE jaro-dedup-sqlite)
@@ -209,7 +210,7 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/generated/VERSION" CONTENT "${JARO_RES
 install(PROGRAMS "${CMAKE_BINARY_DIR}/generated/jaro" DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(CODE "file(REMOVE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}/bin/jaro-filter\" \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}/bin/jaro-filter-legacy\")")
 install(PROGRAMS src/jaro DESTINATION "${JARO_RUNTIME_DIR}/bin")
-install(TARGETS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-filter-compile
+install(TARGETS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup jaro-filter-compile
   RUNTIME DESTINATION "${JARO_RUNTIME_DIR}/bin")
 install(FILES "${CMAKE_BINARY_DIR}/generated/VERSION" COPYING.txt DESTINATION "${JARO_RUNTIME_DIR}")
 install(DIRECTORY docs/ DESTINATION "${JARO_RUNTIME_DIR}"
@@ -224,7 +225,7 @@ install(CODE "file(GLOB _stale \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_R
 add_custom_target(install-system
   COMMAND "${CMAKE_COMMAND}" "-DJARO_BINARY_DIR=${CMAKE_BINARY_DIR}" "-DJARO_INSTALL_CONFIG=$<CONFIG>"
     -P "${PROJECT_SOURCE_DIR}/cmake/InstallSystem.cmake"
-  DEPENDS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-filter-compile abook
+  DEPENDS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup jaro-filter-compile abook
   USES_TERMINAL VERBATIM)
 if(TARGET sieve-runtime)
   add_dependencies(install-system sieve-runtime)
@@ -232,8 +233,8 @@ endif()
 
 find_program(ZSH_EXECUTABLE zsh)
 if(ZSH_EXECUTABLE)
-  add_custom_target(check COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot abook USES_TERMINAL)
-  add_custom_target(check-strict COMMAND "${CMAKE_COMMAND}" -E env JARO_TEST_REQUIRE_ALL=1 "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot abook USES_TERMINAL)
+  add_custom_target(check COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup abook USES_TERMINAL)
+  add_custom_target(check-strict COMMAND "${CMAKE_COMMAND}" -E env JARO_TEST_REQUIRE_ALL=1 "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup abook USES_TERMINAL)
   if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME source-regressions COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh")
     set_tests_properties(source-regressions PROPERTIES ENVIRONMENT "JARO_TEST_REQUIRE_ALL=1")
