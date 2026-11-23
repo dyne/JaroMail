@@ -145,11 +145,16 @@ an x86_64 Linux host:
 | x86_64 | x86_64 | x86_64-linux-musl | Native |
 | arm64 | arm_64 | aarch64-linux-musl | qemu-aarch64 |
 
-Each of the nine executables (the eight helpers plus abook) must be an ELF64 binary of the correct machine type,
+Each executable in the static helper set must be an ELF64 binary of the correct machine type,
 with neither an ELF interpreter nor shared-library dependencies. Failed static
 checks, tests, smoke tests or either architecture prevent publication.
 
-CPack creates `jaromail-VERSION-linux-ARCH.tar.gz`; each archive has a matching
+Native Ubuntu 24.04 runners add the private shared Sieve runtime to each
+architecture's CPack bundle. Both runners extract the final archive, compile
+a policy and verify that `jaro -n filter` and `jaro -n fetch` classify a
+message while preserving the incoming copy.
+
+The release archives are named `jaromail-VERSION-linux-ARCH.tar.gz`; each has a matching
 `.sha256` file. Archives contain `bin/jaro`, the native helpers, Zsh modules,
 version metadata, committed manuals, configuration templates and license text.
 The scripts still need Zsh and the normal external mail tools, including

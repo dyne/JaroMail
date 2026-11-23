@@ -14,8 +14,10 @@ that architecture's archive and its SHA-256 checksum, verifies the archive,
 then installs the complete package under **`$HOME/.local`**. No `sudo` is used.
 Running it again installs the latest release over the same prefix.
 
-The package includes Jaromail's scripts, eight native helpers, bundled abook,
-configuration templates, manpages and licenses. It does not bundle the external
+The package includes Jaromail's scripts, static helpers, bundled abook, the
+native Dovecot/Pigeonhole runtime, configuration templates, manpages and
+licenses. The filter runs on glibc Linux with Landlock ABI 3 or newer. The
+runtime binaries are built on Ubuntu 24.04 for each architecture. It does not bundle the external
 mail applications listed below, and it does not change your mail directory.
 
 To inspect the installer first or choose a different prefix:
@@ -39,7 +41,7 @@ runtime packages with:
 
 ```bash
 sudo apt-get install zsh fetchmail msmtp neomutt notmuch pinentry-curses \
-  wipe mblaze vim netcat-traditional gnupg pass
+  wipe mblaze vim netcat-traditional gnupg pass python3 libpcre2-32-0 zlib1g
 ```
 
 Package names vary across distributions. The release includes its own abook;
