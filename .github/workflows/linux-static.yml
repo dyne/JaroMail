@@ -124,8 +124,67 @@ jobs:
           python3 build/check-static.py --bin-dir "$package_root/share/jaromail/bin" --arch "$TARGET_ARCH"
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-static-${{ matrix.arch }}
+          name: static-base-${{ matrix.arch }}
           overwrite: true
           path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Linux release with Sieve (${{ matrix.arch }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: static-base-${{ matrix.arch }}
+          path: base
+      - name: Install native build and smoke-test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y cmake ninja-build make gcc ccache pkg-config libssl-dev zlib1g-dev libpcre2-dev libncurses-dev libreadline-dev zsh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/sieve-deps
+            ${{ runner.temp }}/sieve-sources
+          key: sieve-release-24.04-${{ runner.arch }}-${{ hashFiles('build/sieve-deps.py', 'vendor/sources.json') }}
+      - name: Build private runtime for the package architecture
+        run: |
+          prefix=$(python3 build/sieve-deps.py --cache-dir "$RUNNER_TEMP/sieve-deps" \
+            --source-cache "$RUNNER_TEMP/sieve-sources" --regex-prefix /usr --mail-utf8 --download)
+          cmake -S . -B out/runtime -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DJARO_SIEVE_DEPS_PREFIX="$prefix" -DBUILD_TESTING=OFF -DJARO_BUILD_TEST_DRIVERS=OFF
+          cmake --build out/runtime --target sieve-runtime
+      - name: Assemble and exercise the relocated release archive
+        run: |
+          (cd base && sha256sum -c *.sha256)
+          archives=(base/*.tar.gz)
+          archive=${archives[0]##*/}
+          bundle=${archive%.tar.gz}
+          mkdir stage dist relocated
+          tar -xzf "base/$archive" -C stage
+          cmake --install out/runtime --component sieve --prefix "$PWD/stage/$bundle"
+          tar -czf "dist/$archive" -C stage "$bundle"
+          (cd dist && sha256sum "$archive" > "$archive.sha256")
+          tar -xzf "dist/$archive" -C relocated
+          bash extras/test/release-filter-smoke.sh "$PWD/relocated/$bundle"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-static-${{ matrix.arch }}
+          path: dist/*
+          overwrite: true
           if-no-files-found: error
           retention-days: 7
