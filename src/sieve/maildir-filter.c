@@ -102,7 +102,7 @@ static void check_folder(int base, const char *name)
 	struct mailbox *box = mailbox_alloc(ns->list, name, MAILBOX_FLAG_READONLY);
 	if (mailbox_verify_create_name(box) < 0) {
 		enum mail_error error;
-		i_fatal("Invalid mailbox %s: %s", name, mailbox_get_last_internal_error(box, &error));
+		i_fatal_status(4, "Invalid mailbox %s: %s", name, mailbox_get_last_internal_error(box, &error));
 	}
 	mailbox_free(&box);
 	const char *const *parts = t_strsplit(name, "/");
@@ -110,14 +110,14 @@ static void check_folder(int base, const char *name)
 	if (dir < 0)
 		i_fatal("dup failed: %m");
 	if (*name == '\0')
-		i_fatal("Empty mailbox name");
+		i_fatal_status(4, "Empty mailbox name");
 	for (unsigned int i = 0; parts[i] != NULL; i++) {
 		const char *part = parts[i];
 		if (!*part || !strcmp(part, ".") || !strcmp(part, "..") ||
 		    !strcmp(part, "cur") || !strcmp(part, "new") ||
 		    !strcmp(part, "tmp") || !strcmp(part, ".jaro-source") ||
 		    *part == '~' || strpbrk(part, "\r\n") != NULL)
-			i_fatal("Invalid destination mailbox: %s", name);
+			i_fatal_status(4, "Invalid destination mailbox: %s", name);
 		if (dir < 0)
 			continue; /* Remaining missing components may be created. */
 		int next = openat(dir, part, O_DIRECTORY | O_NOFOLLOW | O_RDONLY);
@@ -147,7 +147,7 @@ static void check_binary_operation(struct sieve_dumptime_env *env, int base)
 		"ADDRESS", "HEADER", "EXISTS", "ENVELOPE", "MAILBOXEXISTS", "SIZE-OVER", "SIZE-UNDER", NULL};
 	struct sieve_operation op;
 	if (!sieve_operation_read(env->sblock, &env->offset, &op))
-		i_fatal("Invalid operation in cached Sieve binary");
+		i_fatal_status(5, "Invalid operation in cached Sieve binary");
 	env->oprtn = &op;
 	env->cdumper = sieve_code_dumper_create(env);
 	if (!strcmp(sieve_operation_mnemonic(&op), "FILEINTO")) {
@@ -157,13 +157,13 @@ static void check_binary_operation(struct sieve_dumptime_env *env, int base)
 		    !sieve_operand_read(env->sblock, &env->offset, NULL, &operand) ||
 		    !sieve_operand_is_string_literal(&operand) ||
 		    !sieve_binary_read_string(env->sblock, &env->offset, &name))
-			i_fatal("Invalid fileinto in cached Sieve binary");
+			i_fatal_status(5, "Invalid fileinto in cached Sieve binary");
 		check_folder(base, strcasecmp(str_c(name), "INBOX") ? str_c(name) : "INBOX");
 	} else {
 		if (!str_array_find(allowed, sieve_operation_mnemonic(&op)))
-			i_fatal("Unsupported operation in cached Sieve binary: %s", sieve_operation_mnemonic(&op));
+			i_fatal_status(5, "Unsupported operation in cached Sieve binary: %s", sieve_operation_mnemonic(&op));
 		if (op.def->dump != NULL && !op.def->dump(env, &env->offset))
-			i_fatal("Invalid operands in cached Sieve binary");
+			i_fatal_status(5, "Invalid operands in cached Sieve binary");
 	}
 	sieve_code_dumper_free(&env->cdumper);
 }
@@ -179,14 +179,14 @@ static void check_cached_binary(struct sieve_binary *binary, int base)
 	if (env.sblock == NULL || !sieve_binary_read_unsigned(env.sblock, &env.offset, &debug) ||
 	    sieve_binary_block_get(binary, debug) == NULL ||
 	    !sieve_binary_read_unsigned(env.sblock, &env.offset, &count))
-		i_fatal("Invalid cached Sieve binary header");
+		i_fatal_status(5, "Invalid cached Sieve binary header");
 	for (unsigned int i = 0; i < count; i++) {
 		const struct sieve_extension *extension;
 		unsigned int code = 0, deferred;
 		if (!sieve_binary_read_extension(env.sblock, &env.offset, &code, &extension) ||
 		    !sieve_binary_read_byte(env.sblock, &env.offset, &deferred) || extension == NULL ||
 		    extension->def == NULL || !str_array_find(allowed, sieve_extension_name(extension)))
-			i_fatal("Unsupported extension in cached Sieve binary");
+			i_fatal_status(5, "Unsupported extension in cached Sieve binary");
 	}
 	env.stream = o_stream_create_null();
 	while (env.offset < sieve_binary_block_get_size(env.sblock)) T_BEGIN {
@@ -206,13 +206,13 @@ static void check_commands(const struct sieve_ast_node *block, int base)
 			    !strcasecmp(sieve_ast_argument_tag(arg), "create"))
 				arg = sieve_ast_argument_next(arg);
 			if (arg == NULL || arg->type != SAAT_STRING || arg->next != NULL)
-				i_fatal("line %u: expected fileinto [:create] \"mailbox\"", cmd->source_line);
+				i_fatal_status(4, "line %u: expected fileinto [:create] \"mailbox\"", cmd->source_line);
 			const char *name = sieve_ast_argument_strc(arg);
 			check_folder(base, strcasecmp(name, "INBOX") == 0 ? "INBOX" : name);
 		} else if (strcasecmp(id, "require") && strcasecmp(id, "if") &&
 			   strcasecmp(id, "elsif") && strcasecmp(id, "else") &&
 			   strcasecmp(id, "keep") && strcasecmp(id, "stop")) {
-			i_fatal("line %u: unsupported delivery action '%s'", cmd->source_line, id);
+			i_fatal_status(4, "line %u: unsupported delivery action '%s'", cmd->source_line, id);
 		}
 		check_commands(cmd, base);
 	}
@@ -231,13 +231,13 @@ static struct sieve_binary *open_program(struct sieve_instance *svinst,
 	i_stream_unref(&input);
 	struct sieve_ast *ast = sieve_parse(script, errors, NULL);
 	if (ast == NULL)
-		i_fatal("Invalid Sieve source");
+		i_fatal_status(4, "Invalid Sieve source");
 	check_commands(sieve_ast_root(ast), destination_fd);
 	if (!sieve_validate(ast, errors, SIEVE_COMPILE_FLAG_NOGLOBAL, NULL))
-		i_fatal("Invalid Sieve folder-delivery script");
+		i_fatal_status(4, "Invalid Sieve folder-delivery script");
 	if (cached) {
 		if (sieve_load(svinst, "binary", &binary, NULL) < 0)
-			i_fatal("Cannot load pinned Sieve binary");
+			i_fatal_status(5, "Cannot load pinned Sieve binary");
 		check_cached_binary(binary, destination_fd);
 	} else {
 		struct sieve_generator *generator = sieve_generator_create(
@@ -245,7 +245,7 @@ static struct sieve_binary *open_program(struct sieve_instance *svinst,
 		binary = sieve_generator_run(generator, NULL);
 		sieve_generator_free(&generator);
 		if (binary == NULL)
-			i_fatal("Cannot generate Sieve executable");
+			i_fatal_status(4, "Cannot generate Sieve executable");
 	}
 	sieve_ast_unref(&ast);
 	sieve_script_unref(&script);

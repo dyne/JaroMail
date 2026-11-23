@@ -18,10 +18,16 @@ import sys
 import tempfile
 
 
+class FilterError(Exception):
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status = status
+
+
 def directory(path, stack):
     path = Path(path)
     if not path.is_absolute() or ".." in path.parts:
-        raise ValueError(f"expected an absolute directory: {path}")
+        raise FilterError(2, f"expected an absolute directory: {path}")
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     fd = os.open("/", flags)
     try:
@@ -49,22 +55,29 @@ def product(path, limit):
 
 def snapshot(script, home, runtime, runtime_id, generation):
     # Resolve the directory once, including a published generation symlink.
-    parent = script.parent.resolve(strict=True)
-    source = product(parent / script.name, 128 << 20)
+    try:
+        parent = script.parent.resolve(strict=True)
+        source = product(parent / script.name, 128 << 20)
+    except (FileNotFoundError, ValueError) as error:
+        if generation:
+            raise FilterError(5, "selected generation is incomplete; run jaro update") from error
+        raise
     (home / "script").write_bytes(source)
     if not (script.name == "Filters.sieve"
             and parent.parts[-4:-1] == ("cache", "filter-engine", "generations")
             and re.fullmatch("[0-9a-f]{64}", parent.name)):
         if generation:
-            raise ValueError("workflow requires a pinned Sieve generation; run jaro update")
+            raise FilterError(5, "workflow requires a pinned Sieve generation; run jaro update")
         return False
     if generation and generation != parent.name:
-        raise ValueError("selected Sieve generation changed; run jaro update")
+        raise FilterError(5, "selected Sieve generation changed; run jaro update")
     extra = [home / "provenance"] if generation else []
     with (home / "binary").open("xb") as binary:
-        subprocess.run([runtime.parent / "bin/sieve-generation-read", parent.parents[3],
+        result = subprocess.run([runtime.parent / "bin/sieve-generation-read", parent.parents[3],
                         parent.name, hashlib.sha256(source).hexdigest(), runtime_id, *extra],
-                       stdout=binary, check=True)
+                       stdout=binary)
+        if result.returncode:
+            raise FilterError(5, "cannot load selected generation; run jaro update")
     return True
 
 
@@ -72,13 +85,15 @@ def identity(st):
     return st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns
 
 
-def source_entries(dirs, selected):
+def source_entries(dirs, selected, *, limit=None):
     entries = []
     for folder in ("cur", "new"):
         if selected and folder != selected[0]:
             continue
         names = (selected[1],) if selected else sorted(
             (name for name in os.listdir(dirs[folder]) if not name.startswith(".")), key=os.fsencode)
+        if limit is not None and len(entries) + len(names) > limit:
+            raise FilterError(2, f"batch exceeds the {limit}-message workflow limit")
         for name in names:
             st = os.stat(name, dir_fd=dirs[folder], follow_symlinks=False)
             if not stat.S_ISREG(st.st_mode):
@@ -94,6 +109,14 @@ def restore(claim_fd, key, directory, name):
     os.link(key, name, src_dir_fd=claim_fd, dst_dir_fd=directory, follow_symlinks=False)
     os.fsync(directory)
     os.unlink(key, dir_fd=claim_fd)
+
+
+def worker_status(status):
+    if status < 0:
+        return 128 - status
+    if status in (0, 2, 3, 4, 5, 6, 7, 127) or 128 < status < 128 + signal.NSIG:
+        return status
+    return 3
 
 
 def run_batch(command, env, home, source, dirs, fds, preview, entries):
@@ -114,7 +137,7 @@ def run_batch(command, env, home, source, dirs, fds, preview, entries):
     try:
         with os.fdopen(read_fd, "rb") as ready:
             if ready.read(1) != b"R":
-                return worker.wait() or 1
+                return worker_status(worker.wait()) or 3
         try:
             work.mkdir(mode=0o700)
         except FileExistsError:
@@ -197,7 +220,7 @@ def run_batch(command, env, home, source, dirs, fds, preview, entries):
                     os.fsync(dirs["tmp"])
         finally:
             handles.close()
-    return 128 - status if status < 0 else status or (7 if failed else 0)
+    return worker_status(status) or (7 if failed else 0)
 
 
 def records(path):
@@ -249,14 +272,15 @@ def lock_workflow(base_fd, stack):
         raise ValueError("invalid workflow batch.lock")
     fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     if not os.path.samestat(st, os.stat("batch.lock", dir_fd=engine, follow_symlinks=False)):
-        raise ValueError("workflow batch.lock changed")
+        raise FilterError(6, "workflow batch.lock changed")
 
 
 def main():
     parser = argparse.ArgumentParser(prog="jaro-sieve-filter")
     parser.add_argument("--from", required=True, dest="incoming")
     parser.add_argument("--to", required=True, dest="base")
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="preview each message against the existing mailboxes; simulated saves do not create folders")
     parser.add_argument("--report0", metavar="GENERATION")
     parser.add_argument("--message", type=Path)
     parser.add_argument("script", type=Path)
@@ -285,7 +309,7 @@ def main():
                     with (source / "new/message").open("xb") as copy:
                         shutil.copyfileobj(original, copy)
                     if identity(before) != identity(os.fstat(fd)):
-                        raise ValueError("saved message changed during explain")
+                        raise FilterError(6, "saved message changed during explain")
                 selected = ("new", "message")
             else:
                 parser.error("selected message must belong to --from")
@@ -297,7 +321,7 @@ def main():
             roots.callback(os.close, fd)
             dirs[name] = fd
         if args.report0 and args.script != base / "cache/filter-engine/generations" / args.report0 / "Filters.sieve":
-            raise ValueError("workflow policy must belong to its selected mail root")
+            raise FilterError(5, "workflow policy must belong to its selected mail root")
         cached = snapshot(args.script, home, runtime, runtime_id, args.report0)
         if args.report0 and not args.dry_run:
             lock_workflow(base_fd, roots)
@@ -319,7 +343,7 @@ def main():
         env = {"PATH": "/usr/bin:/bin", "USER": pwd.getpwuid(os.geteuid()).pw_name,
                "HOME": str(home), "LD_LIBRARY_PATH": str(runtime / "lib"),
                "CONFIG_MODULES": str(runtime / "lib/libpigeonhole_settings.so")}
-        entries = source_entries(dirs, selected)
+        entries = source_entries(dirs, selected, limit=100_000 if args.report0 else None)
         status = run_batch(command, env, home, source, dirs, (source_fd, base_fd), args.dry_run, entries)
         if args.report0 and (home / "decisions").exists():
             report(home, entries, source, base, args, source_box)
@@ -333,8 +357,12 @@ if __name__ == "__main__":
         signal.signal(sig, interrupt)
     try:
         sys.exit(main())
+    except FilterError as error:
+        print(f"jaro-sieve-filter: {error}", file=sys.stderr)
+        sys.exit(error.status)
     except BlockingIOError as error:
         print(f"jaro-sieve-filter: batch locked: {error}", file=sys.stderr)
         sys.exit(6)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        sys.exit(f"jaro-sieve-filter: {error}")
+        print(f"jaro-sieve-filter: {error}", file=sys.stderr)
+        sys.exit(3)
