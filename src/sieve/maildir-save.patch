@@ -6,7 +6,7 @@
  
 +/* Original Maildir filename for the current local delivery. */
 +extern const char *jaro_sieve_filename;
-+void jaro_sieve_published(const char *path, const struct stat *st);
++int jaro_sieve_publish(const char *mailbox, const char *temporary, const char *name);
 +
  #define MAILDIR_FILENAME_FLAG_MOVED 0x10000000
  
@@ -17,7 +17,7 @@
  	const char *pop3_uidl, *guid;
  
  	uoff_t size, vsize;
-@@ -87,20 +91,44 @@
+@@ -87,20 +91,41 @@
  		t_strconcat(ctx->newdir, "/", destname, NULL) :
  		t_strconcat(ctx->curdir, "/", destname, NULL);
  
@@ -37,15 +37,12 @@
 -	} else if (ENOQUOTA(errno)) {
 +	/* The source name may already exist. Keep an unrelated publication and
 +	   retain our final name for Dovecot's uidlist, fsync and rollback. */
-+	struct stat staged;
-+	if (lstat(tmp_path, &staged) < 0) {
-+		mailbox_set_critical(&ctx->mbox->box, "stat(%s) failed: %m", tmp_path);
-+		return -1;
-+	}
++	const char *mailbox = mailbox_get_vname(&ctx->mbox->box);
++	if (strcasecmp(mailbox, "INBOX") == 0)
++		mailbox = "INBOX";
 +	for (unsigned int attempt = 0; attempt < 64; attempt++) {
-+		if (renameat2(AT_FDCWD, tmp_path, AT_FDCWD, new_path, RENAME_NOREPLACE) == 0) {
++		if (jaro_sieve_publish(mailbox, mf->tmp_name, mf->local_name) == 0) {
 +			mf->flags |= MAILDIR_FILENAME_FLAG_MOVED;
-+			jaro_sieve_published(new_path, &staged);
 +			return 0;
 +		}
 +		if (errno != EEXIST || attempt == 63)
@@ -76,7 +73,7 @@
  		mail_storage_set_error(storage, MAIL_ERROR_NOQUOTA,
  				       MAIL_ERRSTR_NO_QUOTA);
  		return -1;
-@@ -163,6 +191,7 @@
+@@ -163,6 +188,7 @@
  	mf = p_new(ctx->pool, struct maildir_filename, 1);
  	mf->tmp_name = mf->dest_basename = p_strdup(ctx->pool, tmp_fname);
  	mf->flags = mdata->flags;
@@ -84,7 +81,7 @@
  	mf->size = UOFF_T_MAX;
  	mf->vsize = UOFF_T_MAX;
  
-@@ -235,37 +264,9 @@
+@@ -235,37 +261,9 @@
  			  struct maildir_filename *mf,
  			  const char **fname_r)
  {
@@ -125,7 +122,7 @@
  }
  
  static const char *maildir_mf_get_path(struct maildir_save_context *ctx,
-@@ -348,7 +349,7 @@
+@@ -348,7 +346,7 @@
  		   useless. */
  		old_mask = umask(0777 & ~perm->file_create_mode);
  		fd = open(str_c(path),
@@ -134,7 +131,7 @@
  		umask(old_mask);
  	} while (fd == -1 && errno == EEXIST);
  
-@@ -405,10 +406,9 @@
+@@ -405,10 +403,9 @@
  		if (ctx->fd == -1)
  			ctx->failed = TRUE;
  		else {
@@ -148,7 +145,7 @@
  			mf = maildir_save_add(_ctx, fname, NULL);
  			if (_ctx->data.guid != NULL) {
  				maildir_save_set_dest_basename(_ctx, mf,
-@@ -934,18 +934,21 @@
+@@ -934,18 +931,21 @@
  		ret = maildir_uidlist_sync_next_uid(ctx->uidlist_sync_ctx,
  						    dest, uid, flags, &rec);
  		i_assert(ret > 0);
