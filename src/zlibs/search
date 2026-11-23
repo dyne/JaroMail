@@ -267,7 +267,7 @@ backup() {
         func "no notmuch hits, trying raw maildir content match"
         folders="$(maildir_list_folders "$MAILDIRS")" || return $?
         for _md in "${(@0)folders}"; do
-            [[ -n "$_md" && "$_md" != "${dst:a}" ]] || continue
+            [[ -n "$_md" && "${_md:A}" != "${dst:A}" ]] || continue
             # mlist outputs lines. Preserve full paths here, including newlines.
             for _msg in "$_md"/{new,cur}/*(.N); do
                 grep -qi -- "$expr" "$_msg" || continue

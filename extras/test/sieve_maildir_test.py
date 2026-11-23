@@ -1,7 +1,7 @@
 """Inspect the installed Pigeonhole CLI and independent physical Maildir inventories."""
 
 import hashlib
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import json
 import os
 from pathlib import Path
@@ -13,6 +13,7 @@ import signal
 import stat
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -148,14 +149,16 @@ class MaildirTest(unittest.TestCase):
         current = (self.base / "cache/filter-engine/current").resolve()
         (self.source / "new/retained").write_bytes(message("limit", "retain"))
         installed = runpy.run_path(str(self.runtime / "filter"))
-        original = os.listdir
+        original = os.scandir
+        new_dir = (self.source / "new").stat()
+
         def large_inventory(fd):
-            if isinstance(fd, int) and os.path.samestat(os.fstat(fd), (self.source / "new").stat()):
-                return [str(i) for i in range(100_001)]
+            if isinstance(fd, int) and os.path.samestat(os.fstat(fd), new_dir):
+                return nullcontext(SimpleNamespace(name=str(i)) for i in range(100_001))
             return original(fd)
         args = [str(self.cli), "--from", str(self.source), "--to", str(self.base),
                 "--report0", current.name, str(current / "Filters.sieve")]
-        with mock.patch("sys.argv", args), mock.patch("os.listdir", large_inventory):
+        with mock.patch("sys.argv", args), mock.patch("os.scandir", large_inventory):
             with self.assertRaises(installed["FilterError"]) as error:
                 installed["main"]()
         self.assertEqual(error.exception.status, 2)
