@@ -76,6 +76,8 @@ if [[ "${listed_messages}" == *"/incoming/tmp/tmp.eml"* ]]; then
   exit 1
 fi
 
+odd_folder="$mail_root/"$'Projects\n2026\n'
+maildir_fixture_ensure "$odd_folder"
 listed_folders="$(
   zsh -lc '
     JAROMAILDIR="'"${mail_root}"'" \
@@ -83,8 +85,10 @@ listed_folders="$(
     PROGRAM=test VERSION=6.0 \
     source "'"${repo_root}"'/src/zlibs/bootstrap" source
     maildir_list_folders "'"${mail_root}"'"
-  ' 2>/dev/null | sort
+  ' 2>/dev/null
 )"
+folders=("${(@0)listed_folders}")
+(( ${folders[(Ie)$odd_folder]} ))
 assert_contains "${listed_folders}" "/incoming" "maildir_list_folders includes direct child"
 assert_contains "${listed_folders}" "/archive" "maildir_list_folders includes archive"
 if [[ "${listed_folders}" == *"/incoming/nested"* ]]; then

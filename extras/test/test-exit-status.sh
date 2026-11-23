@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 source "${0:A:h}/lib/module_helpers.zsh"
 source "$repo_root/src/zlibs/email"
+source "$repo_root/src/zlibs/maildirs"
 source "$repo_root/src/zlibs/search"
 source "$repo_root/src/zlibs/filters"
 MAILDIRS="$tmp_root/mail"

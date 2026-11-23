@@ -52,3 +52,28 @@ if print ignored | deliver archive; then
 fi
 [[ -L "$collision" && ! -e "$tmp_root/missing" ]]
 print -- "PASS: collision-safe refile and atomic delivery"
+
+unfunction command mktemp
+if command -v mrefile >/dev/null; then
+  src="$tmp_root/source/ordinary:2,S"
+  print -r -- "refile fixture" > "$src"
+  # Upstream returns success even when it publishes no message.
+  mrefile() { return 0; }
+  assert_status 1 maildir_refile "$src" "$MAILDIRS/archive"
+  [[ -f "$src" ]]
+  unfunction mrefile
+
+  if [[ -n "${JARO_FILTER_CROSS_FS_DIR:-}" ]]; then
+    cross="$(mktemp -d "$JARO_FILTER_CROSS_FS_DIR/jaro-refile.XXXXXXXX")"
+    {
+      maildirmake "$cross/archive"
+      maildir_refile "$src" "$cross/archive"
+      received=("$cross/archive/cur/"*(.N))
+      assert_equal "${#received}" 1 "cross-device move published once"
+      [[ ! -e "$src" && "$received[1]" == *:2,S ]]
+      assert_equal "$(cat "$received[1]")" "refile fixture" "cross-device move bytes"
+    } always {
+      rm -rf -- "$cross"
+    }
+  fi
+fi

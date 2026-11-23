@@ -418,7 +418,13 @@ fetch() {
         fmconf+=(" sslcertck ") # sslcertpath '$WORKDIR/certs'
     fi
 
-    fmconf+=(" sslproto ${transport} warnings 3600 and wants mda \"jaro -q deliver\" ")
+    local mda='jaro -q deliver'
+    local -x JARO_FETCH_INCOMING="${MAILDIRS:a}/incoming"
+    if command -v mdeliver >/dev/null; then
+        # Fetchmail decodes the quotes. Its MDA shell expands the path as one argument.
+        mda='mdeliver \x22$JARO_FETCH_INCOMING\x22'
+    fi
+    fmconf+=(" sslproto ${transport} warnings 3600 and wants mda \"$mda\" ")
 
 
     fmconf+=(" antispam 571 550 501 554 ")
@@ -478,6 +484,9 @@ fetch() {
 
     if [[ $DRYRUN = 0 ]]; then
 
+        if [[ "$mda" != "jaro -q deliver" ]]; then
+            maildirmake "$JARO_FETCH_INCOMING" || return $?
+        fi
         act "please wait while downloading mails to incoming..."
 
         print -r -- " $fmconf " | fetchmail -f -
