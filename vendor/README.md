@@ -4,6 +4,10 @@ The complete [abook 0.6.2 release](abook/README.md) is vendored separately for
 the application build and future customization. Its full source archive is an
 explicit exception to the minimal Sieve extraction policy below.
 
+The [SQLite 3.54.1 amalgamation](sqlite/README.md) supplies the private dedup
+scratch database. Only its C source and matching header are retained, with
+official archive provenance and per-file digests in `sqlite/sources.json`.
+
 ## Minimal Sieve tool source extraction
 
 The compiler, evaluator, binary loader and Maildir frontend sources

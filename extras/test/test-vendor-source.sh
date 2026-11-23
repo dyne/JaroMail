@@ -55,6 +55,13 @@ with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
     abook_extra.write_text('/* build output must stay outside vendor */\n')
     rejects('extra or missing')
     abook_extra.unlink()
+    sqlite_target = fixture / 'sqlite/upstream/sqlite3.c'
+    sqlite_original = sqlite_target.read_bytes()
+    sqlite_target.write_bytes(sqlite_original + b'\n/* changed fixture */\n')
+    rejects('upstream source differs')
+    sqlite_target.unlink()
+    rejects('extra or missing')
+    sqlite_target.write_bytes(sqlite_original)
     extra = fixture / 'pigeonhole/upstream/extra.c'
     extra.write_text('/* unneeded source */\n')
     rejects('extra or missing')
@@ -62,5 +69,5 @@ with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
     target.unlink()
     target.symlink_to(source / 'pigeonhole/upstream/src/sieve-tools/sievec.c')
     rejects('unexpected symlink')
-print('PASS: minimal Sieve scope, complete abook scope and modified/missing/extra/symlink rejection')
+print('PASS: minimal Sieve scope, complete abook scope, pinned SQLite and modified/missing/extra/symlink rejection')
 PY

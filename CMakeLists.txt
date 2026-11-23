@@ -116,6 +116,16 @@ target_compile_definitions(dotlock PRIVATE DL_STANDALONE)
 jaro_executable(gpgewrap src/gpgewrap.c)
 jaro_executable(jaro-outbox src/jaro-outbox.c src/filter/sha256.c)
 jaro_executable(jaro-snapshot src/jaro-snapshot.c src/filter/sha256.c)
+# Compile the same pinned amalgamation with the selected compiler for native and
+# cross builds. No find_package/pkg-config search can select a host SQLite.
+add_library(jaro-dedup-sqlite STATIC vendor/sqlite/upstream/sqlite3.c)
+target_include_directories(jaro-dedup-sqlite PUBLIC "${PROJECT_SOURCE_DIR}/vendor/sqlite/upstream")
+target_compile_definitions(jaro-dedup-sqlite PRIVATE SQLITE_THREADSAFE=0 SQLITE_OMIT_LOAD_EXTENSION
+  SQLITE_OMIT_WAL SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=1 SQLITE_TEMP_STORE=1
+  SQLITE_MAX_MMAP_SIZE=0 SQLITE_DEFAULT_MMAP_SIZE=0)
+jaro_executable(jaro-dedup src/jaro-dedup.c src/dedup/inventory.c src/dedup/store.c)
+target_link_libraries(jaro-dedup PRIVATE jaro-dedup-sqlite)
+target_compile_options(jaro-dedup PRIVATE -Wall -Wextra -Wpedantic)
 # These retained helpers previously used the compiler's GNU dialect. Keep its
 # POSIX declarations while the shared filter core remains strict C99.
 set_target_properties(fetchaddr parsedate dotlock gpgewrap PROPERTIES C_EXTENSIONS ON)
@@ -124,6 +134,12 @@ add_custom_target(filter-core DEPENDS jaro-policy)
 add_custom_target(filter-compile DEPENDS jaro-filter-compile)
 
 if(JARO_BUILD_TEST_DRIVERS)
+  jaro_executable(jaro-dedup-test src/jaro-dedup.c src/dedup/inventory.c src/dedup/store.c)
+  target_compile_definitions(jaro-dedup-test PRIVATE JARO_DEDUP_TESTING)
+  target_compile_options(jaro-dedup-test PRIVATE -Wall -Wextra -Wpedantic)
+  target_link_libraries(jaro-dedup-test PRIVATE jaro-dedup-sqlite)
+  jaro_executable(dedup-inventory-driver extras/test/dedup-inventory-driver.c src/dedup/inventory.c)
+  target_compile_options(dedup-inventory-driver PRIVATE -Wall -Wextra -Wpedantic)
   jaro_executable(jaro-snapshot-test src/jaro-snapshot.c src/filter/sha256.c)
   target_compile_definitions(jaro-snapshot-test PRIVATE JARO_SNAPSHOT_TESTING)
   jaro_executable(jaro-outbox-test src/jaro-outbox.c src/filter/sha256.c)
