@@ -1,5 +1,6 @@
 /* Local Maildir adapter, derived from Pigeonhole 2.4.5 sieve-filter.c.
  * Copyright (c) Pigeonhole authors. See vendor/pigeonhole/upstream/COPYING. */
+#define _GNU_SOURCE
 #include "lib.h"
 #include "array.h"
 #include "istream.h"
@@ -29,6 +30,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <linux/landlock.h>
+#include <linux/openat2.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -37,6 +39,7 @@
 /* The local Dovecot save transaction receives the original Maildir basename. */
 const char *jaro_sieve_filename;
 static const char *source_name, *batch_path;
+static int destination_fd = -1;
 static volatile sig_atomic_t stopping;
 static FILE *decisions;
 
@@ -219,9 +222,8 @@ static struct sieve_binary *open_program(struct sieve_instance *svinst,
 	struct sieve_error_handler *errors, bool cached)
 {
 	struct sieve_binary *binary = NULL;
-	int base = open("folders", O_RDONLY | O_DIRECTORY);
 	int fd = open("script", O_RDONLY | O_NOFOLLOW);
-	if (base < 0 || fd < 0)
+	if (fd < 0)
 		i_fatal("Could not open pinned filter inputs: %m");
 	struct istream *input = i_stream_create_fd_autoclose(&fd, IO_BLOCK_SIZE);
 	struct sieve_script *script = sieve_data_script_create_from_input(
@@ -230,13 +232,13 @@ static struct sieve_binary *open_program(struct sieve_instance *svinst,
 	struct sieve_ast *ast = sieve_parse(script, errors, NULL);
 	if (ast == NULL)
 		i_fatal("Invalid Sieve source");
-	check_commands(sieve_ast_root(ast), base);
+	check_commands(sieve_ast_root(ast), destination_fd);
 	if (!sieve_validate(ast, errors, SIEVE_COMPILE_FLAG_NOGLOBAL, NULL))
 		i_fatal("Invalid Sieve folder-delivery script");
 	if (cached) {
 		if (sieve_load(svinst, "binary", &binary, NULL) < 0)
 			i_fatal("Cannot load pinned Sieve binary");
-		check_cached_binary(binary, base);
+		check_cached_binary(binary, destination_fd);
 	} else {
 		struct sieve_generator *generator = sieve_generator_create(
 			ast, errors, SIEVE_COMPILE_FLAG_NOGLOBAL);
@@ -246,7 +248,6 @@ static struct sieve_binary *open_program(struct sieve_instance *svinst,
 			i_fatal("Cannot generate Sieve executable");
 	}
 	sieve_ast_unref(&ast);
-	i_close_fd(&base);
 	sieve_script_unref(&script);
 	return binary;
 }
@@ -354,19 +355,48 @@ struct published_file {
 	struct stat st;
 };
 static ARRAY(struct published_file) publications;
-void jaro_sieve_published(const char *path, const struct stat *st);
-
-void jaro_sieve_published(const char *path, const struct stat *st)
+static int open_destination(const char *path, int flags)
 {
-	struct published_file saved = { .path = i_strdup(path), .st = *st };
-	array_push_back(&publications, &saved);
+	const struct open_how how = {
+		.flags = flags | O_CLOEXEC,
+		.resolve = RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS
+	};
+	return syscall(SYS_openat2, destination_fd, path, &how, sizeof(how));
+}
+
+int jaro_sieve_publish(const char *mailbox, const char *temporary, const char *name);
+
+int jaro_sieve_publish(const char *mailbox, const char *temporary, const char *name)
+{
+	/* Bind both ends of the rename to the mailbox chosen by fileinto. */
+	int box = open_destination(mailbox, O_RDONLY | O_DIRECTORY);
+	if (box < 0)
+		return -1;
+	const int flags = O_DIRECTORY | O_RDONLY | O_NOFOLLOW;
+	int tmp = openat(box, "tmp", flags);
+	int cur = tmp < 0 ? -1 : openat(box, "cur", flags);
+	struct published_file saved;
+	int ret = -1;
+	if (cur >= 0 && fstatat(tmp, temporary, &saved.st, AT_SYMLINK_NOFOLLOW) == 0) {
+		ret = renameat2(tmp, temporary, cur, name, RENAME_NOREPLACE);
+		if (ret == 0) {
+			saved.path = i_strdup(t_strconcat(mailbox, "/cur/", name, NULL));
+			array_push_back(&publications, &saved);
+		}
+	}
+	int error = errno;
+	if (cur >= 0) i_close_fd(&cur);
+	if (tmp >= 0) i_close_fd(&tmp);
+	i_close_fd(&box);
+	errno = error;
+	return ret;
 }
 
 static bool copy_matches(int original, const struct published_file *saved)
 {
 	struct stat st;
 	unsigned char source[16384], dest[sizeof(source)];
-	int fd = open(saved->path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+	int fd = open_destination(saved->path, O_RDONLY | O_NONBLOCK);
 	if (fd < 0)
 		return FALSE;
 	bool same = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) &&
@@ -379,7 +409,14 @@ static bool copy_matches(int original, const struct published_file *saved)
 			break;
 		off += n;
 	}
-	same = same && lstat(saved->path, &st) == 0 && st.st_dev == saved->st.st_dev &&
+	i_close_fd(&fd);
+	if (!same)
+		return FALSE;
+	/* Resolve again from --to after the byte comparison. */
+	fd = open_destination(saved->path, O_PATH);
+	if (fd < 0)
+		return FALSE;
+	same = fstat(fd, &st) == 0 && st.st_dev == saved->st.st_dev &&
 		st.st_ino == saved->st.st_ino && st.st_size == saved->st.st_size &&
 		st.st_mtim.tv_sec == saved->st.st_mtim.tv_sec &&
 		st.st_mtim.tv_nsec == saved->st.st_mtim.tv_nsec;
@@ -526,6 +563,9 @@ int main(int argc, char **argv)
 	sieve_set_extensions(svinst, "fileinto mailbox regex envelope");
 	struct sieve_error_handler *errors = sieve_stderr_ehandler_create(svinst, 0);
 	confine_storage(preview);
+	destination_fd = open("folders", O_RDONLY | O_DIRECTORY);
+	if (destination_fd < 0)
+		i_fatal("Cannot open destination root: %m");
 	struct sieve_binary *binary = open_program(svinst, errors, !strcmp(argv[optind + 2], "cached"));
 	if (write(ready_fd, "R", 1) != 1)
 		i_fatal("Could not acknowledge validated batch");
@@ -588,6 +628,7 @@ int main(int argc, char **argv)
 		i_error("Maildir batch contains incomplete deliveries");
 	mailbox_free(&box);
 	i_close_fd(&batch_fd);
+	i_close_fd(&destination_fd);
 	sieve_close(&binary);
 	sieve_error_handler_unref(&errors);
 	sieve_tool_deinit(&sieve_tool);

@@ -415,6 +415,19 @@ if header :is "Subject" "explicit" { keep; stop; }
         filed = self.base / "INBOX/cur" / selected.name
         self.assertEqual((filed.read_bytes(), stat.S_IMODE(filed.stat().st_mode)), (data, 0o600))
 
+    def test_replaced_delivery_directory_retains_source(self):
+        mailbox = maildir(self.base / "INBOX")
+        selected = self.source / "new/selected"
+        data = message("filing", "retain the incoming copy")
+        selected.write_bytes(data)
+        with self.held_save():
+            (mailbox / "cur").rename(mailbox / "old-cur")
+            (mailbox / "cur").mkdir()
+        self.assertEqual(self.held_result.returncode, 7, self.held_result.stderr)
+        self.assertEqual(selected.read_bytes(), data)
+        self.assertEqual(list((mailbox / "cur").iterdir()), [])
+        self.assertEqual((mailbox / "old-cur" / selected.name).read_bytes(), data)
+
     def test_changed_destination_staging_retains_source(self):
         data = message("stage", "original")
         selected = self.source / "cur/a"
