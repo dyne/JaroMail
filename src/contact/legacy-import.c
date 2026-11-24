@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 static int
 field_is(const struct jaro_legacy_field *field, const char *name)
@@ -89,6 +90,9 @@ jaro_contact_import_record(struct jaro_contact_store *store, int64_t book,
 				goto done;
 			}
 		} else {
+			/* Keep the original field as well, including unrecognized date formats. */
+			if (field->key_size == 4 && !strncasecmp(field->key, "date", 4))
+				contact.insertion_date = value;
 			size_t slot = contact.field_count++;
 			fields[slot] = (struct jaro_contact_field){{field->key, field->key_size}, value};
 			field_ordinals[slot] = i + 1;

@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import closing
+from datetime import datetime, timezone
 import hashlib
 import os
 from pathlib import Path
@@ -34,7 +35,9 @@ class ContactStoreTests(unittest.TestCase):
         return closing(sqlite3.connect(f'{self.db.as_uri()}?mode=ro', uri=True))
 
     def test_roundtrip_edit_conflicts_exact_lookup_and_mutt_display(self):
+        before = datetime.now(timezone.utc).date().isoformat()
         result = self.run_driver('roundtrip', self.db)
+        after = datetime.now(timezone.utc).date().isoformat()
         addresses = ['FIRST@Example.org', '"A,B O\'Neil"@Example.org', 'first@example.org']
         expected_rows = ''.join(f'{address}\tJose\u0301 O’Neil 물\tWorkshop Straße 照 [0m  last\n'
                                 for address in addresses).encode()
@@ -43,7 +46,7 @@ class ContactStoreTests(unittest.TestCase):
         self.assertTrue(all(row.count(b'\t') == 2 for row in result.stdout.splitlines()))
         with self.read_sqlite() as db:
             self.assertEqual(db.execute('PRAGMA application_id').fetchone(), (APPLICATION_ID,))
-            self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (1,))
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (2,))
             self.assertEqual(db.execute('PRAGMA journal_mode').fetchone(), ('delete',))
             self.assertEqual(db.execute('PRAGMA integrity_check').fetchone(), ('ok',))
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
@@ -53,6 +56,10 @@ class ContactStoreTests(unittest.TestCase):
                               'FROM contacts ORDER BY book_id,ordinal').fetchall()
             self.assertEqual(len(data), 3)
             self.assertEqual([row[2] for row in data], [2, 1, 1])
+            dates = db.execute('SELECT date FROM contacts').fetchall()
+            self.assertEqual(len(dates), 3)
+            for (value,) in dates:
+                self.assertIn(value, (before, after))
             self.assertEqual(data[0][3:], ('Updated Name', 'Étoile', 'Workshop Straße\n照\x1b[0m\x9b\u2028last',
                                            'updatedname', 'etoile', 'workshopstrasse照0mlast'))
             self.assertEqual(db.execute('SELECT spelling,mailbox_key FROM addresses '
@@ -128,7 +135,8 @@ class ContactStoreTests(unittest.TestCase):
         self.db.chmod(0o600)
         for sql, diagnostic in (
             ('PRAGMA user_version=99', b'unsupported contact schema version'),
-            ('PRAGMA user_version=1; DROP INDEX addresses_book_mailbox', b'invalid contact database schema'),
+            ('PRAGMA user_version=2; DROP TRIGGER contact_date_fixed', b'invalid contact insertion date triggers'),
+            ('DROP INDEX addresses_book_mailbox', b'invalid contact database schema'),
         ):
             with self.subTest(sql=sql), closing(sqlite3.connect(self.db)) as db:
                 db.executescript(sql)

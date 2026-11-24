@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 #define JARO_CONTACT_APPLICATION_ID 0x4a434e54
-#define JARO_CONTACT_SCHEMA_VERSION 1
+#define JARO_CONTACT_SCHEMA_VERSION 2
 #define JARO_CONTACT_TEXT_MAX (64u * 1024u)
 #define JARO_CONTACT_FIELDS_MAX 128u
 #define JARO_CONTACT_ADDRESSES_MAX 16384u
@@ -25,6 +25,7 @@ struct jaro_contact_field {
 struct jaro_contact {
 	int64_t id, book_id, revision;
 	struct jaro_contact_text name, nickname, notes;
+	struct jaro_contact_text insertion_date; /* Optional YYYY-MM-DD override on import. */
 	const struct jaro_contact_text *addresses;
 	size_t address_count;
 	const struct jaro_contact_field *fields;

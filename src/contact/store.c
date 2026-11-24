@@ -19,6 +19,20 @@ struct jaro_contact_store {
 #define STRINGIFY_ARG(x) #x
 #define STRINGIFY(x) STRINGIFY_ARG(x)
 
+#define CONTACT_DATE_COLUMN \
+	"date TEXT CHECK(date IS NULL OR date(date,'+0 days') IS date)"
+/* Date initialization is part of the insert, which already advances generation. */
+#define CONTACT_CHANGED_TRIGGER \
+	"CREATE TRIGGER contact_changed AFTER UPDATE OF id,book_id,ordinal,revision,name," \
+	" nickname,notes,name_key,nickname_key,notes_key ON contacts BEGIN" \
+	" UPDATE metadata SET generation=generation+1; END;"
+#define CONTACT_DATE_TRIGGERS \
+	"CREATE TRIGGER contact_date_added AFTER INSERT ON contacts WHEN NEW.date IS NULL BEGIN" \
+	" UPDATE contacts SET date=CURRENT_DATE WHERE id=NEW.id; END;" \
+	"CREATE TRIGGER contact_date_fixed BEFORE UPDATE OF date ON contacts" \
+	" WHEN OLD.date IS NOT NULL AND NEW.date IS NOT OLD.date BEGIN" \
+	" SELECT RAISE(ABORT,'contact insertion date is immutable'); END;"
+
 static const char schema[] =
 	"PRAGMA application_id=" STRINGIFY(JARO_CONTACT_APPLICATION_ID) ";"
 	"PRAGMA user_version=" STRINGIFY(JARO_CONTACT_SCHEMA_VERSION) ";"
@@ -30,7 +44,8 @@ static const char schema[] =
 	" REFERENCES books(id), ordinal INTEGER NOT NULL CHECK(ordinal>=0),"
 	" revision INTEGER NOT NULL CHECK(revision>0), name TEXT NOT NULL, nickname TEXT NOT NULL,"
 	" notes TEXT NOT NULL, name_key TEXT NOT NULL, nickname_key TEXT NOT NULL,"
-	" notes_key TEXT NOT NULL, UNIQUE(book_id,ordinal), UNIQUE(id,book_id)) STRICT;"
+	" notes_key TEXT NOT NULL, " CONTACT_DATE_COLUMN
+	", UNIQUE(book_id,ordinal), UNIQUE(id,book_id)) STRICT;"
 	"CREATE TABLE addresses (contact_id INTEGER NOT NULL, book_id INTEGER NOT NULL,"
 	" ordinal INTEGER NOT NULL CHECK(ordinal>=0), spelling TEXT NOT NULL, mailbox_key TEXT NOT NULL,"
 	" search_key TEXT NOT NULL, PRIMARY KEY(contact_id,ordinal),"
@@ -44,10 +59,17 @@ static const char schema[] =
 	" UPDATE metadata SET generation=generation+1; END;"
 	"CREATE TRIGGER contact_added AFTER INSERT ON contacts BEGIN"
 	" UPDATE metadata SET generation=generation+1; END;"
-	"CREATE TRIGGER contact_changed AFTER UPDATE ON contacts BEGIN"
-	" UPDATE metadata SET generation=generation+1; END;"
+	CONTACT_CHANGED_TRIGGER
 	"CREATE TRIGGER contact_removed AFTER DELETE ON contacts BEGIN"
-	" UPDATE metadata SET generation=generation+1; END;";
+	" UPDATE metadata SET generation=generation+1; END;"
+	CONTACT_DATE_TRIGGERS;
+
+static const char upgrade_schema[] =
+	"ALTER TABLE contacts ADD COLUMN " CONTACT_DATE_COLUMN ";"
+	"DROP TRIGGER contact_changed;"
+	CONTACT_CHANGED_TRIGGER
+	CONTACT_DATE_TRIGGERS
+	"PRAGMA user_version=" STRINGIFY(JARO_CONTACT_SCHEMA_VERSION) ";";
 
 static const char has_mailbox_sql[] =
 	"SELECT 1 FROM addresses INDEXED BY addresses_book_mailbox"
@@ -155,6 +177,12 @@ configure(sqlite3 *db, int create, int memory, struct jaro_contact_error *error)
 }
 
 static int
+supported_schema(sqlite3_int64 version)
+{
+	return version == 1 || version == JARO_CONTACT_SCHEMA_VERSION;
+}
+
+static int
 check_schema(sqlite3 *db, struct jaro_contact_health *health, struct jaro_contact_error *error)
 {
 	sqlite3_int64 version = 0, generation = 0;
@@ -170,7 +198,7 @@ check_schema(sqlite3 *db, struct jaro_contact_health *health, struct jaro_contac
 		health->schema_known = 1;
 		health->schema_version = version;
 	}
-	if (version != JARO_CONTACT_SCHEMA_VERSION)
+	if (!supported_schema(version))
 		return sql_failure(error, SQLITE_MISMATCH, "unsupported contact schema version");
 	rc = read_integer(db, "SELECT generation FROM metadata WHERE singleton=1", &generation);
 	if (rc == SQLITE_OK && generation < 0)
@@ -186,9 +214,34 @@ check_schema(sqlite3 *db, struct jaro_contact_health *health, struct jaro_contac
 	sqlite3_finalize(statement);
 	if (rc != SQLITE_OK)
 		return sql_failure(error, rc, "invalid contact database schema");
-	return check_setting(db, "SELECT count(*) FROM sqlite_schema WHERE type='trigger' AND"
+	status = check_setting(db, "SELECT count(*) FROM sqlite_schema WHERE type='trigger' AND"
 		" name IN ('book_added','contact_added','contact_changed','contact_removed')",
 		4, error, "invalid contact change tracking");
+	if (!status && version == JARO_CONTACT_SCHEMA_VERSION)
+		status = check_setting(db, "SELECT count(*) FROM pragma_table_info('contacts')"
+			" WHERE name='date' AND type='TEXT' AND [notnull]=0",
+			1, error, "invalid contact insertion date column");
+	if (!status && version == JARO_CONTACT_SCHEMA_VERSION)
+		status = check_setting(db, "SELECT count(*) FROM sqlite_schema WHERE type='trigger'"
+			" AND tbl_name='contacts' AND name IN ('contact_date_added','contact_date_fixed')",
+			2, error, "invalid contact insertion date triggers");
+	return status;
+}
+
+static int
+upgrade_database(struct jaro_contact_store *store, struct jaro_contact_error *error)
+{
+	struct jaro_contact_health health = {0};
+	int status = jaro_contact_begin(store, error);
+	/* Another writer may have upgraded the schema while we acquired the lock. */
+	if (!status)
+		status = check_schema(store->db, &health, error);
+	if (!status && health.schema_version == 1) {
+		status = execute(store->db, upgrade_schema, error, "cannot upgrade contact schema");
+		if (!status)
+			status = check_schema(store->db, NULL, error);
+	}
+	return jaro_contact_finish(store, status, error);
 }
 
 static int
@@ -219,6 +272,7 @@ open_database(const char *path, int flags, int create, int memory,
 	struct jaro_contact_store **store, struct jaro_contact_error *error)
 {
 	struct jaro_contact_store *opened;
+	struct jaro_contact_health health = {0};
 	int status = open_connection(path, flags, create, memory, &opened, error);
 	if (status)
 		return status;
@@ -229,7 +283,9 @@ open_database(const char *path, int flags, int create, int memory,
 	if (!status && create)
 		status = execute(opened->db, "COMMIT", error, "cannot commit contact schema");
 	if (!status)
-		status = check_schema(opened->db, NULL, error);
+		status = check_schema(opened->db, &health, error);
+	if (!status && (flags & SQLITE_OPEN_READWRITE) && health.schema_version == 1)
+		status = upgrade_database(opened, error);
 	if (status) {
 		jaro_contact_close(opened, NULL); /* SQLite rolls back unfinished transactions. */
 		return status;
@@ -396,7 +452,7 @@ jaro_contact_diagnose(const char *path, struct jaro_contact_health *health)
 	}
 	if (status == JARO_CONTACT_BUSY)
 		return JARO_CONTACT_DIAG_LOCKED;
-	if (health->schema_known && health->schema_version != JARO_CONTACT_SCHEMA_VERSION)
+	if (health->schema_known && !supported_schema(health->schema_version))
 		return JARO_CONTACT_DIAG_SCHEMA;
 	if (error.native_code == SQLITE_READONLY_ROLLBACK)
 		return JARO_CONTACT_DIAG_RECOVERY;
@@ -634,9 +690,10 @@ save_contact_row(sqlite3 *db, const struct jaro_contact *contact,
 	const char *sql = contact->id ?
 		"UPDATE contacts SET name=?2,nickname=?3,notes=?4,name_key=?5,nickname_key=?6,"
 		"notes_key=?7,revision=revision+1 WHERE book_id=?1 AND id=?8 AND revision=?9" :
-		"INSERT INTO contacts(book_id,name,nickname,notes,name_key,nickname_key,notes_key,ordinal,revision)"
+		"INSERT INTO contacts(book_id,name,nickname,notes,name_key,nickname_key,notes_key,ordinal,revision,date)"
 		" VALUES(?1,?2,?3,?4,?5,?6,?7,"
-		"(SELECT COALESCE(MAX(ordinal)+1,0) FROM contacts WHERE book_id=?1),1)";
+		"(SELECT COALESCE(MAX(ordinal)+1,0) FROM contacts WHERE book_id=?1),1,"
+		"CASE WHEN date(?8,'+0 days') IS ?8 THEN ?8 END)";
 	sqlite3_stmt *statement = NULL;
 	int rc = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 
@@ -650,6 +707,8 @@ save_contact_row(sqlite3 *db, const struct jaro_contact *contact,
 		rc = sqlite3_bind_int64(statement, 8, contact->id);
 	if (rc == SQLITE_OK && contact->id)
 		rc = sqlite3_bind_int64(statement, 9, contact->revision);
+	if (rc == SQLITE_OK && !contact->id && contact->insertion_date.size == 10)
+		rc = bind_text(statement, 8, contact->insertion_date);
 	if (rc == SQLITE_OK)
 		rc = sqlite3_step(statement);
 	sqlite3_finalize(statement);
