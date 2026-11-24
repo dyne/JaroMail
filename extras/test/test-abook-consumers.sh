@@ -14,7 +14,8 @@ if ! SIEVE_DEPS_PREFIX= DESTDIR= PREFIX="$tmp_root/staged" \
     cat "$tmp_root/build.log"
     exit 1
 fi
-mv "$tmp_root/staged" "$tmp_root/relocated"
+relocated="$tmp_root/relocated Anne's 100%s"
+mv "$tmp_root/staged" "$relocated"
 python3 "$repo_root/extras/test/abook-consumers-test.py" \
-    --prefix "$tmp_root/relocated" --snapshot-driver "$tmp_root/build/filter-compiler-driver" \
+    --prefix "$relocated" --snapshot-driver "$tmp_root/build/filter-compiler-driver" \
     --client "$(command -v neomutt)"

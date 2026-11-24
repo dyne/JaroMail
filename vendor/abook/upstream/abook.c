@@ -10,11 +10,14 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <signal.h>
+#include <spawn.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #ifdef HAVE_CONFIG_H
 #	include "config.h"
 #endif
@@ -37,6 +40,8 @@
 #include "xmalloc.h"
 #include "remap.h"
 #include "search-fold.h"
+
+extern char **environ;
 
 static void             init_abook();
 static void		quit_abook_sig(int i);
@@ -573,18 +578,31 @@ init_mutt_query()
 static char *
 make_mailstr(int item)
 {
-	char email[MAX_EMAIL_LEN];
+	char *csv = db_email_get(item);
+	abook_list *mailboxes = mailbox_list_from_csv(csv);
+	const char *name = db_name_get(item);
+	size_t length = strlen(name);
+	char *quoted, *out;
 	char *ret;
-	char *name = strdup_printf("\"%s\"", db_name_get(item));
+	free(csv);
 
-	get_first_email(email, item);
+	if(length > (SIZE_MAX - 3) / 2)
+		xmalloc_error_handler(EOVERFLOW);
+	out = quoted = xmalloc(2 * length + 3);
+	*out++ = '"';
+	for(; *name; name++) {
+		unsigned char c = *name;
+		if(c == '"' || c == '\\')
+			*out++ = '\\';
+		*out++ = c < ' ' || c == 127 ? ' ' : c;
+	}
+	*out++ = '"';
+	*out = 0;
 
-	ret = *email ?
-		strdup_printf("%s <%s>", name, email) :
-		xstrdup(name);
-
-	free(name);
-
+	ret = mailboxes ? strdup_printf("%s <%s>", quoted, mailboxes->data) : quoted;
+	if(mailboxes)
+		free(quoted);
+	abook_list_free(&mailboxes);
 	return ret;
 }
 
@@ -604,67 +622,208 @@ print_stderr(int item)
 
 }
 
+/* Split only the configured words. The contact argument is appended verbatim. */
+static char **
+contact_command_argv(char *config, char *argument)
+{
+	size_t slots = strlen(config) / 2 + 3;
+	char **argv;
+	char *read = config, *write = config;
+	size_t argc = 0;
+
+	if(slots > SIZE_MAX / sizeof(*argv))
+		xmalloc_error_handler(EOVERFLOW);
+	argv = xmalloc(slots * sizeof(*argv));
+
+	while(*read == ' ' || *read == '\t')
+		read++;
+	while(*read) {
+		char quote = 0;
+
+		argv[argc++] = write;
+		while(*read && (quote || (*read != ' ' && *read != '\t'))) {
+			char c = *read++;
+			if(c == '\\' && quote != '\'') {
+				if(!*read)
+					goto invalid;
+				*write++ = *read++;
+			} else if(quote) {
+				if(c == quote)
+					quote = 0;
+				else
+					*write++ = c;
+			} else if(c == '\'' || c == '"') {
+				quote = c;
+			} else {
+				*write++ = c;
+			}
+		}
+		if(quote)
+			goto invalid;
+		while(*read == ' ' || *read == '\t')
+			read++;
+		*write++ = 0;
+	}
+
+	if(!argc || !*argv[0])
+		goto invalid;
+	argv[argc++] = argument;
+	argv[argc] = NULL;
+	return argv;
+
+invalid:
+	free(argv);
+	return NULL;
+}
+
+static int
+spawn_contact_command(char **argv, int *status)
+{
+	posix_spawnattr_t attr;
+	struct sigaction ignore = { .sa_handler = SIG_IGN };
+	struct sigaction old_int, old_quit;
+	sigset_t defaults;
+	pid_t child;
+	int error;
+
+	/* The terminal's interrupt keys should affect the child, as with system(). */
+	sigemptyset(&ignore.sa_mask);
+	if(sigaction(SIGINT, &ignore, &old_int) == -1)
+		return errno;
+	if(sigaction(SIGQUIT, &ignore, &old_quit) == -1) {
+		error = errno;
+		goto restore_int;
+	}
+
+	error = posix_spawnattr_init(&attr);
+	if(error)
+		goto restore_signals;
+	sigemptyset(&defaults);
+	if(old_int.sa_handler != SIG_IGN)
+		sigaddset(&defaults, SIGINT);
+	if(old_quit.sa_handler != SIG_IGN)
+		sigaddset(&defaults, SIGQUIT);
+	error = posix_spawnattr_setsigdefault(&attr, &defaults);
+	if(!error)
+		error = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGDEF);
+	if(!error)
+		error = posix_spawnp(&child, argv[0], NULL, &attr, argv, environ);
+	posix_spawnattr_destroy(&attr);
+	if(!error) {
+		pid_t result;
+		do {
+			result = waitpid(child, status, 0);
+		} while(result == -1 && errno == EINTR);
+		if(result == -1)
+			error = errno;
+	}
+
+restore_signals:
+	sigaction(SIGQUIT, &old_quit, NULL);
+restore_int:
+	sigaction(SIGINT, &old_int, NULL);
+	return error;
+}
+
+static void
+run_contact_command(const char *command, char *argument)
+{
+	char *config, **argv, *message = NULL;
+	int status, error;
+
+	if(!command || !*command)
+		return;
+	config = xstrdup(command);
+	argv = contact_command_argv(config, argument);
+	if(!argv) {
+		free(config);
+		statusline_msg(_("Invalid external command setting"));
+		return;
+	}
+
+	if(endwin() == ERR) {
+		message = xstrdup(_("Cannot release terminal for external command"));
+	} else {
+		error = spawn_contact_command(argv, &status);
+		if(error)
+			message = strdup_printf(_("Cannot run external command: %s"), strerror(error));
+		else if(WIFSIGNALED(status))
+			message = strdup_printf(_("External command terminated by signal %d"), WTERMSIG(status));
+		else if(WIFEXITED(status) && WEXITSTATUS(status))
+			message = strdup_printf(_("External command exited with status %d"), WEXITSTATUS(status));
+	}
+
+	reset_prog_mode();
+	clearok(stdscr, TRUE);
+	refresh();
+	if(message)
+		statusline_msg(message);
+	free(message);
+	free(argv);
+	free(config);
+}
+
 void
 launch_mutt(int item)
 {
-	char *cmd = NULL, *mailstr = NULL;
-	char *mutt_command = opt_get_str(STR_MUTT_COMMAND);
+	char *mailstr = NULL;
 
-	if(mutt_command == NULL || !*mutt_command)
-		return;
-
-	if( is_valid_item(item) )
+	if(is_valid_item(item))
 		mailstr = make_mailstr(item);
 	else {
 		struct db_enumerator e = init_db_enumerator(ENUM_SELECTED);
-		char *tmp = NULL;
 		db_enumerate_items(e) {
-			tmp = mailstr;
-			mailstr = tmp ?
-				strconcat(tmp, ",", make_mailstr(e.item), NULL):
-				strconcat(make_mailstr(e.item), NULL);
-			free(tmp);
+			char *recipient = make_mailstr(e.item);
+			if(mailstr) {
+				char *previous = mailstr;
+				mailstr = strconcat(previous, ",", recipient, NULL);
+				free(previous);
+				free(recipient);
+			} else {
+				mailstr = recipient;
+			}
 		}
 	}
-
-	cmd = strconcat(mutt_command, " \'", mailstr, "\'", NULL);
+	if(mailstr)
+		run_contact_command(opt_get_str(STR_MUTT_COMMAND), mailstr);
 	free(mailstr);
-#ifdef DEBUG
-	fprintf(stderr, "cmd: %s\n", cmd);
-#endif
-	system(cmd);
-	free(cmd);
+}
 
-	/*
-	 * we need to make sure that curses settings are correct
-	 */
-	ui_init_curses();
+static int
+is_web_url(const char *url)
+{
+	const char *authority;
+	const unsigned char *byte;
+
+	if(!strncasecmp(url, "https://", 8))
+		authority = url + 8;
+	else if(!strncasecmp(url, "http://", 7))
+		authority = url + 7;
+	else
+		return FALSE;
+	if(strcspn(authority, "/?#") == 0)
+		return FALSE;
+	for(byte = (const unsigned char *)url; *byte; byte++)
+		if(*byte <= ' ' || *byte == 127 || *byte == '\\')
+			return FALSE;
+	return TRUE;
 }
 
 void
 launch_wwwbrowser(int item)
 {
-	char *cmd = NULL;
+	char *url;
 
-	if( !is_valid_item(item) )
+	if(!is_valid_item(item))
 		return;
-
-	if(db_fget(item, URL))
-		cmd = strdup_printf("%s '%s'",
-				opt_get_str(STR_WWW_COMMAND),
-				safe_str(db_fget(item, URL)));
-	else
+	url = db_fget(item, URL);
+	if(!url || !*url)
 		return;
-
-	if ( cmd )
-		system(cmd);
-
-	free(cmd);
-
-	/*
-	 * we need to make sure that curses settings are correct
-	 */
-	ui_init_curses();
+	if(!is_web_url(url)) {
+		statusline_msg(_("Contact URL must be an absolute HTTP or HTTPS URL"));
+		return;
+	}
+	run_contact_command(opt_get_str(STR_WWW_COMMAND), url);
 }
 
 FILE *
