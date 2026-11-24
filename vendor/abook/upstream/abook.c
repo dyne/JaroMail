@@ -468,7 +468,11 @@ parse_command_line(int argc, char **argv)
 static void
 show_usage()
 {
-	puts	(PACKAGE " v" VERSION "\n");
+	puts	(PACKAGE " v" VERSION);
+#ifdef JARO_ABOOK_FORK_VERSION
+	puts	("JaroMail abook fork " JARO_ABOOK_FORK_VERSION);
+#endif
+	putchar	('\n');
 	puts	(_("     -h	--help				show usage"));
 	puts	(_("     -C	--config	<file>		use an alternative configuration file"));
 	puts	(_("     -f	--datafile	<file>		use an alternative addressbook file"));

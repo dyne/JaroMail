@@ -1,5 +1,10 @@
-# Build the complete, pinned release sources without running upstream Autotools.
+# Build the maintained fork without running upstream Autotools.
 set(_source "${PROJECT_SOURCE_DIR}/vendor/abook/upstream")
+set(_manifest "${PROJECT_SOURCE_DIR}/vendor/abook/sources.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_manifest}")
+file(READ "${_manifest}" _abook_manifest)
+string(JSON ABOOK_UPSTREAM_VERSION GET "${_abook_manifest}" upstream version)
+string(JSON ABOOK_FORK_VERSION GET "${_abook_manifest}" fork version)
 set(JARO_ABOOK_DEPS_PREFIX "" CACHE PATH "Target ncurses/readline prefix for abook (required for static cross builds)")
 option(JARO_ABOOK_NLS "Build abook message translations (requires gettext tools and libintl)" OFF)
 if(JARO_STATIC AND NOT JARO_ABOOK_DEPS_PREFIX)

@@ -22,9 +22,15 @@ expected = {
 assert {entry['path'] for entry in manifest['files']} == expected
 abook = json.loads((source / 'abook/sources.json').read_text())
 assert abook['upstream']['version'] == '0.6.2'
-assert len(abook['files']) == 126
+assert abook['fork']['version'] == '0.6.2+jaromail.1'
+pristine = {entry['path']: entry for entry in abook['files']}
+modified = {entry['path']: entry for entry in abook['fork']['modified_files']}
+assert len(pristine) == 126
 assert {'abook.c', 'database.c', 'filter.c', 'COPYING', 'AUTHORS', 'configure',
-        'Makefile.in', 'po/fr.po'} <= {entry['path'] for entry in abook['files']}
+        'Makefile.in', 'po/fr.po'} <= pristine.keys()
+assert not {'COPYING', 'AUTHORS'} & modified.keys()
+assert pristine['database.c']['sha256'] == '44ae207c541722f3848a95567c5dda230cd0f3efaed7d3fd4eb3bbec868c1634'
+assert modified['database.c']['sha256'] != pristine['database.c']['sha256']
 with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
     fixture = Path(temp) / 'vendor'
     shutil.copytree(source, fixture)
@@ -46,8 +52,8 @@ with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
     extra.unlink()
     abook_target = fixture / 'abook/upstream/database.c'
     abook_original = abook_target.read_bytes()
-    abook_target.write_bytes(abook_original + b'\n/* changed fixture */\n')
-    rejects('upstream source differs')
+    abook_target.write_bytes(bytes([abook_original[0] ^ 1]) + abook_original[1:])
+    rejects('upstream source differs: database.c')
     abook_target.unlink()
     rejects('extra or missing')
     abook_target.write_bytes(abook_original)
@@ -55,6 +61,15 @@ with tempfile.TemporaryDirectory(prefix='jaromail-vendor-test-') as temp:
     abook_extra.write_text('/* build output must stay outside vendor */\n')
     rejects('extra or missing')
     abook_extra.unlink()
+    abook_manifest = fixture / 'abook/sources.json'
+    original_manifest = abook_manifest.read_bytes()
+    override = abook['fork']['modified_files'][0]
+    for invalid_path in ('COPYING', 'unexpected.c'):
+        abook['fork']['modified_files'].append(dict(override, path=invalid_path))
+        abook_manifest.write_text(json.dumps(abook))
+        rejects('invalid abook fork override: ' + invalid_path)
+        abook['fork']['modified_files'].pop()
+    abook_manifest.write_bytes(original_manifest)
     sqlite_target = fixture / 'sqlite/upstream/sqlite3.c'
     sqlite_original = sqlite_target.read_bytes()
     sqlite_target.write_bytes(sqlite_original + b'\n/* changed fixture */\n')
