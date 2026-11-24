@@ -32,10 +32,16 @@ configure; the built-in vCard importer remains available.
 
 Install puts abook in `share/jaromail/bin` alongside Jaromail's helpers, and
 Jaromail's existing runtime PATH selects it first. `abook --help` identifies the
-private build as `0.6.2+jaromail.1`, following the existing upstream version line.
+private build as `0.6.2+jaromail.2`, following the existing upstream version line.
 The native format header still uses the upstream version. Manuals, the sample
 configuration and the original `COPYING` and `AUTHORS` notices ship with the
 private executable. User/system prefixes and `DESTDIR` follow the main project.
+
+Mutt queries use canonical Unicode decomposition, case folding and alphanumeric
+search keys for names, individual mailboxes, nicknames and notes. Queries leave
+contact text unchanged. The Unicode 15.1.0 data used by the matcher is committed
+under `cmake/abook/`, with its license and a generator for maintainers. Builds
+use the committed data and require no Unicode library or generation step.
 
 Linux releases are fully static, including abook. Dyne musl **v2.6.0** supplies
 both ncurses and GNU readline beside the compiler at `/opt/dyne/<target-triplet>`.

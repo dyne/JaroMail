@@ -1,4 +1,4 @@
-"""Compare a real abook executable with the recorded 0.6.2 Mutt query protocol."""
+"""Check the fork's query protocol and the recorded upstream baseline."""
 
 import argparse
 import os
@@ -16,6 +16,14 @@ ZOE = PRIMARY + SECONDARY
 ALL_ROWS = ZOE + ADA
 FIRST_ONLY = b'set mutt_return_all_emails=false\n'
 ALL_EMAILS = b'set mutt_return_all_emails=true\n'
+FOLDED_BOOK = (
+    '[0]\nname=José O’Neil\nemail=first@example.org,"a,b"@example.org\n'
+    'nick=Étoile\nnotes=Workshop Straße Σίσυφος 물\tarchive\n'
+).encode()
+FOLDED_ROWS = (
+    'first@example.org\tJosé O’Neil\tWorkshop Straße Σίσυφος 물 archive\n'
+    '"a,b"@example.org\tJosé O’Neil\tWorkshop Straße Σίσυφος 물 archive\n'
+).encode()
 
 
 class QueryProtocolTests(unittest.TestCase):
@@ -28,6 +36,7 @@ class QueryProtocolTests(unittest.TestCase):
             (self.maildir / subdir).mkdir(parents=True)
         self.books = {
             'contacts': BOOK.read_bytes(),
+            'folded': FOLDED_BOOK,
             'empty': b'',
             'header-only': b'[format]\nprogram=abook\nversion=0.6.2\n',
             'missing': None,
@@ -69,9 +78,31 @@ class QueryProtocolTests(unittest.TestCase):
             self.check_query(locale, label, query, b'\n' + rows)
         self.check_query(locale, 'literal all', 'all', b'All items\n' + ALL_ROWS)
         self.check_query(locale, 'no match', 'no-result', b'Not found\n', status=1)
-        self.check_query(locale, 'unaccented query', 'Zoe', b'Not found\n', status=1)
-        for book in ('empty', 'header-only', 'missing'):
-            self.check_query(locale, book, 'all', b'Cannot open database\n', status=1, book=book)
+        if self.baseline:
+            self.check_query(locale, 'unaccented query', 'Zoe', b'Not found\n', status=1)
+            for book in ('empty', 'header-only', 'missing'):
+                self.check_query(locale, book, 'all', b'Cannot open database\n', status=1, book=book)
+        else:
+            self.check_query(locale, 'unaccented query', 'Zoe', b'\n' + ZOE)
+            for book in ('empty', 'header-only'):
+                self.check_query(locale, book, 'all', b'Not found\n', status=1, book=book)
+            self.check_query(locale, 'missing', 'all', b'Cannot open database\n', status=2,
+                             book='missing')
+            for label, query in (
+                ('beginning', 'jose'), ('middle', 'seo'), ('end', 'neil'),
+                ('single character', 'é'), ('composed', 'josé'),
+                ('decomposed', 'jose\u0301'), ('punctuation', 'oneil'),
+                ('nickname', 'etoile'), ('notes', 'STRASSE'),
+                ('non-Latin case', 'ΣΊΣΥΦΟΣ'), ('decomposed Hangul', '\u1106\u116e\u11af'),
+                ('quoted comma', '"a,b"@example.org'),
+                ('no pattern expansion', 'jo%s_e'),
+            ):
+                self.check_query(locale, label, query, b'\n' + FOLDED_ROWS, book='folded')
+            for label, query in (
+                ('gap within field', 'joneil'), ('across fields', 'neilfirst'),
+                ('across mailboxes', 'orgab'), ('pattern characters only', '%_'),
+            ):
+                self.check_query(locale, label, query, b'Not found\n', status=1, book='folded')
 
         self.check_query(locale, 'first address on secondary match', 'second@example.org',
                          b'\n' + PRIMARY, config=FIRST_ONLY)
@@ -98,5 +129,8 @@ class QueryProtocolTests(unittest.TestCase):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, required=True)
-    QueryProtocolTests.binary = parser.parse_args().binary.resolve(strict=True)
+    parser.add_argument('--baseline', action='store_true', help='expect pristine 0.6.2 behavior')
+    args = parser.parse_args()
+    QueryProtocolTests.binary = args.binary.resolve(strict=True)
+    QueryProtocolTests.baseline = args.baseline
     unittest.main(argv=[__file__], verbosity=2)

@@ -211,7 +211,7 @@ exec "$JARO_REAL_CC" "$@"
 
     def test_cmake_abook_import_export_and_private_install(self):
         abook = self.binary/'bin/abook'
-        help_lines = ['abook v0.6.2', 'JaroMail abook fork 0.6.2+jaromail.1']
+        help_lines = ['abook v0.6.2', 'JaroMail abook fork 0.6.2+jaromail.2']
         self.assertEqual(run([abook,'--help'],env=self.env).stdout.splitlines()[:2], help_lines)
         work = self.work/'abook roundtrip'
         work.mkdir()
@@ -448,7 +448,7 @@ exec "$JARO_REAL_CC" "$@"
         self.assertFalse((root/'share/jaromail/bin/jaro-filter-legacy').exists())
         self.assertTrue((root/'share/jaromail/bin/jaro-snapshot').is_file())
         self.assertFalse((root/'share/jaromail/bin/jaro-snapshot-test').exists())
-        self.assertIn('JaroMail abook fork 0.6.2+jaromail.1',
+        self.assertIn('JaroMail abook fork 0.6.2+jaromail.2',
                       run([root/'share/jaromail/bin/abook','--help'],env=self.env).stdout.splitlines())
         self.assertTrue((root/'share/jaromail/COPYING.txt').is_file())
         self.assertFalse((root/'share/jaromail/bin/filter-policy-driver').exists())

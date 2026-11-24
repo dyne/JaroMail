@@ -12,7 +12,7 @@
   },
   "directory": "abook/upstream",
   "fork": {
-    "version": "0.6.2+jaromail.1",
+    "version": "0.6.2+jaromail.2",
     "reviewed_upstream_tip": "b5e4a4daec1c7842e214b50a0f267e07d9792311",
     "adopted_upstream_commits": [
       "39484721c44629fb1f54d92f09c92ef4c3201302",
@@ -21,23 +21,38 @@
     "modified_files": [
       {
         "path": "abook.c",
-        "size": 19206,
-        "sha256": "3fddff5e72a4411f80e705ab30395bac4d079f5706b56fa5c97a1e81f168a7fe"
+        "size": 19354,
+        "sha256": "2d96bc999b2b8914193d110b5c34962a8734b024fd9786aea4ae3fc8b6a35479"
       },
       {
         "path": "database.c",
-        "size": 19135,
-        "sha256": "483e4efd38cebcf625f0092415e484f6804c0f285ef14804f8949d2cfbc36c94"
+        "size": 20179,
+        "sha256": "f0600d56784601f64511fa4f45e6446a84bcb1bed71be2bf25870c65728090c5"
+      },
+      {
+        "path": "database.h",
+        "size": 3314,
+        "sha256": "e2ca542cef767ac737b67b050d346013d16426762e74522a24c5486082c89a02"
       },
       {
         "path": "filter.c",
-        "size": 58610,
-        "sha256": "1522b63ac5e4ec3f6f011957c5dcea094e574d16b3403052146f9059929b8041"
+        "size": 58917,
+        "sha256": "502e737682e8e6a56208cbbb5a8e5b40dc6c8dd3a1f1056d18b64bf4b55ae31a"
       },
       {
         "path": "filter.h",
         "size": 1098,
         "sha256": "997101d93fa6103f419d947ea58160bfc1d4164a8514b411efa870eded7a0a2b"
+      },
+      {
+        "path": "misc.c",
+        "size": 27826,
+        "sha256": "ad5644e9a14bb114ceacd9f655bd19fb737a776ba63524c76ed00944cbc011c2"
+      },
+      {
+        "path": "misc.h",
+        "size": 1468,
+        "sha256": "43e824fadc96e23b289cc58561497d88ddcc058fc1829c639df111ce8c79be28"
       }
     ]
   },

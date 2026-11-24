@@ -56,8 +56,10 @@ int main(int argc,char **argv)
 		valid=jf_valid_utf8((const unsigned char *)copy,strlen(copy)) && jf_normalize_mailbox(copy);
 		free(copy); return valid ? 0 : 4;
 	}
-	if ((argc==5 || (argc==6 && !strcmp(argv[5],"--check"))) && !strcmp(argv[1],"--add-contact")) {
-		rc=jf_contact_add(argv[2],argv[3],argv[4],argc==6,&error);
+	if (((argc==5 || (argc==6 && !strcmp(argv[5],"--check"))) && !strcmp(argv[1],"--add-contact")) ||
+		(argc==4 && !strcmp(argv[1],"--has-contact"))) {
+		rc=argc==4 ? jf_contact_contains(argv[2],argv[3],&error) :
+			jf_contact_add(argv[2],argv[3],argv[4],argc==6,&error);
 		if (rc!=0 && rc!=1) {
 			fprintf(stderr,"%s ",error.code ? error.code : "E_IO"); escaped(argv[2]);
 			fprintf(stderr," %s\n",error.detail);
@@ -68,7 +70,8 @@ int main(int argc,char **argv)
 		const char **slot=NULL;
 		if (!strcmp(argv[i],"--help") && argc==2) {
 			puts("jaro-filter-compile --root ROOT [--accounts-dir DIR] [--profile FILE] [--import-sieve FILE [--legacy-generated]] [--check] [--report0]");
-			puts("jaro-filter-compile --add-contact BOOK ADDRESS NAME [--check]\njaro-filter-compile --check-address ADDRESS"); return 0;
+			puts("jaro-filter-compile --add-contact BOOK ADDRESS NAME [--check]\n"
+			     "jaro-filter-compile --has-contact BOOK ADDRESS\njaro-filter-compile --check-address ADDRESS"); return 0;
 		}
 		if (!strcmp(argv[i],"--version") && argc==2) { puts(JF_COMPILER_ID); return 0; }
 		if (!strcmp(argv[i],"--root")) slot=&root;

@@ -2279,18 +2279,31 @@ mutt_alias_export(FILE *out, struct db_enumerator e)
 	return 0;
 }
 
+static void
+muttq_print_field(FILE *file, const char *value)
+{
+	const unsigned char *p = (const unsigned char *)value;
+
+	for(; *p; p++)
+		fputc(*p < 32 || *p == 127 ? ' ' : *p, file);
+}
+
 void muttq_print_item(FILE *file, int item)
 {
 	abook_list *emails, *e;
 	char *tmp = db_email_get(item);
+	const char *notes = db_fget(item, NOTES);
 
-	emails = csv_to_abook_list(tmp);
+	emails = mailbox_list_from_csv(tmp);
 	free(tmp);
 
 	for(e = emails; e; e = e->next) {
-		fprintf(file, "%s\t%s\t%s\n", e->data, db_name_get(item),
-				!db_fget(item, NOTES) ?" " :db_fget(item, NOTES)
-				);
+		muttq_print_field(file, e->data);
+		fputc('\t', file);
+		muttq_print_field(file, db_name_get(item));
+		fputc('\t', file);
+		muttq_print_field(file, notes ? notes : " ");
+		fputc('\n', file);
 		if(!opt_get_bool(BOOL_MUTT_RETURN_ALL_EMAILS))
 			break;
 	}

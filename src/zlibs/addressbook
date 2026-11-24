@@ -26,6 +26,7 @@
 
 cmd_addr_list() {
     search_addressbook ${option_params}
+    exitcode=$?
 }
 
 cmd_complete() {
@@ -95,41 +96,43 @@ insert_address() {
 
 search_addressbook() {
     fn search_addressbook ${ADDRESSBOOK} $*
-    
-    abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" --mutt-query "${*:l}" | awk '
-/^$/ { next }
-{ for(c=2;c<=NF;c++) printf "%s ", $c
-  print "<" $1 ">" }'
 
+    setopt localoptions pipefail
+    addressbook_rows "$*" | awk -F '\t' 'NF >= 2 { print $2 " <" $1 ">" }'
 }
 
 all_addressbook_emails() {
     fn all_addressbook_emails ${ADDRESSBOOK} $*
-    abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" --mutt-query "" | awk '
-/^$/{ next } {print $1}'
-#         for i in `awk -F'=' '
-# /^email/ { print $2 }
-# ' "$MAILDIRS/$ADDRESSBOOK"`; do
-#             sieve_filter_array+=("$i")
-#         done
+    setopt localoptions pipefail
+    addressbook_rows '' | awk -F '\t' 'NF >= 2 { print $1 }'
+}
 
+addressbook_rows() {
+    local result rc
+    result=$(abook --datafile "$MAILDIRS/$ADDRESSBOOK" --mutt-query "$1") || {
+        rc=$?
+        (( rc > 1 )) && [[ -n $result ]] && print -u2 -r -- "$result"
+        return $rc
+    }
+    [[ $result == *$'\n'* ]] && print -r -- "${result#*$'\n'}"
+    return 0
 }
 
 lookup_email() {
-    _addr=${1:l}
-    func "lookup address $_addr in $list"
-    abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" \
-        --mutt-query "$_addr" > /dev/null
-    return $?
+    func "lookup address $1 in $list"
+    "${WORKDIR}/bin/jaro-filter-compile" --has-contact "$MAILDIRS/$ADDRESSBOOK" "$1"
 }
 
 complete_groups() {
     fn complete_groups $*
 
-    _needle="${1:l}"
+    local needle="${1:l}" paths
     [[ -d "$MAILDIRS/Groups" ]] || return 1
 
-    find "$MAILDIRS/Groups" -type f | awk -v needle="$_needle" '
+    paths=$(find "$MAILDIRS/Groups" -type f) || return 2
+    [[ -n $paths ]] || return 1
+    GROUP_NEEDLE="$needle" awk '
+BEGIN { needle=ENVIRON["GROUP_NEEDLE"] }
 {
     path=$0
     name=path
@@ -141,20 +144,25 @@ complete_groups() {
     }
 
     count=0
-    while ((getline line < path) > 0) {
+    while ((status = getline line < path) > 0) {
         if (line ~ /^#/ || line ~ /^[[:space:]]*$/) {
             continue
         }
         count++
     }
     close(path)
+    if (status < 0) {
+        print "Cannot read group: " path > "/dev/stderr"
+        failed=1
+        exit
+    }
 
     printf "%s\tGroup %s (%d recipients)\n", pseudo, name, count
     found=1
 }
 END {
-    exit found ? 0 : 1
-}'
+    exit failed ? 2 : (found ? 0 : 1)
+}' <<< "$paths"
 }
 
 complete() {
@@ -162,47 +170,51 @@ complete() {
 	req=(list)
 	ckreq || return 1
 
-    # completion on configured groups
-    { test -d "$MAILDIRS/Groups" } && {
-        if [[ "$1" =~ "group/" ]]; then
-            func "completion will look into groups"
-            needle="${1[(ws:/:)2]}"
-            complete_groups "$needle"
-            return $?
+    local query="${1:-}" contacts groups query_status="" rows="" rc
+    if [[ $query == group/* ]]; then
+        query="${query#group/}"
+    else
+        act "Searching for \"$query\" in addressbook $list"
+        if contacts=$(abook --datafile "$MAILDIRS/$ADDRESSBOOK" --mutt-query "$query"); then
+            query_status="${contacts%%$'\n'*}"
+            [[ $contacts == *$'\n'* ]] && rows="${contacts#*$'\n'}"
+        else
+            rc=$?
+            if (( rc != 1 )); then
+                print -r -- "${contacts:-Cannot query addressbook}"
+                return $rc
+            fi
+        fi
+    fi
+
+    groups=$(complete_groups "$query") || {
+        rc=$?
+        if (( rc != 1 )); then
+            print -r -- 'Cannot query groups'
+            return $rc
         fi
     }
-
-    act "Searching for \"$1\" in addressbook $list"
-    abook --datafile "${MAILDIRS}/${ADDRESSBOOK}" --mutt-query "$1"
-    abook_res=$?
-
-    complete_groups "$1"
-    groups_res=$?
-
-    [[ $abook_res = 0 || $groups_res = 0 ]]
-    return $?
+    if [[ -z $rows && -z $groups ]]; then
+        print -r -- 'Not found'
+        return 1
+    fi
+    print -r -- "$query_status"
+    [[ -n $rows ]] && print -r -- "$rows"
+    [[ -n $groups ]] && print -r -- "$groups"
+    return 0
 }
 
 sender_isknown() {
-	fn sender_isknown $*
-	local e_from=""
-    local _mail_input="${body:-}"
-    [[ -z "${_mail_input}" ]] && _mail_input="$(cat)"
-	if command -v maddr > /dev/null; then
-		mblaze_ensure
-		local email_regex="([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})"
-		e_from=`print - "${_mail_input}" | maddr -h 'from' - | grep -oP "$email_regex"`
-		e_from=${e_from:l}
-	else
-		local head="`print - "${_mail_input}" | awk '
-{ print $0 }
-/^$/ { exit }' | ${WORKDIR}/bin/fetchaddr -x From -a`"
-		e_from="${head[(ws:,:)1]:l}"
-	fi
-	isemail $e_from || return 1
-	abook --datafile $MAILDIRS/$list.abook \
-		  --mutt-query "$e_from" > /dev/null
-    return $?
+    fn sender_isknown $*
+    local parsed sender
+    if [[ -n ${body:-} ]]; then
+        parsed=$("${WORKDIR}/bin/fetchaddr" -x From -a -0 <<< "$body") || return $?
+    else
+        parsed=$("${WORKDIR}/bin/fetchaddr" -x From -a -0) || return $?
+    fi
+    sender="${parsed%%$'\0'*}"
+    [[ -n $sender ]] || return 1
+    lookup_email "$sender"
 }
 
 learn() {

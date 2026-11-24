@@ -36,6 +36,7 @@
 #include "views.h"
 #include "xmalloc.h"
 #include "remap.h"
+#include "search-fold.h"
 
 static void             init_abook();
 static void		quit_abook_sig(int i);
@@ -526,9 +527,10 @@ mutt_query(char *str)
 	if( str == NULL || !strcasecmp(str, "all") ) {
 		export_file("muttq", "-");
 	} else {
-		int search_fields[] = {NAME, EMAIL, NICK, NOTES, -1};
-		int i;
-		if( (i = find_item(str, 0, search_fields)) < 0 ) {
+		char *key = abook_search_key(str);
+		int i = *str && !*key ? -1 : find_query_item(key, 0);
+		if(i < 0) {
+			free(key);
 			printf("Not found\n");
 			quit_mutt_query(EXIT_FAILURE);
 		}
@@ -540,24 +542,30 @@ mutt_query(char *str)
 			putchar('\n');
 		while(i >= 0) {
 			e_write_item(stdout, i, selected_item_filter.func);
-			i = find_item(str, i + 1, search_fields);
+			i = find_query_item(key, i + 1);
 		}
+		free(key);
 	}
 
-	quit_mutt_query(EXIT_SUCCESS);
+	quit_mutt_query(fflush(stdout) || ferror(stdout) ? 2 : EXIT_SUCCESS);
 }
 
 static void
 init_mutt_query()
 {
+	int status;
+
 	set_filenames();
 	init_opts();
 	load_opts(rcfile);
 
-	if( load_database(datafile) ) {
-		printf(_("Cannot open database\n"));
+	status = load_database(datafile);
+	if(status == 2) {
+		puts("Not found");
 		quit_mutt_query(EXIT_FAILURE);
-		exit(EXIT_FAILURE);
+	} else if(status) {
+		printf(_("Cannot open database\n"));
+		quit_mutt_query(2);
 	}
 }
 

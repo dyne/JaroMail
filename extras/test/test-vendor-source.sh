@@ -22,7 +22,7 @@ expected = {
 assert {entry['path'] for entry in manifest['files']} == expected
 abook = json.loads((source / 'abook/sources.json').read_text())
 assert abook['upstream']['version'] == '0.6.2'
-assert abook['fork']['version'] == '0.6.2+jaromail.1'
+assert abook['fork']['version'] == '0.6.2+jaromail.2'
 pristine = {entry['path']: entry for entry in abook['files']}
 modified = {entry['path']: entry for entry in abook['fork']['modified_files']}
 assert len(pristine) == 126
