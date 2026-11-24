@@ -111,6 +111,12 @@ Defines whether all email addresses for a contact are shown in the main list vie
 Obsoleted by \fBindex_format\fP.
 
 .TP
+\fBmutt_command\fP=program [arguments]
+Defines the program to compose mail to the selected contacts. Default is "mutt".
+The recipient list is appended as one argument. See \fBwww_command\fP for the
+command syntax.
+
+.TP
 \fBmutt_return_all_emails\fP=[true|false]
 Defines whether to return all email addresses matching the search criteria to a mutt query. Default is true.
 
@@ -119,8 +125,15 @@ Defines whether to return all email addresses matching the search criteria to a 
 Defines the command to used when printing the addressbook. Default is "lpr".
 
 .TP
-\fBwww_command\fP=command
-Defines the command used to start the web browser to view a contact's URL. Default is "lynx".
+\fBwww_command\fP=program [arguments]
+Defines the browser program. Default is "lynx". An absolute HTTP or HTTPS
+URL is appended as one argument.
+Separate the program and fixed arguments with spaces or tabs. Single and double
+quotes group text into one word, and a backslash outside single quotes takes
+the following character literally. An outer pair of double quotes encloses
+the whole abookrc value. Use single quotes around a program path containing
+spaces. The program is run directly with its arguments. Use a wrapper program
+for shell features.
 
 .TP
 \fBaddress_style\fP=[eu|uk|us]

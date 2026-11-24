@@ -5,6 +5,7 @@ from contextlib import suppress
 import errno
 import fcntl
 import hashlib
+import json
 import os
 from pathlib import Path
 import pty
@@ -47,6 +48,10 @@ notes=ghost@example.org
 name=Membership Twin
 email=first.member@example.org,Upper.Member@example.org,"a,b"@example.org
 notes=ghost-member@example.org
+
+[5]
+name=Anne-Marie O'Neil
+email=anne@example.org
 ''',
     'alternate': BOOK_HEADER + b'\n[0]\nname=Alternate Person\nemail=alternate@example.org\n',
     'blacklist': BOOK_HEADER + b'\n[0]\nname=Block Person\nemail=block@example.org\n',
@@ -54,7 +59,7 @@ notes=ghost-member@example.org
 GROUP_ROSTER = b'roster@jaromail.group\tGroup roster (2 recipients)\n'
 
 
-def run_client(command, *, cwd, env):
+def run_client(command, *, cwd, env, keys_after=()):
     """Run queued keystrokes in a terminal and settle the child on every path."""
     master, slave = pty.openpty()
     try:
@@ -67,6 +72,9 @@ def run_client(command, *, cwd, env):
     finally:
         os.close(slave)
     output = bytearray()
+    steps = iter(keys_after)
+    step = next(steps, None)
+    offset = 0
     deadline = time.monotonic() + 10
     try:
         while time.monotonic() < deadline:
@@ -81,6 +89,15 @@ def run_client(command, *, cwd, env):
             if not block:
                 break
             output.extend(block)
+            while step and (index := output.find(step[0], offset)) >= 0:
+                needle, keys = step
+                offset = index + len(needle)
+                if termios.tcgetattr(master)[3] & (termios.ICANON | termios.ECHO):
+                    raise AssertionError(f'editor mode was not restored at {needle!r}')
+                os.write(master, keys)
+                step = next(steps, None)
+        if step:
+            raise AssertionError(f'did not observe {step[0]!r}: {bytes(output[-1200:])!r}')
         return process.wait(timeout=max(0, deadline - time.monotonic())), bytes(output)
     finally:
         if process.poll() is None:
@@ -211,12 +228,16 @@ class InstalledConsumers(unittest.TestCase):
         mutt = launcher / 'mutt'
         mutt.write_bytes(b'#!/bin/sh\nexit 0\n')
         mutt.chmod(0o700)
+        # The generated command is parsed by the client's shell even when
+        # the user's Zsh configuration enables a different quote syntax.
+        (self.home / '.zshenv').write_text('setopt rc_quotes\n')
         generated = self.capture([self.jaro, '-q', 'open'],
-                                 env=dict(self.env, PATH=str(launcher) + os.pathsep + self.env['PATH']))
+                                 env=dict(self.env, ZDOTDIR=str(self.home),
+                                          PATH=str(launcher) + os.pathsep + self.env['PATH']))
         self.assertEqual((generated.returncode, generated.stdout, generated.stderr), (0, b'', b''))
         lines = (self.mail / '.mutt/rc').read_text().splitlines()
-        expected = f'set query_command = "{self.runtime / "bin/jaro"} -q complete \'%s\'"'
-        self.assertEqual([line for line in lines if line.startswith('set query_command ')], [expected])
+        (query_command,) = [line for line in lines if line.startswith('set query_command ')]
+        self.assertTrue(query_command.endswith(' -q complete -- %s"'), query_command)
         bindings = (self.runtime / 'mutt/keybindings').read_text().splitlines()
         tab = next(line for line in bindings if line.split() == ['bind', 'editor', '<tab>', 'complete-query'])
 
@@ -244,10 +265,12 @@ class InstalledConsumers(unittest.TestCase):
             ('quoted', '', False, 'Quoted Person <ab@example.org>'),
             ('alternate', '', False, 'alternate@fixture.invalid'),
             ('alternate', '', True, 'Alternate Person <alternate@example.org>'),
+            ("O'Neil", '', False, "Anne-Marie O'Neil <anne@example.org>"),
+            ('Anne-Marie', '', False, "Anne-Marie O'Neil <anne@example.org>"),
         )
         for index, (query, choose, alternate, recipient) in enumerate(cases):
             with self.subTest(query=query, choose=choose, alternate=alternate):
-                command = expected.replace(' -q complete ', ' -l alternate -q complete ') if alternate else expected
+                command = query_command.replace(' -q complete ', ' -l alternate -q complete ') if alternate else query_command
                 config.write_text('\n'.join((command, *settings)) + '\n')
                 draft = self.root / f'draft-{index}'
                 keys = f'push "m{query}<tab>{choose}<enter>Fixture<enter>qq"'
@@ -257,6 +280,94 @@ class InstalledConsumers(unittest.TestCase):
                 self.assertTrue(draft.is_file(), repr(tty[-600:]))
                 self.assertEqual([line for line in draft.read_text().splitlines() if line.startswith('To: ')],
                                  ['To: ' + recipient])
+
+    def run_contact_actions(self, mutt_command, url, keys_after):
+        book = self.root / 'actions.abook'
+        book.write_text(
+            "[0]\nname=Anne O'Neil\nemail=\"anne,one\"@example.org,other@example.org\n"
+            f"url={url}\n\n[1]\nname=Pat \"Junior\" Contact\nemail=pat@example.org\n")
+        recorder = self.root / 'record contact action'
+        recorder.write_text(
+            '#!/usr/bin/env python3\n'
+            'import json, os, signal, sys, termios\n'
+            'mode = termios.tcgetattr(0)\n'
+            'record = [sys.argv[1:], bool(mode[3] & termios.ICANON), bool(mode[3] & termios.ECHO)]\n'
+            'with open(os.environ["CONTACT_ACTION_LOG"], "a") as log:\n'
+            '    log.write(json.dumps(record) + "\\n")\n'
+            'if sys.argv[1] == "fail":\n'
+            '    mode[3] &= ~(termios.ICANON | termios.ECHO)\n'
+            '    termios.tcsetattr(0, termios.TCSANOW, mode)\n'
+            '    sys.exit(9)\n'
+            'if sys.argv[1] == "signal":\n'
+            '    os.kill(os.getpid(), signal.SIGINT)\n')
+        recorder.chmod(0o700)
+        (self.root / 'jaro').symlink_to(recorder)
+        config = self.root / 'action.abookrc'
+        config.write_text(f"set mutt_command={mutt_command}\n"
+                          f"set www_command='{recorder}' browser \"new window\"\n")
+        log = self.root / 'action.log'
+        abook = self.runtime / 'bin/abook'
+        status, tty = run_client(
+            [abook, '--config', config, '--datafile', book], cwd=self.root,
+            env=dict(self.env, PATH=str(self.root) + os.pathsep + self.env['PATH'],
+                     CONTACT_ACTION_LOG=str(log)), keys_after=keys_after)
+        self.assertEqual(status, 0, repr(tty[-600:]))
+        return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+    def test_external_actions_pass_argv_and_restore_terminal(self):
+        recorder = self.root / 'record contact action'
+        url = "HTTPS://example.org/O'Neil?tag=a%20b&active=yes"
+        records = self.run_contact_actions(
+            f"'{recorder}' compose --label \"two words\" '' ordinary\\ flag", url,
+            [(b"Anne O'Neil", b'+mvQy')])
+        self.assertEqual(records, [
+            [['compose', '--label', 'two words', '', 'ordinary flag',
+              '"Anne O\'Neil" <"anne,one"@example.org>,"Pat \\"Junior\\" Contact" <pat@example.org>'], True, True],
+            [['browser', 'new window', url], True, True],
+        ])
+
+    def test_jaro_compose_and_browser_policy_in_contact_editor(self):
+        records = self.run_contact_actions(
+            'jaro compose', 'ftp://example.org/contact',
+            [(b"Anne O'Neil", b'\rmv'),
+             (b'Contact URL must be an absolute HTTP or HTTPS URL', b'xqQy')])
+        self.assertEqual(records, [[['compose', '"Anne O\'Neil" <"anne,one"@example.org>'], True, True]])
+
+    def test_external_action_nonzero_exit_restores_terminal(self):
+        recorder = self.root / 'record contact action'
+        url = 'http://example.org/after-failure'
+        records = self.run_contact_actions(
+            f"'{recorder}' fail", url,
+            [(b"Anne O'Neil", b'm'), (b'External command exited with status 9', b'xvQy')])
+        self.assertEqual(records, [
+            [['fail', '"Anne O\'Neil" <"anne,one"@example.org>'], True, True],
+            [['browser', 'new window', url], True, True],
+        ])
+
+    def test_external_action_signaled_child_restores_terminal(self):
+        recorder = self.root / 'record contact action'
+        url = 'http://example.org/after-interrupt'
+        message = f'External command terminated by signal {signal.SIGINT}'.encode()
+        records = self.run_contact_actions(
+            f"'{recorder}' signal", url, [(b"Anne O'Neil", b'm'), (message, b'xvQy')])
+        self.assertEqual(records, [
+            [['signal', '"Anne O\'Neil" <"anne,one"@example.org>'], True, True],
+            [['browser', 'new window', url], True, True],
+        ])
+
+    def test_external_action_launch_failure_restores_terminal(self):
+        url = 'http://example.org/after-missing-command'
+        records = self.run_contact_actions(
+            str(self.root / 'missing-program'), url,
+            [(b"Anne O'Neil", b'm'), (b'Cannot run external command:', b'xvQy')])
+        self.assertEqual(records, [[['browser', 'new window', url], True, True]])
+
+    def test_external_action_rejects_incomplete_command_quote(self):
+        url = 'http://example.org/after-invalid-command'
+        records = self.run_contact_actions(
+            "jaro 'compose", url,
+            [(b"Anne O'Neil", b'm'), (b'Invalid external command setting', b'xvQy')])
+        self.assertEqual(records, [[['browser', 'new window', url], True, True]])
 
     def test_filter_snapshot_membership(self):
         products = self.root / 'products'
@@ -274,7 +385,7 @@ class InstalledConsumers(unittest.TestCase):
                          [os.fsencode(abook), b'1', hashlib.sha256(abook.read_bytes()).digest()])
         self.assertEqual(deps[b'export.whitelist'][-1],
                          b'pat@example.org\nzed@example.org\nada@example.org\n"a b"@example.org\n'
-                         b'first.member@example.org\nUpper.Member@example.org\n"a,b"@example.org\n')
+                         b'first.member@example.org\nUpper.Member@example.org\n"a,b"@example.org\nanne@example.org\n')
         self.assertEqual(deps[b'export.blacklist'][-1], b'block@example.org\n')
         sieve = (products / 'Filters.sieve').read_bytes()
         self.assertIn(b'"From" "\\"a b\\"@example.org" { fileinto :create "INBOX"; stop; }', sieve)

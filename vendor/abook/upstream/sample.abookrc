@@ -113,7 +113,8 @@ set show_all_emails=true
 #  * the 'anniversary' field, with no length limit
 set index_format=" {name:25} {phone:-12|workphone|mobile} {anniversary}"
 
-# Command used to start mutt
+# Mail program and optional arguments. Abook appends one recipient-list argument.
+# Use quotes to group words. Use a wrapper program for shell features.
 set mutt_command=mutt
 
 # Return all email addresses to a mutt query
@@ -122,7 +123,7 @@ set mutt_return_all_emails=true
 # Command used to print
 set print_command=lpr
 
-# Command used to start the web browser
+# Browser program and optional arguments. Abook appends one HTTP or HTTPS URL.
 set www_command=lynx
 
 # address style [eu|us|uk]

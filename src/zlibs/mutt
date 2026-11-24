@@ -82,6 +82,19 @@ x_mutt() {
     ${=mkdir} "$MAILDIRS/.mutt"/cache
     rm -f "$MAILDIRS/.mutt"/rc
 
+	# Quote the executable for the shell, then escape the Mutt format and rc.
+	# Mutt and NeoMutt shell-quote the value substituted for %s themselves.
+	local query_executable="$WORKDIR/bin/jaro"
+	query_executable=${query_executable//\'/\'\\\'\'}
+	query_executable="'$query_executable'"
+	query_executable=${query_executable//\%/%%}
+	query_executable=${query_executable//\\/\\\\}
+	query_executable=${query_executable//\"/\\\"}
+	query_executable=${query_executable//\$/\\\$}
+	query_executable=${query_executable//\`/\\\`}
+	query_executable=${query_executable//$'\n'/\\n}
+	query_executable=${query_executable//$'\r'/\\r}
+
 
 	# detect the default gpg key to always encrypt also to self
 	# update: do not re-encrypt if already done
@@ -112,7 +125,7 @@ set editor = "$WORKDIR/bin/jaro -q edit"
 set mailcap_path = "$MAILDIRS/.mutt/mailcap:$HOME/.mailcap:/etc/mailcap:/etc/mailcap:/usr/etc/mailcap:/usr/local/etc/mailcap"
 
 # Little Brother Database
-set query_command = "$WORKDIR/bin/jaro -q complete '%s'"
+set query_command = "$query_executable -q complete -- %s"
 macro index,pager a "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn sender<enter>" "add to whitelist everyone in the message"
 macro index,pager A "<pipe-message>$WORKDIR/bin/jaro -l whitelist -q learn all<enter>" "add all addresses in whitelist"
 macro index,pager z "<pipe-message>$WORKDIR/bin/jaro -l blacklist -q learn sender<enter>" "add sender to blacklist"

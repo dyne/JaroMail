@@ -12,7 +12,7 @@
   },
   "directory": "abook/upstream",
   "fork": {
-    "version": "0.6.2+jaromail.2",
+    "version": "0.6.2+jaromail.3",
     "reviewed_upstream_tip": "b5e4a4daec1c7842e214b50a0f267e07d9792311",
     "adopted_upstream_commits": [
       "39484721c44629fb1f54d92f09c92ef4c3201302",
@@ -21,8 +21,13 @@
     "modified_files": [
       {
         "path": "abook.c",
-        "size": 19354,
-        "sha256": "2d96bc999b2b8914193d110b5c34962a8734b024fd9786aea4ae3fc8b6a35479"
+        "size": 23365,
+        "sha256": "e2b7cd79146e0373d312a9dffd1799f8ad236278d13b7a0eddd5e61cc11e7f4b"
+      },
+      {
+        "path": "abookrc.5",
+        "size": 8621,
+        "sha256": "618938e7bb0692a945b520f75eb6a1161e4c7c74737a5ec4b46787cfaa4d55f4"
       },
       {
         "path": "database.c",
@@ -53,6 +58,11 @@
         "path": "misc.h",
         "size": 1468,
         "sha256": "43e824fadc96e23b289cc58561497d88ddcc058fc1829c639df111ce8c79be28"
+      },
+      {
+        "path": "sample.abookrc",
+        "size": 3627,
+        "sha256": "6288ae20c7846dec57019ccbe649e99ceb83875f7c5f2165ff9b0d8a2b15f108"
       }
     ]
   },

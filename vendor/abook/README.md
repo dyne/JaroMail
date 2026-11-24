@@ -32,7 +32,7 @@ configure; the built-in vCard importer remains available.
 
 Install puts abook in `share/jaromail/bin` alongside Jaromail's helpers, and
 Jaromail's existing runtime PATH selects it first. `abook --help` identifies the
-private build as `0.6.2+jaromail.2`, following the existing upstream version line.
+private build as `0.6.2+jaromail.3`, following the existing upstream version line.
 The native format header still uses the upstream version. Manuals, the sample
 configuration and the original `COPYING` and `AUTHORS` notices ship with the
 private executable. User/system prefixes and `DESTDIR` follow the main project.
@@ -55,6 +55,30 @@ For manually selected older musl toolchains, the explicit dependency command
 retains pinned source fallbacks from `build/abook-deps.json`, available with
 `--download` instead of strict mode. Ordinary CMake configure/build never downloads
 dependencies. The normal release pipeline requires the complete prebuilt bundle.
+
+## External contact actions
+
+The mail and browser actions use `mutt_command` and `www_command` as a program
+followed by optional arguments. Use spaces or tabs between words. Use single
+or double quotes to group text, or use a backslash outside single quotes to
+include the following character literally. The launcher passes these words
+directly to the program and appends one argument containing the recipient list
+or URL. The defaults are `mutt` and `lynx`. The JaroMail editor configures
+`set mutt_command=jaro compose`.
+
+An outer pair of double quotes encloses the whole value in `abookrc`. Use
+single quotes around a program path containing spaces.
+
+For example, `set www_command='/opt/Browser Tools/browser' --new-window` runs
+that executable with `--new-window` and the contact URL as two arguments.
+For settings that need expansion, pipelines or redirection, use a wrapper
+program that accepts the appended argument. The browser action accepts absolute
+HTTP and HTTPS URLs with an authority. Encode spaces in URL text as `%20`.
+
+Generated Mutt and NeoMutt settings leave the `%s` placeholder unquoted in
+the shell command so the client can quote the completion text itself.
+[Mutt manual](https://www.mutt.org/doc/manual/#query-command)
+[NeoMutt documentation](https://docs.neomutt.org/reference/config/alias.html#query-command).
 
 ## Reproduce and update the fork
 
