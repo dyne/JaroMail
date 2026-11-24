@@ -498,6 +498,23 @@ class InstalledConsumers(unittest.TestCase):
                          [{'name': 'Zoë One', 'email': 'first@example.org'},
                           {'name': 'Renée Two', 'email': 'two@example.org'}])
 
+    def test_legacy_mailbox_error_locates_line_for_query_and_editor(self):
+        legacy = self.mail / '00-synthetic.abook'
+        invalid = b'[0]\nname=Synthetic Contact\nemail=synthetic-no-domain\n'
+        legacy.write_bytes(invalid)
+        diagnostic = b'legacy .abook source 1, line 3: email: invalid deliverable mailbox'
+        result = self.capture([self.jaro, '-q', 'addr'])
+        self.assertEqual(result.returncode, 4, result.stderr)
+        self.assertIn(diagnostic, result.stderr)
+        self.assertNotIn(b'synthetic-no-domain', result.stderr)
+        with Terminal([self.jaro, '-q', 'abook'], cwd=self.root, env=self.env,
+                      cols=100, lines=24) as terminal:
+            terminal.wait(diagnostic.decode())
+            self.assertEqual(terminal.process.wait(timeout=5), 1)
+            self.assertNotIn(b'synthetic-no-domain', terminal.output)
+        self.assertEqual(legacy.read_bytes(), invalid)
+        self.assertFalse((self.mail / 'contacts.sqlite').exists())
+
     def test_installed_editor_add_cancel_autosave_and_reopen(self):
         legacy = self.mail / 'whitelist.abook'
         fixture = ('[0]\nname=Zoë One\nemail=First@Example.org,Second@Example.org\n'

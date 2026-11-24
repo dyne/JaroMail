@@ -51,6 +51,20 @@ struct import_context {
 	int status;
 };
 
+void
+jaro_contact_migration_diagnostic(char *buffer, size_t size,
+	const struct jaro_contact_migration_error *error)
+{
+	char location[96] = "";
+	if (error->source && error->line)
+		snprintf(location, sizeof location, "legacy .abook source %zu, line %zu: ",
+			error->source, error->line);
+	else if (error->source)
+		snprintf(location, sizeof location, "legacy .abook source %zu: ", error->source);
+	snprintf(buffer, size, "%s%s%s%s", location, error->field ? error->field : "",
+		error->field ? ": " : "", error->reason);
+}
+
 static int
 failure(struct jaro_contact_migration_error *error, int status, const char *reason,
 	const char *field, size_t source, size_t record, size_t line, size_t field_number, int native_code)

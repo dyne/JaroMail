@@ -114,7 +114,11 @@ int jf_contact_command(int argc,char **argv,struct jf_error *error)
 	int preview=add && argc==7;
 	int status=jaro_contact_profile_open(argv[2],preview ? JARO_CONTACT_PROFILE_PREVIEW :
 		add ? JARO_CONTACT_PROFILE_WRITE : JARO_CONTACT_PROFILE_READ,&store,&migration);
-	if (status) return contact_error(error,status,migration.reason,migration.field);
+	if (status) {
+		char diagnostic[sizeof error->detail];
+		jaro_contact_migration_diagnostic(diagnostic, sizeof diagnostic, &migration);
+		return contact_error(error,status,diagnostic,NULL);
+	}
 
 	int result,found=0;
 	int64_t book_id=0;

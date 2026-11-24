@@ -209,8 +209,18 @@ class GenerationTests(unittest.TestCase):
         second = self.run_compile()
         self.assertNotEqual(first[0], second[0])
         config.unlink()
-        self.assertIn(b'E_SIEVE_RUNTIME', self.run_compile(expected=3).stderr)
+        broken = self.run_compile(expected=3).stderr
+        self.assertIn(b'E_SIEVE_RUNTIME', broken)
+        self.assertIn(b'Sieve runtime failed during identity', broken)
         self.assertEqual(self.selected(), 'generations/' + second[0])
+
+    def test_missing_sieve_launcher_reports_installation_action(self):
+        first = self.run_compile()
+        missing = self.run_compile(expected=3, extra={'JARO_SIEVE_RUNTIME': str(self.case / 'missing')})
+        self.assertIn(b'E_SIEVE_RUNTIME', missing.stderr)
+        self.assertIn(b'Sieve launcher unavailable', missing.stderr)
+        self.assertIn(b'install a Sieve-enabled build', missing.stderr)
+        self.assertEqual(self.selected(), 'generations/' + first[0])
 
     def test_production_build_ignores_test_fault_environment_and_cli_errors(self):
         command = [str(self.native), '--root', str(self.root), '--report0']
