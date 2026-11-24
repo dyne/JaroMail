@@ -1,0 +1,14 @@
+[format]
+program=abook
+version=0.6.2
+
+[7]
+name=Zoë O'Neil
+email=primary@example.org,second@example.org
+nick=stargazer
+notes=Workshop liaison
+
+[2]
+name=Ada Rivera
+email=ada@example.org
+nick=river
