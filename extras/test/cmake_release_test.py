@@ -247,6 +247,17 @@ exec "$JARO_REAL_CC" "$@"
         self.assertEqual(original,{p.relative_to(self.source/'vendor/abook/upstream'):p.read_bytes()
                                   for p in (self.source/'vendor/abook/upstream').rglob('*') if p.is_file()})
 
+    def test_cmake_abook_query_protocol(self):
+        installed = self.work / 'abook query install'
+        run(['cmake', '--install', self.binary, '--prefix', installed], env=self.env)
+        relocated = installed.with_name('relocated abook query install')
+        installed.rename(relocated)
+        abook = relocated / 'share/jaromail/bin/abook'
+        result = run([sys.executable, REPO/'extras/test/abook-query-test.py', '--binary', abook],
+                     env=self.env, succeeds=False)
+        (self.work/'abook-query.log').write_text(result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_cmake_default_user_and_system_install_with_destdir(self):
         user_prefix = Path.home()/'.local'
         cache = (self.binary/'CMakeCache.txt').read_text()
