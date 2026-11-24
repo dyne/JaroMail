@@ -23,6 +23,7 @@
 #include "misc.h"
 #include "xmalloc.h"
 #include "search-fold.h"
+#include "contact/legacy-book.h"
 
 abook_field_list *fields_list = NULL;
 int fields_count = 0;
@@ -35,6 +36,7 @@ static int items = 0;
 
 #define INITIAL_LIST_CAPACITY	30
 static int list_capacity = 0;
+static bool failed_database_read = FALSE;
 
 int standard_fields_indexed[ITEM_FIELDS];
 
@@ -283,32 +285,33 @@ prepare_database_internals()
 int
 parse_database(FILE *in)
 {
-        char *line = NULL;
+	struct jaro_legacy_line_reader reader = {0};
 	char *tmp;
 	int sec=0, field;
-	list_item item;
-
-	item = item_create();
+	int status = -1;
+	int original_items = items;
+	bool original_need_save = db_need_save;
+	list_item item = item_create();
 
 	for(;;) {
-		line = getaline(in);
-		if(ferror(in)) {
-			free(line);
-			item_free(&item);
-			return -1;
-		}
-		if(feof(in)) {
+		enum jaro_legacy_line_result next = jaro_legacy_line_read(in, &reader);
+		char *line = reader.line;
+
+		if(next == JARO_LEGACY_LINE_EOF) {
 			if(item[field_id(NAME)] && sec) {
 				add_item2database(item);
-			} else {
-				item_empty(item);
+				memset(item, 0, ITEM_SIZE);
 			}
+			status = 0;
 			break;
 		}
+		if(next != JARO_LEGACY_LINE_OK ||
+				(reader.length && memchr(line, 0, reader.length)))
+			break;
 
-		if(!*line || *line == '\n' || *line == '#') {
-			goto next;
-		} else if(*line == '[') {
+		if(!reader.length || *line == '#')
+			continue;
+		if(*line == '[') {
 			if(item[field_id(NAME)] && sec ) {
 				add_item2database(item);
 			} else {
@@ -322,25 +325,30 @@ parse_database(FILE *in)
 			*tmp++ = '\0';
 			find_field_number(line, &field);
 			if(field != -1) {
+				free(item[field]);
 				item[field] = xstrdup(tmp);
-				goto next;
 			} else if(!strcasecmp(opt_get_str(STR_PRESERVE_FIELDS),
 						"all")){
 				declare_unknown_field(line);
 				item = xrealloc(item, ITEM_SIZE);
 				item[fields_count - 1] = xstrdup(tmp);
-				goto next;
 			}
 		}
-next:
-		xfree(line);
 	}
 
-	xfree(line);
+	free(reader.line);
+	item_empty(item);
 	item_free(&item);
-	db_need_save = FALSE;
+	if(status) {
+		while(items > original_items) {
+			item_empty(database[LAST_ITEM]);
+			item_free(&database[LAST_ITEM]);
+			items--;
+		}
+	}
+	db_need_save = status ? original_need_save : FALSE;
 
-	return 0;
+	return status;
 }
 
 int
@@ -351,13 +359,17 @@ load_database(char *filename)
 
 	if(database != NULL)
 		close_database();
+	failed_database_read = FALSE;
 
 	if ((in = abook_fopen(filename, "r")) == NULL)
 		return -1;
 
 	status = parse_database(in);
-	if(fclose(in) || status)
+	if(fclose(in) || status) {
+		close_database();
+		failed_database_read = TRUE;
 		return -1;
+	}
 
 	return (items == 0) ? 2 : 0;
 }
@@ -415,6 +427,11 @@ save_database(int force_save)
 	char *datafile_new = strconcat(datafile, ".new", NULL);
 	char *datafile_old = strconcat(datafile, "~", NULL);
 
+	if(failed_database_read) {
+		ret = -1;
+		goto out;
+	}
+
 	if( (out = abook_fopen(datafile_new, "w")) == NULL ) {
 		ret = -1;
 		goto out;
@@ -458,8 +475,10 @@ close_database()
 {
 	int i;
 
-	for(i=0; i <= LAST_ITEM; i++)
+	for(i=0; i <= LAST_ITEM; i++) {
 		db_free_item(i);
+		item_free(&database[i]);
+	}
 
 	xfree(database);
 	free(selected);

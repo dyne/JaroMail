@@ -43,6 +43,15 @@ contact text unchanged. The Unicode 15.1.0 data used by the matcher is committed
 under `cmake/abook/`, with its license and a generator for maintainers. Builds
 use the committed data and require no Unicode library or generation step.
 
+The legacy migration reader accepts numeric contact sections in file order,
+an optional `[format]` header, and empty books. It preserves field keys and
+values, including unknown fields, empty values, tabs, and equals signs in
+values. It accepts LF, CRLF, and a final line without a terminator. Duplicate
+field keys, missing names, and malformed sections produce line, record, and
+field diagnostics without displaying contact values. Limits are 64 KiB per
+physical line excluding LF, 128 fields per contact, and 64 MiB per source
+including line endings.
+
 Linux releases are fully static, including abook. Dyne musl **v2.6.0** supplies
 both ncurses and GNU readline beside the compiler at `/opt/dyne/<target-triplet>`.
 `build/abook-deps.py --require-bundled` stages those target archives and headers;

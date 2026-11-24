@@ -100,7 +100,7 @@ function(jaro_executable target)
   endif()
 endfunction()
 
-add_library(jaro-policy OBJECT src/filter/policy.c src/filter/sha256.c
+add_library(jaro-policy OBJECT src/filter/policy.c src/filter/sha256.c src/mailbox.c
   src/filter/headers.c src/rfc822.c src/helpers.c)
 add_library(jaro-products OBJECT src/filter/product_util.c src/filter/profile.c src/filter/regex_subset.c
   src/filter/emit.c src/filter/cache.c src/filter/snapshot.c src/filter/import.c src/filter/contact.c)
@@ -129,6 +129,19 @@ set(_dedup_sources src/jaro-dedup.c src/dedup/inventory.c src/dedup/store.c
 jaro_executable(jaro-dedup ${_dedup_sources})
 target_link_libraries(jaro-dedup PRIVATE jaro-dedup-sqlite)
 target_compile_options(jaro-dedup PRIVATE -Wall -Wextra -Wpedantic)
+add_library(jaro-contact-sqlite STATIC EXCLUDE_FROM_ALL vendor/sqlite/upstream/sqlite3.c)
+target_include_directories(jaro-contact-sqlite PUBLIC "${PROJECT_SOURCE_DIR}/vendor/sqlite/upstream")
+target_compile_definitions(jaro-contact-sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION
+  SQLITE_DQS=0 SQLITE_DEFAULT_SYNCHRONOUS=3 SQLITE_DEFAULT_FOREIGN_KEYS=1
+  SQLITE_DEFAULT_FILE_PERMISSIONS=0600 SQLITE_TEMP_STORE=3)
+target_link_libraries(jaro-contact-sqlite PUBLIC Threads::Threads)
+add_library(jaro-contacts STATIC EXCLUDE_FROM_ALL src/contact/store.c src/contact/text.c
+  src/contact/legacy-import.c src/contact/legacy-book.c src/contact/migrate.c src/filter/sha256.c
+  src/mailbox.c cmake/abook/search-fold.c)
+target_include_directories(jaro-contacts PUBLIC "${PROJECT_SOURCE_DIR}/src"
+  PRIVATE "${PROJECT_SOURCE_DIR}/cmake/abook")
+target_compile_options(jaro-contacts PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(jaro-contacts PRIVATE jaro-contact-sqlite)
 # These retained helpers previously used the compiler's GNU dialect. Keep its
 # POSIX declarations while the shared filter core remains strict C99.
 set_target_properties(fetchaddr parsedate dotlock gpgewrap PROPERTIES C_EXTENSIONS ON)
@@ -150,6 +163,15 @@ if(JARO_BUILD_TEST_DRIVERS)
   target_link_libraries(jaro-dedup-test PRIVATE jaro-dedup-sqlite)
   jaro_executable(dedup-inventory-driver extras/test/dedup-inventory-driver.c src/dedup/inventory.c)
   target_compile_options(dedup-inventory-driver PRIVATE -Wall -Wextra -Wpedantic)
+  jaro_executable(contact-legacy-driver extras/test/contact-legacy-driver.c src/contact/legacy-book.c)
+  target_compile_options(contact-legacy-driver PRIVATE -Wall -Wextra -Wpedantic)
+  jaro_executable(contact-store-driver extras/test/contact-store-driver.c)
+  target_compile_options(contact-store-driver PRIVATE -Wall -Wextra -Wpedantic)
+  target_link_libraries(contact-store-driver PRIVATE jaro-contacts)
+  jaro_executable(contact-migrate-driver extras/test/contact-migrate-driver.c src/contact/migrate.c)
+  target_compile_options(contact-migrate-driver PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_definitions(contact-migrate-driver PRIVATE JARO_CONTACT_MIGRATION_TEST)
+  target_link_libraries(contact-migrate-driver PRIVATE jaro-contacts jaro-contact-sqlite)
   jaro_executable(jaro-snapshot-test src/jaro-snapshot.c src/filter/sha256.c)
   target_compile_definitions(jaro-snapshot-test PRIVATE JARO_SNAPSHOT_TESTING)
   jaro_executable(jaro-outbox-test src/jaro-outbox.c src/filter/sha256.c)
@@ -204,6 +226,9 @@ if(JARO_SIEVE_DEPS_PREFIX)
   install(DIRECTORY vendor/dovecot/licenses/ DESTINATION "${JARO_RUNTIME_DIR}/licenses/dovecot" COMPONENT sieve)
 endif()
 add_subdirectory(cmake/abook)
+if(JARO_BUILD_TEST_DRIVERS)
+  add_custom_target(contact-test-tools DEPENDS abook contact-legacy-driver contact-store-driver contact-migrate-driver)
+endif()
 file(RELATIVE_PATH JARO_BIN_TO_SHARE "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}" "${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}")
 if(TARGET sieve-runtime)
   set(JARO_SIEVE_RELATIVE_PATH "${JARO_BIN_TO_SHARE}/sieve/filter")

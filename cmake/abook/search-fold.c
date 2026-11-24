@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "search-fold.h"
-#include "xmalloc.h"
 
 struct fold_range {
 	uint32_t first, last;
@@ -14,7 +13,7 @@ struct fold_range {
 
 /* Return 0 for a malformed UTF-8 sequence and let the caller skip one byte. */
 static size_t
-decode(const unsigned char *s, uint32_t *point)
+decode(const unsigned char *s, size_t remaining, uint32_t *point)
 {
 	size_t count, i;
 	uint32_t value;
@@ -35,6 +34,8 @@ decode(const unsigned char *s, uint32_t *point)
 	} else {
 		return 0;
 	}
+	if(remaining < count)
+		return 0;
 	for(i = 1; i < count; i++) {
 		if((s[i] & 0xc0) != 0x80)
 			return 0;
@@ -75,23 +76,26 @@ write_jamo(char *out, uint32_t point)
 }
 
 char *
-abook_search_key(const char *text)
+abook_search_key_alloc(const char *text, size_t length, void *(*allocate)(size_t))
 {
 	const unsigned char *src = (const unsigned char *)text;
-	size_t length = strlen(text);
+	size_t remaining = length;
 	char *key, *out;
 
 	/* A character expands by at most 3x in UTF-8, including Hangul. */
 	if(length > (SIZE_MAX - 1) / 3)
-		abort();
-	key = out = xmalloc(3 * length + 1);
-	while(*src) {
+		return NULL;
+	key = out = allocate(3 * length + 1);
+	if(!key)
+		return NULL;
+	while(remaining) {
 		uint32_t point;
-		size_t count = decode(src, &point);
+		size_t count = decode(src, remaining, &point);
 		const struct fold_range *range;
 
 		if(!count) {
 			src++;
+			remaining--;
 			continue;
 		}
 		if(point >= 0xac00 && point <= 0xd7a3) {
@@ -111,7 +115,14 @@ abook_search_key(const char *text)
 			}
 		}
 		src += count;
+		remaining -= count;
 	}
 	*out = '\0';
 	return key;
+}
+
+char *
+abook_search_key_bytes(const char *text, size_t length)
+{
+	return abook_search_key_alloc(text, length, malloc);
 }
