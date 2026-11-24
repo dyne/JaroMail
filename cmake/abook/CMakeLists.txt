@@ -63,7 +63,8 @@ configure_file(config.h.in generated/config.h)
 set(_sources abook.c abook_rl.c database.c edit.c filter.c getname.c getopt.c getopt1.c gettext.c
   ldif.c list.c mbswidth.c misc.c options.c remap.c ui.c views.c xmalloc.c)
 list(TRANSFORM _sources PREPEND "${_source}/")
-jaro_executable(abook ${_sources} search-fold.c)
+jaro_executable(abook ${_sources} search-fold.c search-fold-legacy.c
+  "${PROJECT_SOURCE_DIR}/src/contact/legacy-book.c")
 set_target_properties(abook PROPERTIES C_EXTENSIONS ON)
 target_compile_definitions(abook PRIVATE HAVE_CONFIG_H=1 _GNU_SOURCE)
 target_compile_options(abook PRIVATE "$<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-fgnu89-inline>")
