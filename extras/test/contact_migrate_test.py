@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import closing, contextmanager
+from datetime import datetime, timezone
 import fcntl
 import os
 from pathlib import Path
@@ -166,6 +167,24 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(poison.read_bytes(), b'broken legacy bytes')
         self.assertEqual(self.db.read_bytes(), before)
         self.assert_no_stage()
+
+    def test_import_preserves_valid_dates_and_stamps_other_records(self):
+        self.write_source('allow.abook', legacy('Dated', 'dated@example.org') +
+                          b'DATE=2000-02-29\n'
+                          b'[1]\nname=Missing\nemail=missing@example.org\n'
+                          b'[2]\nname=Empty\nemail=empty@example.org\ndate=\n'
+                          b'[3]\nname=Invalid\nemail=invalid@example.org\ndate=1900-02-29\n')
+        before = datetime.now(timezone.utc).date().isoformat()
+        self.run_migrate()
+        after = datetime.now(timezone.utc).date().isoformat()
+        with readonly(self.db) as db:
+            dates = db.execute('SELECT name,date FROM contacts ORDER BY ordinal').fetchall()
+            self.assertEqual(dates[0], ('Dated', '2000-02-29'))
+            self.assertEqual([name for name, _ in dates[1:]], ['Missing', 'Empty', 'Invalid'])
+            for _, value in dates[1:]:
+                self.assertIn(value, (before, after))
+            self.assertEqual(db.execute('SELECT key,value FROM fields ORDER BY contact_id').fetchall(),
+                             [('DATE', '2000-02-29'), ('date', ''), ('date', '1900-02-29')])
 
     def test_damaged_existing_database_takes_precedence_over_valid_legacy(self):
         for number, fixture in enumerate(('empty', 'text', 'unreadable', 'unsupported', 'wrong identity', 'wrong shape')):
@@ -508,6 +527,60 @@ class WriterTests(unittest.TestCase):
     def generation(self):
         with readonly(self.db) as db:
             return db.execute('SELECT generation FROM metadata').fetchone()[0]
+
+    def test_schema_upgrade_preserves_undated_rows_and_stamps_new_inserts(self):
+        initial = self.seed()['Initial']
+        with closing(sqlite3.connect(self.db)) as db:
+            db.executescript("""
+                DROP TRIGGER contact_date_added;
+                DROP TRIGGER contact_date_fixed;
+                DROP TRIGGER contact_changed;
+                ALTER TABLE contacts DROP COLUMN date;
+                CREATE TRIGGER contact_changed AFTER UPDATE ON contacts BEGIN
+                    UPDATE metadata SET generation=generation+1;
+                END;
+                PRAGMA user_version=1;
+            """)
+        original = self.db.read_bytes()
+        self.assertIn(b'Initial@example.org\tInitial', self.run_writer('query', 'allow', 'Initial').stdout)
+        self.assertEqual(self.db.read_bytes(), original)
+        generation = self.generation()
+
+        before = datetime.now(timezone.utc).date().isoformat()
+        self.run_writer('save', 'allow', initial, 'Edited')
+        self.run_writer('learn', 'allow', 'new@example.org', 'New')
+        self.run_writer('learn', 'allow', 'new@example.org', 'Duplicate')
+        after = datetime.now(timezone.utc).date().isoformat()
+        self.assertEqual(self.generation(), generation + 2)
+        with closing(sqlite3.connect(self.db)) as db:
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (2,))
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+            rows = db.execute('SELECT id,name,date FROM contacts ORDER BY id').fetchall()
+            self.assertEqual([(name, value) for _, name, value in rows[:2]],
+                             [('Edited', None), ('Neighbor', None)])
+            new_id, name, value = rows[2]
+            self.assertEqual(name, 'New')
+            self.assertIn(value, (before, after))
+            with self.assertRaisesRegex(sqlite3.IntegrityError, 'contact insertion date is immutable'):
+                db.execute("UPDATE contacts SET date=NULL WHERE id=?", (new_id,))
+            db.execute("""
+                INSERT INTO contacts(book_id,ordinal,revision,name,nickname,notes,name_key,nickname_key,notes_key)
+                SELECT book_id,99,1,'Direct','','','direct','','' FROM contacts WHERE id=?
+            """, (new_id,))
+            self.assertEqual(db.execute("SELECT date FROM contacts WHERE name='Direct'").fetchone(),
+                             db.execute('SELECT CURRENT_DATE').fetchone())
+            db.commit()
+        self.assertEqual(self.generation(), generation + 3)
+
+    def test_edit_keeps_imported_insertion_date(self):
+        (self.profile / 'allow.abook').write_bytes(
+            legacy('Dated', 'dated@example.org') + b'date=2000-02-29\n')
+        self.run_writer('query', 'allow', 'dated')
+        contact_id = self.records()[0][0]
+        self.run_writer('save', 'allow', contact_id, 'Renamed')
+        with readonly(self.db) as db:
+            self.assertEqual(db.execute('SELECT name,date FROM contacts').fetchone(),
+                             ('Renamed', '2000-02-29'))
 
     def test_learn_during_draft_preserves_name_and_secondary_addresses(self):
         initial = self.seed()['Initial']

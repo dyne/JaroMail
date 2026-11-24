@@ -208,7 +208,7 @@ class InstalledConsumers(unittest.TestCase):
 
     def test_contact_doctor_initialized_counts_and_permissions(self):
         self.doctor_fixture()
-        expected = 'Contact store initialized; schema=1 lists=2 contacts=3 mode=0600; integrity checks passed.'
+        expected = 'Contact store initialized; schema=2 lists=2 contacts=3 mode=0600; integrity checks passed.'
         self.doctor_output('ok', expected)
         self.doctor_output('ok', expected, structured=False)
 
@@ -260,13 +260,13 @@ class InstalledConsumers(unittest.TestCase):
         membership = self.capture([self.runtime / 'bin/jaro-filter-compile', '--has-contact',
                                    self.mail, 'allow', DOCTOR_PRIVATE[0].decode()])
         self.assertEqual(membership.returncode, 0, membership.stderr)
-        self.doctor_output('blocker', 'Contact store is corrupt or invalid (schema=1 mode=0600)')
+        self.doctor_output('blocker', 'Contact store is corrupt or invalid (schema=2 mode=0600)')
 
     def test_contact_doctor_unsupported_schema(self):
         database = self.doctor_fixture()
         with closing(sqlite3.connect(database)) as db, db:
-            db.execute('PRAGMA user_version=2')
-        self.doctor_output('blocker', 'Unsupported contact schema (schema=2 mode=0600)')
+            db.execute('PRAGMA user_version=99')
+        self.doctor_output('blocker', 'Unsupported contact schema (schema=99 mode=0600)')
 
     def test_contact_doctor_unsupported_wal_without_creating_sidecars(self):
         database = self.doctor_fixture()
