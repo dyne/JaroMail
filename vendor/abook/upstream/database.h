@@ -90,6 +90,7 @@ void close_database();
 int add_item2database(list_item item);
 char *get_surname(char *s);
 int find_item(char *str, int start, int search_fields[]);
+int find_query_item(const char *key, int start);
 int is_selected(int item);
 int is_valid_item(int item);
 int last_item();

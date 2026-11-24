@@ -60,14 +60,15 @@ static int sync_parent(const char *path)
 	rc=fsync(fd); if (close(fd)) rc=-1; return rc;
 }
 
-int jf_contact_add(const char *path,const char *email,const char *name,int check,struct jf_error *error)
+static int contact_book(const char *path,const char *email,const char *name,int check,struct jf_error *error)
 {
 	struct jf_bytes raw={0},record={0}; struct stat before,after,named;
 	struct flock lock={0}; char *address=NULL; unsigned char buffer[4096];
 	size_t pos=0,next=0,records=0; int format=0,section=0,fd=-1,rc=3,created=0;
+	int lookup=name==NULL, found=0;
 	char number[64]; ssize_t n;
 	if (error) memset(error,0,sizeof *error);
-	if (!valid_text(email) || !valid_text(name) || strchr(email,','))
+	if (!valid_text(email) || (!lookup && (!valid_text(name) || strchr(email,','))))
 		return jf_product_error(error,"E_CONTACT",0,"contact fields contain unsupported bytes or exceed their limit");
 	address=strdup(email); if (!address) goto done;
 	if (!canonical(address)) { rc=jf_product_error(error,"E_ADDRESS",0,"invalid contact mailbox"); goto done; }
@@ -77,7 +78,7 @@ int jf_contact_add(const char *path,const char *email,const char *name,int check
 		else if (errno!=EEXIST) goto done;
 	}
 	if (fd<0) fd=open(path,(check ? O_RDONLY : O_RDWR|O_APPEND)|O_NONBLOCK|O_CLOEXEC);
-	if (fd<0 && check && errno==ENOENT && lstat(path,&named)<0 && errno==ENOENT) { rc=0; goto done; }
+	if (fd<0 && check && !lookup && errno==ENOENT && lstat(path,&named)<0 && errno==ENOENT) { rc=0; goto done; }
 	if (fd<0 || fstat(fd,&before) || !S_ISREG(before.st_mode)) goto done;
 	lock.l_type=check ? F_RDLCK : F_WRLCK; lock.l_whence=SEEK_SET;
 	if (fcntl(fd,F_SETLK,&lock)) {
@@ -104,7 +105,7 @@ int jf_contact_add(const char *path,const char *email,const char *name,int check
 				if (format || records) goto invalid;
 				format=1; section=0; continue;
 			}
-			if (!format || end-start<3 || raw.data[end-1]!=']') goto invalid;
+			if ((!format && !lookup) || end-start<3 || raw.data[end-1]!=']') goto invalid;
 			for (i=start+1;i<end-1;i++) {
 				unsigned char c=raw.data[i];
 				if (c<'0' || c>'9' || id>(SIZE_MAX-(size_t)(c-'0'))/10) goto invalid;
@@ -115,15 +116,16 @@ int jf_contact_add(const char *path,const char *email,const char *name,int check
 			section=1; continue;
 		}
 		key=start; while (key<end && raw.data[key]!='=') key++;
-		if (!format || key==end) goto invalid;
+		if ((!format && !section) || key==end) goto invalid;
 		value=key+1; while (key>start && (raw.data[key-1]==' ' || raw.data[key-1]=='\t')) key--;
 		if (section && key-start==5 && !memcmp(raw.data+start,"email",5)) {
 			int same=same_email(raw.data+value,end-value,address);
 			if (same<0) goto done;
-			if (same) { rc=1; goto done; }
+			if (same && !lookup) { rc=1; goto done; }
+			found |= same;
 		}
 	}
-	if (check) { rc=0; goto done; }
+	if (check) { rc=lookup && !found; goto done; }
 	if (records==JF_RULE_MAX) goto invalid;
 	if (!format && jf_bytes_text(&record,"\n[format]\nprogram=abook\nversion=0.6.1\n")) goto done;
 	snprintf(number,sizeof number,"\n[%zu]\nname=",next);
@@ -143,10 +145,22 @@ int jf_contact_add(const char *path,const char *email,const char *name,int check
 	if (n<0 || (size_t)n!=record.size || fsync(fd) || (created && sync_parent(path))) goto done;
 	rc=0; goto done;
 invalid:
-	rc=jf_product_error(error,"E_ADDRESSBOOK",0,"unsupported addressbook structure or contact limit; existing records unchanged");
+	rc=jf_product_error(error,"E_ADDRESSBOOK",0,lookup ? "unsupported addressbook structure or contact limit" :
+		"unsupported addressbook structure or contact limit; existing records unchanged");
 done:
 	if (rc==3 && error && !error->code)
-		jf_product_error(error,"E_IO",0,"contact append failed; original records retained; inspect the book before retrying");
+		jf_product_error(error,"E_IO",0,lookup ? "cannot read addressbook" :
+			"contact append failed; original records retained; inspect the book before retrying");
 	if (fd>=0) close(fd);
 	free(address); jf_bytes_free(&raw); jf_bytes_free(&record); return rc;
+}
+
+int jf_contact_add(const char *path,const char *email,const char *name,int check,struct jf_error *error)
+{
+	return contact_book(path,email,name,check,error);
+}
+
+int jf_contact_contains(const char *path,const char *email,struct jf_error *error)
+{
+	return contact_book(path,email,NULL,1,error);
 }

@@ -1193,6 +1193,37 @@ csv_to_abook_list(char *str)
 	return list;
 }
 
+/* A comma inside a quoted local part belongs to the mailbox. */
+abook_list *
+mailbox_list_from_csv(const char *csv)
+{
+	abook_list *list = NULL;
+	const char *start = csv, *p;
+	int quoted = 0;
+
+	for(p = csv; ; p++) {
+		if(!*p || (*p == ',' && !quoted)) {
+			const char *end = p;
+			while(start < end && (*start == ' ' || *start == '\t'))
+				start++;
+			while(end > start && (end[-1] == ' ' || end[-1] == '\t'))
+				end--;
+			if(end > start) {
+				char *mailbox = xstrndup(start, end - start);
+				abook_list_append(&list, mailbox);
+				free(mailbox);
+			}
+			if(!*p)
+				return list;
+			start = p + 1;
+		} else if(quoted && *p == '\\' && p[1]) {
+			p++;
+		} else if(*p == '"') {
+			quoted = !quoted;
+		}
+	}
+}
+
 char *
 abook_list_to_csv(abook_list *list)
 {

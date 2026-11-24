@@ -1,17 +1,19 @@
-# abook 0.6.2 query fixture
+# abook query fixture
 
 The first line is the Mutt query status. Each later line has the mailbox,
 display name and notes separated by tabs. Query results preserve the order of
 contacts and their mailboxes in the fixture. The missing notes field on the
 second contact appears as a single space in the result.
 
-The [query test](../../abook-query-test.py) captures 0.6.2 behavior.
+The [query test](../../abook-query-test.py) checks the maintained fork by
+default. Pass `--baseline` with a pristine 0.6.2 executable to check the
+recorded upstream behavior.
 
-## Planned search correction
+## Search keys
 
-The planned Unicode search uses accent folding. A query for `Zoe` will return
-both mailboxes for `Zoë O'Neil` with the original display name. Pin that result
-in a separate replacement expectation when the new search is implemented.
+Unicode folding matches `Zoe` with `Zoë O'Neil` and returns both original
+mailboxes. The fork also distinguishes empty books from read failures and
+matches individual fields, including each mailbox on its own.
 
 ## Installed consumers
 
@@ -24,20 +26,18 @@ the production snapshot reader and checks both export lists and Sieve output.
 | Case | `jaro -q complete` | NeoMutt Tab |
 | --- | --- | --- |
 | Contact | Blank status, multiword name and separate note | Selects the named mailbox |
-| Group | `Not found` status preceding the group row, exit 0 | Selects the first group |
+| Group | Blank status followed by the group row, exit 0 | Selects the first group |
 | Mixed | Two contacts in book order, then the group | All three selectable in wire order with client sorting disabled |
 | Miss | `Not found` status only, exit 1 | Leaves the entered text |
-| `group/roster` | Group row in the status position, exit 0 | Leaves the entered text |
+| `group/roster` | Blank status followed by the group row, exit 0 | Selects the first group |
 | Quoted mailbox | Preserves `"a b"@example.org` in the mailbox column | NeoMutt 20250510 selects `ab@example.org` |
 | Alternate list | Default book misses, explicit list finds the contact | Generated default misses, explicit command override selects the contact |
 
-L3 owns the group status framing and mailbox boundary repairs. It should
-preserve the first candidate for `group/`, emit a success status for a
-group-only hit, and address the quoted-mailbox handoff. The current `addr`
-consumer includes notes in the display name and splits the quoted local part
-at its space. L3 should preserve the separate fields. The native filter
-snapshot retains the quoted mailbox and excludes the mailbox-shaped note from
-membership. Those filter expectations carry forward to the replacement.
+`addr` reads the TAB-separated mailbox and name fields, including spaces in
+quoted local parts, and omits notes. `isknown` and duplicate checks in `import`
+compare exact normalized mailboxes, including secondary addresses. An address
+written only in notes appears in completion queries and stays out of membership.
+The native filter snapshot retains the quoted mailbox and excludes notes.
 
 [The group suite](../../test-group-modes.sh) covers pseudo-addresses and
 recipient counts. [The addressbook suite](../../test-addressbook-parse.sh)

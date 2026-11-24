@@ -22,6 +22,7 @@
 #include "list.h"
 #include "misc.h"
 #include "xmalloc.h"
+#include "search-fold.h"
 
 abook_field_list *fields_list = NULL;
 int fields_count = 0;
@@ -291,6 +292,11 @@ parse_database(FILE *in)
 
 	for(;;) {
 		line = getaline(in);
+		if(ferror(in)) {
+			free(line);
+			item_free(&item);
+			return -1;
+		}
 		if(feof(in)) {
 			if(item[field_id(NAME)] && sec) {
 				add_item2database(item);
@@ -341,6 +347,7 @@ int
 load_database(char *filename)
 {
 	FILE *in;
+	int status;
 
 	if(database != NULL)
 		close_database();
@@ -348,7 +355,9 @@ load_database(char *filename)
 	if ((in = abook_fopen(filename, "r")) == NULL)
 		return -1;
 
-	parse_database(in);
+	status = parse_database(in);
+	if(fclose(in) || status)
+		return -1;
 
 	return (items == 0) ? 2 : 0;
 }
@@ -781,6 +790,48 @@ out:
 	free(findstr);
 	free(tmp);
 	return ret;
+}
+
+static int
+matches_query(const char *field, const char *key)
+{
+	char *folded;
+	int found;
+
+	if(!field)
+		return 0;
+	folded = abook_search_key(field);
+	found = strstr(folded, key) != NULL;
+	free(folded);
+	return found;
+}
+
+int
+find_query_item(const char *key, int start)
+{
+	struct db_enumerator e = init_db_enumerator(ENUM_ALL);
+
+	e.item = start - 1;
+	db_enumerate_items(e) {
+		char *csv;
+		abook_list *addresses, *address;
+		int found = 0;
+
+		if(matches_query(db_name_get(e.item), key) ||
+				matches_query(db_fget(e.item, NICK), key) ||
+				matches_query(db_fget(e.item, NOTES), key))
+			return e.item;
+
+		csv = db_email_get(e.item);
+		addresses = mailbox_list_from_csv(csv);
+		free(csv);
+		for(address = addresses; address && !found; address = address->next)
+			found = matches_query(address->data, key);
+		abook_list_free(&addresses);
+		if(found)
+			return e.item;
+	}
+	return -1;
 }
 
 int

@@ -36,6 +36,7 @@ void		abook_list_append(abook_list **list, char *str);
 void		abook_list_free(abook_list **list);
 char		*abook_list_to_csv(abook_list *list);
 abook_list	*csv_to_abook_list(char *str);
+abook_list	*mailbox_list_from_csv(const char *csv);
 void		abook_list_rotate(abook_list **list, enum rotate_dir dir);
 void		abook_list_replace(abook_list **list, int index, char *str);
 abook_list	*abook_list_get(abook_list *list, int index);

@@ -42,6 +42,11 @@ email=ada@example.org
 name=Quoted Person
 email="a b"@example.org
 notes=ghost@example.org
+
+[4]
+name=Membership Twin
+email=first.member@example.org,Upper.Member@example.org,"a,b"@example.org
+notes=ghost-member@example.org
 ''',
     'alternate': BOOK_HEADER + b'\n[0]\nname=Alternate Person\nemail=alternate@example.org\n',
     'blacklist': BOOK_HEADER + b'\n[0]\nname=Block Person\nemail=block@example.org\n',
@@ -100,6 +105,10 @@ class InstalledConsumers(unittest.TestCase):
         (self.mail / 'Filters.txt').write_bytes(b'from-address fixture@example.org move Fixture\n')
         for book, data in BOOKS.items():
             (self.mail / f'{book}.abook').write_bytes(data)
+        (self.mail / 'empty.abook').touch()
+        (self.mail / 'headerless.abook').write_bytes(
+            b'[0]\nname=Legacy Contact\nemail=legacy@example.org\n')
+        (self.mail / 'broken.abook').mkdir()
         for group in ('roster', 'mixed'):
             (self.mail / 'Groups' / group).write_bytes(
                 b'# members\n\nOne <one@example.org>\nTwo <two@example.org>\n')
@@ -108,21 +117,28 @@ class InstalledConsumers(unittest.TestCase):
                         LC_ALL='C', LANGUAGE='C', TERM='xterm-256color')
         self.env.pop('JAROWORKDIR', None)
 
-    def capture(self, command, *, env=None):
+    def capture(self, command, *, env=None, input=None):
         return subprocess.run(command, env=self.env if env is None else env, cwd=self.root,
-                              stdin=subprocess.DEVNULL, capture_output=True, timeout=15)
+                              stdin=subprocess.DEVNULL if input is None else None, input=input,
+                              capture_output=True, timeout=15)
 
     def test_cli_query_records(self):
         cases = (
             ('contact', (), 0, b'\npat@example.org\tPat Contact\tContact note\n'),
-            ('roster', (), 0, b'Not found\n' + GROUP_ROSTER),
+            ('PAT CONTACT', (), 0, b'\npat@example.org\tPat Contact\tContact note\n'),
+            ('roster', (), 0, b'\n' + GROUP_ROSTER),
             ('mixed', (), 0, b'\nzed@example.org\tMixed Zed\t \nada@example.org\tMixed Ada\t \n'
                               b'mixed@jaromail.group\tGroup mixed (2 recipients)\n'),
             ('miss', (), 1, b'Not found\n'),
-            ('group/roster', (), 0, GROUP_ROSTER),
+            ('group/roster', (), 0, b'\n' + GROUP_ROSTER),
+            ('group/absent', (), 1, b'Not found\n'),
             ('quoted', (), 0, b'\n"a b"@example.org\tQuoted Person\tghost@example.org\n'),
+            ('ghost@example.org', (), 0, b'\n"a b"@example.org\tQuoted Person\tghost@example.org\n'),
             ('alternate', (), 1, b'Not found\n'),
             ('alternate', ('-l', 'alternate'), 0, b'\nalternate@example.org\tAlternate Person\t \n'),
+            ('roster', ('-l', 'empty'), 0, b'\n' + GROUP_ROSTER),
+            ('miss', ('-l', 'empty'), 1, b'Not found\n'),
+            ('roster', ('-l', 'broken'), 2, b'Cannot open database\n'),
         )
         for query, options, status, stdout in cases:
             with self.subTest(query=query, options=options):
@@ -130,12 +146,62 @@ class InstalledConsumers(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout, result.stderr), (status, stdout, b''))
 
         for query, stdout in (
-            ('contact', b'Pat Contact Contact note <pat@example.org>\n'),
-            ('quoted', b'b"@example.org Quoted Person ghost@example.org <"a>\n'),
+            ('contact', b'Pat Contact <pat@example.org>\n'),
+            ('quoted', b'Quoted Person <"a b"@example.org>\n'),
         ):
             with self.subTest(command='addr', query=query):
                 result = self.capture([self.jaro, '-q', 'addr', query])
                 self.assertEqual((result.returncode, result.stdout, result.stderr), (0, stdout, b''))
+
+        for book, status, stderr in (
+            ('empty', 1, b''), ('broken', 2, b'Cannot open database\n'),
+        ):
+            with self.subTest(command='addr', book=book):
+                result = self.capture([self.jaro, '-q', '-l', book, 'addr'])
+                self.assertEqual((result.returncode, result.stdout, result.stderr), (status, b'', stderr))
+
+    def test_known_sender_uses_exact_mailbox(self):
+        for mailbox, book, status in (
+            (b'FIRST.MEMBER@EXAMPLE.ORG', 'whitelist', 0),
+            (b'upper.member@example.org', 'whitelist', 0),
+            (b'"a,b"@example.org', 'whitelist', 0),
+            (b'"a b"@example.org', 'whitelist', 0),
+            (b'ab@example.org', 'whitelist', 1),
+            (b'ghost-member@example.org', 'whitelist', 1),
+            (b'firstmember@example.org', 'whitelist', 1),
+            (b'alternate@example.org', 'whitelist', 1),
+            (b'alternate@example.org', 'alternate', 0),
+            (b'legacy@example.org', 'headerless', 0),
+            (b'first.member@example.org', 'empty', 1),
+            (b'first.member@example.org', 'broken', 3),
+        ):
+            with self.subTest(mailbox=mailbox, book=book):
+                result = self.capture([self.jaro, '-q', '-l', book, 'isknown'],
+                                      input=b'From: Synthetic Sender <' + mailbox + b'>\n\nFixture body\n')
+                self.assertEqual((result.returncode, result.stdout), (status, b''))
+                if status == 3:
+                    self.assertIn(b'E_IO', result.stderr)
+                else:
+                    self.assertEqual(result.stderr, b'')
+        self.assertEqual((self.mail / 'whitelist.abook').read_bytes(), BOOKS['whitelist'])
+
+    def test_import_duplicate_uses_exact_mailbox(self):
+        book = self.mail / 'whitelist.abook'
+        for mailbox in (b'upper.member@example.org', b'"a b"@example.org'):
+            duplicate = self.capture([self.jaro, '-q', 'import'], input=b'Duplicate <' + mailbox + b'>\n')
+            self.assertEqual((duplicate.returncode, duplicate.stdout, duplicate.stderr), (0, b'', b''))
+            self.assertEqual(book.read_bytes(), BOOKS['whitelist'])
+
+        item = b'Notes Mailbox <ghost-member@example.org>\n'
+        imported = self.capture([self.jaro, '-q', 'import'], input=item)
+        self.assertEqual((imported.returncode, imported.stdout, imported.stderr), (0, item, b''))
+        appended = book.read_bytes()
+        self.assertTrue(appended.startswith(BOOKS['whitelist']))
+        self.assertIn(b'\nemail=ghost-member@example.org\n', appended)
+        broken = self.capture([self.jaro, '-q', '-l', 'broken', 'import'], input=item)
+        self.assertEqual((broken.returncode, broken.stdout), (3, b''))
+        self.assertIn(b'E_IO', broken.stderr)
+        self.assertTrue((self.mail / 'broken.abook').is_dir())
 
     def test_neomutt_tabs_select_recipients(self):
         launcher = self.root / 'launcher'
@@ -174,7 +240,7 @@ class InstalledConsumers(unittest.TestCase):
             ('mixed', 'j<enter>', False, 'Mixed Ada <ada@example.org>'),
             ('mixed', 'jj<enter>', False, '"Group mixed (2 recipients)" <mixed@jaromail.group>'),
             ('miss', '', False, 'miss@fixture.invalid'),
-            ('group/roster', '', False, 'group/roster@fixture.invalid'),
+            ('group/roster', '', False, '"Group roster (2 recipients)" <roster@jaromail.group>'),
             ('quoted', '', False, 'Quoted Person <ab@example.org>'),
             ('alternate', '', False, 'alternate@fixture.invalid'),
             ('alternate', '', True, 'Alternate Person <alternate@example.org>'),
@@ -207,7 +273,8 @@ class InstalledConsumers(unittest.TestCase):
         self.assertEqual(deps[b'input.exporter'][:3],
                          [os.fsencode(abook), b'1', hashlib.sha256(abook.read_bytes()).digest()])
         self.assertEqual(deps[b'export.whitelist'][-1],
-                         b'pat@example.org\nzed@example.org\nada@example.org\n"a b"@example.org\n')
+                         b'pat@example.org\nzed@example.org\nada@example.org\n"a b"@example.org\n'
+                         b'first.member@example.org\nUpper.Member@example.org\n"a,b"@example.org\n')
         self.assertEqual(deps[b'export.blacklist'][-1], b'block@example.org\n')
         sieve = (products / 'Filters.sieve').read_bytes()
         self.assertIn(b'"From" "\\"a b\\"@example.org" { fileinto :create "INBOX"; stop; }', sieve)
