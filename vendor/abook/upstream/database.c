@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <ctype.h>
 #ifdef HAVE_CONFIG_H
 #	include "config.h"
 #endif

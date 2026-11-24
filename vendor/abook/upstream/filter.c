@@ -414,7 +414,7 @@ export_database()
 	return 0;
 }
 
-struct abook_output_item_filter select_output_item_filter(char filtname[FILTNAME_LEN]) {
+struct abook_output_item_filter select_output_item_filter(char *filtname) {
 	int i;
 	for(i=0;; i++) {
 		if(!strncasecmp(u_filters[i].filtname, filtname, FILTNAME_LEN))
@@ -457,7 +457,7 @@ e_write_file(char *filename, int (*func) (FILE *in, struct db_enumerator e),
 }
 
 int
-fexport(char filtname[FILTNAME_LEN], FILE *handle, int enum_mode)
+fexport(char *filtname, FILE *handle, int enum_mode)
 {
 	int i;
 	struct db_enumerator e = init_db_enumerator(enum_mode);
@@ -478,7 +478,7 @@ fexport(char filtname[FILTNAME_LEN], FILE *handle, int enum_mode)
 
 
 int
-export_file(char filtname[FILTNAME_LEN], char *filename)
+export_file(char *filtname, char *filename)
 {
 	const int mode = ENUM_ALL;
 	int i;
@@ -1791,8 +1791,16 @@ vcard_parse_line(list_item item, char *line)
 				vcard_parse_phone(item, line);
 			else if(0 == strcmp(key, "N"))
 				vcard_parse_name(item, line);
-			else
-				item[i] = vcard_get_line_element(line, VCARD_VALUE);
+			else {
+				char *value = vcard_get_line_element(line, VCARD_VALUE);
+				if(value) {
+					char *previous = item_fget(item, i);
+					if(item_fput(item, i, value))
+						free(previous);
+					else
+						free(value);
+				}
+			}
 			return;
 		}
 	}
@@ -1958,7 +1966,7 @@ allcsv_export_database(FILE *out, struct db_enumerator e)
 	// name of the defined field <field_no> as chosen by the user
 	char *custom_field_name = NULL;
 
-	abook_field_list *cur, *custom_fieldsl;
+	abook_field_list *cur;
 	for(cur = list_custom_fields(); cur; cur = cur->next) {
 		if(find_declared_field(cur->field->key)) {
 			find_field_number(cur->field->key, &field_no);

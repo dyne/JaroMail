@@ -31,10 +31,10 @@ int		import_database();
 int             import_file(char filtname[FILTNAME_LEN], char *filename);
 
 int		export_database();
-int             export_file(char filtname[FILTNAME_LEN], char *filename);
+int             export_file(char *filtname, char *filename);
 
 struct abook_output_item_filter
-		select_output_item_filter(char filtname[FILTNAME_LEN]);
+		select_output_item_filter(char *filtname);
 
 void		e_write_item(FILE *out, int item, void (*func) (FILE *in, int item));
 void		muttq_print_item(FILE *file, int item);
@@ -42,7 +42,7 @@ void		muttq_print_item(FILE *file, int item);
 void		parse_custom_format(char *s, char *fmt_string, int *ft);
 void		custom_print_item(FILE *out, int item);
 
-int		fexport(char filtname[FILTNAME_LEN], FILE *handle,
+int		fexport(char *filtname, FILE *handle,
 		int enum_mode);
 
 void		print_filters();

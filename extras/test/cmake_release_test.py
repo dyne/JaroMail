@@ -1,4 +1,5 @@
 """Real CMake builds/packages and isolated Git/GitHub release contracts."""
+from configparser import ConfigParser
 from datetime import datetime, timezone
 import hashlib
 import importlib.util
@@ -26,8 +27,9 @@ abook_deps = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(abook_deps)
 
 
-def run(args, *, env=None, cwd=None, succeeds=True):
-    result = subprocess.run(list(map(str, args)), env=env, cwd=cwd, capture_output=True, text=True, timeout=120)
+def run(args, *, env=None, cwd=None, succeeds=True, stdin=None):
+    result = subprocess.run(list(map(str, args)), env=env, cwd=cwd, input=stdin,
+                            capture_output=True, text=True, timeout=120)
     if succeeds and result.returncode:
         raise AssertionError(f'{args!r} failed ({result.returncode}):\n{result.stdout[-1800:]}\n{result.stderr[-1800:]}')
     return result
@@ -209,7 +211,8 @@ exec "$JARO_REAL_CC" "$@"
 
     def test_cmake_abook_import_export_and_private_install(self):
         abook = self.binary/'bin/abook'
-        self.assertIn('abook v0.6.2',run([abook,'--help'],env=self.env).stdout)
+        help_lines = ['abook v0.6.2', 'JaroMail abook fork 0.6.2+jaromail.1']
+        self.assertEqual(run([abook,'--help'],env=self.env).stdout.splitlines()[:2], help_lines)
         work = self.work/'abook roundtrip'
         work.mkdir()
         address = 'person.with.a.long.untruncated.address@addressbook.example.org'
@@ -218,6 +221,9 @@ exec "$JARO_REAL_CC" "$@"
         run([abook,'--config','/dev/null','--convert','--informat','mutt','--infile',aliases,
              '--outformat','abook','--outfile',database],env=self.env)
         self.assertIn('email='+address,database.read_text())
+        native_book = ConfigParser(interpolation=None)
+        native_book.read(database)
+        self.assertEqual(dict(native_book['format']), {'program': 'abook', 'version': '0.6.2'})
         query = run([abook,'--config','/dev/null','--datafile',database,'--mutt-query',''],env=self.env).stdout
         self.assertIn(address+'\tFull Address\t',query)
         exported = run([abook,'--config','/dev/null','--convert','--informat','abook','--infile',database,
@@ -229,7 +235,8 @@ exec "$JARO_REAL_CC" "$@"
         installed = work/'installed'
         run(['cmake','--install',self.binary,'--prefix',installed],env=self.env)
         runtime = installed/'share/jaromail'
-        self.assertTrue((runtime/'licenses/abook/COPYING').is_file())
+        for name in ('COPYING', 'AUTHORS'):
+            self.assertEqual((runtime/'licenses/abook'/name).read_bytes(), original[Path(name)])
         self.assertTrue((installed/'share/man/man5/abookrc.5').is_file())
         self.assertFalse((installed/'bin/abook').exists())
         # Match the bootstrap's private-bin precedence even with a system decoy.
@@ -242,10 +249,63 @@ exec "$JARO_REAL_CC" "$@"
         env = dict(self.env,JAROWORKDIR=str(runtime),PATH=str(decoy)+os.pathsep+self.env['PATH'])
         result = run(['zsh',probe],env=env,cwd=work)
         self.assertIn(str(runtime/'bin/abook'),result.stdout)
-        self.assertIn('abook v0.6.2',result.stdout)
+        self.assertEqual(result.stdout.splitlines()[1:3], help_lines)
         run([sys.executable,REPO/'extras/test/abook-tui-smoke.py','--binary',runtime/'bin/abook'],env=self.env)
         self.assertEqual(original,{p.relative_to(self.source/'vendor/abook/upstream'):p.read_bytes()
                                   for p in (self.source/'vendor/abook/upstream').rglob('*') if p.is_file()})
+
+    def test_cmake_abook_vcard_round_trip_with_reordered_fields(self):
+        abook = self.binary/'bin/abook'
+        work = self.work/'vcard round trip'
+        work.mkdir()
+        config = work/'abookrc'
+        config.write_text('field imported = Imported\n'
+                          'view Contact = notes, nick, url, imported, anniversary\n')
+        card = work/'original.vcf'
+        card.write_bytes(b'BEGIN:VCARD\r\nVERSION:3.0\r\n'
+                         b'N:Card;Fixture;;;\r\nFN:Fixture Card\r\n'
+                         b'EMAIL:one@example.org\r\nEMAIL:two@example.org\r\n'
+                         b'NICKNAME:Fixture\r\nURL:https://example.org/card\r\n'
+                         b'NOTE:Discarded duplicate\r\nNOTE:Round trip note\r\n'
+                         b'BDAY:2001-02-03\r\nX-IMPORTED:Unmapped property\r\nEND:VCARD\r\n')
+
+        def convert(informat, infile, outformat):
+            return run([abook, '--config', config, '--convert', '--informat', informat,
+                        '--infile', infile, '--outformat', outformat], env=self.env).stdout
+
+        expected = {'name': 'Fixture Card', 'email': 'one@example.org,two@example.org',
+                    'nick': 'Fixture', 'url': 'https://example.org/card',
+                    'notes': 'Round trip note', 'anniversary': '2001-02-03'}
+        database = work/'contacts.abook'
+        exported = work/'exported.vcf'
+        for source in (card, exported):
+            database.write_text(convert('vcard', source, 'abook'))
+            parsed = ConfigParser(interpolation=None)
+            parsed.read(database)
+            self.assertEqual(dict(parsed['0']), expected)
+            if source == card:
+                exported.write_text(convert('abook', database, 'vcard'))
+
+    def test_cmake_abook_unknown_native_field_round_trip(self):
+        abook = self.binary/'bin/abook'
+        work = self.work/'native field round trip'
+        work.mkdir()
+        config = work/'abookrc'
+        config.write_text('set preserve_fields=all\n')
+        (work/'.abook').mkdir()
+        env = dict(self.env, HOME=str(work), XDG_DATA_HOME=str(work))
+        book = work/'contacts.abook'
+        book.write_text('[0]\nname=Unknown Field\nemail=unknown@example.org\n'
+                        'x-imported=some unknown native field\n\n')
+
+        for index, name in enumerate(('First', 'Second'), 1):
+            mailbox = f'{name.lower()}@example.org'
+            run([abook, '--config', config, '--datafile', book, '--add-email-quiet'],
+                env=env, stdin=f'From: {name} <{mailbox}>\n\n')
+            parsed = ConfigParser(interpolation=None)
+            parsed.read(book)
+            self.assertEqual(parsed['0']['x-imported'], 'some unknown native field')
+            self.assertEqual(parsed[str(index)]['email'], mailbox)
 
     def test_cmake_abook_query_protocol(self):
         installed = self.work / 'abook query install'
@@ -388,7 +448,8 @@ exec "$JARO_REAL_CC" "$@"
         self.assertFalse((root/'share/jaromail/bin/jaro-filter-legacy').exists())
         self.assertTrue((root/'share/jaromail/bin/jaro-snapshot').is_file())
         self.assertFalse((root/'share/jaromail/bin/jaro-snapshot-test').exists())
-        self.assertIn('abook v0.6.2',run([root/'share/jaromail/bin/abook','--help'],env=self.env).stdout)
+        self.assertIn('JaroMail abook fork 0.6.2+jaromail.1',
+                      run([root/'share/jaromail/bin/abook','--help'],env=self.env).stdout.splitlines())
         self.assertTrue((root/'share/jaromail/COPYING.txt').is_file())
         self.assertFalse((root/'share/jaromail/bin/filter-policy-driver').exists())
 

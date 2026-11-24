@@ -1,14 +1,46 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "upstream": {
     "name": "abook",
     "version": "0.6.2",
     "url": "https://abook.sourceforge.io/devel/abook-0.6.2.tar.gz",
     "sha256": "2d6bde2d2d03523f164f930e4fdec6025f3a94abe48a43706f543880a1a21ebe",
+    "git_tag": "ver_0_6_2",
+    "git_commit": "a243d4a18a64f4ee188191a797b34f60d4ff852f",
     "retrieved_on": "2026-11-07",
     "scope": "Complete release archive, retained byte-for-byte; no source modifications at import."
   },
   "directory": "abook/upstream",
+  "fork": {
+    "version": "0.6.2+jaromail.1",
+    "reviewed_upstream_tip": "b5e4a4daec1c7842e214b50a0f267e07d9792311",
+    "adopted_upstream_commits": [
+      "39484721c44629fb1f54d92f09c92ef4c3201302",
+      "b5e4a4daec1c7842e214b50a0f267e07d9792311"
+    ],
+    "modified_files": [
+      {
+        "path": "abook.c",
+        "size": 19206,
+        "sha256": "3fddff5e72a4411f80e705ab30395bac4d079f5706b56fa5c97a1e81f168a7fe"
+      },
+      {
+        "path": "database.c",
+        "size": 19135,
+        "sha256": "483e4efd38cebcf625f0092415e484f6804c0f285ef14804f8949d2cfbc36c94"
+      },
+      {
+        "path": "filter.c",
+        "size": 58610,
+        "sha256": "1522b63ac5e4ec3f6f011957c5dcea094e574d16b3403052146f9059929b8041"
+      },
+      {
+        "path": "filter.h",
+        "size": 1098,
+        "sha256": "997101d93fa6103f419d947ea58160bfc1d4164a8514b411efa870eded7a0a2b"
+      }
+    ]
+  },
   "files": [
     {
       "path": "ABOUT-NLS",

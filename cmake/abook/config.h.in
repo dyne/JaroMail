@@ -1,4 +1,3 @@
-#include <ctype.h> /* Upstream database.c uses isalnum without this declaration. */
 #include <string.h> /* Bundled getopt omits it for non-glibc targets. */
 #define STDC_HEADERS 1
 #cmakedefine ENABLE_NLS 1
@@ -28,6 +27,7 @@
 #cmakedefine HAVE_ISWCNTRL 1
 #define PACKAGE "abook"
 #define PACKAGE_NAME "Abook"
-#define PACKAGE_VERSION "0.6.2"
-#define VERSION "0.6.2"
+#define PACKAGE_VERSION "@ABOOK_UPSTREAM_VERSION@"
+#define VERSION "@ABOOK_UPSTREAM_VERSION@"
+#define JARO_ABOOK_FORK_VERSION "@ABOOK_FORK_VERSION@"
 #define LOCALEDIR "@CMAKE_INSTALL_FULL_LOCALEDIR@"
