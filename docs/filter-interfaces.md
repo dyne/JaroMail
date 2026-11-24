@@ -91,34 +91,25 @@ an empty positional path, or mixed selection forms fail with status 2.
 `--` ends option parsing; `-- -message` is a literal relative path.
 `--help` and `--version` need no root and return 0 without writes.
 
-The compiler snapshots rules, accounts/aliases and abook exports once, validates
-all outputs, and publishes one generation. `--check` performs the same policy
-and export validation without publication or input mutation. `--report0` emits
+The compiler snapshots rules, accounts, aliases, and SQLite allow/block
+memberships, validates all outputs, and publishes one generation. `--check`
+validates the same inputs without publishing or modifying them. `--report0` emits
 `JFC1 NUL generation-id NUL changed NUL generation-directory NUL`; changed is
 ASCII `0` or `1`. A check reports an empty directory and changed `0`. Otherwise
 compiler stdout is empty, including on error. Diagnostics go to stderr and
 identify a stable error code, source path (byte-escaped for display), physical
 line where available, and offending selector/profile. Never execute input text.
 
-Invalid mailboxes returned successfully by the abook exporter produce
-`W_ADDRESS` warnings on stderr, including the source book and **exported address
-row**, and are omitted from known/blacklist rules. These rows are not physical
-lines in the `.abook` file. At most eight examples per book are printed, followed
-by the total omitted count. Every original addressbook byte remains unchanged;
-raw exports are retained in generation dependencies. Warm compilation and
-`--check` also warn. Exporter failures and invalid policy, aliases or account
-addresses remain errors.
+Invalid contact data produces a storage diagnostic, including at first-use
+migration. The compiler keeps the last valid generation. Invalid policy,
+alias, and account addresses also fail closed.
 
 Contact learning uses `fetchaddr -0` mailbox/name pairs and
-`jaro-filter-compile --add-contact BOOK ADDRESS NAME [--check]`. This appends a
-native abook record, preserving complete fields and all existing bytes; it
-avoids abook's header importer. Status 1 means the normalized mailbox already
-exists; `--check` validates without writing. New books use mode 0600; existing
-permissions are retained. Control bytes and comma-containing mailboxes are
-rejected because they cannot be represented safely by this writer. Jaromail
-writers take an advisory POSIX file lock; finish any interactive abook edit
-before importing. A failed/short append is reported, leaving original records
-and any partial append available for inspection before retrying.
+`jaro-filter-compile --add-contact ROOT LIST ADDRESS NAME [--check]`.
+It compares the normalized mailbox within the selected list in the same
+transaction as insertion. Status 1 means the mailbox already exists.
+`--check` validates without writing. A busy writer returns status 6.
+The source mailbox spelling and valid UTF-8 display name are preserved.
 
 The frontend selects regular Maildir occurrences under new and cur. It supports
 raw path bytes and an empty Maildir. The public explain command also accepts a
@@ -318,43 +309,23 @@ terminated fields per action: generated line, rule ID, source and authored
 line. The schema 4 manifest binds the generation, dependency envelope, source,
 bytecode, provenance, profile and packaged runtime.
 
-Fingerprint SHA256 covers a versioned, length-framed ordered input inventory:
-raw Filters.txt/aliases bytes and presence, byte-sorted account file paths/content
-and membership, raw whitelist/blacklist bytes and canonical contact export
-bytes, exporter executable digest/flags, compiler executable/build ID, cache/
-policy versions, regex locale/dialect, parser/address normalization versions,
-whole-address comparator identifier,
-profile content/capabilities/qualification and mailbox namespace/mappings.
-Follow explicitly configured input symlinks only as input: fingerprint/recheck
-both link target bytes and opened regular-file contents. Output/message symlinks
-are not followed. Missing optional books/aliases/accounts mean explicit empty
-inputs; missing Filters.txt is an error. Inventory membership changes invalidate
-even when mtimes are preserved. Directory membership and resolved inputs must
-be rechecked before publication.
-Precisely, hash ASCII `JFFP1` plus NUL followed by each complete sorted D record
-in its binary payload encoding. Source-content digests cover complete raw bytes;
-presence distinguishes an absent file from an empty file. Effective compiler/
-schema/normalization/profile/comparator/namespace values are required D records
-too, with ASCII `config.` role names, empty path, presence `1`, their value's
-SHA256 and value bytes as auxiliary data. Input roles use `input.` plus the
-source kind, exports use `export.whitelist`/`export.blacklist`, account membership
-uses `inventory.accounts`, and link records use `link.` plus their input role.
-Account-file records share role `input.account` and retain distinct raw paths.
-This framing prevents concatenation ambiguities and makes the fingerprint
-independently reproducible without trusting mtimes or native struct layout.
+Fingerprint SHA256 covers a versioned, length-framed ordered input inventory.
+It includes the raw Filters.txt and alias bytes, the account paths and bytes,
+the sorted exact mailbox keys in the allow and block lists, and the compiler,
+policy, parser, address normalization, and profile configuration. Both lists
+come from one read transaction on `contacts.sqlite`. Display names, notes,
+custom lists, and legacy archives do not affect the generation. Changes to
+either membership set invalidate it, including changes hidden by allow's
+incoming precedence over block.
 
-Export each abook at most once when its raw content or exporter identity changes.
-Books containing only blank lines and `#` comment lines have an empty export,
-as do those with only the complete ordered header `[format]`, `program=abook`,
-`version=0.6.0` or `version=0.6.1` (allowing blank/comment lines between them).
-Space, tab and CR padding is ignored for this recognition; NUL and other control
-bytes are excluded. This includes Jaromail's touched books and comment-only
-fixtures, which abook itself rejects for having no records. Other input still
-goes through abook with its normal failure checks. The exporter must remain
-available, and the original book bytes remain unchanged and fully fingerprinted.
-An unchanged verified book can reuse its last generation's stored export bytes;
-include their digest in the new fingerprint. Never trust mtime alone. Snapshot
-all inputs under a shared publication lock, release that lock, build in an owned
+Hash ASCII `JFFP1` plus NUL followed by each complete sorted D record in its
+binary payload encoding. File presence distinguishes an absent input from
+an empty file. `contacts.allow` and `contacts.block` both identify
+`contacts.sqlite` and include the exact sorted mailbox bytes as auxiliary
+data. Account paths share the `input.account` role and keep distinct raw paths.
+Follow explicitly configured input symlinks as inputs and recheck link target
+bytes and file content. A contact storage error preserves the last valid
+generation and returns a diagnostic. Snapshot all inputs under a shared publication lock, release that lock, build in an owned
 private sibling staging directory, validate the
 executable, provenance and capability-qualified Sieve, then
 recheck source content/membership under the compiler's exclusive publication
@@ -449,7 +420,7 @@ stop; }`; test forms are address :all :is (typed address), address :domain :is
 (whole-address glob), qualified address
 :regex (legacy ERE), Sender header :contains mailman-bounce (bounce), or
 X-Spam-Flag header :is YES (spam). Header lists/keys are quoted strings or lists;
-From-stage fields are From/Sender, To/own are To/Cc, blacklist/known are From.
+From-stage fields are From/Sender, To/own are To/Cc, and block/allow are From.
 Comparators are always explicit. Namespace mappings invert without ambiguity;
 reject colliding mappings for different logical destinations when import cannot
 recover them. Rule IDs/comments are optional audit hints, never the only source
@@ -469,14 +440,14 @@ Parse/validate the entire script/profile/mappings before staging any writes.
 
 Native import defaults to v1. `--legacy-generated` explicitly recovers the
 previous generated header-contains layout covered by test-sieve-import.sh:
-From blacklist groups -> blacklist book; From/Sender INBOX groups -> whitelist;
+From block groups go to block. From/Sender INBOX groups go to allow.
 To/Cc priv groups -> aliases excluding configured account addresses; inline
 To/Cc or From/Sender routes -> legacy to/from move records; fixed bounce/spam/
 fallback blocks -> builtins. Reject other tests/actions, unknown sections or
 ambiguous forms before writes. Recovery reconstructs original local rule text;
 it does not claim the older header-substring script is semantically equivalent
 to parsed-address/ERE policy v1. Emit that migration diagnostic.
-Legacy recovery accepts omitted whitelisted blocks, restoring policy-v1 builtins
+Legacy recovery accepts omitted allow stages, restoring the builtins
 and emitting the migration diagnostic. An unused legacy require "variables" is
 accepted only in this recovery grammar; variable commands remain unsupported.
 Recovered legacy ERE routes still need a qualified regex export profile before
@@ -485,10 +456,12 @@ capability grant.
 
 Import merges exact duplicate entries idempotently, preserving unrelated source
 rules and accounts; unsupported collisions fail instead of rewriting unrelated
-configuration. Stage all changed Filters.txt/books/aliases and a validated new
-generation, then publish under the same recoverable lock/journal boundary.
-On failed import restore every original input and previous generation/export;
-there must be no successful partial import or remote deployment.
+configuration. Validate the prospective generation and stage any Filters.txt
+and Aliases.txt changes before acquiring a contact write transaction. Recheck
+the original input inventory, sync the filter files and selector, then commit
+the membership additions and their SQLite receipt. The journal rolls back the
+file changes if the receipt was never committed. A durable receipt lets retry
+finish an interrupted publication without duplicating memberships.
 
 Native `jaro sieve-import FILE` now invokes this bounded importer;
 `jaro -n sieve-import FILE` validates the complete prospective generation without

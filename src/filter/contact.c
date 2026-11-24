@@ -1,166 +1,116 @@
-#define _POSIX_C_SOURCE 200809L
 #include "contact.h"
+#include "contact/migrate.h"
 #include "products.h"
-#include "policy_internal.h"
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>
-#include <stdlib.h>
+
 #include <stdio.h>
 #include <string.h>
 
-static int valid_text(const char *s)
+static struct jaro_contact_text text(const char *s)
 {
-	const unsigned char *p=(const unsigned char *)s;
-	if (strlen(s)>JF_LINE_MAX || !jf_valid_utf8(p,strlen(s))) return 0;
-	for (;*p;p++) if (*p<32 || *p==127) return 0;
-	return 1;
+	return (struct jaro_contact_text){s, strlen(s)};
 }
 
-static int canonical(char *s)
+static int contact_error(struct jf_error *error, int status, const char *reason, const char *field)
 {
-	unsigned char *p=(unsigned char *)s;
-	if (!jf_valid_utf8(p,strlen(s)) || !jf_normalize_mailbox(s)) return 0;
-	for (;*p;p++) if (*p>='A' && *p<='Z') *p=(unsigned char)(*p+32);
-	return 1;
+	const char *code=status==JARO_CONTACT_BUSY ? "E_CONTACT_BUSY" :
+		status==JARO_CONTACT_INVALID ? "E_CONTACT_FIELD" : "E_CONTACT_STORAGE";
+	char diagnostic[192];
+	snprintf(diagnostic,sizeof diagnostic,"%s%s%s",field ? field : "",field ? ": " : "",reason);
+	jf_product_error(error,code,0,diagnostic);
+	return status==JARO_CONTACT_BUSY ? 6 : status==JARO_CONTACT_INVALID ? 4 : 3;
 }
 
-static int same_email(const unsigned char *s,size_t n,const char *wanted)
+struct display {
+	int vcard, all_addresses, wrote;
+	const char *heading;
+};
+
+static int vcard_text(struct jaro_contact_text value)
 {
-	size_t start=0,i; int quote=0,escape=0;
-	for (i=0;i<=n;i++) {
-		if (i<n && escape) { escape=0; continue; }
-		if (i<n && s[i]=='\\' && quote) { escape=1; continue; }
-		if (i<n && s[i]=='"') { quote=!quote; continue; }
-		if (i==n || (s[i]==',' && !quote)) {
-			size_t end=i; char *copy; int same;
-			while (start<end && (s[start]==' ' || s[start]=='\t')) start++;
-			while (end>start && (s[end-1]==' ' || s[end-1]=='\t')) end--;
-			copy=malloc(end-start+1); if (!copy) return -1;
-			memcpy(copy,s+start,end-start); copy[end-start]=0;
-			same=canonical(copy) && !strcmp(copy,wanted); free(copy);
-			if (same) return 1;
-			start=i+1;
+	for (size_t i=0;i<value.size;i++) {
+		unsigned char c=value.data[i];
+		if (c=='\r') {
+			if (i+1<value.size && value.data[i+1]=='\n') i++;
+			c='\n';
+		}
+		if (c=='\n') {
+			if (fputs("\\n",stdout)<0) return 1;
+		} else {
+			if ((c=='\\' || c==';' || c==',') && putchar('\\')==EOF) return 1;
+			if (putchar(c)==EOF) return 1;
 		}
 	}
+	return fputs("\r\n",stdout)<0;
+}
+
+static int display_contact(const struct jaro_contact *contact,void *data)
+{
+	struct display *display=data;
+	if (display->vcard) {
+		if (fputs("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:",stdout)<0 || vcard_text(contact->name) ||
+			fputs("N:",stdout)<0 || vcard_text(contact->name)) return 1;
+		if (contact->nickname.size && (fputs("NICKNAME:",stdout)<0 || vcard_text(contact->nickname))) return 1;
+		if (contact->notes.size && (fputs("NOTE:",stdout)<0 || vcard_text(contact->notes))) return 1;
+		for (size_t i=0;i<contact->address_count;i++)
+			if (fputs("EMAIL:",stdout)<0 || vcard_text(contact->addresses[i])) return 1;
+		if (fputs("END:VCARD\r\n",stdout)<0) return 1;
+		display->wrote=1;
+		return 0;
+	}
+	if (!contact->address_count) return 0;
+	if (!display->wrote && puts(display->heading)==EOF) return 1;
+	display->wrote=1;
+	size_t count=display->all_addresses ? contact->address_count : 1;
+	for (size_t i=0;i<count;i++)
+		if (jaro_contact_write_mutt_row(stdout,contact->addresses[i],contact->name,contact->notes)) return 1;
 	return 0;
 }
 
-static int sync_parent(const char *path)
+int jf_contact_command(int argc,char **argv,struct jf_error *error)
 {
-	char *copy=strdup(path),*slash; int fd,rc;
-	if (!copy) return -1;
-	slash=strrchr(copy,'/');
-	if (!slash) { free(copy); copy=strdup("."); if (!copy) return -1; }
-	else if (slash==copy) slash[1]=0;
-	else *slash=0;
-	fd=open(copy,O_RDONLY|O_DIRECTORY|O_CLOEXEC); free(copy);
-	if (fd<0) return -1;
-	rc=fsync(fd); if (close(fd)) rc=-1; return rc;
-}
+	const char *command=argc>1 ? argv[1] : "";
+	int add=!strcmp(command,"--add-contact"), has=!strcmp(command,"--has-contact");
+	int query=!strcmp(command,"--query-contacts"), recipients=!strcmp(command,"--recipient-contacts");
+	int export=!strcmp(command,"--export-contacts");
+	if (!add && !has && !query && !recipients && !export) return -1;
+	if ((add && !(argc==6 || (argc==7 && !strcmp(argv[6],"--check")))) ||
+		(has && argc!=5) || (query && argc!=5) || (recipients && argc!=4) || (export && argc!=4))
+		return 2;
 
-static int contact_book(const char *path,const char *email,const char *name,int check,struct jf_error *error)
-{
-	struct jf_bytes raw={0},record={0}; struct stat before,after,named;
-	struct flock lock={0}; char *address=NULL; unsigned char buffer[4096];
-	size_t pos=0,next=0,records=0; int format=0,section=0,fd=-1,rc=3,created=0;
-	int lookup=name==NULL, found=0;
-	char number[64]; ssize_t n;
-	if (error) memset(error,0,sizeof *error);
-	if (!valid_text(email) || (!lookup && (!valid_text(name) || strchr(email,','))))
-		return jf_product_error(error,"E_CONTACT",0,"contact fields contain unsupported bytes or exceed their limit");
-	address=strdup(email); if (!address) goto done;
-	if (!canonical(address)) { rc=jf_product_error(error,"E_ADDRESS",0,"invalid contact mailbox"); goto done; }
-	if (!check) {
-		fd=open(path,O_RDWR|O_APPEND|O_NONBLOCK|O_CLOEXEC|O_CREAT|O_EXCL,0600);
-		if (fd>=0) created=1;
-		else if (errno!=EEXIST) goto done;
-	}
-	if (fd<0) fd=open(path,(check ? O_RDONLY : O_RDWR|O_APPEND)|O_NONBLOCK|O_CLOEXEC);
-	if (fd<0 && check && !lookup && errno==ENOENT && lstat(path,&named)<0 && errno==ENOENT) { rc=0; goto done; }
-	if (fd<0 || fstat(fd,&before) || !S_ISREG(before.st_mode)) goto done;
-	lock.l_type=check ? F_RDLCK : F_WRLCK; lock.l_whence=SEEK_SET;
-	if (fcntl(fd,F_SETLK,&lock)) {
-		if (errno==EAGAIN || errno==EACCES) { rc=6; jf_product_error(error,"E_BOOK_BUSY",0,"addressbook is locked; retry after its writer finishes"); }
-		goto done;
-	}
-	while ((n=read(fd,buffer,sizeof buffer))) {
-		if (n<0) { if (errno==EINTR) continue; goto done; }
-		if (jf_bytes_add_limit(&raw,buffer,(size_t)n,JF_INPUT_MAX)) goto done;
-	}
-	/* Numeric section labels are chosen independently of contact contents.
-	 * Preserve every original byte, including custom fields and invalid old
-	 * addresses. Never send contact fields through abook's header importer. */
-	while (pos<raw.size) {
-		size_t start=pos,end,key,value,i,id=0;
-		while (pos<raw.size && raw.data[pos]!='\n') pos++;
-		end=pos; if (pos<raw.size) pos++;
-		while (start<end && (raw.data[start]==' ' || raw.data[start]=='\t')) start++;
-		while (end>start && (raw.data[end-1]==' ' || raw.data[end-1]=='\t' || raw.data[end-1]=='\r')) end--;
-		if (end-start>JF_LINE_MAX || memchr(raw.data+start,0,end-start)) goto invalid;
-		if (start==end || raw.data[start]=='#') continue;
-		if (raw.data[start]=='[') {
-			if (end-start==8 && !memcmp(raw.data+start,"[format]",8)) {
-				if (format || records) goto invalid;
-				format=1; section=0; continue;
-			}
-			if ((!format && !lookup) || end-start<3 || raw.data[end-1]!=']') goto invalid;
-			for (i=start+1;i<end-1;i++) {
-				unsigned char c=raw.data[i];
-				if (c<'0' || c>'9' || id>(SIZE_MAX-(size_t)(c-'0'))/10) goto invalid;
-				id=id*10+(size_t)(c-'0');
-			}
-			if (id==SIZE_MAX || ++records>JF_RULE_MAX) goto invalid;
-			if (id>=next) next=id+1;
-			section=1; continue;
+	struct jaro_contact_store *store;
+	struct jaro_contact_migration_error migration;
+	struct jaro_contact_error detail={0};
+	int preview=add && argc==7;
+	int status=jaro_contact_profile_open(argv[2],preview ? JARO_CONTACT_PROFILE_PREVIEW :
+		add ? JARO_CONTACT_PROFILE_WRITE : JARO_CONTACT_PROFILE_READ,&store,&migration);
+	if (status) return contact_error(error,status,migration.reason,migration.field);
+
+	int result,found=0;
+	int64_t book_id=0;
+	struct jaro_contact_text book=recipients ? (struct jaro_contact_text){0} : text(argv[3]);
+	if (add) {
+		status=jaro_contact_learn(store,book,text(argv[4]),text(argv[5]),preview,&found,&detail);
+		result=!found;
+	} else {
+		status=jaro_contact_begin_read(store,&detail);
+		if (!status && !recipients) {
+			status=jaro_contact_book(store,book,0,&book_id,&detail);
+			if (status==JARO_CONTACT_MISSING) status=JARO_CONTACT_OK;
 		}
-		key=start; while (key<end && raw.data[key]!='=') key++;
-		if ((!format && !section) || key==end) goto invalid;
-		value=key+1; while (key>start && (raw.data[key-1]==' ' || raw.data[key-1]=='\t')) key--;
-		if (section && key-start==5 && !memcmp(raw.data+start,"email",5)) {
-			int same=same_email(raw.data+value,end-value,address);
-			if (same<0) goto done;
-			if (same && !lookup) { rc=1; goto done; }
-			found |= same;
+		if (!status && has && book_id)
+			status=jaro_contact_has_mailbox(store,book_id,text(argv[4]),&found,&detail);
+		if (!status && !has && (recipients || book_id)) {
+			const char *needle=export ? "" : argv[recipients ? 3 : 4];
+			int all=!strcmp(needle,"all");
+			struct display display={.vcard=export,.all_addresses=!recipients,.heading=all ? "All items" : ""};
+			status=jaro_contact_visit(store,book_id,text(all ? "" : needle),display_contact,&display,&detail);
+			found=display.wrote;
 		}
+		status=jaro_contact_finish(store,status,&detail);
+		result=!found && !export;
 	}
-	if (check) { rc=lookup && !found; goto done; }
-	if (records==JF_RULE_MAX) goto invalid;
-	if (!format && jf_bytes_text(&record,"\n[format]\nprogram=abook\nversion=0.6.1\n")) goto done;
-	snprintf(number,sizeof number,"\n[%zu]\nname=",next);
-	if (jf_bytes_text(&record,number) || jf_bytes_text(&record,*name ? name : email) ||
-		jf_bytes_text(&record,"\nemail=") || jf_bytes_text(&record,email) || jf_bytes_text(&record,"\n")) goto done;
-	if (!jf_bytes_fits(raw.size,record.size,JF_INPUT_MAX)) goto invalid;
-	if (fstat(fd,&after) || stat(path,&named) || before.st_dev!=after.st_dev ||
-		before.st_ino!=after.st_ino || before.st_size!=after.st_size ||
-		before.st_mtime!=after.st_mtime || before.st_ctime!=after.st_ctime ||
-		named.st_dev!=after.st_dev || named.st_ino!=after.st_ino) {
-		rc=6; jf_product_error(error,"E_BOOK_CHANGED",0,"addressbook changed while preparing the contact; retry"); goto done;
-	}
-	/* O_APPEND leaves all old records intact. Check the complete append and
-	 * fsync; on a short/failed write retain the bytes for inspection, never
-	 * truncate a file which may also have an uncooperative external writer. */
-	do { n=write(fd,record.data,record.size); } while (n<0 && errno==EINTR);
-	if (n<0 || (size_t)n!=record.size || fsync(fd) || (created && sync_parent(path))) goto done;
-	rc=0; goto done;
-invalid:
-	rc=jf_product_error(error,"E_ADDRESSBOOK",0,lookup ? "unsupported addressbook structure or contact limit" :
-		"unsupported addressbook structure or contact limit; existing records unchanged");
-done:
-	if (rc==3 && error && !error->code)
-		jf_product_error(error,"E_IO",0,lookup ? "cannot read addressbook" :
-			"contact append failed; original records retained; inspect the book before retrying");
-	if (fd>=0) close(fd);
-	free(address); jf_bytes_free(&raw); jf_bytes_free(&record); return rc;
-}
-
-int jf_contact_add(const char *path,const char *email,const char *name,int check,struct jf_error *error)
-{
-	return contact_book(path,email,name,check,error);
-}
-
-int jf_contact_contains(const char *path,const char *email,struct jf_error *error)
-{
-	return contact_book(path,email,NULL,1,error);
+	jaro_contact_close(store,NULL);
+	if (status) return contact_error(error,status,detail.reason,detail.field);
+	if (fflush(stdout) || ferror(stdout)) return contact_error(error,JARO_CONTACT_STORAGE,"cannot write contact output",NULL);
+	return result;
 }

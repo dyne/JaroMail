@@ -102,5 +102,5 @@ else
   exit 1
 fi
 
-print -- "Luther Blisset <luther@dyne.org>" | jaro_source import -l blacklist
+print -- "Luther Blisset <luther@dyne.org>" | jaro_source import -l block
 jaro_source filter "${mail_root}/known"

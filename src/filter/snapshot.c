@@ -1,9 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 #include "snapshot.h"
 #include "policy_internal.h"
+#include "contact/migrate.h"
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -68,42 +68,6 @@ static int config(struct jf_snapshot *s, const char *role, const char *value)
 	return dep(s,role,"",1,value,strlen(value),value,strlen(value));
 }
 
-static int same_dependency(const struct jf_dependency *a, const struct jf_dependency *b)
-{
-	return a && b && a->present==b->present && (!a->present || !memcmp(a->digest,b->digest,32)) &&
-		a->auxiliary.size==b->auxiliary.size && (!a->auxiliary.size ||
-		!memcmp(a->auxiliary.data,b->auxiliary.data,a->auxiliary.size));
-}
-
-static int same_optional(const struct jf_snapshot *a, const struct jf_snapshot *b,
-	const char *role, const char *path)
-{
-	const struct jf_dependency *x=jf_snapshot_dependency(a,role,path), *y=jf_snapshot_dependency(b,role,path);
-	return (!x && !y) || same_dependency(x,y);
-}
-
-static int reusable_export(const struct jf_snapshot *now, const struct jf_snapshot *prior,
-	const char *role, const char *export_role, const char *path, const char *exporter, const char *compiler)
-{
-	static const char *config_roles[]={"config.exporter-flags","config.exporter-locale",
-		"config.compiler-build","config.cache-version","config.policy-version","config.parser",
-		"config.address-case","config.address-normalization","config.contact-validation","config.locale","config.regex-dialect","config.sieve-comparator"};
-	const struct jf_dependency *book=jf_snapshot_dependency(prior,role,path);
-	const struct jf_dependency *exported=jf_snapshot_dependency(prior,export_role,path);
-	unsigned char digest[32];
-	size_t i;
-	if (!book || !book->present || !exported || !exported->present ||
-		!same_dependency(book,jf_snapshot_dependency(now,role,path)) ||
-		!same_dependency(jf_snapshot_dependency(prior,"input.exporter",exporter),jf_snapshot_dependency(now,"input.exporter",exporter)) ||
-		!same_dependency(jf_snapshot_dependency(prior,"input.compiler",compiler),jf_snapshot_dependency(now,"input.compiler",compiler)) ||
-		!same_optional(prior,now,"link.input.exporter",exporter) || !same_optional(prior,now,"link.input.compiler",compiler)) return 0;
-	for (i=0;i<sizeof config_roles/sizeof *config_roles;i++)
-		if (!same_dependency(jf_snapshot_dependency(prior,config_roles[i],""),jf_snapshot_dependency(now,config_roles[i],""))) return 0;
-	/* A reusable prior export must itself be complete and digest-verified. */
-	jf_digest(exported->auxiliary.data,exported->auxiliary.size,digest);
-	return !memcmp(digest,exported->digest,32);
-}
-
 static int source(struct jf_snapshot *s, enum jf_source_kind kind, const char *identity,
 	const char *path, struct jf_bytes *bytes)
 {
@@ -114,64 +78,6 @@ static int source(struct jf_snapshot *s, enum jf_source_kind kind, const char *i
 	p->kind=kind; p->identity=strdup(identity); p->path=strdup(path); p->data=bytes->data; p->size=bytes->size;
 	memset(bytes,0,sizeof *bytes);
 	return !p->identity || !p->path ? 3 : 0;
-}
-
-static int warning_quote(struct jf_bytes *out,const unsigned char *data,size_t n)
-{
-	size_t i; char hex[5];
-	if (jf_bytes_text(out,"\"")) return 3;
-	for (i=0;i<n;i++) {
-		unsigned char c=data[i];
-		if (c<32 || c>=127 || c=='"' || c=='\\') {
-			snprintf(hex,sizeof hex,"\\x%02x",c);
-			if (jf_bytes_text(out,hex)) return 3;
-		} else if (jf_bytes_add(out,&c,1)) return 3;
-	}
-	return jf_bytes_text(out,"\"");
-}
-
-static int contact_source(struct jf_snapshot *s,enum jf_source_kind kind,const char *book,
-	const char *path,struct jf_bytes *exported)
-{
-	struct jf_bytes valid={0}; size_t pos=0,line=0,bad=0; int rc=3;
-	while (pos<exported->size) {
-		size_t start=pos,end,n; char *copy; int acceptable;
-		while (pos<exported->size && exported->data[pos]!='\n') pos++;
-		end=pos; if (pos<exported->size) pos++;
-		line++;
-		while (start<end && (exported->data[start]==' ' || exported->data[start]=='\t')) start++;
-		while (end>start && (exported->data[end-1]==' ' || exported->data[end-1]=='\t' || exported->data[end-1]=='\r')) end--;
-		n=end-start;
-		if (!n) { if (jf_bytes_text(&valid,"\n")) goto done; continue; }
-		copy=malloc(n+1); if (!copy) goto done;
-		memcpy(copy,exported->data+start,n); copy[n]=0;
-		acceptable=n<=JF_LINE_MAX && jf_valid_utf8(exported->data+start,n) && jf_normalize_mailbox(copy);
-		free(copy);
-		if (acceptable) {
-			if (jf_bytes_add(&valid,exported->data+start,n)) goto done;
-		} else {
-			char detail[128]; bad++;
-			if (bad<=8) {
-				if (jf_bytes_text(&s->warnings,"W_ADDRESS ") ||
-					warning_quote(&s->warnings,(const unsigned char *)path,strlen(path))) goto done;
-				snprintf(detail,sizeof detail," exported address row %zu: ignored invalid mailbox ",line);
-				if (jf_bytes_text(&s->warnings,detail) || warning_quote(&s->warnings,exported->data+start,n>96 ? 96 : n) ||
-					jf_bytes_text(&s->warnings,n>96 ? " (first 96 bytes shown)\n" : "\n")) goto done;
-			}
-		}
-		/* Keep exported row numbers stable, even when a bad row is omitted. */
-		if (jf_bytes_text(&valid,"\n")) goto done;
-	}
-	if (bad) {
-		char detail[160];
-		if (jf_bytes_text(&s->warnings,"W_ADDRESS ") || warning_quote(&s->warnings,(const unsigned char *)path,strlen(path))) goto done;
-		snprintf(detail,sizeof detail," ignored %zu invalid contact%s%s; original addressbook unchanged\n",
-			bad,bad==1 ? "" : "s",bad>8 ? " (first 8 listed)" : "");
-		if (jf_bytes_text(&s->warnings,detail)) goto done;
-	}
-	rc=source(s,kind,book,path,&valid);
-done:
-	jf_bytes_free(&valid); return rc;
 }
 
 static int readfd(int fd, struct jf_bytes *b)
@@ -205,7 +111,7 @@ static int input(struct jf_snapshot *s, const char *role, const char *path, int 
 	struct stat st,after;
 	size_t i;
 	if (diagnostic(s,path)) return 3;
-	for (i=0;i<s->override_count;i++) if (!strcmp(path,s->overrides[i].path)) {
+	for (i=0;i<s->override_count;i++) if (!s->overrides[i].role && !strcmp(path,s->overrides[i].path)) {
 		const struct jf_bytes *b=s->overrides[i].bytes;
 		if (jf_bytes_add(bytes,b->data,b->size)) return 3;
 		return dep(s,role,path,1,b->data,b->size,NULL,0);
@@ -296,112 +202,72 @@ done:
 	free(names); free(dirpath); return rc;
 }
 
-static char *executable(const char *name)
+const char *const jf_contact_roles[2]={"contacts.allow","contacts.block"};
+
+static int append_key(struct jaro_contact_text key,void *data)
 {
-	const char *env=getenv("PATH"), *p=env ? env : "/usr/bin:/bin";
-	if (strchr(name,'/')) return strdup(name);
-	for (;;) {
-		const char *end=strchr(p,':');
-		size_t n=end ? (size_t)(end-p) : strlen(p);
-		char *dir=malloc(n+1),*path;
-		if (!dir) return NULL;
-		memcpy(dir,p,n); dir[n]=0; path=join(n ? dir : ".",name); free(dir);
-		if (!path) return NULL;
-		if (!access(path,X_OK)) return path;
-		free(path); if (!end) return NULL; p=end+1;
-	}
+	struct jf_bytes *bytes=data;
+	return jf_bytes_add_limit(bytes,key.data,key.size,JF_INPUT_MAX) ||
+		jf_bytes_add_limit(bytes,"\n",1,JF_INPUT_MAX);
 }
 
-static int empty_book(const struct jf_bytes *raw)
+static int contact_sources(struct jf_snapshot *s,const char *root,const char *path,int preview,
+	struct jaro_contact_store *borrowed,int (*snapshot_hook)(const char *),struct jf_error *error)
 {
-	/* abook rejects books without records, including its own empty header.
-	 * Recognize only trivia or a complete known header, never contact syntax.
-	 * This inspects the snapshot; dependency digests still cover every byte. */
-	size_t pos=0;
-	unsigned header=0;
-	while (pos<raw->size) {
-		size_t start=pos,end;
-		while (pos<raw->size && raw->data[pos]!='\n') {
-			unsigned char c=raw->data[pos++];
-			if ((c<32 && c!='\t' && c!='\r') || c==127) return 0;
-		}
-		end=pos; if (pos<raw->size) pos++;
-		while (start<end && (raw->data[start]==' ' || raw->data[start]=='\t' || raw->data[start]=='\r')) start++;
-		while (end>start && (raw->data[end-1]==' ' || raw->data[end-1]=='\t' || raw->data[end-1]=='\r')) end--;
-		if (start==end || raw->data[start]=='#') continue;
-		if (header==0 && end-start==8 && !memcmp(raw->data+start,"[format]",8)) header=1;
-		else if (header==1 && end-start==13 && !memcmp(raw->data+start,"program=abook",13)) header=2;
-		else if (header==2 && end-start==13 && (!memcmp(raw->data+start,"version=0.6.0",13) ||
-			!memcmp(raw->data+start,"version=0.6.1",13))) header=3;
-		else return 0;
-	}
-	return header==0 || header==3;
-}
+	static const struct jaro_contact_text names[]={{"allow",5},{"block",5}};
+	struct jaro_contact_store *store=borrowed;
+	struct jaro_contact_migration_error migration;
+	struct jaro_contact_error detail={0};
+	int status=0,rc=0;
 
-static int export_book(const char *exporter, const struct jf_bytes *raw, struct jf_bytes *out)
-{
-	const char *tmp=getenv("TMPDIR");
-	char *name=NULL, descriptor[64];
-	struct jf_bytes result={0};
-	int fd=-1,pipes[2]={-1,-1},status,rc=3;
-	pid_t pid=-1,waited;
-	size_t pos=0;
-	if (empty_book(raw)) return 0;
-	name=join(tmp ? tmp : "/tmp","jaro-filter-book-XXXXXX");
-	if (!name || (fd=mkstemp(name))<0) goto done;
-	if (unlink(name)) goto done;
-	while (pos<raw->size) {
-		ssize_t n=write(fd,raw->data+pos,raw->size-pos);
-		if (n<0 && errno==EINTR) continue;
-		if (n<=0) goto done;
-		pos+=(size_t)n;
+	if (!store) {
+		status=jaro_contact_profile_open(root,preview ? JARO_CONTACT_PROFILE_PREVIEW :
+			JARO_CONTACT_PROFILE_READ,&store,&migration);
+		if (status) detail.reason=migration.reason;
+		if (!status) status=jaro_contact_begin_read(store,&detail);
 	}
-	if (lseek(fd,0,SEEK_SET)<0 || pipe(pipes)) goto done;
-	snprintf(descriptor,sizeof descriptor,"/dev/fd/%d",fd);
-	pid=fork(); if (pid<0) goto done;
-	if (!pid) {
-		if (dup2(pipes[1],STDOUT_FILENO)<0) _exit(127);
-		close(pipes[0]); close(pipes[1]);
-		if (setenv("LC_ALL","C",1)) _exit(127);
-		execl(exporter,exporter,"--config","/dev/null","--datafile",descriptor,"--mutt-query","",(char *)NULL); _exit(127);
+	for (size_t i=0;!status && !rc && i<2;i++) {
+		struct jf_bytes keys={0};
+		const struct jf_bytes *override=NULL;
+		for (size_t j=0;j<s->override_count;j++)
+			if (s->overrides[j].role && !strcmp(s->overrides[j].role,jf_contact_roles[i])) {
+				override=s->overrides[j].bytes;
+				break;
+			}
+		if (override)
+			rc=jf_bytes_add(&keys,override->data,override->size);
+		else
+			status=jaro_contact_visit_keys(store,names[i],append_key,&keys,&detail);
+		if (!status && !rc)
+			rc=dep(s,jf_contact_roles[i],path,1,keys.data,keys.size,keys.data,keys.size) ||
+				source(s,i ? JF_BLACKLIST : JF_KNOWN,names[i].data,path,&keys);
+		jf_bytes_free(&keys);
+		if (!i && !status && !rc && snapshot_hook && snapshot_hook("contacts-allow-read"))
+			rc=3;
 	}
-	close(pipes[1]); pipes[1]=-1;
-	rc=readfd(pipes[0],&result);
-	close(pipes[0]); pipes[0]=-1;
-	do { waited=waitpid(pid,&status,0); } while (waited<0 && errno==EINTR);
-	pid=-1;
-	if (rc || waited<0 || !WIFEXITED(status) || WEXITSTATUS(status)) { rc=3; goto done; }
-	/* mutt-query columns are TAB-delimited: a quoted local part may contain SP.
-	 * Consume the complete mailbox column, never whitespace-split it. */
-	for (pos=0;pos<result.size;) {
-		size_t start=pos,end;
-		while (pos<result.size && result.data[pos]!='\n') pos++;
-		end=pos; if (pos<result.size) pos++;
-		if (end>start && result.data[end-1]=='\r') end--;
-		if (end==start) continue;
-		while (start<end && result.data[start]!='\t') start++;
-		if (start==end) { rc=3; goto done; }
-		/* Recover the line start; first TAB is the only address delimiter. */
-		end=start; while (start && result.data[start-1]!='\n') start--;
-		if (jf_bytes_add(out,result.data+start,end-start) || jf_bytes_text(out,"\n")) { rc=3; goto done; }
+	if (store && !borrowed) {
+		if (status || rc) jaro_contact_rollback(store,NULL);
+		else status=jaro_contact_commit(store,&detail);
+		jaro_contact_close(store,NULL);
 	}
-	rc=0;
-done:
-	if (pid>0) { do { waited=waitpid(pid,&status,0); } while (waited<0 && errno==EINTR); }
-	if (fd>=0) close(fd);
-	if (pipes[0]>=0) close(pipes[0]);
-	if (pipes[1]>=0) close(pipes[1]);
-	free(name); jf_bytes_free(&result); return rc;
+	if (status) {
+		jf_product_error(error,status==JARO_CONTACT_BUSY ? "E_CONTACT_BUSY" : "E_CONTACT_STORAGE",
+			0,detail.reason);
+		if (status==JARO_CONTACT_BUSY) s->changed=1;
+		return status==JARO_CONTACT_BUSY ? 6 : 3;
+	}
+	return rc ? jf_product_error(error,"E_MEMORY",0,"contact membership exceeds snapshot limits") : 0;
 }
 
 static int collect(const char *root, const char *accounts_arg, const char *profile_arg,
-	const char *compiler, const char *runtime, const struct jf_snapshot *prior, const struct jf_input_override *overrides,
+	const char *compiler, const char *runtime, int preview, struct jaro_contact_store *contacts,
+	int (*snapshot_hook)(const char *),const struct jf_input_override *overrides,
 	size_t override_count, struct jf_snapshot *out, struct jf_error *error)
 {
 	struct jf_snapshot s={0};
 	struct jf_bytes bytes={0},inventory={0},execbytes={0};
 	char *accounts=accounts_arg ? strdup(accounts_arg) : join(root,"Accounts");
-	char *path=NULL,*exporter=NULL;
+	char *path=NULL;
 	struct stat st;
 	size_t i;
 	int rc=3;
@@ -410,17 +276,13 @@ static int collect(const char *root, const char *accounts_arg, const char *profi
 	if (!accounts) goto memory;
 	if (diagnostic(&s,root) || link_dep(&s,"root",root)) goto io;
 	if (config(&s,"config.compiler-build",JF_COMPILER_ID) || config(&s,"config.cache-version","1") ||
-		config(&s,"config.policy-version","1") || config(&s,"config.regex-dialect","posix-ere-c-icase-v1") ||
+		config(&s,"config.policy-version","2") || config(&s,"config.regex-dialect","posix-ere-c-icase-v1") ||
 		config(&s,"config.locale","C") || config(&s,"config.parser","bounded-rfc822-v2") ||
 		config(&s,"config.address-normalization",JF_ADDRESS_NORMALIZATION) ||
-		config(&s,"config.contact-validation","warn-skip-invalid-export-v1") ||
+		config(&s,"config.contact-membership","sqlite-sorted-mailbox-keys-v1") ||
 		config(&s,"config.address-case","ascii-mailbox-casemap-v1") || config(&s,"config.sieve-comparator","i;ascii-casemap") ||
-		config(&s,"config.exporter-locale","C") || config(&s,"config.regex-catalogue",jf_regex_catalogue()) ||
+		config(&s,"config.regex-catalogue",jf_regex_catalogue()) ||
 		config(&s,"config.regex-qualification",jf_regex_qualification())) goto memory;
-	{
-		static const char flags[]="--config\0/dev/null\0--datafile\0SNAPSHOT-FD\0--mutt-query\0";
-		if (dep(&s,"config.exporter-flags","",1,flags,sizeof flags,flags,sizeof flags)) goto memory;
-	}
 	/* Executable bytes, not version text or mtime, bind compiler identity. */
 	if (!compiler || input(&s,"input.compiler",compiler,1,&execbytes)) goto io;
 	jf_bytes_free(&execbytes);
@@ -468,59 +330,33 @@ static int collect(const char *root, const char *accounts_arg, const char *profi
 		jf_bytes_free(&mappings); if (failure) goto memory;
 	}
 	jf_bytes_free(&bytes);
-	for (i=0;i<2;i++) {
-		const char *book=i ? "blacklist.abook" : "whitelist.abook";
-		const char *role=i ? "input.blacklist" : "input.whitelist";
-		const char *erole=i ? "export.blacklist" : "export.whitelist";
-		const struct jf_dependency *current,*exported;
-		struct jf_bytes exported_bytes={0};
-		path=join(root,book); if (!path) goto memory;
-		if (input(&s,role,path,0,&bytes)) goto io;
-		current=jf_snapshot_dependency(&s,role,path);
-		if (current->present) {
-			if (!exporter) {
-				exporter=executable("abook"); if (!exporter || input(&s,"input.exporter",exporter,1,&execbytes)) goto io;
-				jf_bytes_free(&execbytes);
-			}
-			/* dep reallocations invalidate pointers; find the current record again. */
-			current=jf_snapshot_dependency(&s,role,path);
-			if (diagnostic(&s,path)) goto memory;
-			exported=jf_snapshot_dependency(prior,erole,path);
-			if (reusable_export(&s,prior,role,erole,path,exporter,compiler))
-				rc=jf_bytes_add(&exported_bytes,exported->auxiliary.data,exported->auxiliary.size);
-			else rc=export_book(exporter,&bytes,&exported_bytes);
-			if (rc) { jf_bytes_free(&exported_bytes); goto io; }
-		}
-		if (dep(&s,erole,path,current->present,exported_bytes.data,exported_bytes.size,exported_bytes.data,exported_bytes.size) ||
-			contact_source(&s,i ? JF_BLACKLIST : JF_KNOWN,book,path,&exported_bytes)) {
-			jf_bytes_free(&exported_bytes); goto memory;
-		}
-		jf_bytes_free(&exported_bytes);
-		jf_bytes_free(&bytes); free(path); path=NULL;
-	}
+	path=join(root,JARO_CONTACT_DATABASE); if (!path || diagnostic(&s,path)) goto memory;
+	rc=contact_sources(&s,root,path,preview,contacts,snapshot_hook,error);
+	if (rc) goto done;
 	rc=0;
 	goto done;
 memory:
 	rc=jf_product_error(error,"E_MEMORY",0,"snapshot allocation/size limit"); goto done;
 io:
 	if (s.changed) { jf_product_error(error,"E_SNAPSHOT_CHANGED",0,"input changed while reading"); rc=6; }
-	else rc=jf_product_error(error,"E_IO",0,"cannot snapshot input or export addressbook");
+	else rc=jf_product_error(error,"E_IO",0,"cannot snapshot filter input");
 done:
-	free(accounts); free(path); free(exporter); jf_bytes_free(&bytes); jf_bytes_free(&execbytes); jf_bytes_free(&inventory);
+	free(accounts); free(path); jf_bytes_free(&bytes); jf_bytes_free(&execbytes); jf_bytes_free(&inventory);
 	s.overrides=NULL; s.override_count=0; *out=s; return rc;
 }
 
 int jf_snapshot_collect(const char *root, const char *accounts, const char *profile,
-	const char *compiler, const char *runtime, const struct jf_snapshot *prior, struct jf_snapshot *out, struct jf_error *error)
+	const char *compiler, const char *runtime, int preview, struct jaro_contact_store *contacts,
+	int (*snapshot_hook)(const char *),struct jf_snapshot *out, struct jf_error *error)
 {
-	return collect(root,accounts,profile,compiler,runtime,prior,NULL,0,out,error);
+	return collect(root,accounts,profile,compiler,runtime,preview,contacts,snapshot_hook,NULL,0,out,error);
 }
 
 int jf_snapshot_overlay(const char *root, const char *accounts, const char *profile,
-	const char *compiler, const char *runtime, const struct jf_input_override *overrides, size_t count,
+	const char *compiler, const char *runtime, int preview, const struct jf_input_override *overrides, size_t count,
 	struct jf_snapshot *out, struct jf_error *error)
 {
-	return collect(root,accounts,profile,compiler,runtime,NULL,overrides,count,out,error);
+	return collect(root,accounts,profile,compiler,runtime,preview,NULL,NULL,overrides,count,out,error);
 }
 
 int jf_snapshot_parse(struct jf_snapshot *s, struct jf_error *error)
@@ -534,6 +370,7 @@ int jf_snapshot_parse(struct jf_snapshot *s, struct jf_error *error)
 int jf_snapshot_read(const char *root, const char *accounts, const char *profile,
 	const char *compiler, const struct jf_snapshot *prior, struct jf_snapshot *out, struct jf_error *error)
 {
-	int rc=jf_snapshot_collect(root,accounts,profile,compiler,NULL,prior,out,error);
+	(void)prior;
+	int rc=jf_snapshot_collect(root,accounts,profile,compiler,NULL,1,NULL,NULL,out,error);
 	return rc ? rc : jf_snapshot_parse(out,error);
 }

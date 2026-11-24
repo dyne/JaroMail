@@ -133,7 +133,7 @@ check_journal(sqlite3 *db, int create, struct jaro_contact_error *error)
 }
 
 static int
-configure(sqlite3 *db, int create, struct jaro_contact_error *error)
+configure(sqlite3 *db, int create, int memory, struct jaro_contact_error *error)
 {
 	int rc = sqlite3_extended_result_codes(db, 1);
 	if (rc == SQLITE_OK)
@@ -149,7 +149,7 @@ configure(sqlite3 *db, int create, struct jaro_contact_error *error)
 		status = check_setting(db, "PRAGMA foreign_keys", 1, error, "foreign keys unavailable");
 	if (!status)
 		status = check_setting(db, "PRAGMA synchronous", 3, error, "durability setting unavailable");
-	if (!status)
+	if (!status && !memory)
 		status = check_journal(db, create, error);
 	return status;
 }
@@ -185,12 +185,42 @@ check_schema(sqlite3 *db, struct jaro_contact_error *error)
 		4, error, "invalid contact change tracking");
 }
 
+static int
+open_database(const char *path, int flags, int create, int memory,
+	struct jaro_contact_store **store, struct jaro_contact_error *error)
+{
+	struct jaro_contact_store *opened = calloc(1, sizeof *opened);
+	if (!opened)
+		return failure(error, JARO_CONTACT_STORAGE, "cannot allocate contact database",
+			NULL, 0, ENOMEM);
+	int rc = sqlite3_open_v2(path, &opened->db,
+		flags | SQLITE_OPEN_NOFOLLOW | SQLITE_OPEN_PRIVATECACHE | SQLITE_OPEN_EXRESCODE, NULL);
+	if (rc == SQLITE_OK && flags & SQLITE_OPEN_READWRITE && sqlite3_db_readonly(opened->db, "main"))
+		rc = SQLITE_READONLY;
+	int status = rc == SQLITE_OK ? configure(opened->db, create, memory, error) :
+		sql_failure(error, rc, "cannot open contact database");
+	if (!status && create)
+		status = execute(opened->db, "BEGIN IMMEDIATE", error, "cannot begin contact schema");
+	if (!status && create)
+		status = execute(opened->db, schema, error, "cannot create contact schema");
+	if (!status && create)
+		status = execute(opened->db, "COMMIT", error, "cannot commit contact schema");
+	if (!status)
+		status = check_schema(opened->db, error);
+	if (status) {
+		sqlite3_close(opened->db); /* SQLite rolls back unfinished transactions. */
+		free(opened);
+		return status;
+	}
+	*store = opened;
+	return JARO_CONTACT_OK;
+}
+
 int
 jaro_contact_open(const char *path, enum jaro_contact_open_mode mode,
 	struct jaro_contact_store **store, struct jaro_contact_error *error)
 {
 	struct stat st;
-	struct jaro_contact_store *opened;
 	int create = mode == JARO_CONTACT_CREATE_EXCLUSIVE;
 	int status, fd;
 	int flags = mode == JARO_CONTACT_READ ? SQLITE_OPEN_READONLY : SQLITE_OPEN_READWRITE;
@@ -228,36 +258,18 @@ jaro_contact_open(const char *path, enum jaro_contact_open_mode mode,
 		return failure(error, JARO_CONTACT_STORAGE, "contact database must be a private regular file",
 			NULL, 0, 0);
 	}
-	opened = calloc(1, sizeof *opened);
-	if (!opened) {
-		if (create)
-			unlink(path);
-		return failure(error, JARO_CONTACT_STORAGE, "cannot allocate contact database",
-			NULL, 0, ENOMEM);
-	}
-	int rc = sqlite3_open_v2(path, &opened->db,
-		flags | SQLITE_OPEN_NOFOLLOW | SQLITE_OPEN_PRIVATECACHE | SQLITE_OPEN_EXRESCODE, NULL);
-	if (rc == SQLITE_OK && mode != JARO_CONTACT_READ && sqlite3_db_readonly(opened->db, "main"))
-		rc = SQLITE_READONLY;
-	status = rc == SQLITE_OK ? configure(opened->db, create, error) :
-		sql_failure(error, rc, "cannot open contact database");
-	if (!status && create)
-		status = execute(opened->db, "BEGIN IMMEDIATE", error, "cannot begin contact schema");
-	if (!status && create)
-		status = execute(opened->db, schema, error, "cannot create contact schema");
-	if (!status && create)
-		status = execute(opened->db, "COMMIT", error, "cannot commit contact schema");
-	if (!status)
-		status = check_schema(opened->db, error);
-	if (status) {
-		sqlite3_close(opened->db); /* SQLite rolls back unfinished transactions. */
-		free(opened);
-		if (create)
-			unlink(path);
-		return status;
-	}
-	*store = opened;
-	return JARO_CONTACT_OK;
+	status = open_database(path, flags, create, 0, store, error);
+	if (status && create)
+		unlink(path);
+	return status;
+}
+
+int
+jaro_contact_open_memory(struct jaro_contact_store **store, struct jaro_contact_error *error)
+{
+	*store = NULL;
+	return open_database(":memory:", SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_MEMORY,
+		1, 1, store, error);
 }
 
 int
@@ -303,6 +315,12 @@ jaro_contact_begin(struct jaro_contact_store *store, struct jaro_contact_error *
 }
 
 int
+jaro_contact_begin_read(struct jaro_contact_store *store, struct jaro_contact_error *error)
+{
+	return execute(store->db, "BEGIN", error, "cannot begin contact read");
+}
+
+int
 jaro_contact_commit(struct jaro_contact_store *store, struct jaro_contact_error *error)
 {
 	return execute(store->db, "COMMIT", error, "cannot commit contact write");
@@ -313,7 +331,20 @@ jaro_contact_rollback(struct jaro_contact_store *store, struct jaro_contact_erro
 {
 	if (sqlite3_get_autocommit(store->db))
 		return JARO_CONTACT_OK;
-	return execute(store->db, "ROLLBACK", error, "cannot roll back contact write");
+	return execute(store->db, "ROLLBACK", error, "cannot roll back contact transaction");
+}
+
+int
+jaro_contact_finish(struct jaro_contact_store *store, int status, struct jaro_contact_error *error)
+{
+	if (!status)
+		status = jaro_contact_commit(store, error);
+	if (status) {
+		int rollback = jaro_contact_rollback(store, error);
+		if (rollback)
+			return rollback;
+	}
+	return status;
 }
 
 static int
@@ -619,6 +650,125 @@ jaro_contact_save(struct jaro_contact_store *store, const struct jaro_contact *c
 	return JARO_CONTACT_OK;
 }
 
+int
+jaro_contact_delete(struct jaro_contact_store *store, int64_t book_id, int64_t id,
+	int64_t revision, struct jaro_contact_error *error)
+{
+	int status = require_write(store, error);
+	if (status)
+		return status;
+	if (book_id < 1 || id < 1 || revision < 1)
+		return failure(error, JARO_CONTACT_INVALID, "invalid contact identity", NULL, 0, 0);
+
+	sqlite3_stmt *statement = NULL;
+	int rc = sqlite3_prepare_v2(store->db,
+		"DELETE FROM contacts WHERE book_id=?1 AND id=?2 AND revision=?3", -1, &statement, NULL);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_bind_int64(statement, 1, book_id);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_bind_int64(statement, 2, id);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_bind_int64(statement, 3, revision);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_step(statement);
+	sqlite3_finalize(statement);
+	if (rc != SQLITE_DONE)
+		return sql_failure(error, rc, "cannot remove contact");
+	if (sqlite3_changes(store->db) != 1)
+		return failure(error, JARO_CONTACT_CONFLICT, "contact revision has changed", NULL, 0, 0);
+	return JARO_CONTACT_OK;
+}
+
+int
+jaro_contact_learn(struct jaro_contact_store *store, struct jaro_contact_text book,
+	struct jaro_contact_text mailbox, struct jaro_contact_text name, int preview,
+	int *added, struct jaro_contact_error *error)
+{
+	struct jaro_contact contact = {
+		.name = name.size ? name : mailbox, .addresses = &mailbox, .address_count = 1
+	};
+	int present = 0, owned = sqlite3_get_autocommit(store->db);
+
+	*added = 0;
+	if (!jaro_contact_valid_text(name))
+		return failure(error, JARO_CONTACT_INVALID, "invalid UTF-8 text, embedded NUL or size",
+			"name", 0, 0);
+	int status = preview ? jaro_contact_begin_read(store, error) :
+		owned ? jaro_contact_begin(store, error) : require_write(store, error);
+	if (status)
+		return status;
+	status = jaro_contact_book(store, book, 0, &contact.book_id, error);
+	if (status == JARO_CONTACT_MISSING) {
+		if (error)
+			*error = (struct jaro_contact_error){0};
+		status = JARO_CONTACT_OK; /* A zero book ID cannot match an address. */
+	}
+	if (!status)
+		status = jaro_contact_has_mailbox(store, contact.book_id, mailbox, &present, error);
+	if (!status && !present && !preview) {
+		int64_t id;
+		if (!contact.book_id)
+			status = jaro_contact_book(store, book, 1, &contact.book_id, error);
+		if (!status)
+			status = jaro_contact_save(store, &contact, &id, error);
+	}
+	if (owned)
+		status = jaro_contact_finish(store, status, error);
+	if (!status)
+		*added = !present;
+	return status;
+}
+
+int
+jaro_contact_record_import(struct jaro_contact_store *store, char token[33],
+	struct jaro_contact_error *error)
+{
+	sqlite3_stmt *statement = NULL;
+	int status = require_write(store, error);
+	if (!status)
+		status = execute(store->db, "CREATE TABLE IF NOT EXISTS filter_import("
+			"singleton INTEGER PRIMARY KEY CHECK(singleton=1),token TEXT NOT NULL) STRICT",
+			error, "cannot prepare filter import receipt");
+	if (status)
+		return status;
+	int rc = sqlite3_prepare_v2(store->db,
+		"INSERT OR REPLACE INTO filter_import VALUES (1,lower(hex(randomblob(16)))) RETURNING token",
+		-1, &statement, NULL);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_step(statement);
+	if (rc == SQLITE_ROW && sqlite3_column_bytes(statement, 0) == 32) {
+		memcpy(token, sqlite3_column_text(statement, 0), 32);
+		token[32] = 0;
+		rc = sqlite3_step(statement);
+	} else if (rc == SQLITE_ROW || rc == SQLITE_DONE) rc = SQLITE_CORRUPT;
+	sqlite3_finalize(statement);
+	return rc == SQLITE_DONE ? JARO_CONTACT_OK : sql_failure(error, rc, "cannot record filter import");
+}
+
+int
+jaro_contact_has_import(struct jaro_contact_store *store, const char *token,
+	int *present, struct jaro_contact_error *error)
+{
+	sqlite3_int64 exists = 0;
+	sqlite3_stmt *statement = NULL;
+	*present = 0;
+	int rc = read_integer(store->db, "SELECT count(*) FROM sqlite_schema WHERE type='table'"
+		" AND name='filter_import'", &exists);
+	if (rc != SQLITE_OK)
+		return sql_failure(error, rc, "cannot inspect filter import receipts");
+	if (!exists)
+		return JARO_CONTACT_OK;
+	rc = sqlite3_prepare_v2(store->db, "SELECT 1 FROM filter_import WHERE token=?1", -1, &statement, NULL);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_bind_text(statement, 1, token, -1, SQLITE_TRANSIENT);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_step(statement);
+	sqlite3_finalize(statement);
+	*present = rc == SQLITE_ROW;
+	return (rc == SQLITE_ROW || rc == SQLITE_DONE) ? JARO_CONTACT_OK :
+		sql_failure(error, rc, "cannot read filter import receipt");
+}
+
 static int
 copy_text(sqlite3_stmt *statement, int column, struct jaro_contact_text *output, size_t *remaining)
 {
@@ -691,8 +841,8 @@ read_fields(sqlite3 *db, int64_t id, struct jaro_contact_field *fields,
 	return rc;
 }
 
-static void
-free_record_text(struct jaro_contact *contact)
+void
+jaro_contact_clear(struct jaro_contact *contact)
 {
 	free((void *)contact->name.data);
 	free((void *)contact->nickname.data);
@@ -707,46 +857,73 @@ free_record_text(struct jaro_contact *contact)
 		}
 	free((void *)contact->addresses);
 	free((void *)contact->fields);
+	*contact = (struct jaro_contact){0};
 }
 
 static int
-visit_row(sqlite3 *db, sqlite3_stmt *statement, int64_t book,
-	jaro_contact_visitor visit, void *data, struct jaro_contact_error *error)
+read_record(sqlite3 *db, sqlite3_stmt *statement, int64_t book,
+	struct jaro_contact *contact, struct jaro_contact_error *error)
 {
-	struct jaro_contact contact = {
+	*contact = (struct jaro_contact){
 		.id = sqlite3_column_int64(statement, 0), .book_id = book,
 		.revision = sqlite3_column_int64(statement, 1)
 	};
 	sqlite3_int64 addresses = sqlite3_column_int64(statement, 5);
 	sqlite3_int64 fields = sqlite3_column_int64(statement, 6);
 	size_t remaining = JARO_CONTACT_RECORD_MAX;
-	int status = JARO_CONTACT_OK;
-
 	if (addresses < 0 || addresses > JARO_CONTACT_ADDRESSES_MAX ||
 			fields < 0 || fields > JARO_CONTACT_FIELDS_MAX)
 		return sql_failure(error, SQLITE_CORRUPT, "invalid contact field counts");
-	contact.address_count = (size_t)addresses;
-	contact.field_count = (size_t)fields;
-	int rc = copy_text(statement, 2, &contact.name, &remaining);
+	contact->address_count = (size_t)addresses;
+	contact->field_count = (size_t)fields;
+	int rc = copy_text(statement, 2, &contact->name, &remaining);
 	if (rc == SQLITE_OK)
-		rc = copy_text(statement, 3, &contact.nickname, &remaining);
+		rc = copy_text(statement, 3, &contact->nickname, &remaining);
 	if (rc == SQLITE_OK)
-		rc = copy_text(statement, 4, &contact.notes, &remaining);
+		rc = copy_text(statement, 4, &contact->notes, &remaining);
 	if (rc == SQLITE_OK && addresses) {
-		struct jaro_contact_text *items = calloc(contact.address_count, sizeof *items);
-		contact.addresses = items;
-		rc = items ? read_addresses(db, contact.id, items, contact.address_count, &remaining) : SQLITE_NOMEM;
+		struct jaro_contact_text *items = calloc(contact->address_count, sizeof *items);
+		contact->addresses = items;
+		rc = items ? read_addresses(db, contact->id, items, contact->address_count, &remaining) : SQLITE_NOMEM;
 	}
 	if (rc == SQLITE_OK && fields) {
-		struct jaro_contact_field *items = calloc(contact.field_count, sizeof *items);
-		contact.fields = items;
-		rc = items ? read_fields(db, contact.id, items, contact.field_count, &remaining) : SQLITE_NOMEM;
+		struct jaro_contact_field *items = calloc(contact->field_count, sizeof *items);
+		contact->fields = items;
+		rc = items ? read_fields(db, contact->id, items, contact->field_count, &remaining) : SQLITE_NOMEM;
 	}
-	if (rc != SQLITE_OK)
-		status = sql_failure(error, rc, "cannot read contact fields");
-	else if (visit(&contact, data))
-		status = failure(error, JARO_CONTACT_CONSUMER, "contact visitor failed", NULL, 0, 0);
-	free_record_text(&contact);
+	if (rc == SQLITE_OK)
+		return JARO_CONTACT_OK;
+	jaro_contact_clear(contact);
+	return sql_failure(error, rc, "cannot read contact fields");
+}
+
+#define CONTACT_READ_COLUMNS "SELECT c.id,c.revision,c.name,c.nickname,c.notes," \
+	" (SELECT count(*) FROM addresses WHERE contact_id=c.id)," \
+	" (SELECT count(*) FROM fields WHERE contact_id=c.id) FROM contacts c"
+
+int
+jaro_contact_get(struct jaro_contact_store *store, int64_t book, int64_t id,
+	struct jaro_contact *contact, struct jaro_contact_error *error)
+{
+	sqlite3_stmt *statement = NULL;
+	int status;
+
+	*contact = (struct jaro_contact){0};
+	int rc = sqlite3_prepare_v2(store->db,
+		CONTACT_READ_COLUMNS " WHERE c.book_id=?1 AND c.id=?2", -1, &statement, NULL);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_bind_int64(statement, 1, book);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_bind_int64(statement, 2, id);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_step(statement);
+	if (rc == SQLITE_ROW)
+		status = read_record(store->db, statement, book, contact, error);
+	else if (rc == SQLITE_DONE)
+		status = failure(error, JARO_CONTACT_MISSING, "contact does not exist", NULL, 0, 0);
+	else
+		status = sql_failure(error, rc, "cannot get contact");
+	sqlite3_finalize(statement);
 	return status;
 }
 
@@ -758,11 +935,12 @@ jaro_contact_visit(struct jaro_contact_store *store, int64_t book_id,
 	static const char sql[] =
 		"SELECT c.id,c.revision,c.name,c.nickname,c.notes,"
 		" (SELECT count(*) FROM addresses WHERE contact_id=c.id),"
-		" (SELECT count(*) FROM fields WHERE contact_id=c.id)"
-		" FROM contacts c WHERE c.book_id=?1 AND (?2='' OR instr(c.name_key,?2)>0"
+		" (SELECT count(*) FROM fields WHERE contact_id=c.id),c.book_id"
+		" FROM contacts c JOIN books b ON b.id=c.book_id"
+		" WHERE (c.book_id=?1 OR (?1=0 AND b.name<>'block')) AND (?2='' OR instr(c.name_key,?2)>0"
 		" OR instr(c.nickname_key,?2)>0 OR instr(c.notes_key,?2)>0"
 		" OR EXISTS(SELECT 1 FROM addresses a WHERE a.contact_id=c.id AND instr(a.search_key,?2)>0))"
-		" ORDER BY c.ordinal";
+		" ORDER BY b.name='allow' DESC,c.book_id,c.ordinal";
 	sqlite3 *db = store->db;
 	sqlite3_stmt *statement = NULL;
 	int rc, status = JARO_CONTACT_OK;
@@ -785,7 +963,11 @@ jaro_contact_visit(struct jaro_contact_store *store, int64_t book_id,
 	free(key);
 	if (rc == SQLITE_OK) {
 		while ((rc = sqlite3_step(statement)) == SQLITE_ROW) {
-			status = visit_row(db, statement, book_id, visit, data, error);
+			struct jaro_contact contact;
+			status = read_record(db, statement, sqlite3_column_int64(statement, 7), &contact, error);
+			if (!status && visit(&contact, data))
+				status = failure(error, JARO_CONTACT_CONSUMER, "contact visitor failed", NULL, 0, 0);
+			jaro_contact_clear(&contact);
 			if (status)
 				break;
 		}
@@ -794,4 +976,44 @@ jaro_contact_visit(struct jaro_contact_store *store, int64_t book_id,
 	if (status)
 		return status;
 	return rc == SQLITE_DONE ? JARO_CONTACT_OK : sql_failure(error, rc, "cannot query contacts");
+}
+
+int
+jaro_contact_visit_keys(struct jaro_contact_store *store, struct jaro_contact_text book,
+	jaro_contact_key_visitor visit, void *data, struct jaro_contact_error *error)
+{
+	sqlite3_stmt *statement = NULL;
+	int64_t id;
+	int status = jaro_contact_book(store, book, 0, &id, error);
+	if (status == JARO_CONTACT_MISSING)
+		return JARO_CONTACT_OK;
+	if (status)
+		return status;
+	int rc = sqlite3_prepare_v2(store->db,
+		"SELECT DISTINCT mailbox_key FROM addresses INDEXED BY addresses_book_mailbox"
+		" WHERE book_id=?1 ORDER BY mailbox_key", -1, &statement, NULL);
+	if (rc == SQLITE_OK)
+		rc = sqlite3_bind_int64(statement, 1, id);
+	if (rc == SQLITE_OK)
+		while ((rc = sqlite3_step(statement)) == SQLITE_ROW) {
+			struct jaro_contact_text key = {
+				(const char *)sqlite3_column_text(statement, 0),
+				(size_t)sqlite3_column_bytes(statement, 0)
+			};
+			char *canonical;
+			int valid = !jaro_contact_mailbox_key(key, &canonical);
+			if (!valid || strcmp(key.data, canonical))
+				status = sql_failure(error, SQLITE_CORRUPT, "invalid stored mailbox key");
+			free(canonical);
+			if (status)
+				break;
+			if (visit(key, data)) {
+				status = failure(error, JARO_CONTACT_CONSUMER, "mailbox visitor failed", NULL, 0, 0);
+				break;
+			}
+		}
+	sqlite3_finalize(statement);
+	if (status)
+		return status;
+	return rc == SQLITE_DONE ? JARO_CONTACT_OK : sql_failure(error, rc, "cannot read contact mailbox keys");
 }

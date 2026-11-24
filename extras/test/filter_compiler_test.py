@@ -96,7 +96,7 @@ class CompilerTests(unittest.TestCase):
         self.case = self.work / self._testMethodName
         self.case.mkdir()
         self.root = self.case / 'mail root'
-        self.root.mkdir()
+        self.root.mkdir(mode=0o700)
         self.out_index = 0
         self.environment = dict(os.environ)
 
@@ -193,7 +193,7 @@ class CompilerTests(unittest.TestCase):
                             known=['known@example.org', 'blocked@example.org'],
                             blacklist=['blocked@example.org'], own=['own@example.org'])
         cases = [
-            ('blocked-before-route', {'From': 'blocked@example.org', 'To': 'team@example.org'}, 'zz.blacklist'),
+            ('allow-overlap-keeps-route-priority', {'From': 'blocked@example.org', 'To': 'team@example.org'}, 'tobucket'),
             ('bounce-before-from', {'Sender': 'mailman-bounce@other.example', 'From': 'route@example.org'}, 'zz.bounces'),
             ('from-before-to', {'From': 'route@example.org', 'To': 'team@example.org'}, 'frombucket'),
             ('sender-before-to', {'Sender': 'route@example.org', 'To': 'team@example.org'}, 'frombucket'),
@@ -311,7 +311,7 @@ class CompilerTests(unittest.TestCase):
         rows = provenance(out)
         self.assertEqual(len(rows), 3)
         for tag, row in decoded:
-            if tag == b'D' and row[0] in (b'export.whitelist', b'export.blacklist'):
+            if tag == b'D' and row[0] in (b'contacts.allow', b'contacts.block'):
                 self.assertEqual(row[2:5], [b'1', sha(b''), b''])
         self.expect(out, {'id': 'zero-book-fallback', 'headers': {'From': 'unknown@example.org'}, 'sieve': 'unsorted'})
 
@@ -352,10 +352,10 @@ class CompilerTests(unittest.TestCase):
         self.environment['PATH'] = str(binaries) + os.pathsep + os.environ['PATH']
         return counter
 
-    def test_byte_paths_accounts_symlinks_and_export_reuse(self):
+    def test_byte_paths_accounts_symlinks_and_contact_snapshot(self):
         # Path bytes travel through argv/cache fields without JSON decoding.
         self.root = Path(os.fsdecode(os.fsencode(self.case) + b'/raw\n\xff root'))
-        self.root.mkdir()
+        self.root.mkdir(mode=0o700)
         accounts = self.case / 'accounts\nexternal'
         (accounts / 'sub dir').mkdir(parents=True)
         (accounts / 'sub dir/account').write_text('email "Own@Example.Org"\npassword NEVER-EVALUATED\n')
@@ -363,28 +363,27 @@ class CompilerTests(unittest.TestCase):
         (accounts / 'linked account').symlink_to(source)
         counter = self.traced_abook()
         out, decoded = self.build(['known-domain *.example.org'], known=['"a b"@example.org'], accounts=accounts, reuse=True)
-        self.assertEqual(counter.read_bytes(), b'export\n', 'unchanged book re-exported on snapshot recheck')
+        self.assertFalse(counter.exists(), 'SQLite snapshots invoked the text exporter')
         rows = provenance(out)
         self.assertIn(os.fsencode(self.root / 'Filters.txt'), [r[2] for r in rows])
         self.assertIn(b'own:' + hashlib.sha256(b'own@example.org').hexdigest().encode(), [r[1] for r in rows])
         dependencies = {(r[0], r[1]): r for t, r in decoded if t == b'D'}
         self.assertIn((b'link.input.account', os.fsencode(accounts / 'linked account')), dependencies)
-        exported = dependencies[b'export.whitelist', os.fsencode(self.root / 'whitelist.abook')]
+        exported = dependencies[b'contacts.allow', os.fsencode(self.root / 'contacts.sqlite')]
         self.assertEqual(exported[4], b'"a b"@example.org\n')
         self.assertEqual(exported[3], sha(exported[4]))
         self.expect(out, {'id': 'raw-path-known', 'headers': {'From': '"a b"@example.org'}, 'sieve': 'INBOX'})
 
-    def test_export_recipe_and_compiler_identity_invalidate_reuse(self):
-        counter = self.traced_abook()
-        roles = ['config.exporter-flags', 'config.exporter-locale', 'config.compiler-build',
-                 'config.cache-version', 'config.policy-version', 'config.parser',
-                 'config.address-case', 'config.locale', 'config.regex-dialect',
-                 'config.sieve-comparator', 'input.compiler', 'input.exporter']
-        self.build(known=['known@example.org'], reuse=True)
-        self.assertEqual(counter.read_bytes().splitlines(), [b'export'])
-        for index, role in enumerate(roles):
-            self.build(known=['known@example.org'], reuse=role)
-            self.assertEqual(len(counter.read_bytes().splitlines()), 1 + 2*(index+1), role)
+    def test_sqlite_membership_fingerprint_uses_logical_content(self):
+        _, first = self.build(known=['UPPER@example.org', 'second@example.org'])
+        book = self.root / 'whitelist.abook'
+        book.write_text(book.read_text().replace('Fixture 0', 'Edited').replace('UPPER@', 'upper@'))
+        _, second = self.build()
+        self.assertEqual(first, second)
+        roles = {row[0]: row[4] for tag, row in second if tag == b'D'}
+        self.assertEqual(roles[b'contacts.allow'], b'second@example.org\nupper@example.org\n')
+        self.assertEqual(roles[b'config.contact-membership'], b'sqlite-sorted-mailbox-keys-v1')
+        self.assertNotIn(b'input.exporter', roles)
 
 
 if __name__ == '__main__':

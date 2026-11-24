@@ -38,6 +38,7 @@ typedef struct abook_field_list_t {
 	struct abook_field_list_t *next;
 } abook_field_list;
 
+#include <stdint.h>
 typedef char **list_item;
 
 enum {
@@ -105,6 +106,8 @@ struct db_enumerator init_db_enumerator(int mode);
  * item manipulation
  */
 list_item item_create();
+int64_t item_contact_id(list_item item);
+void item_set_contact_id(list_item item, int64_t id);
 void item_empty(list_item item);
 void item_free(list_item *item);
 void item_copy(list_item dest, list_item src);

@@ -14,7 +14,7 @@ test_setup() {
   work_root="${prefix_root}/share/jaromail"
   test_bin="${tmp_root}/bin"
 
-  mkdir -p "${mail_root}"
+  mkdir -m 700 -p "${mail_root}"
   mkdir -p "${test_bin}"
   cd "${repo_root}"
   make >/dev/null

@@ -590,6 +590,11 @@ outbox_state() {
     "$helper" "$1" "$MAILDIRS" "$2"
 }
 
+learn_allowed_recipients() {
+    local list=allow
+    learn recipient
+}
+
 outbox_send_one() {
     local qbody="$1" relative="${1:h:t}/${1:t}" report id state res
     local -a fields
@@ -628,7 +633,7 @@ outbox_send_one() {
         # Also preserve acceptance if removing the private SMTP config failed.
         outbox_state accepted "$relative" || { outbox_item_held=1; return 1; }
         (( interrupted == 0 )) || return $interrupted
-        hdr "$MAILDIRS/.outbox-state/$id/message" | learn recipient
+        hdr "$MAILDIRS/.outbox-state/$id/message" | learn_allowed_recipients
         outbox_state finish "$relative" || return 1
         return $res
     fi
@@ -746,8 +751,7 @@ BEGIN { body=0 }
             error "Error sending mail, skipped"
         else
             notice "Mail sent succesfully"
-            # whitelist those to whom we send mails
-            hdr "$qbody" | learn recipient
+            hdr "$qbody" | learn_allowed_recipients
             if printfile "$qbody" | deliver sent; then
                 command rm -- "$qbody" || result=1
             else

@@ -20,6 +20,8 @@
 #include "options.h"
 #include "xmalloc.h"
 #include "color.h"
+#include "contact/text.h"
+#include "sqlite-editor.h"
 
 
 int curitem = -1;
@@ -174,11 +176,23 @@ print_list_field(int item, int line, int *x_pos, struct index_elem *e)
 		return;
 	}
 	
-	if(f.type == FIELD_EMAILS && !opt_get_bool(BOOL_SHOW_ALL_EMAILS))
-		if((p = strchr(s, ',')) != NULL) {
+	if(f.type == FIELD_EMAILS && !opt_get_bool(BOOL_SHOW_ALL_EMAILS)) {
+		if (jaro_editor_profile) {
+			abook_list *addresses=mailbox_list_from_csv(s);
+			s=xstrdup(addresses ? addresses->data : "");
+			mustfree=TRUE;
+			abook_list_free(&addresses);
+		} else if((p = strchr(s, ',')) != NULL) {
 			s = xstrndup(s, p - s);
 			mustfree = TRUE;
 		}
+	}
+	if (jaro_editor_profile && f.type!=FIELD_EMAILS) {
+		char *safe=jaro_contact_display_text((struct jaro_contact_text){s,strlen(s)});
+		if (mustfree) free(s);
+		s=safe ? safe : "";
+		mustfree=safe!=NULL;
+	}
 
 	width = len ? bytes2width(s, len) : strwidth(s);
 	x_start = *x_pos + ((e->d.field.len < 0) ? len - width : 0);

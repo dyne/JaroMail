@@ -87,11 +87,11 @@ class PolicyTests(unittest.TestCase):
                 'bounce': ('mailman-bounce', 2, 2, 4),
                 'spam': ('YES', 6, 16, 5), 'unsorted': ('', 8, 0, 6)}[selector]
             id_ = alias
-        elif selector in ('known', 'blacklist', 'own'):
+        elif selector in ('allow', 'block', 'own'):
             predicate = ascii_fold(value)
             book, entries, stage, fields = {
-                'known': ('whitelist.abook', known, 5, 1),
-                'blacklist': ('blacklist.abook', blacklist, 1, 1),
+                'allow': ('whitelist.abook', known, 5, 1),
+                'block': ('blacklist.abook', blacklist, 1, 1),
                 'own': ('Aliases.txt', own, 7, 12)}[selector]
             kind = 0
             line = [ascii_fold(v) for v in entries].index(predicate) + 1
@@ -239,10 +239,10 @@ class PolicyTests(unittest.TestCase):
     def test_raw_contact_exports_are_not_policy_tokens(self):
         rows = self.parse(('known', 'whitelist.abook', '/known',
                            '"A B"@EXAMPLE.ORG\n#HASH@EXAMPLE.ORG\n'))
-        known = [r for r in rows if r['selector'] == 'known']
+        known = [r for r in rows if r['selector'] == 'allow']
         self.assertEqual([r['predicate'] for r in known], ['"a b"@example.org', '#hash@example.org'])
         for row in known:
-            self.assertEqual(row['id'], 'known:' + hashlib.sha256(row['predicate'].encode()).hexdigest())
+            self.assertEqual(row['id'], 'allow:' + hashlib.sha256(row['predicate'].encode()).hexdigest())
 
     def test_rule_limits_count_effective_records(self):
         self.rules('known-domain example.org\n' * 100001)

@@ -72,6 +72,22 @@ jaro_contact_print_text(FILE *out, struct jaro_contact_text text)
 	return 0;
 }
 
+char *
+jaro_contact_display_text(struct jaro_contact_text text)
+{
+	char *display = malloc(text.size + 1);
+	if (!display)
+		return NULL;
+	size_t out = 0;
+	for (size_t i = 0; i < text.size;) {
+		size_t control = control_size((const unsigned char *)text.data + i, text.size - i);
+		display[out++] = control ? ' ' : text.data[i];
+		i += control ? control : 1;
+	}
+	display[out] = '\0';
+	return display;
+}
+
 int
 jaro_contact_write_mutt_row(FILE *out, struct jaro_contact_text mailbox,
 	struct jaro_contact_text name, struct jaro_contact_text notes)

@@ -13,16 +13,10 @@
 - Maildir layout must provide: `incoming`, `known`, `sent`, `priv`, `postponed`, `drafts`, `unsorted`, `remember`, `outbox`.
 - `update` must rebuild filter cache before routing-dependent flows.
 - Addressbook semantics:
-  - `whitelist.abook` and `blacklist.abook` are list-of-contact truth.
+  - `contacts.sqlite` stores the allow, block, and custom lists for the profile.
   - `-l <name>` switches active list scope.
-- Filter order is deterministic in implementation:
-  1. configured `from` rules,
-  2. configured `to/cc` rules,
-  3. whitelist,
-  4. spam/header checks,
-  5. blacklist,
-  6. own-address private routing,
-  7. `unsorted` fallback.
+- Incoming mail uses allow when a parsed From address also belongs to block.
+- Filter order is deterministic. See [Filter policy](filter-policy.md).
 - Account discovery must resolve one active account before network/index actions.
 - Offline-first default: local maildir operations work without active network access.
 

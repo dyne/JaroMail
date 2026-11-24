@@ -48,7 +48,7 @@ def expected(case, rules):
     logical = 'spam' if alias == 'builtin:spam' else case['local']
     if kind == 'builtin':
         identity = alias
-    elif kind in ('known', 'blacklist', 'own'):
+    elif kind in ('allow', 'block', 'own'):
         identity = kind + ':' + hashlib.sha256(ascii_fold(value).encode()).hexdigest()
     else:
         assert kind in ('filters', 'domain')
@@ -115,7 +115,7 @@ class ParityTests(unittest.TestCase):
 
     def build(self, name, rules, books=None, profile=PROFILE):
         root = self.case / name
-        root.mkdir()
+        root.mkdir(mode=0o700)
         (root / 'Filters.txt').write_text('\n'.join(rules) + '\n')
         (root / 'Aliases.txt').write_text('\n'.join(json.dumps(x) for x in (books or {}).get('own', [])))
         (root / 'FilterProfile.txt').write_text(profile)
@@ -129,7 +129,7 @@ class ParityTests(unittest.TestCase):
 
     def imported(self, root, name):
         target = self.case / name
-        target.mkdir()
+        target.mkdir(mode=0o700)
         (target / 'Filters.txt').write_bytes(b'')
         (target / 'FilterProfile.txt').write_bytes((root / 'FilterProfile.txt').read_bytes())
         self.command([self.compiler, '--root', target, '--import-sieve', root / 'Filters.sieve'])

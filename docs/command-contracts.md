@@ -138,11 +138,11 @@ with imaplib.IMAP4("127.0.0.1", int(os.environ.get("JARO_SERVE_PORT", "61443")))
 
 ## Addressbook family (`addr`, `import`, `isknown`, `learn`)
 
-- `addr`: list addressbook entries (`whitelist` by default or `-l` selected list).
+- `addr`: list addressbook entries (allow by default, or the exact list selected by `-l`).
 - `import`: consumes stdin and appends unique entries to selected list.
 - `isknown`: checks sender against active list; exit `0` if known, non-zero otherwise.
 - `learn`: parses messages from stdin and inserts sender/all entries.
-- IO: reads/writes `*.abook`.
+- IO: reads and writes the profile-wide `contacts.sqlite`. Legacy text books are first-use import inputs.
 - Test-safe: yes (`test-addressbook-parse.sh`).
 
 ## Filtering/maildir family (`filter`, `deliver`, `ismd`)

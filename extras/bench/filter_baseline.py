@@ -39,7 +39,7 @@ def maildir(root, name):
 
 def make_fixture(root, rules, messages):
     """Input bytes and independent decision tables, without shell generation."""
-    root.mkdir(parents=True)
+    root.mkdir(mode=0o700, parents=True)
     (root / "Accounts").mkdir()
     (root / "cache").mkdir()
     (root / "Accounts/default.txt").write_text(

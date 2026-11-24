@@ -259,7 +259,7 @@ static int parse_line(struct parser *p, const struct jf_source *s,
 		memcpy(buffer,line+start,n-start); buffer[n-start]=0;
 		if (!jf_normalize_mailbox(buffer)) return fail(p,"E_ADDRESS","invalid exported mailbox");
 		fold(buffer);
-		return append(p,s,s->kind==JF_KNOWN ? "known" : "blacklist",buffer,
+		return append(p,s,s->kind==JF_KNOWN ? "allow" : "block",buffer,
 			s->kind==JF_KNOWN ? "known" : "zz.blacklist",JF_ADDRESS,
 			s->kind==JF_KNOWN ? 5 : 1,JF_FROM);
 	}
@@ -365,7 +365,7 @@ static void identify(struct jf_rule *r)
 	if (!strcmp(r->selector,"bounce") || !strcmp(r->selector,"spam") || !strcmp(r->selector,"unsorted")) {
 		snprintf(r->id,sizeof r->id,"builtin:%s",r->selector); return;
 	}
-	if (!strcmp(r->selector,"known") || !strcmp(r->selector,"blacklist") || !strcmp(r->selector,"own")) {
+	if (!strcmp(r->selector,"allow") || !strcmp(r->selector,"block") || !strcmp(r->selector,"own")) {
 		snprintf(r->id,sizeof r->id,"%s:",r->selector);
 		out=r->id+strlen(r->id);
 		jf_sha256_update(&hash,r->predicate,strlen(r->predicate));
@@ -379,7 +379,7 @@ static void identify(struct jf_rule *r)
 	jf_sha256_hex(&hash,out);
 }
 
-static int resolve(struct parser *p)
+static int resolve(struct parser *p,int keep_overlap)
 {
 	struct jf_policy *pol=p->policy;
 	struct jf_entry **refs;
@@ -397,10 +397,22 @@ static int resolve(struct parser *p)
 	}
 	qsort(refs,pol->count,sizeof *refs,compare_keys);
 	for (i=0;i<pol->count;i=j) {
-		int contact=!strcmp(refs[i]->rule.selector,"own") || !strcmp(refs[i]->rule.selector,"known") ||
-			!strcmp(refs[i]->rule.selector,"blacklist");
+		int contact=!strcmp(refs[i]->rule.selector,"own") || !strcmp(refs[i]->rule.selector,"allow") ||
+			!strcmp(refs[i]->rule.selector,"block");
 		for (j=i+1;j<pol->count && !compare_key(refs[i],refs[j]);j++) {}
 		for (kept=i;kept<j;kept++) if (kept!=(contact ? i : j-1)) refs[kept]->discard=1;
+	}
+	/* Sort order groups allow and block separately, by normalized mailbox
+	 * within each list. An overlapping block rule is skipped for routing. */
+	if (!keep_overlap) {
+		size_t allow=0;
+		for (i=0;i<pol->count && !strcmp(refs[0]->rule.selector,"allow");i++) {
+			if (strcmp(refs[i]->rule.selector,"block")) continue;
+			while (allow<i && !strcmp(refs[allow]->rule.selector,"allow") &&
+				strcmp(refs[allow]->rule.predicate,refs[i]->rule.predicate)<0) allow++;
+			if (allow<i && !strcmp(refs[allow]->rule.selector,"allow") &&
+				!strcmp(refs[allow]->rule.predicate,refs[i]->rule.predicate)) refs[i]->discard=1;
+		}
 	}
 	release(pol,refs);
 	for (i=0,kept=0;i<pol->count;i++) {
@@ -439,8 +451,8 @@ static int resolve(struct parser *p)
 	return 0;
 }
 
-int jf_policy_parse(const struct jf_source *sources, size_t count,
-	const struct jf_allocator *allocator, struct jf_policy **out, struct jf_error *error)
+static int parse_policy(const struct jf_source *sources, size_t count,
+	const struct jf_allocator *allocator, struct jf_policy **out, struct jf_error *error,int keep_overlap)
 {
 	struct jf_allocator a={NULL,default_allocate,default_release};
 	struct jf_policy *pol;
@@ -497,10 +509,22 @@ int jf_policy_parse(const struct jf_source *sources, size_t count,
 	if ((rc=append(&p,NULL,"bounce","mailman-bounce","zz.bounces",JF_SENDER_CONTAINS,2,JF_SENDER)) ||
 		(rc=append(&p,NULL,"spam","YES","spam",JF_SPAM_IS,6,JF_SPAM)) ||
 		(rc=append(&p,NULL,"unsorted","","unsorted",JF_ALWAYS,8,0))) goto done;
-	rc=resolve(&p);
+	rc=resolve(&p,keep_overlap);
 done:
 	release(pol,refs);
 	if (rc) jf_policy_free(pol);
 	else *out=pol;
 	return rc;
+}
+
+int jf_policy_parse(const struct jf_source *sources,size_t count,const struct jf_allocator *allocator,
+	struct jf_policy **out,struct jf_error *error)
+{
+	return parse_policy(sources,count,allocator,out,error,0);
+}
+
+int jf_policy_parse_import(const struct jf_source *sources,size_t count,
+	struct jf_policy **out,struct jf_error *error)
+{
+	return parse_policy(sources,count,NULL,out,error,1);
 }

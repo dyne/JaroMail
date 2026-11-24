@@ -1,7 +1,7 @@
 """Characterize the installed JaroMail query consumers using synthetic mail."""
 
 import argparse
-from contextlib import suppress
+from contextlib import closing, suppress
 import errno
 import fcntl
 import hashlib
@@ -11,6 +11,8 @@ from pathlib import Path
 import pty
 import select
 import signal
+import sqlite3
+import stat
 import struct
 import subprocess
 import sys
@@ -54,7 +56,8 @@ name=Anne-Marie O'Neil
 email=anne@example.org
 ''',
     'alternate': BOOK_HEADER + b'\n[0]\nname=Alternate Person\nemail=alternate@example.org\n',
-    'blacklist': BOOK_HEADER + b'\n[0]\nname=Block Person\nemail=block@example.org\n',
+    'blacklist': BOOK_HEADER + b'\n[0]\nname=Block Person\nemail=block@example.org\n'
+                 b'\n[1]\nname=Block overlap\nemail=pat@example.org,alternate@example.org\n',
 }
 GROUP_ROSTER = b'roster@jaromail.group\tGroup roster (2 recipients)\n'
 
@@ -116,7 +119,8 @@ class InstalledConsumers(unittest.TestCase):
         self.mail = self.home / 'Maildir'
         self.runtime = self.prefix / 'share/jaromail'
         self.jaro = self.prefix / 'bin/jaro'
-        (self.mail / 'Groups').mkdir(parents=True)
+        self.mail.mkdir(mode=0o700, parents=True)
+        (self.mail / 'Groups').mkdir()
         (self.home / '.abook').mkdir()
         (self.home / '.abook/abookrc').touch()
         (self.mail / 'Filters.txt').write_bytes(b'from-address fixture@example.org move Fixture\n')
@@ -125,7 +129,6 @@ class InstalledConsumers(unittest.TestCase):
         (self.mail / 'empty.abook').touch()
         (self.mail / 'headerless.abook').write_bytes(
             b'[0]\nname=Legacy Contact\nemail=legacy@example.org\n')
-        (self.mail / 'broken.abook').mkdir()
         for group in ('roster', 'mixed'):
             (self.mail / 'Groups' / group).write_bytes(
                 b'# members\n\nOne <one@example.org>\nTwo <two@example.org>\n')
@@ -139,9 +142,78 @@ class InstalledConsumers(unittest.TestCase):
                               stdin=subprocess.DEVNULL if input is None else None, input=input,
                               capture_output=True, timeout=15)
 
+    @staticmethod
+    def profile_tree(profile):
+        tree = {}
+        for path in [profile, *profile.rglob('*')]:
+            info = path.lstat()
+            data = (os.readlink(path) if stat.S_ISLNK(info.st_mode) else
+                    path.read_bytes() if stat.S_ISREG(info.st_mode) else None)
+            tree[path.relative_to(profile)] = (info.st_mode, info.st_ino, info.st_mtime_ns, data)
+        return tree
+
+    def test_contact_dry_runs_leave_fresh_and_existing_profiles_unchanged(self):
+        fresh = self.root / 'fresh dry-run profile'
+        fresh.mkdir(mode=0o700)
+        header = b'From: Dry Run <dry@example.org>\n\nSynthetic body\n'
+        addresses = b'Imported <imported@example.org>\n'
+        commands = [
+            (('-n', '-q', 'learn', 'sender'), header),
+            (('-q', 'import', '--dry-run'), addresses),
+        ]
+        for profile in (fresh, self.mail):
+            env = dict(self.env, JAROMAILDIR=str(profile), JAROACCOUNT=str(profile / 'Accounts'))
+            before = self.profile_tree(profile)
+            for args, data in commands:
+                with self.subTest(profile=profile.name, args=args):
+                    result = self.capture([self.jaro, *args], env=env, input=data)
+                    self.assertEqual((result.returncode, result.stderr), (0, b''))
+                    self.assertEqual(self.profile_tree(profile), before)
+
+        real = self.capture([self.jaro, '-q', '-l', '-n', 'learn', 'sender'],
+                            env=dict(self.env, JAROMAILDIR=str(fresh)), input=header)
+        self.assertEqual((real.returncode, real.stderr), (0, b''))
+        self.assertTrue((fresh / 'Filters.txt').is_file())
+        with closing(sqlite3.connect(fresh / 'contacts.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT name FROM books').fetchall(), [('-n',)])
+
+        for profile in (fresh, self.mail):
+            env = dict(self.env, JAROMAILDIR=str(profile), JAROACCOUNT=str(profile / 'Accounts'))
+            group = profile / 'Group file'
+            group.write_bytes(b'existing@example.org\n')
+            before = self.profile_tree(profile)
+            rejected = (
+                (('-n', '-q', 'abook'), None, b'editor requires a writable session'),
+                (('-q', 'import', '--dry-run', '--', str(group)), addresses,
+                 b'only supported for contact-list imports'),
+            )
+            for args, data, diagnostic in rejected:
+                result = self.capture([self.jaro, *args], env=env, input=data)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertEqual(self.profile_tree(profile), before)
+
+        before = self.profile_tree(fresh)
+        for args, data in commands:
+            result = self.capture([self.jaro, *args], env=dict(self.env, JAROMAILDIR=str(fresh)), input=data)
+            self.assertEqual((result.returncode, result.stderr), (0, b''))
+            self.assertEqual(self.profile_tree(fresh), before)
+        committed = self.capture([self.jaro, '-q', 'import'],
+                                 env=dict(self.env, JAROMAILDIR=str(fresh)), input=addresses)
+        self.assertEqual((committed.returncode, committed.stdout), (0, addresses))
+        database = fresh / 'contacts.sqlite'
+        before = database.read_bytes()
+        group = fresh / 'Group file'
+        result = self.capture([self.jaro, '-q', 'import', '--', str(group)],
+                              env=dict(self.env, JAROMAILDIR=str(fresh)), input=addresses)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(group.read_bytes(), addresses + b'existing@example.org\n')
+        self.assertEqual(database.read_bytes(), before)
+
     def test_cli_query_records(self):
         cases = (
-            ('contact', (), 0, b'\npat@example.org\tPat Contact\tContact note\n'),
+            ('contact', (), 0, b'\npat@example.org\tPat Contact\tContact note\n'
+                               b'legacy@example.org\tLegacy Contact\t \n'),
             ('PAT CONTACT', (), 0, b'\npat@example.org\tPat Contact\tContact note\n'),
             ('roster', (), 0, b'\n' + GROUP_ROSTER),
             ('mixed', (), 0, b'\nzed@example.org\tMixed Zed\t \nada@example.org\tMixed Ada\t \n'
@@ -151,11 +223,13 @@ class InstalledConsumers(unittest.TestCase):
             ('group/absent', (), 1, b'Not found\n'),
             ('quoted', (), 0, b'\n"a b"@example.org\tQuoted Person\tghost@example.org\n'),
             ('ghost@example.org', (), 0, b'\n"a b"@example.org\tQuoted Person\tghost@example.org\n'),
-            ('alternate', (), 1, b'Not found\n'),
+            ('alternate', (), 0, b'\nalternate@example.org\tAlternate Person\t \n'),
+            ('block', (), 1, b'Not found\n'),
+            ('block', ('-l', 'block'), 1, b'Not found\n'),
             ('alternate', ('-l', 'alternate'), 0, b'\nalternate@example.org\tAlternate Person\t \n'),
             ('roster', ('-l', 'empty'), 0, b'\n' + GROUP_ROSTER),
             ('miss', ('-l', 'empty'), 1, b'Not found\n'),
-            ('roster', ('-l', 'broken'), 2, b'Cannot open database\n'),
+
         )
         for query, options, status, stdout in cases:
             with self.subTest(query=query, options=options):
@@ -171,7 +245,7 @@ class InstalledConsumers(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout, result.stderr), (0, stdout, b''))
 
         for book, status, stderr in (
-            ('empty', 1, b''), ('broken', 2, b'Cannot open database\n'),
+            ('empty', 1, b''), ('missing-list', 1, b''),
         ):
             with self.subTest(command='addr', book=book):
                 result = self.capture([self.jaro, '-q', '-l', book, 'addr'])
@@ -179,18 +253,18 @@ class InstalledConsumers(unittest.TestCase):
 
     def test_known_sender_uses_exact_mailbox(self):
         for mailbox, book, status in (
-            (b'FIRST.MEMBER@EXAMPLE.ORG', 'whitelist', 0),
-            (b'upper.member@example.org', 'whitelist', 0),
-            (b'"a,b"@example.org', 'whitelist', 0),
-            (b'"a b"@example.org', 'whitelist', 0),
-            (b'ab@example.org', 'whitelist', 1),
-            (b'ghost-member@example.org', 'whitelist', 1),
-            (b'firstmember@example.org', 'whitelist', 1),
-            (b'alternate@example.org', 'whitelist', 1),
+            (b'FIRST.MEMBER@EXAMPLE.ORG', 'allow', 0),
+            (b'upper.member@example.org', 'allow', 0),
+            (b'"a,b"@example.org', 'allow', 0),
+            (b'"a b"@example.org', 'allow', 0),
+            (b'ab@example.org', 'allow', 1),
+            (b'ghost-member@example.org', 'allow', 1),
+            (b'firstmember@example.org', 'allow', 1),
+            (b'alternate@example.org', 'allow', 1),
             (b'alternate@example.org', 'alternate', 0),
             (b'legacy@example.org', 'headerless', 0),
             (b'first.member@example.org', 'empty', 1),
-            (b'first.member@example.org', 'broken', 3),
+            (b'first.member@example.org', 'missing-list', 1),
         ):
             with self.subTest(mailbox=mailbox, book=book):
                 result = self.capture([self.jaro, '-q', '-l', book, 'isknown'],
@@ -212,13 +286,71 @@ class InstalledConsumers(unittest.TestCase):
         item = b'Notes Mailbox <ghost-member@example.org>\n'
         imported = self.capture([self.jaro, '-q', 'import'], input=item)
         self.assertEqual((imported.returncode, imported.stdout, imported.stderr), (0, item, b''))
-        appended = book.read_bytes()
-        self.assertTrue(appended.startswith(BOOKS['whitelist']))
-        self.assertIn(b'\nemail=ghost-member@example.org\n', appended)
-        broken = self.capture([self.jaro, '-q', '-l', 'broken', 'import'], input=item)
-        self.assertEqual((broken.returncode, broken.stdout), (3, b''))
-        self.assertIn(b'E_IO', broken.stderr)
-        self.assertTrue((self.mail / 'broken.abook').is_dir())
+        self.assertEqual(book.read_bytes(), BOOKS['whitelist'])
+        with closing(sqlite3.connect(self.mail / 'contacts.sqlite')) as db, db:
+            self.assertEqual(db.execute('SELECT spelling FROM addresses WHERE spelling=?',
+                                        ('ghost-member@example.org',)).fetchone(), ('ghost-member@example.org',))
+
+    def test_storage_failure_differs_from_miss_and_never_falls_back(self):
+        self.assertEqual(self.capture([self.jaro, '-q', 'complete', 'miss']).returncode, 1)
+        db = self.mail / 'contacts.sqlite'
+        db.write_bytes(b'corrupt')
+        complete = self.capture([self.jaro, '-q', 'complete', 'roster'])
+        self.assertEqual((complete.returncode, complete.stdout), (3, b'Cannot query addressbook\n'))
+        self.assertIn(b'E_CONTACT_STORAGE', complete.stderr)
+        imported = self.capture([self.jaro, '-q', 'import'], input=b'Never <never@example.org>\n')
+        self.assertEqual((imported.returncode, imported.stdout), (3, b''))
+        self.assertIn(b'E_CONTACT_STORAGE', imported.stderr)
+        self.assertEqual(db.read_bytes(), b'corrupt')
+        self.assertEqual((self.mail / 'whitelist.abook').read_bytes(), BOOKS['whitelist'])
+
+    def test_installed_writer_editor_reader_use_profile_across_accounts(self):
+        accounts = self.mail / 'Accounts'
+        accounts.mkdir()
+        for name in ('alice', 'bob'):
+            (accounts / name).write_text(f'name {name}\nlogin {name}\nemail {name}@example.org\nhost example.org\n')
+        selected = 'block-allow team'
+        payload = b'From: Writer Fresh <new.writer@example.org>\n\nBody\n'
+        learned = self.capture([self.jaro, '-q', '-a', 'alice', '-l', selected, 'learn'], input=payload)
+        self.assertEqual((learned.returncode, learned.stderr), (0, b''))
+        completed = self.capture([self.jaro, '-q', '-a', 'bob', 'complete', 'writer fresh'])
+        self.assertEqual((completed.returncode, completed.stdout),
+                         (0, b'\nnew.writer@example.org\tWriter Fresh\t \n'))
+        status, tty = run_client([self.jaro, '-q', '-a', 'bob', '-l', selected, 'abook'], cwd=self.root,
+                                 env=self.env, keys_after=[(b'Writer Fresh', b'\r1\x15Writer Updated\rqq')])
+        self.assertEqual(status, 0, repr(tty[-1000:]))
+        listed = self.capture([self.jaro, '-q', '-a', 'alice', '-l', selected, 'list'])
+        self.assertEqual((listed.returncode, listed.stdout),
+                         (0, b'Writer Updated <new.writer@example.org>\n'), tty[-2000:])
+        exported = self.capture([self.jaro, '-q', '-a', 'alice', '-l', selected, 'export'])
+        self.assertEqual(exported.returncode, 0, exported.stderr)
+        self.assertIn(b'FN:Writer Updated\r\n', exported.stdout)
+        self.assertIn(b'EMAIL:new.writer@example.org', exported.stdout)
+        card = self.root / 'second.vcf'
+        card.write_text('BEGIN:VCARD\nVERSION:3.0\nFN:From Vcard\n'
+                        'EMAIL:imported.vcard@example.org\nEND:VCARD\n')
+        status, tty = run_client([self.jaro, '-q', '-a', 'bob', '-l', selected, 'abook'], cwd=self.root,
+                                 env=self.env, keys_after=[(b'Writer Updated', b'ihsecond.vcf\rq')])
+        self.assertEqual(status, 0, repr(tty[-1000:]))
+        imported = self.capture([self.jaro, '-q', '-a', 'alice', '-l', selected, 'addr', 'from vcard'])
+        self.assertEqual((imported.returncode, imported.stdout),
+                         (0, b'From Vcard <imported.vcard@example.org>\n'), tty[-2000:])
+        for path in self.mail.glob('*.abook'):
+            path.unlink()
+        self.assertEqual(self.capture([self.jaro, '-q', '-a', 'bob', 'complete', 'writer updated']).returncode, 0)
+        independent = self.root / 'Independent profile'
+        independent.mkdir(mode=0o700)
+        result = self.capture([self.jaro, '-q', 'complete', 'writer updated'],
+                              env=dict(self.env, JAROMAILDIR=str(independent), JAROACCOUNT=str(independent / 'Accounts')))
+        self.assertEqual((result.returncode, result.stdout), (1, b'Not found\n'))
+        self.assertNotEqual((self.mail / 'contacts.sqlite').stat().st_ino,
+                            (independent / 'contacts.sqlite').stat().st_ino)
+        status, tty = run_client([self.jaro, '-q', '-a', 'bob', '-l', selected, 'abook'], cwd=self.root,
+                                 env=self.env, keys_after=[(b'Writer Updated', b'd'),
+                                                           (b'Remove selected item(s)', b'yq')])
+        self.assertEqual(status, 0, repr(tty[-1000:]))
+        self.assertEqual(self.capture([self.jaro, '-q', '-l', selected, 'addr', 'writer updated']).returncode, 1)
+        self.assertEqual(self.capture([self.jaro, '-q', '-l', selected, 'addr', 'from vcard']).returncode, 0)
 
     def test_neomutt_tabs_select_recipients(self):
         launcher = self.root / 'launcher'
@@ -255,7 +387,7 @@ class InstalledConsumers(unittest.TestCase):
             'set copy=no', 'set sendmail=/bin/false', 'set sort_alias=unsorted',
         )
         cases = (
-            ('contact', '', False, 'Pat Contact <pat@example.org>'),
+            ('contact', '<enter>', False, 'Pat Contact <pat@example.org>'),
             ('roster', '', False, '"Group roster (2 recipients)" <roster@jaromail.group>'),
             ('mixed', '<enter>', False, 'Mixed Zed <zed@example.org>'),
             ('mixed', 'j<enter>', False, 'Mixed Ada <ada@example.org>'),
@@ -263,7 +395,7 @@ class InstalledConsumers(unittest.TestCase):
             ('miss', '', False, 'miss@fixture.invalid'),
             ('group/roster', '', False, '"Group roster (2 recipients)" <roster@jaromail.group>'),
             ('quoted', '', False, 'Quoted Person <ab@example.org>'),
-            ('alternate', '', False, 'alternate@fixture.invalid'),
+            ('alternate', '', False, 'Alternate Person <alternate@example.org>'),
             ('alternate', '', True, 'Alternate Person <alternate@example.org>'),
             ("O'Neil", '', False, "Anne-Marie O'Neil <anne@example.org>"),
             ('Anne-Marie', '', False, "Anne-Marie O'Neil <anne@example.org>"),
@@ -377,18 +509,16 @@ class InstalledConsumers(unittest.TestCase):
         self.assertEqual((result.returncode, result.stderr), (0, b''))
         self.assertRegex(result.stdout, rb'^[0-9a-f]{64}\x00$')
         deps = {row[0]: row[1:] for tag, row in records((products / 'dependencies').read_bytes()) if tag == b'D'}
-        self.assertEqual(deps[b'config.exporter-locale'][-1], b'C')
-        self.assertEqual(deps[b'config.exporter-flags'][-1],
-                         b'--config\0/dev/null\0--datafile\0SNAPSHOT-FD\0--mutt-query\0\0')
-        abook = self.runtime / 'bin/abook'
-        self.assertEqual(deps[b'input.exporter'][:3],
-                         [os.fsencode(abook), b'1', hashlib.sha256(abook.read_bytes()).digest()])
-        self.assertEqual(deps[b'export.whitelist'][-1],
-                         b'pat@example.org\nzed@example.org\nada@example.org\n"a b"@example.org\n'
-                         b'first.member@example.org\nUpper.Member@example.org\n"a,b"@example.org\nanne@example.org\n')
-        self.assertEqual(deps[b'export.blacklist'][-1], b'block@example.org\n')
+        self.assertEqual(deps[b'config.contact-membership'][-1], b'sqlite-sorted-mailbox-keys-v1')
+        self.assertNotIn(b'input.exporter', deps)
+        self.assertEqual(deps[b'contacts.allow'][-1],
+                         b'"a b"@example.org\n"a,b"@example.org\nada@example.org\nanne@example.org\n'
+                         b'first.member@example.org\npat@example.org\nupper.member@example.org\nzed@example.org\n')
+        self.assertEqual(deps[b'contacts.block'][-1], b'alternate@example.org\nblock@example.org\npat@example.org\n')
         sieve = (products / 'Filters.sieve').read_bytes()
         self.assertIn(b'"From" "\\"a b\\"@example.org" { fileinto :create "INBOX"; stop; }', sieve)
+        self.assertIn(b'"From" "pat@example.org" { fileinto :create "INBOX"; stop; }', sieve)
+        self.assertIn(b'"From" "alternate@example.org" { fileinto :create "zz.blacklist"; stop; }', sieve)
         self.assertNotIn(b'ghost@example.org', sieve)
 
 

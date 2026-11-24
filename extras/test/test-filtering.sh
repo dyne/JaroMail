@@ -34,7 +34,7 @@ for md in frombucket tobucket zz.bounces zz.blacklist zz.spam known priv unsorte
 done
 
 print -- "White Person <white@example.org>" | jaro_source import >/dev/null
-print -- "Black Person <black@example.org>" | jaro_source -l blacklist import >/dev/null
+print -- "Black Person <black@example.org>" | jaro_source -l block import >/dev/null
 
 deliver_msg() {
   from_addr="${1}"

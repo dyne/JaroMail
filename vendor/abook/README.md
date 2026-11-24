@@ -32,7 +32,7 @@ configure; the built-in vCard importer remains available.
 
 Install puts abook in `share/jaromail/bin` alongside Jaromail's helpers, and
 Jaromail's existing runtime PATH selects it first. `abook --help` identifies the
-private build as `0.6.2+jaromail.3`, following the existing upstream version line.
+private build as `0.6.2+jaromail.4`, following the existing upstream version line.
 The native format header still uses the upstream version. Manuals, the sample
 configuration and the original `COPYING` and `AUTHORS` notices ship with the
 private executable. User/system prefixes and `DESTDIR` follow the main project.
@@ -42,6 +42,12 @@ search keys for names, individual mailboxes, nicknames and notes. Queries leave
 contact text unchanged. The Unicode 15.1.0 data used by the matcher is committed
 under `cmake/abook/`, with its license and a generator for maintainers. Builds
 use the committed data and require no Unicode library or generation step.
+
+`jaro abook` opens the selected list in the profile's `contacts.sqlite`.
+The editor keeps the observed contact ID and revision in memory and writes
+changed records and confirmed removals in one transaction. A failed save
+leaves the draft available. The private executable also retains its upstream
+file conversion and standalone query commands.
 
 The legacy migration reader accepts numeric contact sections in file order,
 an optional `[format]` header, and empty books. It preserves field keys and

@@ -26,7 +26,30 @@
 
 
 # internal use
+contact_index_exclusions() {
+    reply=(contacts.sqlite contacts.sqlite-journal contacts.sqlite-wal contacts.sqlite-shm
+           .contacts.sqlite.init.lock .contacts.sqlite.import .contacts.sqlite.import-journal
+           '/[.]abook$/')
+}
+
 notmuch_run() {
+    if [[ ${1:-} == new ]]; then
+        # Preserve user exclusions when upgrading an existing index profile.
+        local configured entry changed=0
+        local -a ignored reply
+        configured=$(notmuch --config="$MAILDIRS"/notmuch-config config get new.ignore) || return $?
+        ignored=( "${(@f)configured}" )
+        contact_index_exclusions
+        for entry in "${reply[@]}"; do
+            if (( ! ${ignored[(Ie)$entry]} )); then
+                ignored+=( "$entry" )
+                changed=1
+            fi
+        done
+        if (( changed )); then
+            notmuch --config="$MAILDIRS"/notmuch-config config set new.ignore "${ignored[@]}" || return $?
+        fi
+    fi
     notmuch --config="$MAILDIRS"/notmuch-config "$@"
 }
 
@@ -66,13 +89,15 @@ nm_setup() {
     }
 
     rm -f "$nm_conf"
+    local -a reply
+    contact_index_exclusions
     cat <<EOF > "$nm_conf"
 [database]
 path=$MAILDIRS
 
 [new]
 tags=$deftags
-ignore=tmp;cache;logs;outbox;incoming;zz.social;zz.bounces;zz.blacklist;zz.spam;Spam;Accounts;Groups;.mutt;webnomad;Aliases.txt;Filters;Manual.pdf;Mutt.txt;whitelist.abook;blacklist.abook;Applications.txt;Filters.sieve;Filters.txt;.password-store;.envrc;.host;.last;.tty;.uid;alot-config;notmuch-config;bind-hooks;sieve-update;.mblaze
+ignore=tmp;cache;logs;outbox;incoming;zz.social;zz.bounces;zz.blacklist;zz.spam;Spam;Accounts;Groups;.mutt;webnomad;Aliases.txt;Filters;Manual.pdf;Mutt.txt;Applications.txt;Filters.sieve;Filters.txt;.password-store;.envrc;.host;.last;.tty;.uid;alot-config;notmuch-config;bind-hooks;sieve-update;.mblaze;${(j:;:)reply}
 
 [maildir]
 synchronize_flags=true

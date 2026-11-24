@@ -20,4 +20,16 @@ typedef void (*jaro_contact_migration_notice)(void *, size_t source, size_t reco
 int jaro_contact_initialize(const char *profile,
 	jaro_contact_migration_notice notice, void *data, struct jaro_contact_migration_error *error);
 
+enum jaro_contact_profile_mode {
+	JARO_CONTACT_PROFILE_READ,
+	JARO_CONTACT_PROFILE_WRITE,
+	JARO_CONTACT_PROFILE_PREVIEW
+};
+
+/* Open the single store for a profile, initializing it when necessary.
+ * A preview opens existing data read-only and imports missing data privately
+ * in memory without creating anything in the profile. */
+int jaro_contact_profile_open(const char *profile, enum jaro_contact_profile_mode mode,
+	struct jaro_contact_store **store, struct jaro_contact_migration_error *error);
+
 #endif

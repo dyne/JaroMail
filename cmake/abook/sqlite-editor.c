@@ -1,0 +1,328 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include "abook.h"
+#include "database.h"
+#include "list.h"
+#include "ui.h"
+#include "xmalloc.h"
+#include "sqlite-editor.h"
+#include "contact/legacy-import.h"
+#include "contact/migrate.h"
+
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+
+const char *jaro_editor_profile, *jaro_editor_list;
+extern int fields_count;
+extern bool db_need_save;
+
+struct entry {
+	struct jaro_contact contact;
+	int seen;
+};
+
+struct view {
+	struct entry *entries;
+	size_t count, capacity;
+	struct jaro_contact_store *reader;
+	struct jaro_contact_error error;
+};
+
+static struct view current;
+static char diagnostic[256];
+
+const char *jaro_editor_diagnostic(void)
+{
+	return diagnostic;
+}
+
+static void set_diagnostic(const char *reason, const char *field)
+{
+	snprintf(diagnostic,sizeof diagnostic,"%s%s%s",field ? field : "",field ? ": " : "",reason);
+}
+
+static struct jaro_contact_text span(const char *text)
+{
+	return (struct jaro_contact_text){text,text ? strlen(text) : 0};
+}
+
+static int equal(struct jaro_contact_text left,struct jaro_contact_text right)
+{
+	return left.size==right.size && (!left.size || !memcmp(left.data,right.data,left.size));
+}
+
+static int open_store(enum jaro_contact_profile_mode mode,struct jaro_contact_store **store)
+{
+	struct jaro_contact_migration_error error;
+	int status=jaro_contact_profile_open(jaro_editor_profile,mode,store,&error);
+	if (status) set_diagnostic(error.reason,error.field);
+	return status;
+}
+
+static void free_view(struct view *view)
+{
+	for (size_t i=0;i<view->count;i++) jaro_contact_clear(&view->entries[i].contact);
+	free(view->entries);
+	*view=(struct view){0};
+}
+
+static int keep_record(const struct jaro_contact *record,void *data)
+{
+	struct view *view=data;
+	if (view->count==view->capacity) {
+		size_t next=view->capacity ? view->capacity*2 : 32;
+		struct entry *entries=NULL;
+		if (next>view->capacity && next<=SIZE_MAX/sizeof *entries)
+			entries=realloc(view->entries,next*sizeof *entries);
+		if (!entries) {
+			view->error=(struct jaro_contact_error){"cannot allocate editor records",NULL,0,ENOMEM};
+			return 1;
+		}
+		view->entries=entries;
+		view->capacity=next;
+	}
+	struct entry *entry=&view->entries[view->count];
+	*entry=(struct entry){0};
+	if (jaro_contact_get(view->reader,record->book_id,record->id,&entry->contact,&view->error)) return 1;
+	view->count++;
+	return 0;
+}
+
+static char *mailboxes(const struct jaro_contact *record)
+{
+	size_t size=record->address_count ? record->address_count-1 : 0;
+	for (size_t i=0;i<record->address_count;i++) size+=record->addresses[i].size;
+	char *joined=xmalloc(size+1), *pos=joined;
+	for (size_t i=0;i<record->address_count;i++) {
+		if (i) *pos++=',';
+		memcpy(pos,record->addresses[i].data,record->addresses[i].size);
+		pos+=record->addresses[i].size;
+	}
+	*pos=0;
+	return joined;
+}
+
+static void show_record(struct jaro_contact *record)
+{
+	list_item item=item_create();
+	item_fput(item,NAME,xstrdup(record->name.data));
+	item_fput(item,NICK,xstrdup(record->nickname.data));
+	item_fput(item,NOTES,xstrdup(record->notes.data));
+	item_fput(item,EMAIL,mailboxes(record));
+	for (size_t i=0;i<record->field_count;i++) {
+		int field;
+		find_field_number((char *)record->fields[i].key.data,&field);
+		if (field>=0 && !item[field]) item[field]=xstrdup(record->fields[i].value.data);
+	}
+	item_set_contact_id(item,record->id);
+	add_item2database(item);
+	item_free(&item);
+}
+
+static int compare_ids(const void *left, const void *right)
+{
+	int64_t a=((const struct entry *)left)->contact.id;
+	int64_t b=((const struct entry *)right)->contact.id;
+	return (a>b)-(a<b);
+}
+
+int jaro_editor_load(void)
+{
+	struct view view={0};
+	struct jaro_contact_error error={0};
+	int64_t id;
+	int status=open_store(JARO_CONTACT_PROFILE_READ,&view.reader);
+	if (status) return -1;
+	status=jaro_contact_begin_read(view.reader,&error);
+	if (!status) {
+		status=jaro_contact_book(view.reader,span(jaro_editor_list),0,&id,&error);
+		if (status==JARO_CONTACT_MISSING) status=0;
+		else if (!status) status=jaro_contact_visit(view.reader,id,span(NULL),keep_record,&view,&error);
+		status=jaro_contact_finish(view.reader,status,&error);
+	}
+	jaro_contact_close(view.reader,NULL);
+	view.reader=NULL;
+	if (status) {
+		if (view.error.reason) error=view.error;
+		set_diagnostic(error.reason,error.field);
+		free_view(&view);
+		return -1;
+	}
+	close_database();
+	free_view(&current);
+	init_standard_fields();
+	for (size_t i=0;i<view.count;i++)
+		for (size_t j=0;j<view.entries[i].contact.field_count;j++) {
+			char *key=(char *)view.entries[i].contact.fields[j].key.data;
+			if (!find_declared_field(key)) declare_new_field(key,key,"string",1);
+		}
+	for (size_t i=0;i<view.count;i++) show_record(&view.entries[i].contact);
+	if (view.count) qsort(view.entries,view.count,sizeof *view.entries,compare_ids);
+	current=view;
+	db_need_save=FALSE;
+	return 0;
+}
+
+static int add_field_value(struct jaro_contact *draft,struct jaro_contact_field *fields,
+	struct jaro_contact_text key,struct jaro_contact_text value)
+{
+	if (draft->field_count==JARO_CONTACT_FIELDS_MAX) return 1;
+	fields[draft->field_count++]=(struct jaro_contact_field){key,value};
+	return 0;
+}
+
+static int fill_fields(list_item item,const struct jaro_contact *original,
+	struct jaro_contact *draft,struct jaro_contact_field *fields)
+{
+	/* Preserve existing field order. New fields follow the form order. */
+	for (size_t i=0;original && i<original->field_count;i++) {
+		const struct jaro_contact_field *old=&original->fields[i];
+		int index;
+		find_field_number((char *)old->key.data,&index);
+		if (index==field_id(NAME) || index==field_id(EMAIL) ||
+			index==field_id(NICK) || index==field_id(NOTES)) {
+			if (add_field_value(draft,fields,old->key,old->value)) return 1;
+		} else if (index>=0 && item[index] &&
+			add_field_value(draft,fields,old->key,span(item[index]))) return 1;
+	}
+	for (int i=0;i<fields_count;i++) {
+		if (i==field_id(NAME) || i==field_id(EMAIL) || i==field_id(NICK) || i==field_id(NOTES) || !item[i]) continue;
+		char *key;
+		get_field_info(i,&key,NULL,NULL);
+		size_t j=0;
+		while (j<draft->field_count && !equal(fields[j].key,span(key))) j++;
+		if (j==draft->field_count && add_field_value(draft,fields,span(key),span(item[i]))) return 1;
+	}
+	return 0;
+}
+
+static int same_fields(const struct jaro_contact *left,const struct jaro_contact *right)
+{
+	if (!equal(left->name,right->name) || !equal(left->nickname,right->nickname) ||
+		!equal(left->notes,right->notes) || left->field_count!=right->field_count) return 0;
+	for (size_t i=0;i<left->field_count;i++)
+		if (!equal(left->fields[i].key,right->fields[i].key) ||
+			!equal(left->fields[i].value,right->fields[i].value)) return 0;
+	return 1;
+}
+
+struct pending_edit {
+	struct jaro_contact contact;
+	struct jaro_contact_text *split;
+	struct jaro_contact_field *fields;
+	int prepared;
+};
+
+static int prepare_item(list_item item,struct pending_edit *pending,struct jaro_contact_error *error)
+{
+	struct entry identity={.contact.id=item_contact_id(item)};
+	struct entry *previous=current.count && identity.contact.id ?
+		bsearch(&identity,current.entries,current.count,sizeof *current.entries,compare_ids) : NULL;
+	const struct jaro_contact *original=previous ? &previous->contact : NULL;
+	struct jaro_contact_field fields[JARO_CONTACT_FIELDS_MAX];
+	struct jaro_contact draft={
+		.id=identity.contact.id,.revision=original ? original->revision : 0,
+		.name=span(item_fget(item,NAME)),.nickname=span(item_fget(item,NICK)),
+		.notes=span(item_fget(item,NOTES)),.fields=fields
+	};
+	if (previous) previous->seen=1;
+	if (fill_fields(item,original,&draft,fields)) {
+		*error=(struct jaro_contact_error){"too many contact fields","custom",0,0};
+		return JARO_CONTACT_INVALID;
+	}
+	struct jaro_contact_text email=span(item_fget(item,EMAIL));
+	char *before=original ? mailboxes(original) : NULL;
+	int unchanged=original && equal(email,span(before));
+	free(before);
+	if (unchanged && same_fields(&draft,original)) return 0;
+	int status=0;
+	if (unchanged) {
+		draft.addresses=original->addresses;
+		draft.address_count=original->address_count;
+	} else {
+		status=jaro_contact_split_mailboxes(email,&pending->split,&draft.address_count);
+		draft.addresses=pending->split;
+		if (status) {
+			*error=(struct jaro_contact_error){"invalid mailbox list","email",0,0};
+			return status;
+		}
+	}
+	if (draft.field_count) {
+		pending->fields=malloc(draft.field_count*sizeof *fields);
+		if (!pending->fields) {
+			*error=(struct jaro_contact_error){"cannot keep contact fields","custom",0,ENOMEM};
+			return JARO_CONTACT_STORAGE;
+		}
+		memcpy(pending->fields,fields,draft.field_count*sizeof *fields);
+	}
+	draft.fields=pending->fields;
+	pending->contact=draft;
+	pending->prepared=1;
+	return 0;
+}
+
+static void free_edits(struct pending_edit *edits,size_t count)
+{
+	for (size_t i=0;i<count;i++) {
+		free(edits[i].split);
+		free(edits[i].fields);
+	}
+	free(edits);
+}
+
+int jaro_editor_save(void)
+{
+	struct jaro_contact_store *store=NULL;
+	struct jaro_contact_error error={0};
+	if (!db_need_save) return 0;
+
+	int items=db_n_items(),status=0;
+	size_t edits_count=0,deletes=0;
+	struct pending_edit *edits=items ? calloc((size_t)items,sizeof *edits) : NULL;
+	if (items && !edits) {
+		set_diagnostic("cannot prepare contact edits",NULL);
+		return -1;
+	}
+	for (size_t i=0;i<current.count;i++) current.entries[i].seen=0;
+	for (int i=0;!status && i<items;i++) {
+		struct pending_edit *edit=&edits[edits_count];
+		status=prepare_item(db_item_get(i),edit,&error);
+		if (status || edit->prepared) edits_count++;
+	}
+	if (status) goto done;
+	for (size_t i=0;i<current.count;i++) if (!current.entries[i].seen) deletes++;
+	if (!edits_count && !deletes) {
+		db_need_save=FALSE;
+		free(edits);
+		return 0;
+	}
+	if (open_store(JARO_CONTACT_PROFILE_WRITE,&store)) {
+		free_edits(edits,edits_count);
+		return -1;
+	}
+	status=jaro_contact_begin(store,&error);
+	if (!status) {
+		int64_t book,id;
+		status=jaro_contact_book(store,span(jaro_editor_list),1,&book,&error);
+		for (size_t i=0;!status && i<edits_count;i++) {
+			edits[i].contact.book_id=book;
+			status=jaro_contact_save(store,&edits[i].contact,&id,&error);
+		}
+		for (size_t i=0;!status && i<current.count;i++) {
+			struct entry *entry=&current.entries[i];
+			if (!entry->seen) status=jaro_contact_delete(store,book,entry->contact.id,
+				entry->contact.revision,&error);
+		}
+		status=jaro_contact_finish(store,status,&error);
+	}
+	jaro_contact_close(store,NULL);
+done:
+	free_edits(edits,edits_count);
+	if (status) {
+		set_diagnostic(error.reason,error.field);
+		return -1;
+	}
+	db_need_save=FALSE;
+	return jaro_editor_load();
+}

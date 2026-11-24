@@ -205,7 +205,7 @@ int jf_cache_validate(const unsigned char *data, size_t size, const struct jf_by
 			if (++dependencies>JF_DEPENDENCY_MAX || phase!=1 || !f[0].size || (previous_role.size && (c>0 || (!c && compare(previous_path,f[1])>=0))) ||
 				!((equal(f[2],"1") && f[3].size==32) || (equal(f[2],"0") && !f[3].size))) goto bad;
 			if (equal(f[2],"0") && f[4].size) goto bad;
-			if (equal(f[2],"1") && (prefix(f[0],"config.") || prefix(f[0],"export.") ||
+			if (equal(f[2],"1") && (prefix(f[0],"config.") || prefix(f[0],"contacts.") || prefix(f[0],"export.") ||
 				prefix(f[0],"link.") || prefix(f[0],"inventory."))) {
 				jf_digest(f[4].data,f[4].size,digest); if (memcmp(digest,f[3].data,32)) goto bad;
 			}

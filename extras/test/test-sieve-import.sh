@@ -83,7 +83,7 @@ assert_equal "${alias_lines}" '"alias@example.org"' "import aliases"
 whitelist="$(jaro_source addr 2>/dev/null | sort)"
 assert_equal "${whitelist}" "Imported Sieve <known@example.org>" "import whitelist"
 
-blacklist="$(jaro_source -l blacklist addr 2>/dev/null | sort)"
+blacklist="$(jaro_source -l block addr 2>/dev/null | sort)"
 assert_equal "${blacklist}" "Imported Sieve <blocked@example.org>" "import blacklist"
 
 jaro_source update >/dev/null

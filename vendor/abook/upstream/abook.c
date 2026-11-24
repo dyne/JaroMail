@@ -40,6 +40,7 @@
 #include "xmalloc.h"
 #include "remap.h"
 #include "search-fold.h"
+#include "sqlite-editor.h"
 
 extern char **environ;
 
@@ -162,7 +163,7 @@ init_abook()
 	}
 	init_default_views();
 
-	signal(SIGTERM, quit_abook_sig);
+	if (!jaro_editor_profile) signal(SIGTERM, quit_abook_sig);
 
 	init_index();
 
@@ -171,7 +172,13 @@ init_abook()
 
 	umask(DEFAULT_UMASK);
 
-	if(!datafile_writeable()) {
+	if (jaro_editor_profile) {
+		if (jaro_editor_load()) {
+			close_ui();
+			fprintf(stderr,"%s\n",jaro_editor_diagnostic());
+			exit(EXIT_FAILURE);
+		}
+	} else if(!datafile_writeable()) {
 		char *s = strdup_printf(_("File %s is not writeable"), datafile);
 		refresh_screen();
 		statusline_msg(s);
@@ -194,10 +201,11 @@ void
 quit_abook(int save_db)
 {
 	if(save_db)  {
-		if(opt_get_bool(BOOL_AUTOSAVE))
-			save_database(0);
-		else if(statusline_ask_boolean(_("Save database"), TRUE))
-			save_database(1);
+		if(opt_get_bool(BOOL_AUTOSAVE)) {
+			if (save_database(0) && jaro_editor_profile) return;
+		} else if(statusline_ask_boolean(_("Save database"), TRUE)) {
+			if (save_database(1) && jaro_editor_profile) return;
+		}
 	} else if(!statusline_ask_boolean(_("Quit without saving"), FALSE))
 		return;
 
@@ -235,9 +243,10 @@ main(int argc, char **argv)
 
 	init_abook();
 
-	get_commands();
-
-	quit_abook(QUIT_SAVE);
+	for (;;) {
+		get_commands();
+		quit_abook(QUIT_SAVE);
+	}
 
 	return 0;
 }
@@ -350,7 +359,9 @@ parse_command_line(int argc, char **argv)
 			OPT_OUTFORMAT_STR,
 			OPT_INFILE,
 			OPT_OUTFILE,
-			OPT_FORMATS
+			OPT_FORMATS,
+			OPT_JARO_PROFILE,
+			OPT_JARO_LIST
 		};
 		static struct option long_options[] = {
 			{ "help", 0, 0, 'h' },
@@ -367,6 +378,8 @@ parse_command_line(int argc, char **argv)
 			{ "infile", 1, 0, OPT_INFILE },
 			{ "outfile", 1, 0, OPT_OUTFILE },
 			{ "formats", 0, 0, OPT_FORMATS },
+			{ "jaro-profile", 1, 0, OPT_JARO_PROFILE },
+			{ "jaro-list", 1, 0, OPT_JARO_LIST },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -433,6 +446,12 @@ parse_command_line(int argc, char **argv)
 			case OPT_FORMATS:
 				print_filters();
 				exit(EXIT_SUCCESS);
+			case OPT_JARO_PROFILE:
+				jaro_editor_profile=optarg;
+				break;
+			case OPT_JARO_LIST:
+				jaro_editor_list=optarg;
+				break;
 			default:
 				exit(EXIT_FAILURE);
 		}
@@ -456,6 +475,14 @@ parse_command_line(int argc, char **argv)
 		fprintf(stderr, _("%s: unrecognized arguments on command line\n"),
 				argv[0]);
 		exit(EXIT_FAILURE);
+	}
+
+	if (jaro_editor_profile || jaro_editor_list) {
+		if (!jaro_editor_profile || !jaro_editor_list || alternative_datafile || mode!=MODE_CONT) {
+			fputs("Use --jaro-profile DIR --jaro-list LIST for the JaroMail editor.\n",stderr);
+			exit(EXIT_FAILURE);
+		}
+		alternative_datafile=TRUE;
 	}
 
 	switch(mode) {

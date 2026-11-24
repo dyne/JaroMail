@@ -12,7 +12,7 @@
   },
   "directory": "abook/upstream",
   "fork": {
-    "version": "0.6.2+jaromail.3",
+    "version": "0.6.2+jaromail.4",
     "reviewed_upstream_tip": "b5e4a4daec1c7842e214b50a0f267e07d9792311",
     "adopted_upstream_commits": [
       "39484721c44629fb1f54d92f09c92ef4c3201302",
@@ -21,8 +21,8 @@
     "modified_files": [
       {
         "path": "abook.c",
-        "size": 23365,
-        "sha256": "e2b7cd79146e0373d312a9dffd1799f8ad236278d13b7a0eddd5e61cc11e7f4b"
+        "size": 24219,
+        "sha256": "c93badca6b06b850f8e265eacaef22313dd9a5ad4d8d9469c21c7db585a53c91"
       },
       {
         "path": "abookrc.5",
@@ -31,13 +31,18 @@
       },
       {
         "path": "database.c",
-        "size": 20821,
-        "sha256": "154edaf3acaf95ea8fdf51d9945b50e09334ce4b28ca34f1563004c9299da5e6"
+        "size": 21789,
+        "sha256": "eab037a5d255383fc5e99c5f5823a12667718d3a96d6de3b7fe2fcc1bc036edf"
       },
       {
         "path": "database.h",
-        "size": 3314,
-        "sha256": "e2ca542cef767ac737b67b050d346013d16426762e74522a24c5486082c89a02"
+        "size": 3429,
+        "sha256": "4f14b10a6a1ffd75e4de1b7f19c41e12e6408bd02e324453d6ddad8702c2235f"
+      },
+      {
+        "path": "edit.c",
+        "size": 17865,
+        "sha256": "151bb0e06b1336feec62b02315bdd9fa8c5eda12a0ddd996d6ae175a9309e915"
       },
       {
         "path": "filter.c",
@@ -48,6 +53,11 @@
         "path": "filter.h",
         "size": 1098,
         "sha256": "997101d93fa6103f419d947ea58160bfc1d4164a8514b411efa870eded7a0a2b"
+      },
+      {
+        "path": "list.c",
+        "size": 10135,
+        "sha256": "bedc43e4d8820ca80996af4144744aa29d8b6dcd2108afe2f2b060a00c684a29"
       },
       {
         "path": "misc.c",
@@ -63,6 +73,11 @@
         "path": "sample.abookrc",
         "size": 3627,
         "sha256": "6288ae20c7846dec57019ccbe649e99ceb83875f7c5f2165ff9b0d8a2b15f108"
+      },
+      {
+        "path": "ui.c",
+        "size": 16640,
+        "sha256": "551dea5972645fc282aac6ac5199a45512986f6a77f4e744be35ed994bf22e81"
       }
     ]
   },

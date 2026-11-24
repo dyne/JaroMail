@@ -104,10 +104,14 @@ if jaro_outbox_route "$@"; then
     fi
     exit 0
 fi
+# Materialize profile defaults after the normal parser has resolved the
+# contact command and dry-run flag.
+jaro_defer_profile_defaults=1
 source "${bootstrap_path}" || {
     print -u2 "Cannot source bootstrap module: ${bootstrap_path}"
     exit 1
 }
+unset jaro_defer_profile_defaults
 
 
 usage() {
@@ -132,17 +136,20 @@ Main commands:
 Options:
 
  -a     use a particular [account] instead of default
- -l     set [abook] in use, 'whitelist' is default
+ -l     select a contact list by exact name, 'allow' is default
  -n     dry run, show operations without executing them
  -q     run quietly without printing information
  -D     print debugging information at runtime
  -v     version information for this tool
  -h     print this help
 
-== Addressbook commands (use -l to indicate which addressbook)
+== Contact commands (use -l to select a list)
 a pipe | in front indicate they take an email body from stdin
 
  abook    edit the [abook] using the console editor
+ list     list contacts in the selected list
+ addr     search contacts by name, mailbox, nickname, or notes
+ export   write the selected list as vCard records
 
  extract  list addresses of all recipients or senders found in:
           maildir, search expr, vcard, gnupg keyring or pubkey
@@ -206,7 +213,7 @@ a pipe | in front indicate they take an email body from stdin
 
  sieve-import FILE
           import a Jaromail-generated Sieve file into Filters.txt,
-          Aliases.txt, whitelist.abook, and blacklist.abook
+          Aliases.txt and the allow and block lists in contacts.sqlite
 
  filter   process a maildir distributing emails according to Filters.txt
           (if none specified, processes incoming/ - called by fetch)
@@ -315,6 +322,16 @@ main() {
 		done
 	fi
 	option.parse "$@" || return 2
+    local contact_preview=0
+    case "$subcommand" in
+        learn|import|abook)
+            if [[ $DRYRUN == 1 ]] || option.is_set -n; then
+                contact_preview=1
+            fi
+            ;;
+    esac
+    (( contact_preview )) || bootstrap_profile_defaults "$@" || return $?
+
     if [[ $subcommand == filter ]]; then
         local filter_arg
         for filter_arg in "$@"; do
@@ -334,16 +351,7 @@ main() {
     fi
 
     { option.is_set -a } && { account=`option.value -a` }
-    { option.is_set -l } && {
-        if [[ "`option.value -l`" =~ "black" ]]; then
-            list=blacklist
-        elif [[ "`option.value -l`" =~ "white" ]]; then
-            list=whitelist
-        else
-            list=`option.value -l`
-        fi
-        ADDRESSBOOK="${list}.abook"
-    }
+    { option.is_set -l } && { list=$(option.value -l); contact_list_explicit=1 }
     { option.is_set -h } && { usage; return 0 }
     { option.is_set -v } && {
         cat $JAROMAILEXEC | awk 'BEGIN { v=1 } !/^#/ { exit }'
@@ -450,11 +458,6 @@ main() {
     askpass) cmd_askpass ;;
 
     imap) cmd_imap ;;
-
-    # list)
-    #     list_abook ${option_params}
-    #     exitcode=$?
-    #     ;;
 
     extract|parse) cmd_extract_parse ;;
 

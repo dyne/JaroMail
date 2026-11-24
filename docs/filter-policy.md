@@ -1,4 +1,4 @@
-# Filter policy v1
+# Filter policy v2
 
 This is the approved replacement policy, independent of legacy implementation
 observations. `extras/test/fixtures/filter-policy/target.json` is the authored
@@ -10,11 +10,11 @@ not yet implement this contract. Its separate observations are in
 
 Evaluate stages in this order, stopping at the first matching rule:
 
-1. Blacklist: parsed **From** address -> `zz.blacklist`.
+1. Block-only: parsed **From** address -> `zz.blacklist`.
 2. Bounce: **Sender** header contains `mailman-bounce` -> `zz.bounces`.
 3. Explicit From routes: parsed **From and Sender** addresses.
 4. Explicit To routes: parsed **To and Cc** addresses.
-5. Known addresses and known domains: parsed **From** addresses -> `INBOX`.
+5. Allow addresses and known domains: parsed **From** addresses -> `INBOX`.
 6. Spam: **X-Spam-Flag** equals `YES`, ASCII case-insensitive -> `Spam`.
 7. Own account/alias addresses: parsed **To and Cc** -> `priv`.
 8. Fallback -> `unsorted`.
@@ -22,11 +22,12 @@ Evaluate stages in this order, stopping at the first matching rule:
 Address predicates examine extracted mailboxes, never display names, comments
 or body text. Bounce intentionally retains the existing generated Sieve's
 Sender substring condition. It does not become a From substring test.
-Blacklist wins even when the address is also known and an explicit route or
-spam test matches. Explicit routes win over known domains. From routes win
-over To routes. Known senders win over spam. Spam wins over own recipients.
+An address in both allow and block is treated as allowed for incoming mail.
+The database retains both memberships. Explicit routes win over allow
+addresses and known domains. From routes win over To routes. Allow addresses
+and known domains win over spam. Spam wins over own recipients.
 
-Within each stage retain original file order. For identical legacy
+Within each explicit route stage retain original file order. Contact membership keys are sorted. For identical legacy
 selector/pattern pairs retain only the last definition, including its source
 position, before evaluating distinct rules in source order. `move` and `save`
 mean the same move action. Any other action is an error with a source line.
