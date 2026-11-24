@@ -14,12 +14,15 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <ctype.h>
+#include <wchar.h>
+#include <wctype.h>
 #include "abook.h"
 #include <assert.h>
 #include "ui.h"
 #include "edit.h"
 #include "database.h"
 #include "sqlite-editor.h"
+#include "contact/text.h"
 #include "gettext.h"
 #include "list.h"
 #include "misc.h"
@@ -37,6 +40,7 @@
 #endif
 
 #include "abook_rl.h"
+#include <limits.h>
 
 /*
  * external variables
@@ -54,12 +58,19 @@ extern bool db_need_save;
 
 static bool ui_initialized = FALSE;
 
-static bool should_resize = FALSE;
+static volatile sig_atomic_t should_resize = FALSE;
 static bool can_resize = FALSE;
 static struct timeval last_click_time;
 static int double_click_interval = 200; /* maximum time in milliseconds */
 
 static WINDOW *top = NULL, *bottom = NULL;
+static char contact_query[1024];
+static char contact_feedback[256];
+static bool entering_query;
+static void inspect_contact_mailboxes(void);
+
+static int min_lines(void) { return jaro_editor_profile ? 12 : MIN_LINES; }
+static int min_cols(void) { return jaro_editor_profile ? 48 : MIN_COLS; }
 
 
 static void
@@ -67,6 +78,7 @@ init_windows()
 {
 	top = newwin(LIST_TOP - 1, COLS, 0, 0);
 	bottom = newwin(LINES - LIST_BOTTOM, COLS, LIST_BOTTOM, 0);
+	keypad(bottom, TRUE);
 }
 
 static void
@@ -84,14 +96,16 @@ resize_abook()
 #ifdef TIOCGWINSZ
 	struct winsize winsz;
 
-	ioctl(0, TIOCGWINSZ, &winsz);
+	should_resize = FALSE;
+	if(ioctl(0, TIOCGWINSZ, &winsz) < 0)
+		return;
 #ifdef DEBUG
-	if(winsz.ws_col >= MIN_COLS && winsz.ws_row >= MIN_LINES) {
+	if(winsz.ws_col >= min_cols() && winsz.ws_row >= min_lines()) {
 		fprintf(stderr, "Warning: COLS=%d, LINES=%d\n", winsz.ws_col, winsz.ws_row);
 	}
 #endif
 
-	if(winsz.ws_col >= MIN_COLS && winsz.ws_row >= MIN_LINES) {
+	if(winsz.ws_col >= min_cols() && winsz.ws_row >= min_lines()) {
 #ifdef HAVE_RESIZETERM
 		resizeterm(winsz.ws_row, winsz.ws_col);
 #else
@@ -100,7 +114,6 @@ resize_abook()
 #endif
 	}
 
-	should_resize = FALSE;
 	close_list(); /* we need to recreate windows */
 	init_list();
 	free_windows();
@@ -114,7 +127,7 @@ resize_abook()
 static void
 win_changed(int i)
 {
-	if(can_resize)
+	if(can_resize && !jaro_editor_profile)
 		resize_abook();
 	else
 		should_resize = TRUE;
@@ -233,12 +246,12 @@ init_ui()
         fprintf(stderr, "init_abook():\n");
         fprintf(stderr, "  COLS = %d, LINES = %d\n", COLS, LINES);
 #endif
-	if( LINES < MIN_LINES || COLS < MIN_COLS ) {
+	if( LINES < min_lines() || COLS < min_cols() ) {
 		clear(); refresh(); endwin();
 		fprintf(stderr, _("Your terminal size is %dx%d\n"), COLS, LINES);
 		fprintf(stderr, _("Terminal is too small. Minimum terminal "
 				"size for abook is "
-				"%dx%d\n"), MIN_COLS, MIN_LINES);
+				"%dx%d\n"), min_cols(), min_lines());
 		return 1;
 	}
 
@@ -267,6 +280,26 @@ close_ui()
 }
 
 
+static void
+draw_contact_scope(void)
+{
+	const char *name = jaro_editor_list;
+	const char *label = _("List: ");
+	const char *pending = _("Unsaved changes");
+	int col = strwidth(label);
+	int end = db_need_save ? max(col + 1, COLS - strwidth(pending) - 1) : COLS;
+	char *safe = jaro_contact_display_text((struct jaro_contact_text){name, strlen(name)});
+	wattrset(top, COLOR_PAIR(CP_HEADER));
+	mvwhline(top, 0, 0, ' ', COLS);
+	mvwaddstr(top, 0, 0, label);
+	if(safe) {
+		mvwaddnstr(top, 0, col, safe, bytes2width(safe, end - col - 1));
+		free(safe);
+	}
+	if(db_need_save)
+		mvwaddnstr(top, 0, end + 1, pending, bytes2width(pending, COLS - end - 1));
+}
+
 void
 headerline(const char *str)
 {
@@ -276,10 +309,146 @@ headerline(const char *str)
 	mvwhline(top, 0, 0, ' ', COLS);
 	mvwhline(top, 1, 0, UI_HLINE_CHAR, COLS);
 
-	mvwprintw(top, 0, 0, "%s | %s", PACKAGE " " VERSION, str);
+	if(jaro_editor_profile) {
+		draw_contact_scope();
+		mvwhline(top, 1, 0, ' ', COLS);
+		mvwaddnstr(top, 1, 0, str, bytes2width(str, COLS - 1));
+	} else
+		mvwprintw(top, 0, 0, "%s | %s", PACKAGE " " VERSION, str);
 
 	refresh();
 	wrefresh(top);
+}
+
+/* Prefer the configured binding even when the default key still works. */
+char
+ui_binding(char command)
+{
+	const char *remap = get_remap_table();
+	for(int key = ' '; key < 127; key++)
+		if(key != command && remap[key] == command)
+			return key;
+	return command;
+}
+
+void
+ui_browse_footer(void)
+{
+	draw_contact_scope();
+	wnoutrefresh(top);
+	werase(bottom);
+	wattrset(bottom, COLOR_PAIR(CP_FOOTER));
+	if(entering_query || *contact_query) {
+		const char *tail = contact_query;
+		while(strwidth(tail) > COLS - 4) {
+			tail++;
+			while(((unsigned char)*tail & 0xc0) == 0x80)
+				tail++;
+		}
+		mvwprintw(bottom, 1, 0, "%c %s", ui_binding('/'), tail);
+		mvwaddstr(bottom, 0, 0, entering_query ? _("Enter edit  Tab mailboxes  Esc clear  Up/Down") :
+			_("Enter edit  Tab mailboxes  Esc clear"));
+		if(entering_query)
+			wmove(bottom, 1, 2 + strwidth(tail));
+	} else {
+		mvwaddstr(bottom, 0, 0, _("Enter edit  Tab mailboxes"));
+		mvwprintw(bottom, 1, 0, _("%c filter  %c lists  %c reload"),
+			ui_binding('/'), ui_binding('o'), ui_binding('l'));
+	}
+	if(!entering_query && *contact_feedback) {
+		wmove(bottom, 0, 0);
+		wclrtoeol(bottom);
+		mvwaddnstr(bottom, 0, 0, contact_feedback, bytes2width(contact_feedback, COLS - 1));
+	}
+	wnoutrefresh(bottom);
+}
+
+void
+ui_contact_editor_footer(void)
+{
+	werase(bottom);
+	wattrset(bottom, COLOR_PAIR(CP_FOOTER));
+	mvwaddnstr(bottom, 0, 0, contact_feedback, bytes2width(contact_feedback, COLS - 1));
+	mvwprintw(bottom, 1, 0, _("%c save  Ctrl+R reload/discard"), ui_binding('w'));
+	wnoutrefresh(bottom);
+}
+
+void
+ui_contact_draft_changed(void)
+{
+	*contact_feedback = 0;
+}
+
+static void
+set_contact_feedback(const char *message)
+{
+	snprintf(contact_feedback, sizeof contact_feedback, "%s", message);
+}
+
+int
+ui_save_contacts(void)
+{
+	int result = jaro_editor_save();
+	if(result < 0) {
+		int item = jaro_editor_failed_item();
+		if(is_valid_item(item))
+			list_set_curitem(item);
+		set_contact_feedback(jaro_editor_diagnostic());
+		return -1;
+	}
+	set_contact_feedback(result ? _("Saved to this list") : _("No changes to save"));
+	return 0;
+}
+
+static int
+contact_prompt(const char *question, const char *choices)
+{
+	werase(bottom);
+	wattrset(bottom, COLOR_PAIR(CP_FOOTER));
+	mvwaddnstr(bottom, 0, 0, question, bytes2width(question, COLS - 1));
+	mvwaddnstr(bottom, 1, 0, choices, bytes2width(choices, COLS - 1));
+	wrefresh(bottom);
+	int choice = getch();
+	return choice >= 0 && choice <= UCHAR_MAX ? tolower(choice) : choice;
+}
+
+static bool
+confirm_contact_discard(const char *question)
+{
+	return contact_prompt(question, _("y discard  Esc keep editing")) == 'y';
+}
+
+int
+ui_reload_contacts(bool confirm)
+{
+	bool discarded = db_need_save;
+	if(confirm && discarded && !confirm_contact_discard(_("Discard draft and reload this list?")))
+		return -1;
+	if(jaro_editor_load()) {
+		set_contact_feedback(jaro_editor_diagnostic());
+		return -1;
+	}
+	set_contact_feedback(discarded ? _("Reloaded this list") : "");
+	return 0;
+}
+
+enum ui_contact_leave
+ui_leave_contacts(bool discard)
+{
+	if(!db_need_save)
+		return UI_CONTACT_LEAVE;
+	if(discard)
+		return confirm_contact_discard(_("Discard unsaved changes and quit?")) ?
+			UI_CONTACT_DISCARD : UI_CONTACT_STAY;
+	if(!opt_get_bool(BOOL_AUTOSAVE)) {
+		int choice = contact_prompt(_("This list has unsaved changes"),
+			_("s save  d discard  Esc keep editing"));
+		if(choice == 'd')
+			return UI_CONTACT_DISCARD;
+		if(choice != 's')
+			return UI_CONTACT_STAY;
+	}
+	return ui_save_contacts() ? UI_CONTACT_STAY : UI_CONTACT_LEAVE;
 }
 
 
@@ -300,6 +469,18 @@ refresh_screen()
 
 	refresh_statusline();
 
+	if(jaro_editor_profile) {
+		char *actions = strdup_printf(_("%c help  %c add  %c save  %c quit  %c lists  %c load"),
+			ui_binding('?'), ui_binding('a'), ui_binding('w'), ui_binding('q'),
+			ui_binding('o'), ui_binding('l'));
+		headerline(actions);
+		free(actions);
+		list_update_matches();
+		list_headerline();
+		refresh_list();
+		return;
+	}
+
 	remap_table = get_remap_table();
 	helpline = strdup(gettext(MAIN_HELPLINE));
 	size = strlen(helpline);
@@ -314,6 +495,15 @@ refresh_screen()
 	list_headerline();
 
 	refresh_list();
+}
+
+int
+ui_handle_resize(void)
+{
+	if(!should_resize)
+		return 0;
+	refresh_screen();
+	return 1;
 }
 
 
@@ -401,7 +591,10 @@ statusline_askchoice(const char *msg, const char *choices, short dflt)
 
 	while(1)
 	{
-		ch = tolower(getch());
+		ch = getch();
+		if(ch < 0 || ch > UCHAR_MAX)
+			continue;
+		ch = tolower(ch);
 
 		if(ch == 7) /* ctrl+G */
 			return 0;
@@ -420,14 +613,17 @@ ui_readline(const char *prompt, char *s, size_t limit, bool use_completion)
 	int y, x;
 	char *ret;
 
+	wmove(bottom, 1, 0);
+	wclrtoeol(bottom);
 	mvwaddstr(bottom, 1, 0, prompt);
 
 	getyx(bottom, y, x);
 
-	ret = abook_readline(bottom, y, x, s, use_completion);
+	ret = abook_readline(bottom, y, x, s, use_completion, jaro_editor_profile && !limit);
 
 	if(ret) {
-		strtrim(ret);
+		if(!jaro_editor_profile || limit)
+			strtrim(ret);
 		if(strlen(ret) > limit && limit > 0)
 			ret[limit] = '\0';
 	}
@@ -499,6 +695,22 @@ clear_statusline()
 
 #include "help.h"
 
+static void
+display_contact_help(void)
+{
+	erase();
+	headerline(_("Contacts help"));
+	mvprintw(2, 0, _("Arrows or %c/%c: move"), ui_binding('j'), ui_binding('k'));
+	mvaddstr(3, 0, _("Enter: edit  Tab: inspect mailboxes"));
+	mvprintw(4, 0, _("%c: filter as you type  Esc: clear"), ui_binding('/'));
+	mvprintw(5, 0, _("%c: choose list  %c: reload"), ui_binding('o'), ui_binding('l'));
+	mvprintw(6, 0, _("%c: add  %c: remove  %c: duplicate"), ui_binding('a'), ui_binding('r'), ui_binding('D'));
+	mvprintw(7, 0, _("%c: save  %c: quit  %c: discard and quit"), ui_binding('w'), ui_binding('q'), ui_binding('Q'));
+	mvaddstr(LINES - 1, 0, _("Press any key to return"));
+	refresh();
+	getch();
+}
+
 void
 display_help(int help)
 {
@@ -508,6 +720,10 @@ display_help(int help)
 
 	switch(help) {
 		case HELP_MAIN:
+			if(jaro_editor_profile) {
+				display_contact_help();
+				return;
+			}
 			tbl = mainhelp;
 			break;
 		case HELP_EDITOR:
@@ -528,7 +744,7 @@ display_help(int help)
 			wrefresh(helpw);
 			refresh_statusline();
 			if(statusline_msg(_("Press any key to continue..."))
-					== 'q')
+					== ui_binding('q'))
 				break;
 			wclear(helpw);
 		}
@@ -544,6 +760,174 @@ display_help(int help)
 
 extern char *selected;
 
+static void
+set_contact_query(void)
+{
+	list_set_query(contact_query);
+	refresh_list();
+}
+
+static void
+filter_contacts(void)
+{
+	int action = 0;
+	entering_query = TRUE;
+	show_cursor();
+	for(;;) {
+		if(should_resize)
+			refresh_screen();
+		ui_browse_footer();
+		doupdate();
+		wtimeout(bottom, 100);
+		wint_t key;
+		int kind = wget_wch(bottom, &key);
+		if(kind == ERR)
+			continue;
+		size_t length = strlen(contact_query);
+		if(kind == KEY_CODE_YES && key == KEY_UP)
+			scroll_up();
+		else if(kind == KEY_CODE_YES && key == KEY_DOWN)
+			scroll_down();
+		else if((kind == KEY_CODE_YES && key == KEY_ENTER) ||
+		        (kind == OK && (key == '\r' || key == '\n'))) {
+			action = '\r';
+			break;
+		} else if(kind == OK && key == '\t') {
+			action = '\t';
+			break;
+		} else if(kind == OK && (key == 27 || key == 7)) {
+			*contact_query = 0;
+			break;
+		} else if((kind == KEY_CODE_YES && key == KEY_BACKSPACE) ||
+		       (kind == OK && (key == 8 || key == 127))) {
+			if(length) {
+				do length--;
+				while(((unsigned char)contact_query[length] & 0xc0) == 0x80);
+				contact_query[length] = 0;
+				set_contact_query();
+			}
+		} else if(kind == OK && key == 21) { /* Ctrl+U clears the input. */
+			*contact_query = 0;
+			set_contact_query();
+		} else if(kind == OK && iswprint(key)) {
+			mbstate_t state = {0};
+			char character[MB_LEN_MAX];
+			size_t size = wcrtomb(character, (wchar_t)key, &state);
+			if(size != (size_t)-1 && size < sizeof contact_query - length) {
+				memcpy(contact_query + length, character, size);
+				contact_query[length + size] = 0;
+				set_contact_query();
+			}
+		}
+	}
+	wtimeout(bottom, -1);
+	entering_query = FALSE;
+	if(!opt_get_bool(BOOL_SHOW_CURSOR))
+		hide_cursor();
+	set_contact_query();
+	if(action == '\r')
+		edit_item(-1);
+	else if(action == '\t')
+		inspect_contact_mailboxes();
+}
+
+static abook_list *
+contact_menu(const char *title, abook_list *rows, const char *active, const char *actions)
+{
+	const char *remap = get_remap_table();
+	int count = 0, choice = 0, offset = 0, column_offset = 0;
+	abook_list *result = NULL;
+	for(abook_list *row = rows; row; row = row->next, count++)
+		if(active && !strcmp(row->data, active))
+			choice = count;
+
+	wtimeout(stdscr, 100);
+	hide_cursor();
+	for(;;) {
+		if(should_resize)
+			refresh_screen();
+		int height = LINES - 4;
+		if(choice < offset)
+			offset = choice;
+		else if(choice >= offset + height)
+			offset = choice - height + 1;
+		erase();
+		headerline(title);
+		int pos = 0, max_column_offset = 0;
+		for(abook_list *row = rows; row && pos < offset + height; row = row->next, pos++) {
+			if(pos < offset)
+				continue;
+			int line = 2 + pos - offset;
+			const char *mark = active && !strcmp(row->data, active) ? "*" : " ";
+			char *safe = jaro_contact_display_text((struct jaro_contact_text){row->data, strlen(row->data)});
+			if(pos == choice)
+				attron(A_REVERSE);
+			mvprintw(line, 0, "%c%s ", pos == choice ? '>' : ' ', mark);
+			if(safe) {
+				const char *display = safe;
+				if(pos == choice) {
+					max_column_offset = max(0, strwidth(safe) - (COLS - 4));
+					column_offset = min(column_offset, max_column_offset);
+					display += bytes2width(safe, column_offset);
+				}
+				addnstr(display, bytes2width(display, COLS - 4));
+				free(safe);
+			}
+			attroff(A_REVERSE);
+		}
+		if(!count)
+			mvaddstr(2, 1, _("No mailboxes"));
+		if(max_column_offset)
+			mvaddstr(LINES - 2, 0, _("Left/Right scroll"));
+		mvaddnstr(LINES - 1, 0, actions, bytes2width(actions, COLS - 1));
+		refresh();
+
+		int key;
+		do key = getch();
+		while(key == ERR && !should_resize);
+		if(key == 27 || key == 7)
+			break;
+		if(key > 0 && key < 127)
+			key = remap[key];
+		if(key == 'q')
+			break;
+		if(key == '\r' || key == '\n' || key == KEY_ENTER) {
+			if(count)
+				result = abook_list_get(rows, choice);
+			break;
+		}
+		if((key == KEY_UP || key == 'k') && choice > 0) {
+			choice--;
+			column_offset = 0;
+		} else if((key == KEY_DOWN || key == 'j') && choice + 1 < count) {
+			choice++;
+			column_offset = 0;
+		} else if(key == KEY_LEFT) {
+			column_offset = max(0, column_offset - 8);
+		} else if(key == KEY_RIGHT) {
+			column_offset = min(max_column_offset, column_offset + 8);
+		}
+	}
+	wtimeout(stdscr, -1);
+	refresh_screen();
+	return result;
+}
+
+static void
+inspect_contact_mailboxes(void)
+{
+	int item = list_get_curitem();
+	if(!is_valid_item(item))
+		return;
+	abook_list *addresses = mailbox_list_from_csv(safe_str(db_fget(item, EMAIL)));
+	char *title = strdup_printf(_("Mailboxes for %s"), db_name_get(item));
+	char *safe = jaro_contact_display_text((struct jaro_contact_text){title, strlen(title)});
+	contact_menu(safe ? safe : _("Mailboxes"), addresses, NULL, _("Up/Down move  Enter/Esc back"));
+	free(safe);
+	free(title);
+	abook_list_free(&addresses);
+}
+
 void
 get_commands()
 {
@@ -558,7 +942,12 @@ get_commands()
 			hide_cursor();
 		if(should_resize)
 			refresh_screen();
-		ch = getch();
+		if(jaro_editor_profile)
+			wtimeout(stdscr, 100);
+		do ch = getch();
+		while(jaro_editor_profile && ch == ERR && !should_resize);
+		if(jaro_editor_profile)
+			wtimeout(stdscr, -1);
 		if(!opt_get_bool(BOOL_SHOW_CURSOR))
 			show_cursor();
 		can_resize = FALSE; /* it's not safe to resize anymore */
@@ -571,7 +960,10 @@ get_commands()
 					if(event.y == 0) {
 						return;
 					}
-					list_set_curitem(event.y + list_get_firstitem() - LIST_TOP);
+					int item = list_visible_item(event.y + list_get_firstitem() - LIST_TOP);
+					if(jaro_editor_profile && (event.y < LIST_TOP || event.y >= LIST_BOTTOM || item < 0))
+						continue;
+					list_set_curitem(item);
 					if(double_clicked) {
 						edit_item(-1);
 					} else {
@@ -585,7 +977,7 @@ get_commands()
 			}
 		}
 
-		if (ch > 0 && ch <= 127)
+		if (ch > 0 && ch < 127)
 			ch = remap_table[ch];
 
 		switch(ch) {
@@ -599,6 +991,8 @@ get_commands()
 				  refresh_screen();
 				  break;
 			case 'a': add_item();		break;
+			case KEY_ENTER:
+			case '\n':
 			case '\r': edit_item(-1);	break;
 			case KEY_DC:
 			case 'd':
@@ -622,7 +1016,8 @@ get_commands()
 			case 'G':
 			case KEY_END: goto_end();	break;
 
-			case 'w': save_database(0); // we may reconsider force_save = 1
+			case 'w': save_database(0);
+				  if(jaro_editor_profile) refresh_screen();
 				  break;
 			case 'l': ui_read_database();	break;
 			case 'i': import_database();	break;
@@ -635,9 +1030,20 @@ get_commands()
 			case 'S': sort_surname();	break;
 			case 'F': sort_by_field(NULL);	break;
 
-			case '/': ui_find(0);		break;
+			case '/': if(jaro_editor_profile) filter_contacts();
+				  else ui_find(0);
+				  break;
+			case '\t': if(jaro_editor_profile) inspect_contact_mailboxes();
+				   break;
+			case 27: if(jaro_editor_profile && *contact_query) {
+					*contact_query = 0;
+					set_contact_query();
+				 }
+				 break;
 			case 'n':
-			case '\\': ui_find(1);		break;
+			case '\\': if(jaro_editor_profile) scroll_down();
+				   else ui_find(1);
+				   break;
 
 			case ' ': if(list_get_curitem() >= 0) {
 				   list_invert_curitem_selection();
@@ -676,41 +1082,111 @@ get_commands()
 void
 ui_remove_items()
 {
-	if(list_is_empty())
+	if(jaro_editor_profile) {
+		int count = selected_items();
+		if(!count && !is_valid_item(list_get_curitem()))
+			return;
+		int visible = 0;
+		for(int row = 0; row < list_visible_count(); row++)
+			visible += !!is_selected(list_visible_item(row));
+		int hidden = count - visible;
+		count = max(count, 1);
+		char *question = hidden ? strdup_printf(_("Remove %d here (%d hidden by filter)?"), count, hidden) :
+			strdup_printf(count == 1 ? _("Remove %d contact from this list?") :
+				_("Remove %d contacts from this list?"), count);
+		if(contact_prompt(question, _("y confirm  Esc cancel")) == 'y') {
+			remove_selected_items();
+			set_contact_feedback(_("Removal pending; save to commit"));
+		}
+		free(question);
+		list_update_matches();
+		refresh_list();
+		return;
+	}
+	if(!list_visible_count())
 		return;
 
 	if(statusline_ask_boolean(_("Remove selected item(s)"), FALSE))
 		remove_selected_items();
 
 	clear_statusline();
+	list_update_matches();
 	refresh_list();
 }
 
 void
 ui_merge_items()
 {
+	if(jaro_editor_profile) {
+		int count = selected_items();
+		if(count < 2)
+			return;
+		char *question = strdup_printf(_("Merge %d contacts here? Removes %d."), count, count - 1);
+		if(contact_prompt(question, _("y confirm  Esc cancel")) == 'y') {
+			merge_selected_items();
+			set_contact_feedback(_("Merge pending; save to commit"));
+		}
+		free(question);
+		list_update_matches();
+		refresh_list();
+		return;
+	}
 	if(statusline_ask_boolean(_("Merge selected items"), FALSE))
 		merge_selected_items();
 
 	clear_statusline();
+	list_update_matches();
 	refresh_list();
 }
 
 void		ui_remove_duplicates()
 {
+	if(jaro_editor_profile) {
+		int count = count_duplicate_items();
+		if(!count)
+			return;
+		char *question = strdup_printf(count == 1 ? _("Remove %d duplicate from this list?") :
+			_("Remove %d duplicates from this list?"), count);
+		if(contact_prompt(question, _("y confirm  Esc cancel")) == 'y') {
+			remove_duplicates();
+			select_none();
+			set_contact_feedback(_("Removal pending; save to commit"));
+		}
+		free(question);
+		list_update_matches();
+		refresh_list();
+		return;
+	}
 	if(statusline_ask_boolean(_("Remove duplicates"), FALSE))
 		remove_duplicates();
 	
 	clear_statusline();
+	list_update_matches();
 	refresh_list();
 }
 
 void
 ui_clear_database()
 {
+	if(jaro_editor_profile) {
+		int count = db_n_items();
+		if(!count)
+			return;
+		char *question = strdup_printf(_("Remove all %d contacts from this list?"), count);
+		if(contact_prompt(question, _("y confirm  Esc cancel")) == 'y') {
+			close_database();
+			db_need_save = TRUE;
+			set_contact_feedback(_("Removal pending; save to commit"));
+		}
+		free(question);
+		list_update_matches();
+		refresh_list();
+		return;
+	}
 	if(statusline_ask_boolean(_("Clear WHOLE database"), FALSE)) {
 		close_database();
 		db_need_save = TRUE;
+		list_update_matches();
 		refresh_list();
 	}
 }
@@ -753,6 +1229,8 @@ ui_find(int next)
 void
 ui_print_number_of_items()
 {
+	if(jaro_editor_profile)
+		return;
 	char *str = strdup_printf("    %c" "|%3d/%3d",
 				  db_need_save ? '*' : ' ',
 				  selected_items(),
@@ -769,6 +1247,11 @@ ui_read_database()
 {
 	char *msg;
 
+	if(jaro_editor_profile) {
+		ui_reload_contacts(TRUE);
+		refresh_screen();
+		return;
+	}
 	if(!list_is_empty()) {
 		msg = strdup_printf(_("Your current data will be lost - "
 				"Press '%c' to continue"),
@@ -780,9 +1263,7 @@ ui_read_database()
 		free(msg);
 	}
 
-	if (jaro_editor_profile) {
-		if (jaro_editor_load()) statusline_msg(jaro_editor_diagnostic());
-	} else load_database(datafile);
+	load_database(datafile);
 	refresh_list();
 }
 
@@ -829,7 +1310,26 @@ ui_open_datafile()
 {
 	char *filename;
 	if (jaro_editor_profile) {
-		statusline_msg(_("Use jaro -l LIST abook to edit another contact list"));
+		abook_list *books;
+		if(jaro_editor_books(&books)) {
+			set_contact_feedback(jaro_editor_diagnostic());
+			refresh_screen();
+			return;
+		}
+		abook_list *choice = contact_menu(_("Contact lists"), books, jaro_editor_list,
+			_("Up/Down move  Enter open  Esc back"));
+		if(choice && strcmp(choice->data, jaro_editor_list) &&
+		   ui_leave_contacts(FALSE) != UI_CONTACT_STAY) {
+			if(jaro_editor_switch_book(choice->data))
+				set_contact_feedback(jaro_editor_diagnostic());
+			else {
+				*contact_query = 0;
+				list_set_query(contact_query);
+				ui_contact_draft_changed();
+			}
+		}
+		abook_list_free(&books);
+		refresh_screen();
 		return;
 	}
 

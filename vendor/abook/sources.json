@@ -21,8 +21,18 @@
     "modified_files": [
       {
         "path": "abook.c",
-        "size": 24219,
-        "sha256": "c93badca6b06b850f8e265eacaef22313dd9a5ad4d8d9469c21c7db585a53c91"
+        "size": 24274,
+        "sha256": "1c34339b3f7c87e5eb6a52f078a3b44ea4a00d2517bbe022dfb4bd04ff830283"
+      },
+      {
+        "path": "abook_rl.c",
+        "size": 4683,
+        "sha256": "a59ca2acd23c1e73692e5b1f066e3785d9a71e21877a0f5e7382a11e121d126f"
+      },
+      {
+        "path": "abook_rl.h",
+        "size": 170,
+        "sha256": "6f4e6c93289612a3d35d23a05a90604bd65a33a3790331d5685985525aa200ae"
       },
       {
         "path": "abookrc.5",
@@ -31,18 +41,18 @@
       },
       {
         "path": "database.c",
-        "size": 21789,
-        "sha256": "eab037a5d255383fc5e99c5f5823a12667718d3a96d6de3b7fe2fcc1bc036edf"
+        "size": 22313,
+        "sha256": "f2c90b99da845b40a9b0749f4f58ece5701ef798562242a80fb460a597db40d5"
       },
       {
         "path": "database.h",
-        "size": 3429,
-        "sha256": "4f14b10a6a1ffd75e4de1b7f19c41e12e6408bd02e324453d6ddad8702c2235f"
+        "size": 3462,
+        "sha256": "90030dd1dfb3fc4aac65c0af28cfdde50a8a863071d9265f0595c234b905d2d5"
       },
       {
         "path": "edit.c",
-        "size": 17865,
-        "sha256": "151bb0e06b1336feec62b02315bdd9fa8c5eda12a0ddd996d6ae175a9309e915"
+        "size": 21342,
+        "sha256": "c790f7a838a36a5fb35979b0b19f040ab0869cc3281f85140e6ce7607b52cce8"
       },
       {
         "path": "filter.c",
@@ -56,8 +66,13 @@
       },
       {
         "path": "list.c",
-        "size": 10135,
-        "sha256": "bedc43e4d8820ca80996af4144744aa29d8b6dcd2108afe2f2b060a00c684a29"
+        "size": 13185,
+        "sha256": "dc1a688ec3723909f5d714dcb1fe00962f75cb0b733c834fd1f9a3aa0d34c1aa"
+      },
+      {
+        "path": "list.h",
+        "size": 1669,
+        "sha256": "ab014a39daddfee5e76ed33c174030765322ef09bb445880b7fb1e4b85111052"
       },
       {
         "path": "misc.c",
@@ -76,8 +91,13 @@
       },
       {
         "path": "ui.c",
-        "size": 16640,
-        "sha256": "551dea5972645fc282aac6ac5199a45512986f6a77f4e744be35ed994bf22e81"
+        "size": 30935,
+        "sha256": "b1c317b325a355fdffbf9f6ae2a1ea5000bab4e046c1d9e25b0d5d7d27fb608b"
+      },
+      {
+        "path": "ui.h",
+        "size": 2331,
+        "sha256": "c1d600f70da37eabe7e87c6f178efd3e9ba56a286b7395f44c53b57af5229396"
       }
     ]
   },

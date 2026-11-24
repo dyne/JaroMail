@@ -4,6 +4,6 @@
 #include "abook_curses.h"
 
 char		*abook_readline(WINDOW *w, int y, int x, char *s,
-		bool use_completion);
+		bool use_completion, bool prefill);
 
 #endif

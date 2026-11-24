@@ -2,6 +2,7 @@
 #define _LIST_H
 
 #include "ui.h"
+#include <stdint.h>
 
 #define INDEX_TEXT  1
 #define INDEX_FIELD 2
@@ -51,6 +52,13 @@ int		list_is_empty();
 int		list_get_curitem();
 int		list_get_firstitem();
 void		list_set_curitem(int i);
+int		list_visible_count(void);
+int		list_visible_item(int row);
+int		list_adjacent_item(int item, int direction);
+void		list_set_query(const char *query);
+void		list_update_matches(void);
+int64_t		list_current_contact_id(void);
+void		list_restore_contact_id(int64_t id);
 int		duplicate_item();
 
 

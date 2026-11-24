@@ -22,6 +22,7 @@
 #include "color.h"
 #include "contact/text.h"
 #include "sqlite-editor.h"
+#include "search-fold.h"
 
 
 int curitem = -1;
@@ -33,6 +34,91 @@ extern abook_field_list *fields_list;
 struct index_elem *index_elements = NULL;
 
 static WINDOW *list = NULL;
+static char *query_key;
+static int *matches;
+static int matches_count;
+
+int
+list_visible_count(void)
+{
+	return query_key ? matches_count : db_n_items();
+}
+
+int
+list_visible_item(int row)
+{
+	if(row < 0 || row >= list_visible_count())
+		return -1;
+	return query_key ? matches[row] : row;
+}
+
+static int
+visible_row(int item)
+{
+	if(!query_key)
+		return is_valid_item(item) ? item : -1;
+	/* Results are in database order. */
+	int lo = 0, hi = matches_count;
+	while(lo < hi) {
+		int mid = lo + (hi - lo) / 2;
+		if(matches[mid] < item)
+			lo = mid + 1;
+		else
+			hi = mid;
+	}
+	return lo < matches_count && matches[lo] == item ? lo : -1;
+}
+
+int
+list_adjacent_item(int item, int direction)
+{
+	return list_visible_item(visible_row(item) + direction);
+}
+
+void
+list_update_matches(void)
+{
+	free(matches);
+	matches = NULL;
+	matches_count = 0;
+	if(query_key && db_n_items() > 0) {
+		matches = xmalloc((size_t)db_n_items() * sizeof *matches);
+		for(int item = 0; item < db_n_items(); item++)
+			if(jaro_editor_matches(item, query_key))
+				matches[matches_count++] = item;
+	}
+}
+
+void
+list_set_query(const char *query)
+{
+	free(query_key);
+	query_key = *query ? abook_search_key(query) : NULL;
+	list_update_matches();
+}
+
+int64_t
+list_current_contact_id(void)
+{
+	return is_valid_item(curitem) ? item_contact_id(db_item_get(curitem)) : 0;
+}
+
+void
+list_restore_contact_id(int64_t id)
+{
+	if(id)
+		for(int i = 0; i < db_n_items(); i++)
+			if(item_contact_id(db_item_get(i)) == id) {
+				curitem = i;
+				return;
+			}
+}
+
+static int
+mailbox_column(void)
+{
+	return min(26, COLS / 3 + 2);
+}
 
 
 static void
@@ -254,8 +340,23 @@ print_list_line(int item, int line, int highlight)
 
 	if(selected[item])
 		mvwaddch(list, line, 0, '*' );
+	else if(jaro_editor_profile && highlight)
+		mvwaddch(list, line, 0, '>');
 
-	for(cur = index_elements; cur; cur = cur->next)
+	if(jaro_editor_profile) {
+		int col = mailbox_column();
+		const char *name = db_name_get(item);
+		char *safe = jaro_contact_display_text((struct jaro_contact_text){name, strlen(name)});
+		const char *csv = safe_str(db_fget(item, EMAIL));
+		abook_list *addresses = mailbox_list_from_csv(csv);
+		if(safe) {
+			mvwaddnstr(list, line, 1, safe, bytes2width(safe, col - 2));
+			free(safe);
+		}
+		if(addresses)
+			mvwaddnstr(list, line, col, addresses->data, bytes2width(addresses->data, COLS - col - 1));
+		abook_list_free(&addresses);
+	} else for(cur = index_elements; cur; cur = cur->next)
 		switch(cur->type) {
 			case INDEX_TEXT:
 				mvwaddstr(list, line, x_pos, cur->d.text);
@@ -273,45 +374,62 @@ print_list_line(int item, int line, int highlight)
 		wstandend(list);
 }
 
+static void
+draw_list(void)
+{
+	if(jaro_editor_profile) {
+		wnoutrefresh(stdscr);
+		wnoutrefresh(list);
+		ui_browse_footer();
+		doupdate();
+	} else {
+		refresh();
+		wrefresh(list);
+	}
+}
+
 void
 refresh_list()
 {
-	int i, line;
+	int i, line, row = visible_row(curitem);
 
 	werase(list);
 
 	ui_print_number_of_items();
 
-	if(list_is_empty()) {
-		refresh();
-		wrefresh(list);
+	if(!list_visible_count()) {
+		curitem = first_list_item = -1;
+		if(jaro_editor_profile) {
+			const char *empty = query_key ? _("No matching contacts") : _("No contacts in this list");
+			mvwaddstr(list, 0, 1, empty);
+		}
+		draw_list();
 		return;
 	}
 
-	if(curitem < 0)
-		curitem = 0;
+	if(row < 0) {
+		row = 0;
+		curitem = list_visible_item(0);
+	}
 
 	if(first_list_item < 0)
 		first_list_item = 0;
 
-	if(curitem < first_list_item)
-		first_list_item = curitem;
-	else if(curitem > LAST_LIST_ITEM)
-		first_list_item = max(curitem - LIST_LINES + 1, 0);
+	if(row < first_list_item)
+		first_list_item = row;
+	else if(row > LAST_LIST_ITEM)
+		first_list_item = max(row - LIST_LINES + 1, 0);
 
         for(line = 0, i = first_list_item;
-			i <= LAST_LIST_ITEM && i < db_n_items();
+			i <= LAST_LIST_ITEM && i < list_visible_count();
 			line++, i++) {
 
-		print_list_line(i, line, i == curitem);
+		print_list_line(list_visible_item(i), line, i == row);
         }
 
-	if(opt_get_bool(BOOL_SHOW_CURSOR)) {
-		wmove(list, curitem - first_list_item, 0);
-		/* need to call refresh() to update the cursor positions */
-		refresh();
-	}
-        wrefresh(list);
+	if(opt_get_bool(BOOL_SHOW_CURSOR))
+		wmove(list, row - first_list_item, 0);
+	draw_list();
 }
 
 void
@@ -326,6 +444,13 @@ list_headerline()
 #endif
 	attrset(COLOR_PAIR(CP_LIST_HEADER));
 	mvhline(2, 0, ' ', COLS);
+
+	if(jaro_editor_profile) {
+		mvaddstr(2, 1, _("Name"));
+		mvaddstr(2, mailbox_column(), _("Mailbox"));
+		attrset(A_NORMAL);
+		return;
+	}
 
 	for(e = index_elements; e; e = e->next)
 		if(e->type == INDEX_TEXT)
@@ -349,10 +474,11 @@ list_headerline()
 void
 scroll_up()
 {
-	if(curitem < 1)
+	int item = list_adjacent_item(curitem, -1);
+	if(item < 0)
 		return;
 
-	curitem--;
+	curitem = item;
 
 	refresh_list();
 }
@@ -360,10 +486,11 @@ scroll_up()
 void
 scroll_down()
 {
-	if(curitem > db_n_items() - 2)
+	int item = list_adjacent_item(curitem, 1);
+	if(item < 0)
 		return;
 
-	curitem++;
+	curitem = item;
 
 	refresh_list();
 }
@@ -371,6 +498,10 @@ scroll_down()
 void
 scroll_list_up()
 {
+	if(query_key) {
+		scroll_up();
+		return;
+	}
 	if(first_list_item <= 0) {
 		if(curitem != 0) {
 			curitem--;
@@ -393,6 +524,10 @@ scroll_list_up()
 void
 scroll_list_down()
 {
+	if(query_key) {
+		scroll_down();
+		return;
+	}
 	if(LAST_LIST_ITEM > db_n_items() - 2) {
 		if(curitem < LAST_LIST_ITEM) {
 			curitem++;
@@ -415,11 +550,12 @@ scroll_list_down()
 void
 page_up()
 {
-	if(curitem < 1)
+	int row = visible_row(curitem);
+	if(row < 1)
 		return;
 
-	curitem = curitem == first_list_item ?
-		((curitem -= LIST_LINES) < 0 ? 0 : curitem) : first_list_item;
+	curitem = list_visible_item(row == first_list_item ?
+		max(row - LIST_LINES, 0) : first_list_item);
 
 	refresh_list();
 }
@@ -427,15 +563,12 @@ page_up()
 void
 page_down()
 {
-	if(curitem > db_n_items() - 2)
+	int row = visible_row(curitem), last = list_visible_count() - 1;
+	if(row < 0 || row >= last)
 		return;
 
-	if(curitem == LAST_LIST_ITEM) {
-		if((curitem += LIST_LINES) > last_item())
-			curitem = last_item();
-	} else {
-		curitem = min(LAST_LIST_ITEM, last_item());
-	}
+	curitem = list_visible_item(row == LAST_LIST_ITEM ?
+		min(row + LIST_LINES, last) : min(LAST_LIST_ITEM, last));
 
 	refresh_list();
 }
@@ -449,7 +582,8 @@ select_none()
 void
 select_all()
 {
-        memset(selected, 1, db_n_items());
+	for(int i = 0; i < list_visible_count(); i++)
+		selected[list_visible_item(i)] = 1;
 }
 
 void
@@ -486,7 +620,7 @@ move_curitem(int direction)
 			item_copy(db_item_get(curitem),
 					db_item_get(curitem - 1));
 			item_copy(db_item_get(curitem-1), tmp);
-			scroll_up();
+			curitem--;
 			break;
 
 		case MOVE_ITEM_DOWN:
@@ -495,9 +629,11 @@ move_curitem(int direction)
 			item_copy(db_item_get(curitem),
 					db_item_get(curitem + 1));
 			item_copy(db_item_get(curitem + 1), tmp);
-			scroll_down();
+			curitem++;
 			break;
 	}
+	list_update_matches();
+	refresh_list();
 
 out_move:
 	item_free(&tmp);
@@ -506,8 +642,7 @@ out_move:
 void
 goto_home()
 {
-	if(db_n_items() > 0)
-		curitem = 0;
+	curitem = list_visible_item(0);
 
 	refresh_list();
 }
@@ -515,8 +650,7 @@ goto_home()
 void
 goto_end()
 {
-	if(db_n_items() > 0)
-		curitem = last_item();
+	curitem = list_visible_item(list_visible_count() - 1);
 
 	refresh_list();
 }
@@ -541,8 +675,10 @@ invert_selection()
 	if(list_is_empty())
 		return;
 
-	for(i = 0; i < db_n_items(); i++)
-		selected[i] = !selected[i];
+	for(i = 0; i < list_visible_count(); i++) {
+		int item = list_visible_item(i);
+		selected[item] = !selected[item];
+	}
 }
 
 int
@@ -586,6 +722,7 @@ duplicate_item()
 	item_free(&item);
 
 	curitem = last_item();
+	list_update_matches();
 	refresh_list();
 
 	return 0;

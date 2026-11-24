@@ -38,6 +38,19 @@ void		ui_read_database();
 char		*get_surname(char *s);
 void		ui_print_database();
 void		ui_open_datafile();
+void		ui_browse_footer(void);
+char		ui_binding(char command);
+int		ui_handle_resize(void);
+enum ui_contact_leave {
+	UI_CONTACT_STAY,
+	UI_CONTACT_LEAVE,
+	UI_CONTACT_DISCARD
+};
+enum ui_contact_leave ui_leave_contacts(bool discard);
+int		ui_save_contacts(void);
+int		ui_reload_contacts(bool confirm);
+void		ui_contact_editor_footer(void);
+void		ui_contact_draft_changed(void);
 
 #if NCURSES_MOUSE_VERSION != 2
 #define BUTTON5_PRESSED (0x80 | 0x8000000)

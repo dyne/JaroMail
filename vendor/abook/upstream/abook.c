@@ -200,11 +200,16 @@ init_abook()
 void
 quit_abook(int save_db)
 {
-	if(save_db)  {
+	if(jaro_editor_profile) {
+		if(ui_leave_contacts(!save_db) == UI_CONTACT_STAY) {
+			refresh_screen();
+			return;
+		}
+	} else if(save_db)  {
 		if(opt_get_bool(BOOL_AUTOSAVE)) {
-			if (save_database(0) && jaro_editor_profile) return;
+			save_database(0);
 		} else if(statusline_ask_boolean(_("Save database"), TRUE)) {
-			if (save_database(1) && jaro_editor_profile) return;
+			save_database(1);
 		}
 	} else if(!statusline_ask_boolean(_("Quit without saving"), FALSE))
 		return;

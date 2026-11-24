@@ -11,6 +11,8 @@
 #include <sys/types.h>
 #include "abook.h"
 #include "abook_rl.h"
+#include "contact/text.h"
+#include "misc.h"
 
 #ifdef HAVE_CONFIG_H
 #	include "config.h"
@@ -44,6 +46,8 @@ static int rl_x, rl_y;
 static WINDOW *rl_win;
 
 static bool rl_cancelled;
+static bool rl_prefill;
+static const char *rl_initial;
 
 static void
 rl_refresh()
@@ -63,6 +67,26 @@ rline_calc_point()
 static void
 rline_update()
 {
+	if(rl_prefill) {
+		struct jaro_contact_text line = {rl_line_buffer, (size_t)rl_end};
+		struct jaro_contact_text prefix = {rl_line_buffer, (size_t)rl_point};
+		char *display = jaro_contact_display_text(line);
+		char *before_cursor = jaro_contact_display_text(prefix);
+		int space = COLS - rl_x - 1;
+		int width = before_cursor ? strwidth(before_cursor) : 0;
+		int offset = max(0, width - space);
+		wmove(rl_win, rl_y, rl_x);
+		wclrtoeol(rl_win);
+		if(display) {
+			const char *part = display + bytes2width(display, offset);
+			waddnstr(rl_win, part, bytes2width(part, space));
+		}
+		wmove(rl_win, rl_y, rl_x + min(width, space));
+		free(before_cursor);
+		free(display);
+		rl_refresh();
+		return;
+	}
 #ifdef HANDLE_MULTIBYTE
 	int real_point = rline_calc_point() + rl_x;
 #else
@@ -165,8 +189,16 @@ abook_rl_init(bool use_completion)
 	rl_cancelled = FALSE;
 }
 
+static int
+rline_prefill(void)
+{
+	if(rl_initial)
+		rl_insert_text(rl_initial);
+	return 0;
+}
+
 char *
-abook_readline(WINDOW *w, int y, int x, char *s, bool use_completion)
+abook_readline(WINDOW *w, int y, int x, char *s, bool use_completion, bool prefill)
 {
 	char *ret;
 
@@ -175,10 +207,15 @@ abook_readline(WINDOW *w, int y, int x, char *s, bool use_completion)
 	wmove(rl_win = w, rl_y = y, rl_x = x);
 	rl_refresh();
 
-	if(s && *s)
+	rl_prefill = prefill;
+	rl_initial = s;
+	rl_startup_hook = prefill ? rline_prefill : NULL;
+	if(s && *s && !prefill)
 		add_history(s);
 
 	ret = readline(NULL);
+	rl_startup_hook = NULL;
+	rl_initial = NULL;
 
 	if(rl_cancelled && ret) {
 		free(ret);

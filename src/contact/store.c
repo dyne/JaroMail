@@ -402,6 +402,34 @@ jaro_contact_book(struct jaro_contact_store *store, struct jaro_contact_text nam
 }
 
 int
+jaro_contact_visit_books(struct jaro_contact_store *store,
+	jaro_contact_book_visitor visit, void *data, struct jaro_contact_error *error)
+{
+	sqlite3_stmt *statement = NULL;
+	int rc = sqlite3_prepare_v2(store->db, "SELECT name FROM books ORDER BY id",
+		-1, &statement, NULL);
+	int status = JARO_CONTACT_OK;
+
+	if (rc == SQLITE_OK) {
+		while ((rc = sqlite3_step(statement)) == SQLITE_ROW) {
+			const char *name = (const char *)sqlite3_column_text(statement, 0);
+			if (!name) {
+				rc = SQLITE_NOMEM;
+				break;
+			}
+			if (visit((struct jaro_contact_text){name, (size_t)sqlite3_column_bytes(statement, 0)}, data)) {
+				status = failure(error, JARO_CONTACT_CONSUMER, "contact list visitor failed", NULL, 0, 0);
+				break;
+			}
+		}
+	}
+	sqlite3_finalize(statement);
+	if (status)
+		return status;
+	return rc == SQLITE_DONE ? JARO_CONTACT_OK : sql_failure(error, rc, "cannot list contact books");
+}
+
+int
 jaro_contact_generation(struct jaro_contact_store *store, int64_t *generation,
 	struct jaro_contact_error *error)
 {
@@ -446,8 +474,10 @@ validate_contact(const struct jaro_contact *contact, struct jaro_contact_error *
 
 	if (contact->book_id < 1 || contact->id < 0 || (contact->id && contact->revision < 1))
 		return failure(error, JARO_CONTACT_INVALID, "invalid contact identity", NULL, 0, 0);
+	if (!contact->name.size)
+		return failure(error, JARO_CONTACT_INVALID, "a name is required", "name", 0, 0);
 	for (size_t i = 0; i < sizeof values / sizeof values[0]; i++) {
-		if ((!i && !values[i].size) || !jaro_contact_valid_text(values[i]))
+		if (!jaro_contact_valid_text(values[i]))
 			return failure(error, JARO_CONTACT_INVALID, "invalid UTF-8 text, embedded NUL or size",
 				names[i], 0, 0);
 		bytes += values[i].size;

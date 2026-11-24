@@ -85,6 +85,7 @@ int save_database(int force_save);
 void remove_selected_items();
 void merge_selected_items();
 void remove_duplicates();
+int count_duplicate_items(void);
 void sort_surname();
 void sort_by_field(char *field);
 void close_database();
