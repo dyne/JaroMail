@@ -416,13 +416,9 @@ export_database()
 
 struct abook_output_item_filter select_output_item_filter(char *filtname) {
 	int i;
-	for(i=0;; i++) {
+	for(i=0; *u_filters[i].filtname; i++) {
 		if(!strncasecmp(u_filters[i].filtname, filtname, FILTNAME_LEN))
 		  break;
-		if(!*u_filters[i].filtname) {
-		  i = -1;
-		  break;
-		}
 	}
 	return u_filters[i];
 }
@@ -851,7 +847,9 @@ mutt_read_line(FILE *in, char **groups, char **alias, char **rest)
 		start = ptr;
 		SKIPNONWS(ptr);
 		end = ptr;
-		abook_list_append(&glist,xstrndup(start, end - start));
+		char *group = xstrndup(start, end - start);
+		abook_list_append(&glist, group);
+		free(group);
 		SKIPWS(ptr);
 	}
 
@@ -908,10 +906,12 @@ mutt_parse_email(list_item item)
 	mutt_fix_quoting(line);
 	getname(line, &name, &email);
 
-	if(name)
-		item_fput(item, NAME, name);
-	else
+	if(!name) {
+		free(email);
 		return;
+	}
+	item_fput(item, NAME, name);
+	free(line);
 
 	if(email)
 		item_fput(item, EMAIL, email);
@@ -943,25 +943,20 @@ mutt_parse_file(FILE *in)
 {
 	list_item item = item_create();
 
-	for(;;) {
-		memset(item, 0, fields_count * sizeof(char *));
-
-		if(!mutt_read_line(in,
+	while(!feof(in) && !ferror(in)) {
+		if(mutt_read_line(in,
 			(field_id(GROUPS) != -1) ? &item[field_id(GROUPS)] : NULL,
 			(field_id(NICK) != -1) ? &item[field_id(NICK)] : NULL,
 			&item[field_id(NAME)]) )
-			mutt_parse_email(item);
+			continue;
 
-		if(feof(in)) {
-			item_empty(item);
-			break;
-		}
-
+		mutt_parse_email(item);
 		add_item2database(item);
+		memset(item, 0, fields_count * sizeof(char *));
 	}
 	item_free(&item);
 
-	return 0;
+	return ferror(in) != 0;
 }
 
 /*
@@ -1670,7 +1665,9 @@ vcard_parse_email(list_item item, char *line)
 	email = vcard_get_line_element(line, VCARD_VALUE);
 
 	if(item[1]) {
-		item[1] = strconcat(item[1], ",", email, 0);
+		char *previous = item[1];
+		item[1] = strconcat(previous, ",", email, NULL);
+		free(previous);
 		xfree(email);
 	}
 	else {
@@ -2192,7 +2189,7 @@ static char *
 mutt_alias_gengroups(int i)
 {
 	char *groups, *res = NULL;
-	char groupstr[7] = "-group ";
+	const char groupstr[] = "-group ";
 	abook_list *list, *tmp;
 
 	groups = db_fget(i, GROUPS);
@@ -2224,16 +2221,15 @@ mutt_alias_export(FILE *out, struct db_enumerator e)
 	char *alias = NULL;
 	char *groups = NULL;
 	int email_addresses;
-	char *ptr;
 
 	db_enumerate_items(e) {
-		alias = (field_id(NICK) != -1) ? mutt_alias_genalias(e.item) : NULL;
-		groups = (field_id(GROUPS) != -1) ?  mutt_alias_gengroups(e.item) : NULL;
 		get_first_email(email, e.item);
 
 		/* do not output contacts without email address */
 		/* cause this does not make sense in mutt aliases */
 		if (*email) {
+			alias = (field_id(NICK) != -1) ? mutt_alias_genalias(e.item) : NULL;
+			groups = (field_id(GROUPS) != -1) ? mutt_alias_gengroups(e.item) : NULL;
 
 			/* output first email address */
 			fprintf(out,"alias ");
@@ -2247,13 +2243,13 @@ mutt_alias_export(FILE *out, struct db_enumerator e)
 
 			/* number of email addresses */
 			email_addresses = 1;
-			ptr = db_email_get(e.item);
-			while (*ptr != '\0') {
+			char *emails = db_email_get(e.item);
+			for (const char *ptr = emails; *ptr; ptr++) {
 				if (*ptr == ',') {
 					email_addresses++;
 				}
-				ptr++;
 			}
+			free(emails);
 
 			/* output other email addresses */
 			while (email_addresses-- > 1) {

@@ -21,8 +21,8 @@
     "modified_files": [
       {
         "path": "abook.c",
-        "size": 24274,
-        "sha256": "1c34339b3f7c87e5eb6a52f078a3b44ea4a00d2517bbe022dfb4bd04ff830283"
+        "size": 24321,
+        "sha256": "9dc72d11b243730c79cd679c15bad5efdca139cafb88bcab35e530760398dff4"
       },
       {
         "path": "abook_rl.c",
@@ -51,13 +51,13 @@
       },
       {
         "path": "edit.c",
-        "size": 21342,
-        "sha256": "c790f7a838a36a5fb35979b0b19f040ab0869cc3281f85140e6ce7607b52cce8"
+        "size": 21354,
+        "sha256": "b055ef5ea7f09443c8a952e8b06ea7b85049c8bf482b51764d27c83270c87073"
       },
       {
         "path": "filter.c",
-        "size": 58917,
-        "sha256": "502e737682e8e6a56208cbbb5a8e5b40dc6c8dd3a1f1056d18b64bf4b55ae31a"
+        "size": 59024,
+        "sha256": "65bb9c836e09c2637f87e066ad04fbe00e7a178da59d5b90e79cf3fb442f76ee"
       },
       {
         "path": "filter.h",
@@ -76,8 +76,8 @@
       },
       {
         "path": "misc.c",
-        "size": 27826,
-        "sha256": "ad5644e9a14bb114ceacd9f655bd19fb737a776ba63524c76ed00944cbc011c2"
+        "size": 27921,
+        "sha256": "cc685415eb99f6fb470ddaaa463cc40534b2164b910fdad26f2cb7f0f8799433"
       },
       {
         "path": "misc.h",

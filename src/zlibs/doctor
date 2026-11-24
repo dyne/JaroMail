@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # Deliberately independent of the normal framework, initialization and keyrings.
-# External work is limited to source-version resolution (when available) and
-# the native outbox helper's read-only inspect operation.
+# External work is limited to source-version resolution and native read-only
+# outbox and contact-store checks.
 
 doctor_usage() {
     print -r -- 'Usage: jaro [-a ACCOUNT] doctor [--json]'
@@ -191,6 +191,48 @@ doctor_outbox() {
     doctor_check outbox "$finding" "Queue snapshot: eligible=$eligible held=$held local-recovery=$recovery invalid=$invalid; no message details shown." 'Run jaro outbox list; reconcile held items using the recovery manual.'
 }
 
+doctor_contacts() {
+    local REPLY report mode schema
+    local -a fields
+    if ! doctor_helper jaro-filter-compile; then
+        doctor_check contacts unknown 'Contact check requires the native jaro-filter-compile helper.' 'Build or reinstall Jaromail.'
+        return
+    fi
+    if ! report=$("$REPLY" --diagnose-contacts "$MAILDIRS/contacts.sqlite" 2>/dev/null); then
+        doctor_check contacts blocker 'Contact check failed without a result.' 'Check or reinstall the Jaromail runtime.'
+        return
+    fi
+    fields=( ${=report} )
+    mode="${fields[2]:-}" schema="${fields[3]:-}"
+    if (( ${#fields} != 5 )) || [[ $mode != (unknown|[0-7](#c4)) ||
+        $schema != (unknown|<->|-<->) || $fields[4] != <-> || $fields[5] != <-> ]]; then
+        doctor_check contacts blocker 'Contact check returned an invalid result.' 'Check or reinstall the Jaromail runtime.'
+        return
+    fi
+    case "$fields[1]" in
+        ok)
+            doctor_check contacts ok "Contact store initialized; schema=$schema lists=$fields[4] contacts=$fields[5] mode=$mode; integrity checks passed." '' ;;
+        absent)
+            doctor_check contacts ok 'Contact store absent; first use will initialize it.' '' ;;
+        permissions)
+            doctor_check contacts blocker "Contact store permissions or file type are unsafe (mode=$mode)." 'Check that contacts.sqlite is a regular file owned by you with private permissions.' ;;
+        unreadable)
+            doctor_check contacts blocker "Contact store is unreadable (mode=$mode)." 'Check file and directory permissions and filesystem availability.' ;;
+        locked)
+            doctor_check contacts blocker "Contact store is locked (mode=$mode)." 'Close the other contact editor or writer and retry.' ;;
+        corrupt)
+            doctor_check contacts blocker "Contact store is corrupt or invalid (schema=$schema mode=$mode)." 'Keep the original database and check a known-good SQLite backup.' ;;
+        schema)
+            doctor_check contacts blocker "Unsupported contact schema (schema=$schema mode=$mode)." 'Use a JaroMail version that supports this database schema.' ;;
+        recovery)
+            doctor_check contacts blocker "Contact store requires journal recovery (mode=$mode)." 'Close any other writers and use the contact editor to reopen the store, then retry doctor.' ;;
+        journal)
+            doctor_check contacts blocker "Contact store uses unsupported WAL journaling (mode=$mode)." 'Keep the database and any sidecars together. Restore a consistent rollback-mode backup.' ;;
+        *)
+            doctor_check contacts blocker 'Contact check returned an invalid result.' 'Check or reinstall the Jaromail runtime.' ;;
+    esac
+}
+
 doctor_run() {
     setopt localoptions extendedglob
     local bootstrap="$1" account=default REPLY command_name invalid=0
@@ -284,6 +326,7 @@ doctor_run() {
     if [[ -d "$MAILDIRS/.notmuch/xapian" ]]; then
         doctor_check index unknown 'Search index exists; index freshness was not assessed.' 'Run jaro index if an index refresh is needed.'
     else doctor_check index warning 'Search index is absent.' 'Run jaro index after configuring mail.'; fi
+    doctor_contacts
     doctor_outbox
     return $doctor_result
 }

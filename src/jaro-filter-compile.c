@@ -73,6 +73,7 @@ int main(int argc,char **argv)
 			     "jaro-filter-compile --query-contacts ROOT LIST QUERY\n"
 			     "jaro-filter-compile --recipient-contacts ROOT QUERY\n"
 			     "jaro-filter-compile --export-contacts ROOT LIST\n"
+			     "jaro-filter-compile --diagnose-contacts DATABASE\n"
 			     "jaro-filter-compile --check-address ADDRESS"); return 0;
 		}
 		if (!strcmp(argv[i],"--version") && argc==2) { puts(JF_COMPILER_ID); return 0; }

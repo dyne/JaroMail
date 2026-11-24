@@ -468,6 +468,7 @@ edit_list(int item, int nb, int isemail)
 		xfree(field);
 
 	field = abook_list_to_csv(list);
+	free(csv);
 	db_fput_byid(item, nb, field ? field : xstrdup(""));
 	abook_list_free(&list);
 }
@@ -909,13 +910,13 @@ void
 add_item()
 {
 	char *field = NULL;
-	list_item item = item_create();
 
 	change_field(_("Name: "), &field, MAX_FIELD_LEN);
 
 	if( field == NULL )
 		return;
 
+	list_item item = item_create();
 	item_fput(item, NAME, field);
 
 	add_item2database(item);

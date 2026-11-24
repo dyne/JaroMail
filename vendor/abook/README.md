@@ -105,6 +105,46 @@ the shell command so the client can quote the completion text itself.
 
 ## Reproduce and update the fork
 
+### Qualification checks
+
+Run the vendor verifier and the native strict suite with the prepared Sieve
+and test dependencies described in the repository guidelines.
+
+```sh
+python3 vendor/verify.py
+cmake -S . -B out/build -DCMAKE_BUILD_TYPE=Release "-DJARO_SIEVE_DEPS_PREFIX=$SIEVE_DEPS_PREFIX"
+cmake --build out/build --target check-strict
+```
+
+The strict suite runs the relocated installed-consumer tests, including
+first-use import, Mutt and vCard round trips, SQLite doctor, and the real
+curses editor over a PTY. The native package smoke also runs in that suite.
+For a packaged Linux build, unpack the archive into a different directory
+and inspect the private binaries before running the same smoke:
+
+```sh
+python3 build/check-static.py --bin-dir "$prefix/share/jaromail/bin" --arch "$arch"
+python3 extras/test/abook-package-smoke.py --prefix "$prefix" --version "$version" --cli
+```
+
+Use `--emulator qemu-aarch64` in place of `--cli` for arm64 helpers on an
+x86_64 host. This checks the installed private abook and SQLite contact
+helper. The full shell check runs on a host that can launch the package's
+helpers directly. The smoke reports the selected execution path, checks,
+and executable hashes.
+
+Update the synthetic fixtures alongside the specific behavior change. The
+[query fixtures](../../extras/test/fixtures/abook-query/README.md) document
+approved query-protocol deltas from the pristine release. The conversion
+tests compare parsed records and preserve mailbox spelling and order. The
+built-in vCard converter drops unmapped properties and Mutt alias groups.
+The Mutt alias export splits a multi-address contact and drops its note.
+The package fixture also checks the previously dropped final alias without
+a newline. Review changes in the corresponding expected records when a
+converter mapping changes.
+
+### Replay the downstream delta
+
 From a clean checkout of the desired JaroMail revision, replay its committed
 source diff against a local copy of the pinned archive. Commit
 `fe8d479adc0a970f8e41676c8923e89dd4a857c7` is the pristine vendor import for

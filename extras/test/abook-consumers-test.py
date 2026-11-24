@@ -1,6 +1,7 @@
 """Characterize the installed JaroMail query consumers using synthetic mail."""
 
 import argparse
+from configparser import ConfigParser
 from contextlib import closing, contextmanager, suppress
 import errno
 import fcntl
@@ -62,6 +63,8 @@ email=anne@example.org
                  b'\n[1]\nname=Block overlap\nemail=pat@example.org,alternate@example.org\n',
 }
 GROUP_ROSTER = b'roster@jaromail.group\tGroup roster (2 recipients)\n'
+DOCTOR_PRIVATE = (b'doctor.marker@fixture.invalid', b'Doctor private notes marker',
+                  b'Doctor private list marker')
 
 
 def run_client(command, *, cwd, env, keys_after=()):
@@ -145,14 +148,133 @@ class InstalledConsumers(unittest.TestCase):
                               capture_output=True, timeout=15)
 
     @staticmethod
-    def profile_tree(profile):
+    def profile_tree(profile, omit_contents=()):
         tree = {}
         for path in [profile, *profile.rglob('*')]:
             info = path.lstat()
             data = (os.readlink(path) if stat.S_ISLNK(info.st_mode) else
-                    path.read_bytes() if stat.S_ISREG(info.st_mode) else None)
+                    path.read_bytes() if stat.S_ISREG(info.st_mode) and path not in omit_contents else None)
             tree[path.relative_to(profile)] = (info.st_mode, info.st_ino, info.st_mtime_ns, data)
         return tree
+
+    def doctor_fixture(self, *, initialize=True):
+        for path in self.mail.glob('*.abook'):
+            path.unlink()
+        (self.mail / 'Accounts').mkdir()
+        (self.mail / 'Accounts/default.txt').write_text(
+            'email fixture@example.org\nlogin fixture\nimap imap.example.org\ncert check\n')
+        (self.mail / 'whitelist.abook').write_bytes(
+            b'[0]\nname=Fixture Contact\nemail=' + DOCTOR_PRIVATE[0] +
+            b'\nnotes=' + DOCTOR_PRIVATE[1] + b'\n')
+        (self.mail / (DOCTOR_PRIVATE[2].decode() + '.abook')).write_bytes(
+            b'[0]\nname=Custom One\nemail=one@example.org\n'
+            b'[1]\nname=Custom Two\nemail=two@example.org\n')
+        if initialize:
+            initialized = self.capture([self.jaro, '-q', 'complete', 'fixture contact'])
+            self.assertEqual(initialized.returncode, 0, initialized.stderr)
+        return self.mail / 'contacts.sqlite'
+
+    def doctor_output(self, finding, expected, *, structured=True, omit_contents=()):
+        before = self.profile_tree(self.mail, omit_contents)
+        before_home = {path for path in self.home.iterdir()}
+        command = [self.jaro, 'doctor', *(['--json'] if structured else [])]
+        result = self.capture(command)
+        self.assertIn(result.returncode, (0, 1), result.stderr)
+        if finding == 'blocker':
+            self.assertEqual(result.returncode, 1)
+        if structured:
+            report = json.loads(result.stdout)
+            self.assertEqual(report['exit_status'], result.returncode)
+            checks = [check for check in report['checks'] if check['id'] == 'contacts']
+            self.assertEqual(len(checks), 1)
+            self.assertEqual(checks[0]['status'], finding)
+            self.assertIn(expected, checks[0]['explanation'])
+            if finding == 'blocker':
+                self.assertTrue(checks[0]['next_action'])
+        else:
+            self.assertIn(f'{finding} [contacts] {expected}'.encode(), result.stdout)
+        for marker in DOCTOR_PRIVATE:
+            self.assertNotIn(marker, result.stdout)
+            self.assertNotIn(marker, result.stderr)
+        self.assertEqual(result.stderr, b'')
+        self.assertEqual(before, self.profile_tree(self.mail, omit_contents))
+        self.assertEqual(before_home, set(self.home.iterdir()))
+
+    def test_contact_doctor_absent_with_legacy_sources(self):
+        database = self.doctor_fixture(initialize=False)
+        self.doctor_output('ok', 'Contact store absent')
+        self.assertFalse(database.exists())
+        self.assertEqual(list(self.mail.glob('contacts.sqlite*')), [])
+
+    def test_contact_doctor_initialized_counts_and_permissions(self):
+        self.doctor_fixture()
+        expected = 'Contact store initialized; schema=1 lists=2 contacts=3 mode=0600; integrity checks passed.'
+        self.doctor_output('ok', expected)
+        self.doctor_output('ok', expected, structured=False)
+
+    def test_contact_doctor_locked(self):
+        database = self.doctor_fixture()
+        original = database.read_bytes()
+        with closing(sqlite3.connect(database, isolation_level=None)) as locked:
+            locked.execute('BEGIN EXCLUSIVE')
+            try:
+                self.assertTrue(locked.in_transaction)
+                # Closing a second fd for this inode would release the process's lock.
+                self.doctor_output('blocker', 'Contact store is locked (mode=0600)',
+                                   omit_contents=(database,))
+            finally:
+                locked.rollback()
+        self.assertEqual(database.read_bytes(), original)
+
+    def test_contact_doctor_unreadable(self):
+        database = self.doctor_fixture()
+        original = database.read_bytes()
+        database.chmod(0)
+        try:
+            self.doctor_output('blocker', 'Contact store is unreadable (mode=0000)',
+                               omit_contents=(database,))
+        finally:
+            database.chmod(0o600)
+        self.assertEqual(database.read_bytes(), original)
+
+    def test_contact_doctor_unsafe_permissions(self):
+        database = self.doctor_fixture()
+        database.chmod(0o644)
+        self.doctor_output('blocker', 'Contact store permissions or file type are unsafe (mode=0644)')
+
+    def test_contact_doctor_corrupt_store(self):
+        database = self.doctor_fixture()
+        database.write_bytes(b'Not SQLite: ' + b' '.join(DOCTOR_PRIVATE))
+        self.doctor_output('blocker', 'Contact store is corrupt or invalid (schema=unknown mode=0600)')
+
+    def test_contact_doctor_runs_integrity_check(self):
+        database = self.doctor_fixture()
+        # Damage an ordinary table page outside the indexed membership path.
+        with closing(sqlite3.connect(database)) as db:
+            page_size, = db.execute('PRAGMA page_size').fetchone()
+            root_page, = db.execute("SELECT rootpage FROM sqlite_schema WHERE name='fields'").fetchone()
+        self.assertGreater(root_page, 1)
+        with database.open('r+b') as file:
+            file.seek((root_page - 1) * page_size)
+            file.write(b'\0')
+        membership = self.capture([self.runtime / 'bin/jaro-filter-compile', '--has-contact',
+                                   self.mail, 'allow', DOCTOR_PRIVATE[0].decode()])
+        self.assertEqual(membership.returncode, 0, membership.stderr)
+        self.doctor_output('blocker', 'Contact store is corrupt or invalid (schema=1 mode=0600)')
+
+    def test_contact_doctor_unsupported_schema(self):
+        database = self.doctor_fixture()
+        with closing(sqlite3.connect(database)) as db, db:
+            db.execute('PRAGMA user_version=2')
+        self.doctor_output('blocker', 'Unsupported contact schema (schema=2 mode=0600)')
+
+    def test_contact_doctor_unsupported_wal_without_creating_sidecars(self):
+        database = self.doctor_fixture()
+        with closing(sqlite3.connect(database)) as db:
+            self.assertEqual(db.execute('PRAGMA journal_mode=WAL').fetchone(), ('wal',))
+        self.assertEqual(list(self.mail.glob('contacts.sqlite-*')), [])
+        self.doctor_output('blocker', 'Contact store uses unsupported WAL journaling (mode=0600)')
+        self.assertEqual(list(self.mail.glob('contacts.sqlite-*')), [])
 
     def test_contact_dry_runs_leave_fresh_and_existing_profiles_unchanged(self):
         fresh = self.root / 'fresh dry-run profile'
@@ -305,6 +427,145 @@ class InstalledConsumers(unittest.TestCase):
         self.assertIn(b'E_CONTACT_STORAGE', imported.stderr)
         self.assertEqual(db.read_bytes(), b'corrupt')
         self.assertEqual((self.mail / 'whitelist.abook').read_bytes(), BOOKS['whitelist'])
+
+    def convert_book(self, data, inform, outform):
+        source = self.root / 'conversion-input'
+        source.write_bytes(data)
+        result = self.capture([self.runtime / 'bin/abook', '--config', '/dev/null',
+                               '--convert', '--informat', inform, '--infile', source,
+                               '--outformat', outform],
+                              env=dict(self.env, LC_ALL='C.UTF-8'))
+        self.assertEqual(result.returncode, 0, result.stderr.decode(errors='replace'))
+        self.assertEqual(result.stderr, b'')
+        self.assertEqual(source.read_bytes(), data)
+        return result.stdout
+
+    @staticmethod
+    def native_records(output):
+        book = ConfigParser(interpolation=None, comment_prefixes=('#',), delimiters=('=',))
+        book.read_string(output.decode('utf-8'))
+        return [dict(book[section]) for section in book.sections() if section.isdecimal()]
+
+    def test_installed_mutt_alias_round_trip(self):
+        aliases = ('# Synthetic aliases\n'
+                   'alias -group regular zoe Zoë One <First@Example.org>\n'
+                   'alias renee Renée Two <Two@Example.org>').encode()
+        book = self.convert_book(aliases, 'mutt', 'abook')
+        expected = [
+            {'name': 'Zoë One', 'email': 'First@Example.org', 'nick': 'zoe', 'groups': 'regular'},
+            {'name': 'Renée Two', 'email': 'Two@Example.org', 'nick': 'renee'},
+        ]
+        self.assertEqual(self.native_records(book), expected)
+        aliases = self.convert_book(book, 'abook', 'mutt')
+        self.assertEqual(self.native_records(self.convert_book(aliases, 'mutt', 'abook')),
+                         expected)
+
+    def test_installed_vcard_round_trip(self):
+        card = ('BEGIN:VCARD\r\nVERSION:3.0\r\nN:One;Zoë;;;\r\nFN:Zoë One\r\n'
+                'EMAIL:First@Example.org\r\nEMAIL:Second@Example.org\r\n'
+                'NICKNAME:Étoile\r\nNOTE:Older note\r\nNOTE:講師 ☃\r\n'
+                'X-FIXTURE:Unsupported property\r\nEND:VCARD').encode()
+        # Repeated mailboxes keep their order. A scalar keeps its last value.
+        # The built-in mapping drops unknown vCard properties.
+        expected = [{'name': 'Zoë One', 'email': 'First@Example.org,Second@Example.org',
+                     'nick': 'Étoile', 'notes': '講師 ☃'}]
+        book = self.convert_book(card, 'vcard', 'abook')
+        self.assertEqual(self.native_records(book), expected)
+        card = self.convert_book(book, 'abook', 'vcard')
+        self.assertEqual(self.native_records(self.convert_book(card, 'vcard', 'abook')),
+                         expected)
+        # Mutt alias export splits a multi-address contact into separate aliases
+        # and cannot represent its note.
+        aliases = self.convert_book(book, 'abook', 'mutt')
+        self.assertEqual(self.native_records(self.convert_book(aliases, 'mutt', 'abook')), [
+            {'name': 'Zoë One', 'email': 'First@Example.org', 'nick': 'Étoile'},
+            {'name': 'Zoë One', 'email': 'Second@Example.org',
+             'nick': 'Étoile__Second@Example.org'},
+        ])
+
+    def test_installed_jaro_import_and_vcard_export(self):
+        selected = 'Fixture list'
+        env = dict(self.env, LC_ALL='C.UTF-8')
+        payload = 'Zoë One <first@example.org>\nRenée Two <two@example.org>'.encode()
+        imported = self.capture([self.jaro, '-q', '-l', selected, 'import'],
+                                env=env, input=payload)
+        self.assertEqual((imported.returncode, imported.stderr, imported.stdout),
+                         (0, b'', payload + b'\n'))
+        exported = self.capture([self.jaro, '-q', '-l', selected, 'export', 'vcard'],
+                                env=env)
+        self.assertEqual((exported.returncode, exported.stderr), (0, b''))
+        self.assertEqual(self.native_records(self.convert_book(exported.stdout, 'vcard', 'abook')),
+                         [{'name': 'Zoë One', 'email': 'first@example.org'},
+                          {'name': 'Renée Two', 'email': 'two@example.org'}])
+
+    def test_installed_editor_add_cancel_autosave_and_reopen(self):
+        legacy = self.mail / 'whitelist.abook'
+        fixture = ('[0]\nname=Zoë One\nemail=First@Example.org,Second@Example.org\n'
+                   'nick=Étoile\nnotes=講師 ☃\nfixture=日本語\t= kept').encode()
+        env = dict(self.env, LC_ALL='C.UTF-8')
+        command = [self.jaro, '-q', 'abook']
+        duplicate = fixture + b'\nname=Repeated'
+        legacy.write_bytes(duplicate)
+        rejected = self.capture([self.jaro, '-q', 'complete', 'zoe'], env=env)
+        self.assertEqual(rejected.returncode, 4, rejected.stderr)
+        self.assertIn(b'duplicate field', rejected.stderr)
+        self.assertFalse((self.mail / 'contacts.sqlite').exists())
+        self.assertEqual(legacy.read_bytes(), duplicate)
+        legacy.write_bytes(fixture)
+
+        def addresses(name):
+            with closing(sqlite3.connect(self.mail / 'contacts.sqlite')) as db:
+                return db.execute('SELECT a.spelling FROM addresses a JOIN contacts c '
+                                  'ON a.contact_id=c.id WHERE c.name=? ORDER BY a.ordinal',
+                                  (name,)).fetchall()
+
+        with Terminal(command, cwd=self.root, env=env, cols=80, lines=24) as terminal:
+            terminal.wait('List: allow', 'Zoë One', 'First@Example.org')
+            terminal.send('a')
+            terminal.wait('Name:')
+            terminal.send('Cancelled Name\x07')
+            terminal.wait('List: allow', cursor=lambda screen: not screen.cursor_visible
+                          and 'Name:' not in screen.text)
+            self.assertNotIn('Cancelled Name', terminal.screen.text)
+            terminal.send('a')
+            terminal.wait('Name:')
+            terminal.send('Renée New\r')
+            terminal.wait('< CONTACT >', 'Renée New')
+            terminal.send('2')
+            terminal.wait('E-mail:')
+            terminal.send('Added@Example.org\r')
+            terminal.wait('Added@Example.org', 'Unsaved changes')
+            self.assertEqual(addresses('Renée New'), [])
+            terminal.send('q')
+            terminal.wait('List: allow', 'Saved to this list', 'Renée New')
+            self.assertEqual(addresses('Renée New'), [('Added@Example.org',)])
+            terminal.quit()
+
+        with Terminal(command, cwd=self.root, env=env, cols=80, lines=24) as terminal:
+            terminal.wait('List: allow', 'Renée New', 'Zoë One')
+            terminal.send('/renee')
+            terminal.wait('/ renee', 'Added@Example.org')
+            terminal.send('\r1')
+            terminal.wait('Name: Renée New')
+            terminal.send('\x15Renée Edited\rq')
+            terminal.wait('List: allow', 'Renée Edited', 'Saved to this list')
+            terminal.send('l')
+            terminal.wait('/ renee', 'Renée Edited',
+                          cursor=lambda screen: 'Saved to this list' not in screen.text)
+            terminal.send('d')
+            terminal.wait('Remove 1 contact from this list?')
+            terminal.send('y')
+            terminal.wait('No matching contacts')
+            terminal.quit()
+
+        self.assertEqual(addresses('Renée Edited'), [])
+        self.assertEqual(addresses('Zoë One'), [('First@Example.org',), ('Second@Example.org',)])
+        with closing(sqlite3.connect(self.mail / 'contacts.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT nickname,notes FROM contacts WHERE name=?',
+                                        ('Zoë One',)).fetchone(), ('Étoile', '講師 ☃'))
+            self.assertEqual(db.execute('SELECT key,value FROM fields').fetchall(),
+                             [('fixture', '日本語\t= kept')])
+        self.assertEqual(legacy.read_bytes(), fixture)
 
     def test_installed_writer_editor_reader_use_profile_across_accounts(self):
         accounts = self.mail / 'Accounts'

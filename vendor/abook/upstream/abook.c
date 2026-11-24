@@ -274,13 +274,14 @@ set_filenames()
 		exit(EXIT_FAILURE);
 	}
 
-	if(!datafile)
-		datafile = strconcat(get_data_dir(), "/"
-				DATAFILE, NULL);
-
-	if(!rcfile)
-		rcfile = strconcat(get_data_dir(), "/"
-				RCFILE, NULL);
+	if(!datafile || !rcfile) {
+		char *dir = get_data_dir();
+		if(!datafile)
+			datafile = strconcat(dir, "/" DATAFILE, NULL);
+		if(!rcfile)
+			rcfile = strconcat(dir, "/" RCFILE, NULL);
+		free(dir);
+	}
 
 	atexit(free_filenames);
 }

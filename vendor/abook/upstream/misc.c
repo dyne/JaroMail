@@ -1178,7 +1178,9 @@ csv_to_abook_list(char *str)
 		}
 
 		if((*p == ',') && (end - start)) {
-			abook_list_append(&list, xstrndup(start, end - start));
+			char *element = xstrndup(start, end - start);
+			abook_list_append(&list, element);
+			free(element);
 			p++;
 			SKIPWS(p);
 			start = end = p;
@@ -1187,8 +1189,11 @@ csv_to_abook_list(char *str)
 
 		p++;
 	}
-	if(end - start)
-		abook_list_append(&list, xstrndup(start, end - start));
+	if(end - start) {
+		char *element = xstrndup(start, end - start);
+		abook_list_append(&list, element);
+		free(element);
+	}
 
 	return list;
 }
