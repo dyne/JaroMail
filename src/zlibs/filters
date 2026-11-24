@@ -56,6 +56,15 @@ filter_policy_template() {
     }
 }
 
+filter_copy_policy_template() {
+    local copy_option=-n
+    # GNU cp now warns about -n. Older GNU and BSD cp still need it.
+    if command cp --update=none --version >/dev/null 2>&1; then
+        copy_option=--update=none
+    fi
+    command cp "$copy_option" -- "$1" "$MAILDIRS/Filters.txt" || return 3
+}
+
 native_filter_compile() {
     setopt localoptions extendedglob
     local report result
@@ -120,7 +129,7 @@ init_inbox() {
     cp "$WORKDIR"/jaromail-manual.pdf "$MAILDIRS"/Manual.pdf }
 
     [[ -z $init_filter_template ]] ||
-        cp -n -- "$init_filter_template" "$MAILDIRS/Filters.txt" || return 3
+        filter_copy_policy_template "$init_filter_template" || return 3
 
     { test -r "$MAILDIRS"/Aliases.txt } || {
     cp "$WORKDIR"/Aliases.txt "$MAILDIRS"/Aliases.txt }

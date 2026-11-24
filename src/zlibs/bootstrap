@@ -220,7 +220,7 @@ bootstrap_profile_defaults() {
 
         # make sure we have Filters.txt Applications.txt Mutt.txt
     [[ -z $filter_bootstrap_template ]] || {
-        cp -n -- "$filter_bootstrap_template" "$MAILDIRS/Filters.txt" || return 3
+        filter_copy_policy_template "$filter_bootstrap_template" || return 3
         notice "Default filters created" }
 
     { test -r "$MAILDIRS/Applications.txt" } || {
