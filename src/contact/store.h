@@ -61,6 +61,22 @@ int jaro_contact_open(const char *path, enum jaro_contact_open_mode mode,
 int jaro_contact_open_memory(struct jaro_contact_store **store, struct jaro_contact_error *error);
 int jaro_contact_close(struct jaro_contact_store *store, struct jaro_contact_error *error);
 int jaro_contact_verify(struct jaro_contact_store *store, struct jaro_contact_error *error);
+
+enum jaro_contact_diagnosis {
+	JARO_CONTACT_DIAG_OK, JARO_CONTACT_DIAG_ABSENT, JARO_CONTACT_DIAG_PERMISSIONS,
+	JARO_CONTACT_DIAG_UNREADABLE, JARO_CONTACT_DIAG_LOCKED, JARO_CONTACT_DIAG_CORRUPT,
+	JARO_CONTACT_DIAG_SCHEMA, JARO_CONTACT_DIAG_RECOVERY, JARO_CONTACT_DIAG_JOURNAL
+};
+
+struct jaro_contact_health {
+	int mode;                   /* Permission bits, or -1 if unknown. */
+	int schema_known;
+	int64_t schema_version, books, contacts;
+};
+
+/* Diagnose only the existing file. Never initialize or recover a profile. */
+enum jaro_contact_diagnosis jaro_contact_diagnose(const char *path,
+	struct jaro_contact_health *health);
 int jaro_contact_begin(struct jaro_contact_store *store, struct jaro_contact_error *error);
 int jaro_contact_begin_read(struct jaro_contact_store *store, struct jaro_contact_error *error);
 int jaro_contact_commit(struct jaro_contact_store *store, struct jaro_contact_error *error);

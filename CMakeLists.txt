@@ -133,8 +133,10 @@ target_link_libraries(jaro-dedup PRIVATE jaro-dedup-sqlite)
 target_compile_options(jaro-dedup PRIVATE -Wall -Wextra -Wpedantic)
 add_library(jaro-contact-sqlite STATIC EXCLUDE_FROM_ALL vendor/sqlite/upstream/sqlite3.c)
 target_include_directories(jaro-contact-sqlite PUBLIC "${PROJECT_SOURCE_DIR}/vendor/sqlite/upstream")
+# The contact store supports rollback journals only. Read-only diagnosis
+# must never create the shared memory or log files used for WAL.
 target_compile_definitions(jaro-contact-sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION
-  SQLITE_DQS=0 SQLITE_DEFAULT_SYNCHRONOUS=3 SQLITE_DEFAULT_FOREIGN_KEYS=1
+  SQLITE_OMIT_WAL SQLITE_DQS=0 SQLITE_DEFAULT_SYNCHRONOUS=3 SQLITE_DEFAULT_FOREIGN_KEYS=1
   SQLITE_DEFAULT_FILE_PERMISSIONS=0600 SQLITE_TEMP_STORE=3)
 target_link_libraries(jaro-contact-sqlite PUBLIC Threads::Threads)
 add_library(jaro-contacts STATIC EXCLUDE_FROM_ALL src/contact/store.c src/contact/text.c

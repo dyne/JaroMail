@@ -155,18 +155,24 @@ configure(sqlite3 *db, int create, int memory, struct jaro_contact_error *error)
 }
 
 static int
-check_schema(sqlite3 *db, struct jaro_contact_error *error)
+check_schema(sqlite3 *db, struct jaro_contact_health *health, struct jaro_contact_error *error)
 {
-	sqlite3_int64 generation = 0;
+	sqlite3_int64 version = 0, generation = 0;
 	sqlite3_stmt *statement = NULL;
 	int status = check_setting(db, "PRAGMA application_id", JARO_CONTACT_APPLICATION_ID,
 		error, "invalid contact database identity");
-	if (!status)
-		status = check_setting(db, "PRAGMA user_version", JARO_CONTACT_SCHEMA_VERSION,
-			error, "unsupported contact schema version");
 	if (status)
 		return status;
-	int rc = read_integer(db, "SELECT generation FROM metadata WHERE singleton=1", &generation);
+	int rc = read_integer(db, "PRAGMA user_version", &version);
+	if (rc != SQLITE_OK)
+		return sql_failure(error, rc, "cannot read contact schema version");
+	if (health) {
+		health->schema_known = 1;
+		health->schema_version = version;
+	}
+	if (version != JARO_CONTACT_SCHEMA_VERSION)
+		return sql_failure(error, SQLITE_MISMATCH, "unsupported contact schema version");
+	rc = read_integer(db, "SELECT generation FROM metadata WHERE singleton=1", &generation);
 	if (rc == SQLITE_OK && generation < 0)
 		rc = SQLITE_CORRUPT;
 	if (rc != SQLITE_OK)
@@ -186,7 +192,7 @@ check_schema(sqlite3 *db, struct jaro_contact_error *error)
 }
 
 static int
-open_database(const char *path, int flags, int create, int memory,
+open_connection(const char *path, int flags, int create, int memory,
 	struct jaro_contact_store **store, struct jaro_contact_error *error)
 {
 	struct jaro_contact_store *opened = calloc(1, sizeof *opened);
@@ -199,17 +205,33 @@ open_database(const char *path, int flags, int create, int memory,
 		rc = SQLITE_READONLY;
 	int status = rc == SQLITE_OK ? configure(opened->db, create, memory, error) :
 		sql_failure(error, rc, "cannot open contact database");
-	if (!status && create)
+	if (status) {
+		sqlite3_close(opened->db);
+		free(opened);
+		return status;
+	}
+	*store = opened;
+	return JARO_CONTACT_OK;
+}
+
+static int
+open_database(const char *path, int flags, int create, int memory,
+	struct jaro_contact_store **store, struct jaro_contact_error *error)
+{
+	struct jaro_contact_store *opened;
+	int status = open_connection(path, flags, create, memory, &opened, error);
+	if (status)
+		return status;
+	if (create)
 		status = execute(opened->db, "BEGIN IMMEDIATE", error, "cannot begin contact schema");
 	if (!status && create)
 		status = execute(opened->db, schema, error, "cannot create contact schema");
 	if (!status && create)
 		status = execute(opened->db, "COMMIT", error, "cannot commit contact schema");
 	if (!status)
-		status = check_schema(opened->db, error);
+		status = check_schema(opened->db, NULL, error);
 	if (status) {
-		sqlite3_close(opened->db); /* SQLite rolls back unfinished transactions. */
-		free(opened);
+		jaro_contact_close(opened, NULL); /* SQLite rolls back unfinished transactions. */
 		return status;
 	}
 	*store = opened;
@@ -282,11 +304,12 @@ jaro_contact_close(struct jaro_contact_store *store, struct jaro_contact_error *
 	return JARO_CONTACT_OK;
 }
 
-int
-jaro_contact_verify(struct jaro_contact_store *store, struct jaro_contact_error *error)
+static int
+verify_integrity(struct jaro_contact_store *store, const char *pragma,
+	struct jaro_contact_error *error)
 {
 	sqlite3_stmt *statement = NULL;
-	int rc = sqlite3_prepare_v2(store->db, "PRAGMA quick_check(1)", -1, &statement, NULL);
+	int rc = sqlite3_prepare_v2(store->db, pragma, -1, &statement, NULL);
 	if (rc == SQLITE_OK) {
 		rc = sqlite3_step(statement);
 		if (rc == SQLITE_ROW) {
@@ -306,6 +329,87 @@ jaro_contact_verify(struct jaro_contact_store *store, struct jaro_contact_error 
 	if (rc == SQLITE_ROW)
 		rc = SQLITE_CONSTRAINT_FOREIGNKEY;
 	return rc == SQLITE_DONE ? JARO_CONTACT_OK : sql_failure(error, rc, "invalid contact foreign keys");
+}
+
+int
+jaro_contact_verify(struct jaro_contact_store *store, struct jaro_contact_error *error)
+{
+	return verify_integrity(store, "PRAGMA quick_check(1)", error);
+}
+
+static int
+wal_header(const char *path)
+{
+	unsigned char header[20];
+	int fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+	if (fd < 0)
+		return 0;
+	ssize_t size = read(fd, header, sizeof header);
+	close(fd);
+	/* Bytes 18 and 19 are SQLite's database write and read format versions. */
+	return size == (ssize_t)sizeof header && !memcmp(header, "SQLite format 3", 16) &&
+		header[18] == 2 && header[19] == 2;
+}
+
+enum jaro_contact_diagnosis
+jaro_contact_diagnose(const char *path, struct jaro_contact_health *health)
+{
+	struct jaro_contact_store *store;
+	struct jaro_contact_error error = {0};
+	struct stat st;
+	sqlite3_int64 books = 0, contacts = 0;
+
+	*health = (struct jaro_contact_health){.mode = -1};
+	if (lstat(path, &st) < 0)
+		return errno == ENOENT ? JARO_CONTACT_DIAG_ABSENT : JARO_CONTACT_DIAG_UNREADABLE;
+	health->mode = st.st_mode & 07777;
+	if (!S_ISREG(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 0077))
+		return JARO_CONTACT_DIAG_PERMISSIONS;
+	if (!(st.st_mode & S_IRUSR))
+		return JARO_CONTACT_DIAG_UNREADABLE;
+
+	/* This build supports only rollback journaling. Omitting WAL also
+	 * prevents SQLite from creating sidecars for an unsupported WAL file. */
+	int status = open_connection(path, SQLITE_OPEN_READONLY, 0, 0, &store, &error);
+	if (!status) {
+		status = jaro_contact_begin_read(store, &error);
+		if (!status)
+			status = check_schema(store->db, health, &error);
+		if (!status)
+			status = verify_integrity(store, "PRAGMA integrity_check(1)", &error);
+		if (!status) {
+			int rc = read_integer(store->db, "SELECT count(*) FROM books", &books);
+			if (rc == SQLITE_OK)
+				rc = read_integer(store->db, "SELECT count(*) FROM contacts", &contacts);
+			if (rc != SQLITE_OK)
+				status = sql_failure(&error, rc, "cannot count contact records");
+		}
+		status = jaro_contact_finish(store, status, &error);
+		int closed = jaro_contact_close(store, status ? NULL : &error);
+		if (!status)
+			status = closed;
+	}
+	if (!status) {
+		health->books = books;
+		health->contacts = contacts;
+		return JARO_CONTACT_DIAG_OK;
+	}
+	if (status == JARO_CONTACT_BUSY)
+		return JARO_CONTACT_DIAG_LOCKED;
+	if (health->schema_known && health->schema_version != JARO_CONTACT_SCHEMA_VERSION)
+		return JARO_CONTACT_DIAG_SCHEMA;
+	if (error.native_code == SQLITE_READONLY_ROLLBACK)
+		return JARO_CONTACT_DIAG_RECOVERY;
+	int code = error.native_code & 0xff;
+	if (code == SQLITE_NOTADB && wal_header(path))
+		return JARO_CONTACT_DIAG_JOURNAL;
+	switch (code) {
+	case SQLITE_CORRUPT: case SQLITE_NOTADB: case SQLITE_CONSTRAINT:
+	case SQLITE_MISMATCH: case SQLITE_ERROR:
+		return JARO_CONTACT_DIAG_CORRUPT;
+	default:
+		return JARO_CONTACT_DIAG_UNREADABLE;
+	}
 }
 
 int

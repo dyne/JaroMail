@@ -3,7 +3,7 @@
 set -euo pipefail
 repo_root="${0:A:h:h:h}"
 command -v python3 >/dev/null || exit 77
-[[ -x "$repo_root/build/gnu/jaro-outbox" ]] || exit 77
+[[ -x "$repo_root/build/gnu/jaro-outbox" && -x "$repo_root/build/gnu/jaro-filter-compile" ]] || exit 77
 python3 - "$repo_root" <<'PY'
 import hashlib
 import json
@@ -57,6 +57,7 @@ with tempfile.TemporaryDirectory(prefix='jaro-doctor-', dir=os.environ.get('TMPD
         for name in helpers:
             (runtime / 'bin' / name).write_text(stub)
             (runtime / 'bin' / name).chmod(0o700)
+        shutil.copyfile(repo / 'build/gnu/jaro-filter-compile', runtime / 'bin/jaro-filter-compile')
         accounts = mail / 'Accounts'
         accounts.mkdir()
         (accounts / 'default').write_text('email fixture@example.org\nlogin fixture\nimap imap.example.org\nsmtp smtp.example.org\ncert check\n')
@@ -88,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix='jaro-doctor-', dir=os.environ.get('TMPD
         print(f'PASS case: {root.name}; unchanged manifest={digest}; stub calls=0')
         return p.stdout
 
-    expected_ids = {'paths', 'runtime', 'version', 'mail.root', 'maildirs', 'account', 'trust', 'keyring', 'filters', 'index', 'outbox'}
+    expected_ids = {'paths', 'runtime', 'version', 'mail.root', 'maildirs', 'account', 'trust', 'keyring', 'filters', 'index', 'contacts', 'outbox'}
     expected_ids |= {'command.' + name for name in ['zsh', *required] if name != 'neomutt'} | {'command.mutt'}
     expected_ids |= {'optional.' + name for name in optional if name != 'gnome-keyring-daemon'}
     expected_ids |= {'helper.' + name for name in [*helpers, 'jaro-outbox']}
@@ -116,10 +117,11 @@ with tempfile.TemporaryDirectory(prefix='jaro-doctor-', dir=os.environ.get('TMPD
         return document, {check['id']: check for check in checks}
 
     f = fixture('configured')
-    run(f, includes=('ok [account]', 'ok [keyring]', 'eligible=0 held=0 local-recovery=0 invalid=0', 'Version: 6.0.0'))
+    run(f, includes=('ok [account]', 'ok [keyring]', 'ok [contacts] Contact store absent',
+                     'eligible=0 held=0 local-recovery=0 invalid=0', 'Version: 6.0.0'))
     f = fixture('configured-json')
     document, checks = structured(f)
-    assert len(checks) == 44, checks.keys()
+    assert len(checks) == 45, checks.keys()
     assert checks['trust']['status'] == 'unknown' and checks['index']['status'] == 'warning'
     # Both renderers carry exactly the same findings and suggested actions.
     human = run(f)

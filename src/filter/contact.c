@@ -2,6 +2,7 @@
 #include "contact/migrate.h"
 #include "products.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -66,9 +67,39 @@ static int display_contact(const struct jaro_contact *contact,void *data)
 	return 0;
 }
 
+static int diagnose(const char *path)
+{
+	static const char *const labels[] = {
+		[JARO_CONTACT_DIAG_OK] = "ok",
+		[JARO_CONTACT_DIAG_ABSENT] = "absent",
+		[JARO_CONTACT_DIAG_PERMISSIONS] = "permissions",
+		[JARO_CONTACT_DIAG_UNREADABLE] = "unreadable",
+		[JARO_CONTACT_DIAG_LOCKED] = "locked",
+		[JARO_CONTACT_DIAG_CORRUPT] = "corrupt",
+		[JARO_CONTACT_DIAG_SCHEMA] = "schema",
+		[JARO_CONTACT_DIAG_RECOVERY] = "recovery",
+		[JARO_CONTACT_DIAG_JOURNAL] = "journal",
+	};
+	struct jaro_contact_health health;
+	enum jaro_contact_diagnosis status = jaro_contact_diagnose(path, &health);
+	printf("%s ", labels[status]);
+	if (health.mode < 0)
+		fputs("unknown ", stdout);
+	else
+		printf("%04o ", (unsigned)health.mode);
+	if (health.schema_known)
+		printf("%" PRId64 " ", health.schema_version);
+	else
+		fputs("unknown ", stdout);
+	printf("%" PRId64 " %" PRId64 "\n", health.books, health.contacts);
+	return fflush(stdout) == EOF ? 3 : 0;
+}
+
 int jf_contact_command(int argc,char **argv,struct jf_error *error)
 {
 	const char *command=argc>1 ? argv[1] : "";
+	if (!strcmp(command, "--diagnose-contacts"))
+		return argc == 3 ? diagnose(argv[2]) : 2;
 	int add=!strcmp(command,"--add-contact"), has=!strcmp(command,"--has-contact");
 	int query=!strcmp(command,"--query-contacts"), recipients=!strcmp(command,"--recipient-contacts");
 	int export=!strcmp(command,"--export-contacts");

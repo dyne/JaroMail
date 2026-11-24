@@ -96,12 +96,6 @@ jobs:
           if [[ "$TARGET_ARCH" == arm64 ]]; then emulator=(qemu-aarch64); fi
           "${emulator[@]}" out/static/bin/jaro-filter-compile --version
           "${emulator[@]}" out/static/bin/jaro-filter-compile --check-address person@example.org
-          "${emulator[@]}" out/static/bin/abook --help | grep -Fx 'abook v0.6.2'
-          printf 'alias fixture Static Test <static.person.with.a.long.address@example.org>\n' > out/abook-aliases
-          "${emulator[@]}" out/static/bin/abook --config /dev/null --convert \
-            --informat mutt --infile out/abook-aliases --outformat abook --outfile out/abook-fixture
-          "${emulator[@]}" out/static/bin/abook --config /dev/null --datafile out/abook-fixture \
-            --mutt-query '' | grep -F 'static.person.with.a.long.address@example.org'
           abook_emulator=()
           if [[ "$TARGET_ARCH" == arm64 ]]; then abook_emulator=(--emulator qemu-aarch64); fi
           python3 extras/test/abook-tui-smoke.py --binary out/static/bin/abook \
@@ -123,8 +117,12 @@ jobs:
           test "$("$package_root/bin/jaro" --version)" = "Jaro Mail v$ASSIGNED_VERSION"
           python3 build/check-static.py --bin-dir "$package_root/share/jaromail/bin" --arch "$TARGET_ARCH"
           if [[ "$TARGET_ARCH" == arm64 ]]; then
+            python3 extras/test/abook-package-smoke.py --prefix "$package_root" \
+              --version "$ASSIGNED_VERSION" --emulator qemu-aarch64
             python3 extras/test/dedup-cli-smoke.py --helper "$package_root/share/jaromail/bin/jaro-dedup" --emulator qemu-aarch64
           else
+            python3 extras/test/abook-package-smoke.py --prefix "$package_root" \
+              --version "$ASSIGNED_VERSION" --cli
             python3 extras/test/dedup-cli-smoke.py --cli "$package_root/bin/jaro"
           fi
       - uses: actions/upload-artifact@v4
@@ -186,6 +184,7 @@ jobs:
           (cd dist && sha256sum "$archive" > "$archive.sha256")
           tar -xzf "dist/$archive" -C relocated
           bash extras/test/release-filter-smoke.sh "$PWD/relocated/$bundle"
+          python3 extras/test/abook-package-smoke.py --prefix "$PWD/relocated/$bundle" --cli
           python3 extras/test/dedup-cli-smoke.py --cli "$PWD/relocated/$bundle/bin/jaro"
       - uses: actions/upload-artifact@v4
         with:

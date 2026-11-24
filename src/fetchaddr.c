@@ -122,7 +122,7 @@ int main(int argc, char* argv[])
   int i, rv;
   int partial = 0;
   struct header *cur_hdr = NULL;
-  char *datefmt = NULL;
+  const char *datefmt = "%Y-%m-%d %H:%M";
   char *headerlist = NULL;
   char *fieldname, *next;
   char create_real_name = 0;
@@ -154,9 +154,6 @@ int main(int argc, char* argv[])
       i++;
     }
   }
-
-  if (!datefmt) 
-    datefmt = safe_strdup("%Y-%m-%d %H:%M");
 
   if (headerlist && strlen (headerlist) > 0 ) {
     fieldname = headerlist;
