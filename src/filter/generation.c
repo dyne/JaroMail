@@ -47,7 +47,13 @@ static int run_sieve(const char *runtime,int directory,const char *operation,str
 {
 	char *program=runtime ? join(runtime,"run") : NULL;
 	pid_t child=-1,waited; int status=0;
-	if (program && access(program,X_OK)==0) child=fork();
+	if (!program || access(program,X_OK)) {
+		free(program);
+		jf_product_error(error,"E_SIEVE_RUNTIME",0,
+			"Sieve launcher unavailable; install a Sieve-enabled build or check JARO_SIEVE_RUNTIME");
+		return 3;
+	}
+	child=fork();
 	if (child==0) {
 		int output=open("/dev/null",O_WRONLY);
 		if (output<0 || dup2(output,STDOUT_FILENO)<0 || (directory>=0 && fchdir(directory))) _exit(126);
@@ -62,7 +68,9 @@ static int run_sieve(const char *runtime,int directory,const char *operation,str
 		do waited=waitpid(child,&status,0); while (waited<0 && errno==EINTR);
 		if (waited==child && WIFEXITED(status) && WEXITSTATUS(status)==0) return 0;
 	}
-	jf_product_error(error,"E_SIEVE_RUNTIME",0,"pinned Sieve runtime unavailable or failed to compile/load the program");
+	char detail[96];
+	snprintf(detail,sizeof detail,"Sieve runtime failed during %s",operation);
+	jf_product_error(error,"E_SIEVE_RUNTIME",0,detail);
 	return 3;
 }
 

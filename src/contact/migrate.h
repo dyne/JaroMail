@@ -11,6 +11,10 @@ struct jaro_contact_migration_error {
 	int native_code;
 };
 
+/* Format a diagnostic without including contact values or source names. */
+void jaro_contact_migration_diagnostic(char *buffer, size_t size,
+	const struct jaro_contact_migration_error *error);
+
 /* Reports counts after successful publication, in bytewise filename order.
  * Sources are identified by their one-based position in that order. */
 typedef void (*jaro_contact_migration_notice)(void *, size_t source, size_t records);

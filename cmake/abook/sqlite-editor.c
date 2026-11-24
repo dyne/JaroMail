@@ -77,7 +77,7 @@ static int open_store(enum jaro_contact_profile_mode mode,struct jaro_contact_st
 {
 	struct jaro_contact_migration_error error;
 	int status=jaro_contact_profile_open(jaro_editor_profile,mode,store,&error);
-	if (status) set_diagnostic(error.reason,error.field);
+	if (status) jaro_contact_migration_diagnostic(diagnostic, sizeof diagnostic, &error);
 	return status;
 }
 
