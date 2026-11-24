@@ -44,6 +44,9 @@ extern bool db_need_save;
 
 WINDOW *editw;
 
+static int editor_width(void) { return jaro_editor_profile ? COLS - 2 : EDITW_COLS; }
+static int editor_height(void) { return jaro_editor_profile ? LINES - 4 : EDITW_LINES; }
+static int fields_top(void) { return jaro_editor_profile ? 2 : FIELDS_START_Y; }
 
 static void
 editor_tab(const int tab)
@@ -51,6 +54,15 @@ editor_tab(const int tab)
 	int i, j;
 	int x_pos = 2; /* current x pos */
 	char *tab_name;
+
+	if(jaro_editor_profile) {
+		view_info(tab, &tab_name, NULL);
+		wattrset(editw, COLOR_PAIR(CP_TAB_LABEL));
+		mvwaddstr(editw, TABLINE, 0, "< ");
+		waddnstr(editw, tab_name, bytes2width(tab_name, editor_width() - 5));
+		waddstr(editw, " >");
+		return;
+	}
 
 	wattrset(editw, COLOR_PAIR(CP_TAB_BORDER));
 	mvwhline(editw, TABLINE + 1, 0, UI_HLINE_CHAR, EDITW_COLS);
@@ -128,7 +140,7 @@ static void
 init_editor()
 {
 	clear();
-	editw = newwin(EDITW_LINES, EDITW_COLS, EDITW_TOP, EDITW_X);
+	editw = newwin(editor_height(), editor_width(), EDITW_TOP, jaro_editor_profile ? 1 : EDITW_X);
 	notimeout(editw, TRUE); /* handling of escape key */
 
 	refresh_statusline();
@@ -191,6 +203,17 @@ print_editor_header(int item)
 	char *header;
 	char email[MAX_EMAIL_LEN];
 
+	if(jaro_editor_profile) {
+		const char *name = db_name_get(item);
+		char *safe = jaro_contact_display_text((struct jaro_contact_text){name, strlen(name)});
+		wattrset(editw, COLOR_PAIR(CP_TAB_LABEL));
+		if(safe) {
+			mvwaddnstr(editw, 0, 0, safe, bytes2width(safe, editor_width() - 1));
+			free(safe);
+		}
+		return;
+	}
+
 	if((header = xmalloc(EDITW_COLS)) == NULL)
 		return;
 
@@ -214,6 +237,9 @@ editor_print_data(int tab, int item)
 {
 	int j = 1, nb;
 	int y, x;
+	int field_x = jaro_editor_profile ? 0 : FIELDS_START_X;
+	int colon = jaro_editor_profile ? min(24, editor_width() / 3) : TAB_COLON_POS;
+	int value_width = jaro_editor_profile ? editor_width() - colon - 3 : FIELD_MAX_WIDTH;
 	abook_field_list *cur;
 	char *str;
 
@@ -225,15 +251,17 @@ editor_print_data(int tab, int item)
 			getyx(editw, y, x);
 			y++;
 		} else
-			y = FIELDS_START_Y;
+			y = fields_top();
+		if(jaro_editor_profile && y >= editor_height())
+			break;
 
 		wattrset(editw, COLOR_PAIR(CP_FIELD_NAME));
-		mvwprintw(editw, y, FIELDS_START_X, "%c - ",
+		mvwprintw(editw, y, field_x, "%c - ",
 				(j < 10) ? '0' + j : 'A' + j - 10);
-		mvwaddnstr(editw, y, FIELDS_START_X + 4, cur->field->name,
+		mvwaddnstr(editw, y, field_x + 4, cur->field->name,
 				bytes2width(cur->field->name,
-					FIELDNAME_MAX_WIDTH));
-		mvwaddch(editw, y, TAB_COLON_POS, ':');
+					jaro_editor_profile ? colon - field_x - 4 : FIELDNAME_MAX_WIDTH));
+		mvwaddch(editw, y, colon, ':');
 
 		wattrset(editw, COLOR_PAIR(CP_FIELD_VALUE));
 		if((cur->field->type == FIELD_EMAILS) ||
@@ -247,14 +275,18 @@ editor_print_data(int tab, int item)
 
 			for(e = emails; e; e = e->next) {
 				getyx(editw, y, x);
-				mvwaddnstr(editw, y + 1, TAB_COLON_POS + 2,
+				int row = y + (!jaro_editor_profile || e != emails);
+				if(jaro_editor_profile && row >= editor_height())
+					break;
+				int start = jaro_editor_profile && e != emails ? 4 : colon + 2;
+				mvwaddnstr(editw, row, start,
 						e->data,
 						bytes2width(e->data,
-							FIELD_MAX_WIDTH));
-				mvwaddch(editw, y + 1, TAB_COLON_POS,
-						UI_VLINE_CHAR);
+							jaro_editor_profile ? editor_width() - start - 1 : value_width));
+				if(!jaro_editor_profile)
+					mvwaddch(editw, row, colon, UI_VLINE_CHAR);
 			}
-			if(emails) {
+			if(emails && !jaro_editor_profile) {
 				mvwaddch(editw, y + 2, TAB_COLON_POS,
 						UI_LLCORNER_CHAR);
 				mvwhline(editw, y + 2, TAB_COLON_POS + 1,
@@ -272,8 +304,8 @@ editor_print_data(int tab, int item)
 			if(parse_date_string(str, &day, &month, &year)) {
 				/* put locale representation of date in buf */
 				locale_date(buf, sizeof(buf), year, month, day);
-				mvwaddnstr(editw, y, TAB_COLON_POS + 2, buf,
-					bytes2width(buf, FIELD_MAX_WIDTH));
+				mvwaddnstr(editw, y, colon + 2, buf,
+					bytes2width(buf, value_width));
 			}
 		} else {
 			find_field_number(cur->field->key, &nb);
@@ -281,8 +313,8 @@ editor_print_data(int tab, int item)
 			char *safe=jaro_editor_profile ?
 				jaro_contact_display_text((struct jaro_contact_text){str,strlen(str)}) : NULL;
 			if (jaro_editor_profile) str=safe ? safe : "";
-			mvwaddnstr(editw, y, TAB_COLON_POS + 2, str,
-				bytes2width(str, FIELD_MAX_WIDTH));
+			mvwaddnstr(editw, y, colon + 2, str,
+				bytes2width(str, value_width));
 			free(safe);
 		}
 
@@ -314,10 +346,13 @@ change_field(char *msg, char **field, size_t max_len)
 
 	old = *field;
 
-	*field = ui_readline(msg, old, max_len - 1, 0);
+	*field = ui_readline(msg, old, jaro_editor_profile ? 0 : max_len - 1, 0);
 
 	if(*field) {
-		db_need_save = TRUE;
+		if(!jaro_editor_profile || strcmp(safe_str(old), *field)) {
+			db_need_save = TRUE;
+			ui_contact_draft_changed();
+		}
 		xfree(old);
 		if(!**field)
 			xfree(*field);
@@ -337,6 +372,13 @@ change_name_field(char *msg, char **field, size_t max_len)
 {
 	char *tmp;
 	int ret;
+
+	if(jaro_editor_profile) {
+		ret = change_field(msg, field, max_len);
+		if(!ret && !*field)
+			*field = xstrdup("");
+		return ret;
+	}
 
 	tmp = xstrdup(*field);
 	ret = change_field(msg, field, max_len);
@@ -373,9 +415,12 @@ edit_list(int item, int nb, int isemail)
 		;
 
 	if(elem_count) {
-		keys = xstrndup(S_("keybindings_new_123456789|n123456789"),
-				elem_count + 1);
-		msg = strdup_printf(_("Choose %s to modify (<1>%s%c%s%s."),
+		if(jaro_editor_profile && isemail)
+			msg = elem_count > 1 ?
+				strdup_printf(_("Mailbox: 1-%d or n for new"), min(elem_count, MAX_LIST_ITEMS)) :
+				xstrdup(_("Mailbox: 1 or n for new"));
+		else
+			msg = strdup_printf(_("Choose %s to modify (<1>%s%c%s%s."),
 				isemail ? _("email") : _("item"),
 				(elem_count > 1) ? "-<" : "",
 				(elem_count > 1) ?  '0' + elem_count : ')',
@@ -383,6 +428,8 @@ edit_list(int item, int nb, int isemail)
 				(elem_count < MAX_LIST_ITEMS) ?
 					_(" or <n>ew") : ""
 				);
+		keys = xstrndup(S_("keybindings_new_123456789|n123456789"),
+				elem_count + 1);
 		choice = statusline_askchoice(
 				msg,
 				keys,
@@ -664,23 +711,67 @@ edit_field(int tab, char c, int item_number)
 }
 
 static int
+leave_editor(int item)
+{
+	if(!jaro_editor_profile)
+		return -1;
+	enum ui_contact_leave leave = ui_leave_contacts(FALSE);
+	if(leave == UI_CONTACT_LEAVE ||
+	   (leave == UI_CONTACT_DISCARD && !ui_reload_contacts(FALSE)))
+		return -1;
+	int selected = list_get_curitem();
+	return is_valid_item(selected) ? selected : item;
+}
+
+static int
+saved_editor_item(void)
+{
+	edit_undo(-1, CLEAR_UNDO);
+	list_update_matches();
+	int item = list_get_curitem();
+	return is_valid_item(item) ? item : -1;
+}
+
+static int
 edit_loop(int item)
 {
 	static int tab = 0; /* first tab */
 	int c;
 
 	werase(editw);
-	headerline(gettext(EDITOR_HELPLINE));
-	refresh_statusline();
+	if(jaro_editor_profile) {
+		char *actions = strdup_printf(_("%c back  %c help  Left/Right views  1-9 edit"),
+			ui_binding('q'), ui_binding('?'));
+		headerline(actions);
+		free(actions);
+		ui_contact_editor_footer();
+	} else {
+		headerline(gettext(EDITOR_HELPLINE));
+		refresh_statusline();
+	}
 	print_editor_header(item);
 	editor_tab(tab);
 	editor_print_data(tab, item);
-	wmove(editw, EDITW_LINES - 1, EDITW_COLS - 1);
+	wmove(editw, editor_height() - 1, editor_width() - 1);
 
 	refresh();
 	wrefresh(editw);
 
-	c = getch();
+	if(jaro_editor_profile)
+		wtimeout(stdscr, 100);
+	do {
+		c = getch();
+		if(jaro_editor_profile && ui_handle_resize()) {
+			wtimeout(stdscr, -1);
+			delwin(editw);
+			init_editor();
+			if(c != ERR && c != KEY_RESIZE)
+				ungetch(c);
+			return item;
+		}
+	} while(c == ERR && jaro_editor_profile);
+	if(jaro_editor_profile)
+		wtimeout(stdscr, -1);
 	if(c == '\033') {
 		statusline_addstr("ESC-");
 		c = getch();
@@ -703,9 +794,9 @@ edit_loop(int item)
 				getbegyx(editw, window_y, window_x);
 				if(event.y == 0) {
 					/* if first row is selected, then go back to list */
-					return -1;
-				} else if(event.y == window_y + TABLINE
-				   || event.y == window_y + TABLINE + 1) {
+					return leave_editor(item);
+				} else if(!jaro_editor_profile && (event.y == window_y + TABLINE
+				   || event.y == window_y + TABLINE + 1)) {
 					char* tab_name;
 					int mouse_x = event.x;
 					int xpos = 2 + 1; /* look at editor_tab() and try out */
@@ -724,9 +815,9 @@ edit_loop(int item)
 					if(clicked_tab < views_count) {
 						tab = clicked_tab;
 					}
-				} else if(event.y >= window_y + FIELDS_START_Y) {
+				} else if(event.y >= window_y + fields_top()) {
 					/* is mouse in field area? */
-					int j = 1 + event.y - window_y - FIELDS_START_Y;
+					int j = 1 + event.y - window_y - fields_top();
 					/* field numbers start with 1, but if j='0', then char='0' */
 					/* so fix this, by adding 1 to j */
 					int field_char = (j < 10) ? '0' + j : 'A' + j - 10;
@@ -743,7 +834,7 @@ edit_loop(int item)
 	}
 
 	const char *remap_table = get_remap_table();
-	if (c > 0 && c <= 127)
+	if (c > 0 && c < 127)
 		c = remap_table[c];
 
 	/* No uppercase nor numeric key should be used in this menu,
@@ -757,17 +848,39 @@ edit_loop(int item)
 				break;
 		case KEY_UP:
 		case '<':
-		case 'k': if(is_valid_item(item - 1)) item--; break;
+		case 'k': {
+			int adjacent = list_adjacent_item(item, -1);
+			if(adjacent >= 0) item = adjacent;
+			break;
+		}
 		case KEY_DOWN:
 		case '>':
-		case 'j': if(is_valid_item(item + 1)) item++; break;
+		case 'j': {
+			int adjacent = list_adjacent_item(item, 1);
+			if(adjacent >= 0) item = adjacent;
+			break;
+		}
 		case 'r': roll_emails(item, ROTATE_LEFT); break;
 		case '?': display_help(HELP_EDITOR); break;
-		case 'u': item = edit_undo(item, RESTORE_ITEM); break;
+		case 'u': item = edit_undo(item, RESTORE_ITEM);
+			  ui_contact_draft_changed();
+			  break;
 		case 'm': launch_mutt(item); clearok(stdscr, 1); break;
 		case 'v': launch_wwwbrowser(item); clearok(stdscr, 1); break;
 		case 12 : clearok(stdscr, 1); break; /* ^L (refresh screen) */
-		case 'q': return -1;
+		case 'w':
+			if(jaro_editor_profile) {
+				if(!ui_save_contacts())
+					return saved_editor_item();
+				int selected = list_get_curitem();
+				return is_valid_item(selected) ? selected : item;
+			}
+			break;
+		case 18: /* Ctrl+R */
+			if(jaro_editor_profile && !ui_reload_contacts(TRUE))
+				return saved_editor_item();
+			break;
+		case 'q': return leave_editor(item);
 		default: edit_field(tab, c, item);
 	}
 

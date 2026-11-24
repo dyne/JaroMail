@@ -36,6 +36,7 @@ static int items = 0;
 #define ITEM_SIZE (fields_count * sizeof(char *))
 struct item_storage {
 	int64_t contact_id;
+	int field_count;
 	char *values[];
 };
 #define ITEM_STORAGE_SIZE (offsetof(struct item_storage,values) + ITEM_SIZE)
@@ -247,8 +248,12 @@ list_custom_fields()
 static list_item
 grow_item(list_item item)
 {
-	struct item_storage *row = xrealloc(ITEM_STORAGE(item), ITEM_STORAGE_SIZE);
-	row->values[fields_count - 1] = NULL;
+	struct item_storage *original = ITEM_STORAGE(item);
+	int previous = original->field_count;
+	struct item_storage *row = xrealloc(original, ITEM_STORAGE_SIZE);
+	for(int index = previous; index < fields_count; index++)
+		row->values[index] = NULL;
+	row->field_count = fields_count;
 	return row->values;
 }
 
@@ -425,14 +430,8 @@ write_database(FILE *out, struct db_enumerator e)
 int
 save_database(int force_save)
 {
-	if (jaro_editor_profile) {
-		if (jaro_editor_save()) {
-			statusline_msg(jaro_editor_diagnostic());
-			return -1;
-		}
-		refresh_screen();
-		return 0;
-	}
+	if (jaro_editor_profile)
+		return ui_save_contacts();
 
 	// officialize this the day we are sure that db_need_save cover all possible
 	// modifications of the database using the UI
@@ -692,6 +691,19 @@ void remove_duplicates()
 	adjust_list_capacity();
 }
 
+int
+count_duplicate_items(void)
+{
+	int duplicates = 0;
+	for(int j = 1; j < items; j++)
+		for(int k = 0; k < j; k++)
+			if(!strcmp(db_name_get(j), db_name_get(k))) {
+				duplicates++;
+				break;
+			}
+	return duplicates;
+}
+
 
 char *
 get_surname(char *s)
@@ -946,6 +958,7 @@ list_item
 item_create()
 {
 	struct item_storage *row = xmalloc0(ITEM_STORAGE_SIZE);
+	row->field_count = fields_count;
 	return row->values;
 }
 
@@ -976,7 +989,7 @@ item_empty(list_item item)
 
 	assert(item);
 
-	for(i = 0; i < fields_count; i++)
+	for(i = 0; i < ITEM_STORAGE(item)->field_count; i++)
 		if(item[i])
 			xfree(item[i]);
 
@@ -1017,8 +1030,13 @@ item_merge(list_item dest, list_item src)
 			if (!dest[i])
 			       dest[i] = xstrdup(src[i]);
 			else if((i == field_id(EMAIL)) || (i == field_id(GROUPS))) {
-				dfield = csv_to_abook_list(dest[i]);
-				sfield = csv_to_abook_list(src[i]);
+				if(jaro_editor_profile && i == field_id(EMAIL)) {
+					dfield = mailbox_list_from_csv(dest[i]);
+					sfield = mailbox_list_from_csv(src[i]);
+				} else {
+					dfield = csv_to_abook_list(dest[i]);
+					sfield = csv_to_abook_list(src[i]);
+				}
 				for(es = sfield; es; es = es->next) {
 					for(found=0, ed = dfield; (!found) && ed; ed = ed->next)
 						found = (0 == strcmp(es->data,ed->data));

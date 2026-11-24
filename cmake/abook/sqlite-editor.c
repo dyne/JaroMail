@@ -6,10 +6,12 @@
 #include "ui.h"
 #include "xmalloc.h"
 #include "sqlite-editor.h"
+#include "search-fold.h"
 #include "contact/legacy-import.h"
 #include "contact/migrate.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,6 +33,8 @@ struct view {
 
 static struct view current;
 static char diagnostic[256];
+static char *chosen_list;
+static int failed_item = -1;
 
 const char *jaro_editor_diagnostic(void)
 {
@@ -40,6 +44,23 @@ const char *jaro_editor_diagnostic(void)
 static void set_diagnostic(const char *reason, const char *field)
 {
 	snprintf(diagnostic,sizeof diagnostic,"%s%s%s",field ? field : "",field ? ": " : "",reason);
+}
+
+int jaro_editor_failed_item(void)
+{
+	return failed_item;
+}
+
+static void save_diagnostic(int status, const char *reason, const char *field, int64_t id)
+{
+	if (status == JARO_CONTACT_BUSY)
+		snprintf(diagnostic, sizeof diagnostic, "Contact store is busy. Retry save.");
+	else if (status == JARO_CONTACT_CONFLICT)
+		snprintf(diagnostic, sizeof diagnostic, "Conflict #%" PRId64 ": changed elsewhere", id);
+	else if (status == JARO_CONTACT_INVALID && field)
+		snprintf(diagnostic, sizeof diagnostic, "Invalid %s: %s", field, reason);
+	else
+		set_diagnostic(reason ? reason : "cannot save contacts", field);
 }
 
 static struct jaro_contact_text span(const char *text)
@@ -58,6 +79,80 @@ static int open_store(enum jaro_contact_profile_mode mode,struct jaro_contact_st
 	int status=jaro_contact_profile_open(jaro_editor_profile,mode,store,&error);
 	if (status) set_diagnostic(error.reason,error.field);
 	return status;
+}
+
+static int keep_book(struct jaro_contact_text name, void *data)
+{
+	if (!equal(name, span("allow")) && !equal(name, span("block")) &&
+	    !equal(name, span(jaro_editor_list)))
+		abook_list_append(data, (char *)name.data);
+	return 0;
+}
+
+int jaro_editor_books(abook_list **books)
+{
+	struct jaro_contact_store *store;
+	struct jaro_contact_error error = {0};
+
+	*books = NULL;
+	if (open_store(JARO_CONTACT_PROFILE_READ, &store))
+		return -1;
+	abook_list_append(books, "allow");
+	abook_list_append(books, "block");
+	if (strcmp(jaro_editor_list, "allow") && strcmp(jaro_editor_list, "block"))
+		abook_list_append(books, (char *)jaro_editor_list);
+	int status = jaro_contact_visit_books(store, keep_book, books, &error);
+	jaro_contact_close(store, NULL);
+	if (status) {
+		set_diagnostic(error.reason, error.field);
+		abook_list_free(books);
+		return -1;
+	}
+	return 0;
+}
+
+int jaro_editor_switch_book(const char *name)
+{
+	const char *previous = jaro_editor_list;
+	char *next = xstrdup(name);
+
+	jaro_editor_list = next;
+	if (jaro_editor_load()) {
+		jaro_editor_list = previous;
+		free(next);
+		return -1;
+	}
+	free(chosen_list);
+	chosen_list = next;
+	return 0;
+}
+
+static int field_matches(const char *value, const char *key)
+{
+	if (!value || !*value)
+		return 0;
+	char *folded = abook_search_key(value);
+	int matches = strstr(folded, key) != NULL;
+	free(folded);
+	return matches;
+}
+
+int jaro_editor_matches(int item, const char *key)
+{
+	/* Use the store's folded substring semantics on the current editor rows,
+	 * which may include a draft that is not yet in SQLite. */
+	if (!*key)
+		return 0;
+	if (field_matches(db_fget(item, NAME), key) ||
+	    field_matches(db_fget(item, NICK), key) ||
+	    field_matches(db_fget(item, NOTES), key))
+		return 1;
+	abook_list *mail = mailbox_list_from_csv(safe_str(db_fget(item, EMAIL)));
+	int matches = 0;
+	for (abook_list *address = mail; address && !matches; address = address->next)
+		matches = field_matches(address->data, key);
+	abook_list_free(&mail);
+	return matches;
 }
 
 static void free_view(struct view *view)
@@ -127,6 +222,8 @@ static int compare_ids(const void *left, const void *right)
 	return (a>b)-(a<b);
 }
 
+static void install_view(struct view *view, int64_t selected_id);
+
 int jaro_editor_load(void)
 {
 	struct view view={0};
@@ -149,19 +246,26 @@ int jaro_editor_load(void)
 		free_view(&view);
 		return -1;
 	}
+	install_view(&view, list_current_contact_id());
+	return 0;
+}
+
+static void install_view(struct view *view, int64_t selected_id)
+{
 	close_database();
 	free_view(&current);
 	init_standard_fields();
-	for (size_t i=0;i<view.count;i++)
-		for (size_t j=0;j<view.entries[i].contact.field_count;j++) {
-			char *key=(char *)view.entries[i].contact.fields[j].key.data;
+	for (size_t i=0;i<view->count;i++)
+		for (size_t j=0;j<view->entries[i].contact.field_count;j++) {
+			char *key=(char *)view->entries[i].contact.fields[j].key.data;
 			if (!find_declared_field(key)) declare_new_field(key,key,"string",1);
 		}
-	for (size_t i=0;i<view.count;i++) show_record(&view.entries[i].contact);
-	if (view.count) qsort(view.entries,view.count,sizeof *view.entries,compare_ids);
-	current=view;
+	for (size_t i=0;i<view->count;i++) show_record(&view->entries[i].contact);
+	if (view->count) qsort(view->entries,view->count,sizeof *view->entries,compare_ids);
+	current=*view;
+	*view=(struct view){0};
 	db_need_save=FALSE;
-	return 0;
+	list_restore_contact_id(selected_id);
 }
 
 static int add_field_value(struct jaro_contact *draft,struct jaro_contact_field *fields,
@@ -212,6 +316,7 @@ struct pending_edit {
 	struct jaro_contact_text *split;
 	struct jaro_contact_field *fields;
 	int prepared;
+	int item;
 };
 
 static int prepare_item(list_item item,struct pending_edit *pending,struct jaro_contact_error *error)
@@ -275,6 +380,9 @@ int jaro_editor_save(void)
 {
 	struct jaro_contact_store *store=NULL;
 	struct jaro_contact_error error={0};
+	struct view committed={0};
+	int64_t selected_id=list_current_contact_id(), affected_id=0;
+	failed_item=-1;
 	if (!db_need_save) return 0;
 
 	int items=db_n_items(),status=0;
@@ -287,7 +395,13 @@ int jaro_editor_save(void)
 	for (size_t i=0;i<current.count;i++) current.entries[i].seen=0;
 	for (int i=0;!status && i<items;i++) {
 		struct pending_edit *edit=&edits[edits_count];
-		status=prepare_item(db_item_get(i),edit,&error);
+		list_item item=db_item_get(i);
+		edit->item=i;
+		status=prepare_item(item,edit,&error);
+		if (status) {
+			failed_item=i;
+			affected_id=item_contact_id(item);
+		}
 		if (status || edit->prepared) edits_count++;
 	}
 	if (status) goto done;
@@ -297,7 +411,10 @@ int jaro_editor_save(void)
 		free(edits);
 		return 0;
 	}
-	if (open_store(JARO_CONTACT_PROFILE_WRITE,&store)) {
+	status=open_store(JARO_CONTACT_PROFILE_WRITE,&store);
+	if (status) {
+		if (status==JARO_CONTACT_BUSY)
+			save_diagnostic(status,NULL,NULL,0);
 		free_edits(edits,edits_count);
 		return -1;
 	}
@@ -308,21 +425,37 @@ int jaro_editor_save(void)
 		for (size_t i=0;!status && i<edits_count;i++) {
 			edits[i].contact.book_id=book;
 			status=jaro_contact_save(store,&edits[i].contact,&id,&error);
+			if (status) {
+				failed_item=edits[i].item;
+				affected_id=edits[i].contact.id;
+			} else if (edits[i].item==list_get_curitem())
+				selected_id=id;
 		}
 		for (size_t i=0;!status && i<current.count;i++) {
 			struct entry *entry=&current.entries[i];
-			if (!entry->seen) status=jaro_contact_delete(store,book,entry->contact.id,
-				entry->contact.revision,&error);
+			if (!entry->seen) {
+				status=jaro_contact_delete(store,book,entry->contact.id,
+					entry->contact.revision,&error);
+				if (status) affected_id=entry->contact.id;
+			}
 		}
+		/* Prepare the new editor snapshot before commit. A failed read or
+		 * commit leaves the original revisions and every draft in place. */
+		committed.reader=store;
+		if (!status)
+			status=jaro_contact_visit(store,book,span(NULL),keep_record,&committed,&error);
+		if (committed.error.reason) error=committed.error;
 		status=jaro_contact_finish(store,status,&error);
+		committed.reader=NULL;
 	}
 	jaro_contact_close(store,NULL);
 done:
 	free_edits(edits,edits_count);
 	if (status) {
-		set_diagnostic(error.reason,error.field);
+		free_view(&committed);
+		save_diagnostic(status,error.reason,error.field,affected_id);
 		return -1;
 	}
-	db_need_save=FALSE;
-	return jaro_editor_load();
+	install_view(&committed,selected_id);
+	return 1;
 }

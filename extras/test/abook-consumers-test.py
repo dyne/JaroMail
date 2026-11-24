@@ -1,7 +1,7 @@
 """Characterize the installed JaroMail query consumers using synthetic mail."""
 
 import argparse
-from contextlib import closing, suppress
+from contextlib import closing, contextmanager, suppress
 import errno
 import fcntl
 import hashlib
@@ -22,6 +22,7 @@ import time
 import unittest
 
 sys.dont_write_bytecode = True
+from abook_terminal import Terminal
 from filter_compiler_test import records
 
 
@@ -57,6 +58,7 @@ email=anne@example.org
 ''',
     'alternate': BOOK_HEADER + b'\n[0]\nname=Alternate Person\nemail=alternate@example.org\n',
     'blacklist': BOOK_HEADER + b'\n[0]\nname=Block Person\nemail=block@example.org\n'
+                 b'notes=block-only@fixture.invalid\n'
                  b'\n[1]\nname=Block overlap\nemail=pat@example.org,alternate@example.org\n',
 }
 GROUP_ROSTER = b'roster@jaromail.group\tGroup roster (2 recipients)\n'
@@ -347,10 +349,413 @@ class InstalledConsumers(unittest.TestCase):
                             (independent / 'contacts.sqlite').stat().st_ino)
         status, tty = run_client([self.jaro, '-q', '-a', 'bob', '-l', selected, 'abook'], cwd=self.root,
                                  env=self.env, keys_after=[(b'Writer Updated', b'd'),
-                                                           (b'Remove selected item(s)', b'yq')])
+                                                           (b'Remove 1 contact from this list?', b'yq')])
         self.assertEqual(status, 0, repr(tty[-1000:]))
         self.assertEqual(self.capture([self.jaro, '-q', '-l', selected, 'addr', 'writer updated']).returncode, 1)
         self.assertEqual(self.capture([self.jaro, '-q', '-l', selected, 'addr', 'from vcard']).returncode, 0)
+
+    def browse_contacts(self, cols, lines):
+        long_mailbox = 'third.' + 'a' * 50 + '@long.long.long.long.example.org'
+        setup = (
+            ('Unrelated', 'first@example.org'),
+            ('José', 'Jose.One@example.org'),
+            ('José', f'Jose.Two@example.org,Other.Box@example.org,{long_mailbox}'),
+            ('木 Café', 'wide@example.org'),
+        )
+        (self.mail / 'whitelist.abook').write_bytes(BOOK_HEADER + ''.join(
+            f'\n[{i}]\nname={name}\nemail={addresses}\n'
+            for i, (name, addresses) in enumerate(setup)).encode())
+        (self.mail / 'blacklist.abook').write_bytes(
+            BOOK_HEADER + b'\n[0]\nname=Blocked Fixture\nemail=blocked@example.org\n')
+        env = dict(self.env, LC_ALL='C.UTF-8')
+        screens = os.environ.get('JARO_CONTACT_TUI_SCREENS')
+
+        def snapshot(terminal, name):
+            if screens:
+                directory = Path(screens)
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / f'browse-{cols}x{lines}-{name}.txt').write_text(
+                    terminal.screen.capture(), encoding='utf-8')
+
+        def selected(mailbox):
+            return lambda screen: any(row.startswith('>') and mailbox in row
+                                      for row in screen.text.splitlines())
+
+        def filtering_at_end(screen):
+            return screen.cursor_visible and (screen.row, screen.col) == (screen.lines - 1, 9)
+
+        with Terminal([self.jaro, '-q', 'abook'], cwd=self.root, env=env,
+                      cols=cols, lines=lines) as terminal:
+            terminal.wait('List: allow', '/ filter', 'Tab mailboxes', 'Name', 'Mailbox',
+                          cursor=selected('first@example.org'))
+            terminal.send('/jose')
+            terminal.wait('/ jose', 'Up/Down', 'Jose.One@example.org', 'Jose.Two@example.org',
+                          cursor=selected('Jose.One@example.org'))
+            self.assertNotIn('first@example.org', terminal.screen.text)
+            terminal.send('\x1bOB')
+            terminal.wait('/ jose', cursor=lambda screen: selected('Jose.Two@example.org')(screen)
+                          and screen.cursor_visible and (screen.row, screen.col) == (lines - 1, 6))
+            snapshot(terminal, 'folded-query')
+            terminal.send('\t')
+            terminal.wait('Mailboxes for José', 'Jose.Two@example.org', 'Other.Box@example.org',
+                          'Enter/Esc back')
+            snapshot(terminal, 'mailboxes')
+            terminal.send('jj')
+            terminal.wait('Left/Right scroll')
+            terminal.send('\x1bOC' * 8)
+            terminal.wait('long.example.org', 'Enter/Esc back')
+            terminal.send('\r\r')
+            terminal.wait('List: allow', '< CONTACT >', 'Jose.Two@example.org', 'Other.Box@example.org',
+                          'Left/Right views')
+            terminal.send('q')
+            terminal.wait('Esc clear', cursor=selected('Jose.Two@example.org'))
+            with closing(sqlite3.connect(self.mail / 'contacts.sqlite')) as db, db:
+                second_id, = db.execute('SELECT contact_id FROM addresses WHERE spelling=?',
+                                        ('Jose.Two@example.org',)).fetchone()
+                db.execute('UPDATE contacts SET ordinal=99 WHERE id IN '
+                           '(SELECT contact_id FROM addresses WHERE spelling=?)', ('Jose.One@example.org',))
+            terminal.send('l')
+            terminal.wait('/ jose', 'Esc clear', cursor=lambda screen: selected('Jose.Two@example.org')(screen)
+                          and screen.text.index('Jose.Two@example.org') < screen.text.index('Jose.One@example.org'))
+            snapshot(terminal, 'reloaded-selection')
+            terminal.send('j')
+            terminal.wait('/ jose', cursor=selected('Jose.One@example.org'))
+            terminal.send('k')
+            terminal.wait('/ jose', cursor=selected('Jose.Two@example.org'))
+            terminal.send('/\x15木 Café')
+            terminal.wait('/ 木 Café', 'wide@example.org', cursor=filtering_at_end)
+            other = (48, 12) if cols == 80 else (80, 24)
+            terminal.resize(*other)
+            terminal.wait('List: allow', '/ 木 Café', 'wide@example.org', 'Up/Down', 'l load',
+                          cursor=filtering_at_end)
+            self.assertTrue(selected('wide@example.org')(terminal.screen))
+            snapshot(terminal, 'resized-query')
+            terminal.resize(cols, lines)
+            terminal.wait('/ 木 Café', 'wide@example.org', 'Up/Down', cursor=filtering_at_end)
+            terminal.send('\x15unfindable')
+            terminal.wait('/ unfindable', 'No matching contacts', 'Esc clear')
+            snapshot(terminal, 'no-match')
+            terminal.send('\x1b')
+            terminal.wait('/ filter', 'Tab mailboxes', 'first@example.org')
+            terminal.send('/otherbox')
+            terminal.wait('/ otherbox', 'Jose.Two@example.org', cursor=selected('Jose.Two@example.org'))
+            self.assertNotIn('Jose.One@example.org', terminal.screen.text)
+            terminal.send('\x1b')
+            terminal.wait('/ filter', 'first@example.org')
+            terminal.send('o')
+            terminal.wait('Contact lists', '>* allow', 'block', 'alternate', 'Enter open')
+            snapshot(terminal, 'list-picker')
+            terminal.send('jj\r')
+            terminal.wait('List: alternate', 'alternate@example.org',
+                          cursor=selected('alternate@example.org'))
+            terminal.send('o')
+            terminal.wait('Contact lists', '>* alternate', 'Enter open')
+            terminal.send('k\r')
+            terminal.wait('List: block', 'blocked@example.org', 'Tab mailboxes',
+                          cursor=selected('blocked@example.org'))
+            terminal.send('/blocked\r')
+            terminal.wait('List: block', '< CONTACT >', 'Blocked Fixture', 'blocked@example.org')
+            terminal.send('1')
+            terminal.wait('Name:')
+            terminal.send('\x15Blocked Updated\r')
+            terminal.wait('< CONTACT >', cursor=lambda screen: screen.text.count('Blocked Updated') == 2)
+            snapshot(terminal, 'block-edit')
+            terminal.send('qw')
+            terminal.wait('List: block', 'Blocked Updated', '/ blocked', cursor=selected('blocked@example.org'))
+            terminal.quit()
+
+        with closing(sqlite3.connect(self.mail / 'contacts.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT name FROM contacts WHERE id=?', (second_id,)).fetchone(),
+                             ('José',))
+        visible = self.capture([self.jaro, '-q', '-l', 'block', 'addr', 'blocked updated'], env=env)
+        self.assertEqual((visible.returncode, visible.stdout), (0, b'Blocked Updated <blocked@example.org>\n'))
+        completion = self.capture([self.jaro, '-q', 'complete', 'blocked updated'], env=env)
+        self.assertEqual((completion.returncode, completion.stdout), (1, b'Not found\n'))
+
+    def test_contact_browse_wide(self):
+        self.browse_contacts(80, 24)
+
+    def test_contact_browse_compact(self):
+        self.browse_contacts(48, 12)
+
+    def test_contact_browse_remapped_help(self):
+        config = self.root / 'test.abookrc'
+        config.write_text('remap f = /\nremap b = o\nremap h = ?\n')
+        command = [self.runtime / 'bin/abook', '--config', config,
+                   '--jaro-profile', self.mail, '--jaro-list', 'allow']
+        with Terminal(command, cwd=self.root, env=self.env, cols=48, lines=12) as terminal:
+            terminal.wait('List: allow', 'h help', 'f filter', 'b lists')
+            terminal.send('h')
+            terminal.wait('Contacts help', 'f: filter as you type', 'b: choose list')
+            terminal.send('\rfpat')
+            terminal.wait('f pat', 'Pat Contact', 'Esc clear')
+            terminal.send('\x1b')
+            terminal.wait('f filter', 'b lists')
+            terminal.send('b')
+            terminal.wait('Contact lists', 'Enter open')
+            terminal.send('\x1b')
+            terminal.wait('f filter', 'b lists')
+            terminal.quit()
+
+    def recover_contact_edits(self, cols, lines):
+        (self.mail / 'whitelist.abook').write_bytes(BOOK_HEADER + b'''
+[0]
+name=Shared Fixture
+email=shared@example.org
+
+[1]
+name=Other Contact
+email=other@example.org
+''')
+        (self.mail / 'blacklist.abook').write_bytes(BOOK_HEADER + b'''
+[0]
+name=Blocked Copy
+email=shared@example.org
+''')
+        accounts = self.mail / 'Accounts'
+        accounts.mkdir()
+        for account in ('alice', 'bob'):
+            (accounts / account).write_text(
+                f'name {account}\nlogin {account}\nemail {account}@example.org\nhost example.org\n')
+        env = dict(self.env, LC_ALL='C.UTF-8')
+        database = self.mail / 'contacts.sqlite'
+        screens = os.environ.get('JARO_CONTACT_TUI_SCREENS')
+
+        def snapshot(terminal, name):
+            if screens:
+                directory = Path(screens)
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / f'recovery-{cols}x{lines}-{name}.txt').write_text(
+                    terminal.screen.capture(), encoding='utf-8')
+
+        def session(account):
+            return Terminal([self.jaro, '-q', '-a', account, 'abook'],
+                            cwd=self.root, env=env, cols=cols, lines=lines)
+
+        def rows():
+            with closing(sqlite3.connect(database, timeout=0)) as db:
+                return db.execute(
+                    'SELECT b.name,c.id,c.revision,c.name,a.spelling FROM contacts c '
+                    'JOIN books b ON b.id=c.book_id JOIN addresses a ON a.contact_id=c.id '
+                    "WHERE b.name IN ('allow','block') ORDER BY b.name,c.ordinal,a.ordinal").fetchall()
+
+        @contextmanager
+        def hold_write_lock():
+            with closing(sqlite3.connect(database, timeout=0, isolation_level=None)) as lock:
+                lock.execute('BEGIN IMMEDIATE')
+                self.assertTrue(lock.in_transaction)
+                try:
+                    yield
+                finally:
+                    lock.rollback()
+                    self.assertFalse(lock.in_transaction)
+
+        def change_name(terminal, name):
+            terminal.send('1')
+            terminal.wait('Name:')
+            terminal.send('\x15' + name + '\r')
+            terminal.wait('Unsaved changes', 'Ctrl+R reload/discard', name)
+
+        def change_mailbox(terminal, old, new):
+            terminal.send('2')
+            terminal.wait('Mailbox: 1 or n for new')
+            terminal.send('1')
+            terminal.wait('E-mail: ' + old)
+            terminal.send('\x15' + new + '\r')
+            terminal.wait('Unsaved changes', 'Ctrl+R reload/discard', new)
+
+        def select_block(terminal):
+            terminal.send('o')
+            terminal.wait('Contact lists', '>* allow', 'Enter open')
+            terminal.send('j\r')
+
+        with session('alice') as alice:
+            alice.wait('List: allow', 'Shared Fixture', 'Tab mailboxes')
+            base = rows()
+            shared, other, blocked = base
+            alice.send('\r')
+            alice.wait('< CONTACT >', 'shared@example.org')
+            change_name(alice, 'Alice Draft')
+            with session('bob') as bob:
+                bob.wait('List: allow', 'Shared Fixture', 'Tab mailboxes')
+                bob.send('\r')
+                bob.wait('< CONTACT >', 'shared@example.org')
+                change_name(bob, 'Bob Committed')
+                bob.send('w')
+                bob.wait('Saved to this list', 'Bob Committed', '< CONTACT >')
+                committed = [('allow', shared[1], shared[2] + 1, 'Bob Committed', shared[4]),
+                             other, blocked]
+                self.assertEqual(rows(), committed)
+
+                alice.send('q')
+                alice.wait(f'Conflict #{shared[1]}: changed elsewhere', 'Alice Draft',
+                           'Unsaved changes', '< CONTACT >', 'Ctrl+R reload/discard')
+                snapshot(alice, 'conflict')
+                self.assertEqual(rows(), committed)
+                alice.send('w\x12')
+                alice.wait('Discard draft and reload this list?', 'y discard', 'Alice Draft')
+                alice.send('\x1b')
+                alice.wait('Conflict #', 'Alice Draft', 'Unsaved changes')
+                self.assertEqual(rows(), committed)
+                alice.send('\x12y')
+                alice.wait('Reloaded this list', 'Bob Committed', '< CONTACT >')
+                self.assertNotIn('Unsaved changes', alice.screen.text)
+                self.assertEqual(rows(), committed)
+                bob.quit('qq')
+
+            change_name(alice, 'Busy Draft')
+            # A reload after saving can introduce a custom field while the
+            # form still has an undo record using the older field layout.
+            with closing(sqlite3.connect(database)) as db, db:
+                db.execute('INSERT INTO fields(contact_id,ordinal,key,value) VALUES(?,0,?,?)',
+                           (other[1], 'fixture-extra', 'kept'))
+                db.execute('UPDATE contacts SET revision=revision+1 WHERE id=?', (other[1],))
+            other = (other[0], other[1], other[2] + 1, other[3], other[4])
+            committed[1] = other
+            with hold_write_lock():
+                alice.send('w')
+                alice.wait('Contact store is busy. Retry save.', 'Busy Draft',
+                           'Unsaved changes', '< CONTACT >')
+                snapshot(alice, 'busy')
+                self.assertEqual(rows(), committed)
+            alice.send('w')
+            alice.wait('Saved to this list', 'Busy Draft', '< CONTACT >')
+            busy_saved = [('allow', shared[1], shared[2] + 2, 'Busy Draft', shared[4]), other, blocked]
+            self.assertEqual(rows(), busy_saved)
+            with closing(sqlite3.connect(database)) as db:
+                self.assertEqual(db.execute('SELECT value FROM fields WHERE contact_id=? AND key=?',
+                                            (other[1], 'fixture-extra')).fetchone(), ('kept',))
+
+            alice.send('1')
+            alice.wait('Name: Busy Draft')
+            alice.send('\x15\rw')
+            alice.wait('Invalid name: a name is required', 'Unsaved changes', 'shared@example.org')
+            self.assertNotIn('Busy Draft', alice.screen.text)
+            self.assertEqual(rows(), busy_saved)
+            change_name(alice, 'Busy Draft')
+            change_mailbox(alice, 'shared@example.org', 'broken mailbox')
+            alice.send('w')
+            alice.wait('Invalid email:', 'broken mailbox', 'Unsaved changes', 'Ctrl+R reload/discard')
+            snapshot(alice, 'validation')
+            self.assertEqual(rows(), busy_saved)
+            change_mailbox(alice, 'broken mailbox', 'Shared@Example.org')
+            alice.send('w')
+            alice.wait('Saved to this list', 'Shared@Example.org', '< CONTACT >')
+            corrected = [('allow', shared[1], shared[2] + 3, 'Busy Draft', 'Shared@Example.org'), other, blocked]
+            self.assertEqual(rows(), corrected)
+            alice.send('q')
+            alice.wait('List: allow', 'Mailbox', 'Busy Draft')
+
+            alice.send('C')
+            alice.wait('Remove all 2 contacts from this list?', 'y confirm  Esc cancel', 'List: allow')
+            alice.send('\x1b')
+            alice.wait('/ filter', 'Busy Draft')
+            self.assertEqual(rows(), corrected)
+            alice.send('+r')
+            alice.wait('Remove 2 contacts from this list?', 'y confirm  Esc cancel')
+            snapshot(alice, 'bulk-confirmation')
+            alice.send('n-r')
+            alice.wait('Remove 1 contact from this list?', 'y confirm  Esc cancel')
+            alice.send('\x1b')
+            alice.wait('/ filter', 'Busy Draft')
+            self.assertEqual(rows(), corrected)
+            alice.send('ry')
+            alice.wait('Removal pending; save to commit', 'Unsaved changes', 'Other Contact')
+            self.assertNotIn('Busy Draft', alice.screen.text)
+            self.assertEqual(rows(), corrected)
+            with hold_write_lock():
+                select_block(alice)
+                alice.wait('Contact store is busy. Retry save.', 'List: allow', 'Unsaved changes')
+                snapshot(alice, 'blocked-switch')
+                self.assertEqual(rows(), corrected)
+            select_block(alice)
+            alice.wait('List: block', 'Blocked Copy', 'shared@example.org')
+            self.assertEqual(rows(), [other, blocked])
+
+            alice.send('ry')
+            alice.wait('Removal pending; save to commit', 'Unsaved changes', 'No contacts in this list')
+            with hold_write_lock():
+                alice.send('q')
+                alice.wait('Contact store is busy. Retry save.', 'List: block', 'Unsaved changes')
+                self.assertEqual(rows(), [other, blocked])
+            alice.send('Q')
+            alice.wait('Discard unsaved changes and quit?', 'y discard  Esc keep editing')
+            alice.send('\x1b')
+            alice.wait('Contact store is busy. Retry save.', 'Unsaved changes')
+            self.assertEqual(rows(), [other, blocked])
+            alice.quit('Qy')
+            self.assertEqual(rows(), [other, blocked])
+
+    def test_contact_edit_recovery_wide(self):
+        self.recover_contact_edits(80, 24)
+
+    def test_contact_edit_recovery_compact(self):
+        self.recover_contact_edits(48, 12)
+
+    def test_contact_autosave_disabled(self):
+        config = self.root / 'manual.abookrc'
+        config.write_text('set autosave=false\n')
+        command = [self.runtime / 'bin/abook', '--config', config,
+                   '--jaro-profile', self.mail, '--jaro-list', 'allow']
+        with Terminal(command, cwd=self.root, env=self.env, cols=48, lines=12) as terminal:
+            terminal.wait('List: allow', 'Pat Contact', 'Tab mailboxes')
+            terminal.send('\r1')
+            terminal.wait('Name: Pat Contact')
+            terminal.send('\x15Manual Draft\rq')
+            terminal.wait('s save  d discard  Esc keep editing', 'Manual Draft', 'Unsaved changes')
+            terminal.send('\r')
+            terminal.wait('Manual Draft', 'Ctrl+R reload/discard', 'Unsaved changes')
+            self.assertEqual(self.capture([self.jaro, '-q', 'complete', 'manual draft']).returncode, 1)
+            terminal.send('qs')
+            terminal.wait('Saved to this list', 'Manual Draft', '/ filter')
+            committed = self.capture([self.jaro, '-q', 'complete', 'manual draft'])
+            self.assertEqual((committed.returncode, committed.stdout),
+                             (0, b'\npat@example.org\tManual Draft\tContact note\n'))
+            terminal.send('\r1')
+            terminal.wait('Name: Manual Draft')
+            terminal.send('\x15Discarded Draft\rqd')
+            terminal.wait('Reloaded this list', 'Manual Draft', '/ filter')
+            self.assertNotIn('Unsaved changes', terminal.screen.text)
+            terminal.quit()
+        self.assertEqual(self.capture([self.jaro, '-q', 'complete', 'manual draft']).stdout,
+                         committed.stdout)
+        self.assertEqual(self.capture([self.jaro, '-q', 'complete', 'discarded draft']).returncode, 1)
+
+    def test_contact_bulk_confirmation_counts(self):
+        (self.mail / 'whitelist.abook').write_bytes(BOOK_HEADER + b'''
+[0]
+name=Duplicate
+email="quoted,one"@example.org
+
+[1]
+name=Duplicate
+email=second@example.org
+
+[2]
+name=Separate
+email=third@example.org
+''')
+        with Terminal([self.jaro, '-q', 'abook'], cwd=self.root, env=self.env,
+                      cols=48, lines=12) as terminal:
+            terminal.wait('List: allow', 'Duplicate', 'Separate', 'Tab mailboxes')
+            terminal.send('+M')
+            terminal.wait('Merge 3 contacts here? Removes 2.', 'y confirm  Esc cancel')
+            terminal.send('\x1b')
+            terminal.wait('/ filter', 'Separate')
+            terminal.send('U')
+            terminal.wait('Remove 1 duplicate', 'y confirm  Esc cancel')
+            terminal.send('yw')
+            terminal.wait('Saved to this list', 'Duplicate', 'Separate')
+            terminal.quit()
+        with closing(sqlite3.connect(self.mail / 'contacts.sqlite')) as db:
+            stored = db.execute('SELECT c.name,a.spelling FROM contacts c JOIN books b ON b.id=c.book_id '
+                                'JOIN addresses a ON a.contact_id=c.id WHERE b.name=? ORDER BY a.spelling',
+                                ('allow',)).fetchall()
+            self.assertEqual(stored, [('Duplicate', '"quoted,one"@example.org'),
+                                      ('Duplicate', 'second@example.org'), ('Separate', 'third@example.org')])
+            self.assertEqual(db.execute('SELECT count(DISTINCT c.id) FROM contacts c '
+                                        'JOIN books b ON b.id=c.book_id WHERE b.name=?', ('allow',)).fetchone(),
+                             (2,))
 
     def test_neomutt_tabs_select_recipients(self):
         launcher = self.root / 'launcher'
@@ -393,6 +798,7 @@ class InstalledConsumers(unittest.TestCase):
             ('mixed', 'j<enter>', False, 'Mixed Ada <ada@example.org>'),
             ('mixed', 'jj<enter>', False, '"Group mixed (2 recipients)" <mixed@jaromail.group>'),
             ('miss', '', False, 'miss@fixture.invalid'),
+            ('block-only@fixture.invalid', '', False, 'block-only@fixture.invalid'),
             ('group/roster', '', False, '"Group roster (2 recipients)" <roster@jaromail.group>'),
             ('quoted', '', False, 'Quoted Person <ab@example.org>'),
             ('alternate', '', False, 'Alternate Person <alternate@example.org>'),
@@ -526,6 +932,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('prefix', 'snapshot-driver', 'client'):
         parser.add_argument('--' + name, type=Path, required=True)
+    parser.add_argument('--test', action='append', default=[], help='unittest test identity to run')
     args = parser.parse_args()
     InstalledConsumers.prefix = args.prefix.resolve(strict=True)
     InstalledConsumers.snapshot_driver = args.snapshot_driver.resolve(strict=True)
@@ -541,4 +948,4 @@ if __name__ == '__main__':
         print(f'{label} sha256 {hashlib.sha256(binary.read_bytes()).hexdigest()}', flush=True)
     version = subprocess.run([InstalledConsumers.client, '-v'], check=True, capture_output=True, timeout=5)
     print(version.stdout.decode().splitlines()[0], flush=True)
-    unittest.main(argv=[__file__], verbosity=2)
+    unittest.main(argv=[__file__, *args.test], verbosity=2)

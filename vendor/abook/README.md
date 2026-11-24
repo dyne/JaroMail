@@ -44,10 +44,18 @@ under `cmake/abook/`, with its license and a generator for maintainers. Builds
 use the committed data and require no Unicode library or generation step.
 
 `jaro abook` opens the selected list in the profile's `contacts.sqlite`.
-The editor keeps the observed contact ID and revision in memory and writes
-changed records and confirmed removals in one transaction. A failed save
-leaves the draft available. The private executable also retains its upstream
-file conversion and standalone query commands.
+Press `o` to switch lists, `/` to filter as you type, and Esc to clear the
+filter. Use the arrow keys to choose a result, Enter to edit, or Tab to inspect
+its mailboxes. The list picker includes block, which recipient Tab completion
+excludes.
+Press `w` to save and `q` to return from the form. With autosave enabled,
+leaving a draft saves it first. A failed save keeps the draft visible. Use
+`Ctrl+R` in the form or `l` in the list to discard the draft and reload after
+confirmation. The editor writes changed records and confirmed removals in
+one transaction. A removal affects only the list shown on screen.
+
+The private executable also retains its upstream file conversion and
+standalone query commands.
 
 The legacy migration reader accepts numeric contact sections in file order,
 an optional `[format]` header, and empty books. It preserves field keys and
