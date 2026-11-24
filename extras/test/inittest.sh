@@ -86,7 +86,7 @@ else
 	return 1
 fi
 
-print "Luther Blisset <luther@dyne.org>" | j import -l blacklist
+print "Luther Blisset <luther@dyne.org>" | j import -l block
 
 j filter known
 

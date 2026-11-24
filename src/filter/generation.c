@@ -2,6 +2,7 @@
 #define _XOPEN_SOURCE 700
 #include "generation.h"
 #include "import.h"
+#include "contact/migrate.h"
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <dirent.h>
@@ -137,7 +138,7 @@ static int directory(int parent,const char *name,int create)
 	return fd;
 }
 
-struct location { int root,engine,generations,lock; };
+struct location { int root,engine,generations,lock; const char *path; };
 static void location_close(struct location *l)
 {
 	if (l->lock>=0) close(l->lock);
@@ -151,6 +152,7 @@ static int locate(const char *root,int create,struct location *l)
 {
 	int cache=-1;
 	l->root=l->engine=l->generations=l->lock=-1;
+	l->path=root;
 	l->root=open(root,O_RDONLY|O_DIRECTORY); if (l->root<0) return 3;
 	/* The legacy cache directory may already be 0755. Only native engine and
 	 * generation directories have the new private-directory contract. */
@@ -390,7 +392,8 @@ static int cleanup_transaction(struct location *l)
 	if (remove_file(l->engine,"export.backup") || remove_file(l->engine,"export.next") ||
 		remove_file(l->engine,"export.restore") || remove_file(l->engine,"journal.next") ||
 		remove_file(l->engine,"current.next") || remove_file(l->engine,"current.rollback") ||
-		remove_file(l->engine,"committed.next") || remove_file(l->engine,"committed") || fsync(l->engine)) return 3;
+		remove_file(l->engine,"committed.next") || remove_file(l->engine,"committed") ||
+		remove_file(l->engine,"import.contacts") || fsync(l->engine)) return 3;
 	return 0;
 }
 
@@ -408,14 +411,52 @@ done:
 	jf_bytes_free(&journal); return rc;
 }
 
+/* A durable SQLite receipt also commits the already-synced file view. This
+ * handles interruption after SQL commit and before the file marker. */
+static int contact_receipt(struct location *l,int recover_database,int *present)
+{
+	struct jf_bytes bytes={0};
+	struct jaro_contact_store *store=NULL;
+	char *database=NULL;
+	char token[33];
+	int rc=3, journal=exists(l->engine,"import.contacts");
+	*present=0;
+	if (!journal) return 0;
+	if (journal<0 || load(l->engine,"import.contacts",&bytes,32) || bytes.size!=32) goto done;
+	for (size_t i=0;i<32;i++)
+		if (!((bytes.data[i]>='0' && bytes.data[i]<='9') ||
+			(bytes.data[i]>='a' && bytes.data[i]<='f'))) goto done;
+	memcpy(token,bytes.data,32); token[32]=0;
+	database=join(l->path,JARO_CONTACT_DATABASE);
+	if (!database || jaro_contact_open(database,recover_database ? JARO_CONTACT_WRITE :
+		JARO_CONTACT_READ,&store,NULL) || jaro_contact_has_import(store,token,present,NULL)) goto done;
+	rc=0;
+done:
+	if (store) jaro_contact_close(store,NULL);
+	free(database);
+	jf_bytes_free(&bytes);
+	return rc;
+}
+
+static int commit_proof(struct location *l,const char *next,int recover_database,int *present)
+{
+	struct jf_bytes marker={0};
+	int file=exists(l->engine,"committed"),rc=3;
+	if (file<0) return 3;
+	if (!file) return contact_receipt(l,recover_database,present);
+	if (!load(l->engine,"committed",&marker,64) && marker.size==64 && !memcmp(marker.data,next,64)) {
+		rc=0; *present=1;
+	}
+	jf_bytes_free(&marker);
+	return rc;
+}
+
 static int committed_journal(struct location *l,char next[65])
 {
-	char old[65],selected[65]; struct jf_bytes marker={0}; int present,valid=0; unsigned mode;
-	if (read_journal(l,old,&present,&mode,next) || load(l->engine,"committed",&marker,64) ||
-		marker.size!=64 || memcmp(marker.data,next,64) || selector(l,selected) || strcmp(selected,next)) goto done;
-	valid=1;
-done:
-	jf_bytes_free(&marker); return valid;
+	char old[65],selected[65]; int present,committed; unsigned mode;
+	return !read_journal(l,old,&present,&mode,next) &&
+		!commit_proof(l,next,0,&committed) && committed &&
+		!selector(l,selected) && !strcmp(selected,next);
 }
 
 static void input_name(char name[40],size_t i,const char *suffix)
@@ -425,6 +466,9 @@ static void input_name(char name[40],size_t i,const char *suffix)
 
 static int recover_inputs(struct location *l,int committed)
 {
+	/* The old journal used two text books. A pending pre-cutover rollback
+	 * still addresses its original paths. New journals use only files 0–1. */
+	static const char *const recovery_names[]={"Filters.txt","Aliases.txt","whitelist.abook","blacklist.abook"};
 	struct jf_bytes journal={0}; size_t i; int rc=3;
 	int changed[4]={0},present[4]={0}; unsigned modes[4]={0};
 	if (exists(l->engine,"import.journal")) {
@@ -445,12 +489,12 @@ static int recover_inputs(struct location *l,int committed)
 				if (remove_file(l->engine,restore) || copy_file(l->engine,backup,l->engine,restore,"import-restore")) goto done;
 				fd=openat(l->engine,restore,O_RDONLY|O_NOFOLLOW); if (fd<0) goto done;
 				if (fchmod(fd,(mode_t)modes[i]) || fsync(fd)) { close(fd); goto done; } close(fd);
-				if (renameat(l->engine,restore,l->root,jf_import_names[i])) goto done;
-			} else if (remove_file(l->root,jf_import_names[i])) goto done;
+				if (renameat(l->engine,restore,l->root,recovery_names[i])) goto done;
+			} else if (remove_file(l->root,recovery_names[i])) goto done;
 		}
 		if (fsync(l->root) || fsync(l->engine) || remove_file(l->engine,"import.journal") || fsync(l->engine)) goto done;
 	}
-	for (i=0;i<4;i++) {
+	for (i=0;i<JF_IMPORT_FILES;i++) {
 		char name[40]; size_t j; const char *suffixes[]={"backup","next","restore"};
 		for (j=0;j<3;j++) { input_name(name,i,suffixes[j]); if (remove_file(l->engine,name)) goto done; }
 	}
@@ -466,19 +510,20 @@ static int prepare_inputs(struct location *l,const struct jf_bytes *original,con
 	size_t i; struct jf_bytes journal={0}; int rc=3;
 	for (i=0;i<4;i++) {
 		char name[40],line[40];
-		if (changed[i]) {
+		if (i<JF_IMPORT_DISK_FILES && changed[i]) {
 			input_name(name,i,"backup");
 			if (present[i] && save(l->engine,name,original[i].data,original[i].size,"import-backup")) goto done;
 			input_name(name,i,"next");
 			if (save(l->engine,name,output[i].data,output[i].size,"import-stage")) goto done;
 		}
-		snprintf(line,sizeof line,"%d %d %o\n",changed[i],present[i],(unsigned)modes[i]);
+		snprintf(line,sizeof line,"%d %d %o\n",i<JF_IMPORT_DISK_FILES && changed[i],
+			present[i],(unsigned)modes[i]);
 		if (jf_bytes_text(&journal,line)) goto done;
 	}
 	if (save(l->engine,"import.journal.next",journal.data,journal.size,"import-journal") ||
 		renameat(l->engine,"import.journal.next",l->engine,"import.journal") || syncfd(l->engine,"import-fsync-journal") ||
 		hook("import-prepared")) goto done;
-	for (i=0;i<4;i++) if (changed[i]) {
+	for (i=0;i<JF_IMPORT_DISK_FILES;i++) if (changed[i]) {
 		char name[40]; int fd; input_name(name,i,"next");
 		fd=openat(l->engine,name,O_RDONLY|O_NOFOLLOW); if (fd<0) goto done;
 		if (fchmod(fd,modes[i]) || fsync(fd)) { close(fd); goto done; } close(fd);
@@ -492,21 +537,19 @@ done:
 
 static int recover(struct location *l)
 {
-	struct jf_bytes marker={0};
-	char old[65],next[65]; int public_present,rc=3; unsigned mode;
+	char old[65],next[65]; int public_present,committed,rc=3; unsigned mode;
 	if (exists(l->engine,"journal")==0) {
 		if (recover_inputs(l,0)) return 3;
 		return cleanup_transaction(l);
 	}
-	if (read_journal(l,old,&public_present,&mode,next)) goto done;
-	if (exists(l->engine,"committed")) {
-		struct jf_generation committed={0}; committed.directory=-1;
-		if (load(l->engine,"committed",&marker,64) || marker.size!=64 || memcmp(marker.data,next,64)) goto done;
+	if (read_journal(l,old,&public_present,&mode,next) || commit_proof(l,next,1,&committed)) goto done;
+	if (committed) {
+		struct jf_generation generation={0}; generation.directory=-1;
 		char selected[65];
 		if (selector(l,selected) || strcmp(selected,next)) goto done;
-		rc=previous_format(l,selected) ? previous_export(l,selected) : pin_locked(l,NULL,&committed,NULL);
-		if (rc) { jf_generation_close(&committed); goto done; }
-		jf_generation_close(&committed);
+		rc=previous_format(l,selected) ? previous_export(l,selected) : pin_locked(l,NULL,&generation,NULL);
+		jf_generation_close(&generation);
+		if (rc) goto done;
 	} else {
 		if (public_present) {
 			int fd;
@@ -521,13 +564,14 @@ static int recover(struct location *l)
 	}
 	/* The same commit marker covers inputs, public export and selector. Keep
 	 * the main journal until input recovery/cleanup is durable and repeatable. */
-	if ((rc=recover_inputs(l,marker.size==64))) goto done;
+	if ((rc=recover_inputs(l,committed))) goto done;
 	rc=cleanup_transaction(l);
 done:
-	jf_bytes_free(&marker); return rc;
+	return rc;
 }
 
-static int publish(struct location *l,const char *old,const struct jf_products *p)
+static int publish(struct location *l,const char *old,const struct jf_products *p,
+	struct jaro_contact_store *contacts,struct jf_error *error)
 {
 	char text[180]; int public_present=exists(l->root,"Filters.sieve"),rc=3,prepared=0;
 	mode_t mode=0600;
@@ -544,8 +588,21 @@ static int publish(struct location *l,const char *old,const struct jf_products *
 	prepared=1;
 	if (hook("prepared") || hook("rename-export") || renameat(l->engine,"export.next",l->root,"Filters.sieve") ||
 		hook("export-renamed") || set_selector(l,p->id,"current.next","rename-current") || hook("selector-renamed") ||
-		syncfd(l->root,"fsync-root") || syncfd(l->engine,"fsync-engine") ||
-		save(l->engine,"committed.next",p->id,64,"write-commit") || hook("commit-written") || hook("rename-commit") ||
+		syncfd(l->root,"fsync-root") || syncfd(l->engine,"fsync-engine")) goto done;
+	if (contacts) {
+		struct jaro_contact_error detail;
+		if (hook("import-before-sqlite-commit")) goto done;
+		int status=jaro_contact_finish(contacts,0,&detail);
+		if (status) {
+			rc=status==JARO_CONTACT_BUSY ? 6 : 3;
+			jf_product_error(error,"E_CONTACT_COMMIT",0,detail.reason);
+			goto done;
+		}
+		if (hook("import-after-sqlite-commit")) return 3;
+		/* The synced files and receipt are already complete. */
+		return 0;
+	}
+	if (save(l->engine,"committed.next",p->id,64,"write-commit") || hook("commit-written") || hook("rename-commit") ||
 		renameat(l->engine,"committed.next",l->engine,"committed") || syncfd(l->engine,"fsync-commit")) goto done;
 	if (hook("committed")) goto done;
 	/* Commit is durable. Leave cleanup to the next exclusive invocation; this
@@ -555,6 +612,7 @@ static int publish(struct location *l,const char *old,const struct jf_products *
 done:
 	/* An ordinary reported failure rolls back, even if a commit marker was
 	 * just created. A crash instead leaves the durable marker for recovery. */
+	if (contacts) jaro_contact_rollback(contacts,NULL);
 	if (remove_file(l->engine,"committed")) return 3;
 	if (prepared || exists(l->engine,"journal")==1) (void)recover(l);
 	else (void)cleanup_transaction(l);
@@ -610,16 +668,61 @@ void jf_compile_result_free(struct jf_compile_result *r)
 	free(r->directory); jf_bytes_free(&r->warnings); memset(r,0,sizeof *r);
 }
 
+static int contact_transaction(const char *root,int writable,struct jaro_contact_store **store,
+	struct jf_error *error)
+{
+	struct jaro_contact_migration_error migration;
+	struct jaro_contact_error detail;
+	int status=jaro_contact_profile_open(root,writable ? JARO_CONTACT_PROFILE_WRITE :
+		JARO_CONTACT_PROFILE_READ,store,&migration);
+	const char *reason=migration.reason;
+	if (!status) {
+		status=writable ? jaro_contact_begin(*store,&detail) : jaro_contact_begin_read(*store,&detail);
+		if (status) reason=detail.reason;
+	}
+	if (!status) return 0;
+	jf_product_error(error,status==JARO_CONTACT_BUSY ? "E_CONTACT_BUSY" : "E_CONTACT_STORAGE",0,reason);
+	return status==JARO_CONTACT_BUSY ? 6 : 3;
+}
+
+static int learn_imported_contacts(struct jaro_contact_store *store,const struct jf_bytes *additions,
+	const int *changed,struct jf_error *error)
+{
+	struct jaro_contact_error detail;
+	static const struct jaro_contact_text names[]={{"allow",5},{"block",5}};
+	const struct jaro_contact_text display={"Imported Sieve",14};
+	for (size_t i=0;i<2;i++) if (changed[i+JF_IMPORT_DISK_FILES]) {
+		const struct jf_bytes *keys=&additions[i];
+		size_t pos=0;
+		while (pos<keys->size) {
+			size_t start=pos;
+			int added;
+			while (pos<keys->size && keys->data[pos]!='\n') pos++;
+			struct jaro_contact_text mailbox={(const char *)keys->data+start,pos-start};
+			int status=jaro_contact_learn(store,names[i],mailbox,display,0,&added,&detail);
+			if (status) {
+				jf_product_error(error,"E_CONTACT_IMPORT",0,detail.reason);
+				return status==JARO_CONTACT_BUSY ? 6 : 3;
+			}
+			if (pos<keys->size) pos++;
+		}
+	}
+	return 0;
+}
+
 int jf_compile_import(const char *root,const char *accounts,const char *profile,const char *compiler,
 	const char *script,int legacy,int check,struct jf_compile_result *result,struct jf_error *error,char **error_path)
 {
-	struct location l={-1,-1,-1,-1}; struct jf_snapshot before={0},after={0},recheck={0};
+	struct location l={-1,-1,-1,-1,NULL}; struct jf_snapshot before={0},after={0},recheck={0};
 	struct jf_policy *imported=NULL; struct jf_products products={0}; struct jf_bytes input={0};
 	struct jf_bytes original[4]={{0}},output[4]={{0}};
+	struct jf_bytes additions[2]={{0}};
 	struct jf_input_override overrides[4]; char *paths[4]={0},*temporary=NULL,*engine=join(root,"cache/filter-engine");
-	int present[4]={0},changed[4]={0},rc=3,fd=-1,prepared=0,stage_ready=0; mode_t modes[4]={0600,0600,0600,0600};
+	int present[4]={0},changed[4]={0},rc=3,fd=-1,prepared=0,stage_ready=0,contact_change=0,file_change=0;
+	mode_t modes[4]={0600,0600,0600,0600};
 	unsigned char fingerprint[32],again[32]; char old[65]; size_t i,count=0;
 	struct stat st; char *runtime=runtime_directory(compiler);
+	struct jaro_contact_store *contacts=NULL;
 	memset(result,0,sizeof *result); *error_path=NULL; if (error) memset(error,0,sizeof *error);
 	if (!engine || (rc=run_sieve(runtime,-1,"identity",error))) goto done;
 	rc=3;
@@ -639,12 +742,12 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 	if (rc && !(check && rc==5)) goto done;
 	if (!rc && ((rc=lock(&l,!check)) || (check ? unfinished(&l) ? (rc=5) : 0 : (rc=recover(&l))))) goto done;
 	if (l.root>=0 && !same_root(&l,root)) { rc=6; goto done; }
-	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,NULL,&before,error)) || (rc=jf_snapshot_parse(&before,error))) goto source_error;
+	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,1,NULL,NULL,&before,error)) || (rc=jf_snapshot_parse(&before,error))) goto source_error;
 	if ((rc=jf_sieve_import(&input,legacy,&before.profile,&imported,error))) goto script_error;
-	if (legacy) fputs("W_LEGACY_SIEVE recovered generated header-contains rules; policy-v1 parsed-address/ERE semantics replace legacy substring behavior\n",stderr);
+	if (legacy) fputs("W_LEGACY_SIEVE recovered generated header-contains rules; parsed-address/ERE semantics replace legacy substring behavior\n",stderr);
 	/* Read complete originals for byte-preserving merge and rollback. Import
 	 * deliberately refuses to replace input symlinks or nonregular objects. */
-	for (i=0;i<4;i++) {
+	for (i=0;i<JF_IMPORT_DISK_FILES;i++) {
 		int rootfd=l.root;
 		paths[i]=join(root,jf_import_names[i]); if (!paths[i]) { rc=3; goto done; }
 		if (rootfd<0) { rootfd=open(root,O_RDONLY|O_DIRECTORY); if (rootfd<0) { rc=3; goto done; } }
@@ -653,16 +756,31 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 		if (l.root<0) close(rootfd);
 		if (rc) { jf_product_error(error,"E_IMPORT_INPUT",0,"import inputs must be regular files, never replacement symlinks"); goto done; }
 	}
-	if ((rc=jf_import_merge(before.policy,imported,original,output,error))) goto done;
-	for (i=0;i<4;i++) {
-		changed[i]=original[i].size!=output[i].size || (original[i].size && memcmp(original[i].data,output[i].data,original[i].size));
-		if (changed[i]) { overrides[count].path=paths[i]; overrides[count++].bytes=&output[i]; }
+	for (i=0;i<2;i++) {
+		size_t slot=i+JF_IMPORT_DISK_FILES;
+		paths[slot]=join(root,JARO_CONTACT_DATABASE);
+		if (!paths[slot]) { rc=3; goto done; }
+		const struct jf_dependency *dependency=jf_snapshot_dependency(&before,jf_contact_roles[i],paths[slot]);
+		if (!dependency || jf_bytes_add(&original[slot],dependency->auxiliary.data,dependency->auxiliary.size)) { rc=3; goto done; }
 	}
-	if ((rc=jf_snapshot_overlay(root,accounts,profile,compiler,runtime,overrides,count,&after,error)) ||
+	if ((rc=jf_import_merge(before.policy,imported,original,output,additions,error))) goto done;
+	for (i=0;i<JF_IMPORT_FILES;i++) {
+		changed[i]=original[i].size!=output[i].size || (original[i].size && memcmp(original[i].data,output[i].data,original[i].size));
+		if (i<JF_IMPORT_DISK_FILES) {
+			if (changed[i]) {
+				overrides[count++]=(struct jf_input_override){paths[i],&output[i],NULL};
+				file_change=1;
+			}
+		} else {
+			overrides[count++]=(struct jf_input_override){paths[i],&output[i],jf_contact_roles[i-JF_IMPORT_DISK_FILES]};
+			contact_change|=changed[i];
+		}
+	}
+	if ((rc=jf_snapshot_overlay(root,accounts,profile,compiler,runtime,1,overrides,count,&after,error)) ||
 		(rc=jf_snapshot_parse(&after,error)) ||
 		(rc=jf_products_build(after.policy,&after.profile,after.dependencies,after.dependency_count,&products,error))) goto source_error;
 	if ((rc=jf_dependencies_fingerprint(before.dependencies,before.dependency_count,fingerprint)) ||
-		(rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&before,&recheck,error)) ||
+		(rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,1,NULL,NULL,&recheck,error)) ||
 		(rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) goto source_error;
 	if (memcmp(fingerprint,again,32)) { rc=6; goto done; }
 	if (check) { strcpy(result->id,products.id); rc=0; goto done; }
@@ -681,10 +799,11 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 		jf_generation_close(&existing); if (rc) goto done;
 	}
 	if (syncfd(l.generations,"fsync-generations")) { rc=3; goto done; }
-	/* Staging/exporter work may take time. Recheck the complete original
+	/* Sieve staging may take time. Recheck the complete original
 	 * inventory immediately before preparing any input publication. */
 	jf_snapshot_free(&recheck);
-	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&before,&recheck,error)) ||
+	if ((rc=contact_transaction(root,contact_change,&contacts,error)) ||
+		(rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,0,contacts,NULL,&recheck,error)) ||
 		(rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) goto source_error;
 	if (memcmp(fingerprint,again,32)) { rc=6; goto done; }
 	{
@@ -692,15 +811,25 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 		result->directory=generations ? join(generations,products.id) : NULL; free(generations);
 		if (!result->directory) { rc=3; goto done; }
 	}
-	if (count) {
+	if (contact_change) {
+		char token[33]; struct jaro_contact_error detail;
+		if ((rc=learn_imported_contacts(contacts,additions,changed,error))) goto done;
+		rc=3;
+		if (jaro_contact_record_import(contacts,token,&detail)) {
+			jf_product_error(error,"E_CONTACT_IMPORT",0,detail.reason); goto done;
+		}
+		prepared=1;
+		if (save(l.engine,"import.contacts",token,32,"write-import-receipt") || fsync(l.engine)) goto done;
+	}
+	if (file_change) {
 		prepared=1;
 		if ((rc=prepare_inputs(&l,original,output,present,modes,changed))) goto done;
 	}
-	if (!strcmp(old,products.id) && !count) {
+	if (!strcmp(old,products.id) && !file_change && !contact_change) {
 		struct jf_generation same={0}; same.sieve=products.sieve;
 		rc=public_status(&l,&same,1);
-		if (rc==5) { rc=publish(&l,old,&products); if (!rc) result->changed=1; }
-	} else { rc=publish(&l,old,&products); if (!rc) result->changed=1; }
+		if (rc==5) { rc=publish(&l,old,&products,NULL,error); if (!rc) result->changed=1; }
+	} else { rc=publish(&l,old,&products,contact_change ? contacts : NULL,error); if (!rc) result->changed=1; }
 	if (!rc) strcpy(result->id,products.id);
 	goto done;
 script_error:
@@ -711,12 +840,14 @@ source_error:
 		*error_path=strdup(r ? r->source : after.error_path ? after.error_path : before.error_path ? before.error_path : root);
 	}
 done:
+	if (contacts) { jaro_contact_rollback(contacts,NULL); jaro_contact_close(contacts,NULL); }
 	if (rc && prepared && l.engine>=0) { (void)remove_file(l.engine,"committed"); (void)recover(&l); }
 	if (!rc) { result->warnings=after.warnings; memset(&after.warnings,0,sizeof after.warnings); }
 	if (temporary && (stage_ready || exists(l.engine,temporary)==1)) discard_stage(l.engine,temporary);
-	if (rc && error && !error->code) jf_product_error(error,rc==6 ? "E_BUSY_OR_CHANGED" : "E_IMPORT_IO",0,"import failed; no partial configuration is committed");
+	if (rc && error && !error->code) jf_product_error(error,rc==6 ? "E_BUSY_OR_CHANGED" : "E_IMPORT_IO",0,"cannot finish filter import; retry to reconcile the profile");
 	if (fd>=0) close(fd);
 	for (i=0;i<4;i++) { free(paths[i]); jf_bytes_free(&original[i]); jf_bytes_free(&output[i]); }
+	for (i=0;i<2;i++) jf_bytes_free(&additions[i]);
 	jf_bytes_free(&input); jf_policy_free(imported); jf_snapshot_free(&before); jf_snapshot_free(&after); jf_snapshot_free(&recheck);
 	jf_products_free(&products); free(temporary); free(engine); free(runtime); location_close(&l); return rc;
 }
@@ -724,7 +855,7 @@ done:
 int jf_compile(const char *root,const char *accounts,const char *profile,const char *compiler,int check,
 	struct jf_compile_result *result,struct jf_error *error,char **error_path)
 {
-	struct location l={-1,-1,-1,-1}; struct jf_generation previous={0}; struct jf_snapshot prior={0};
+	struct location l={-1,-1,-1,-1,NULL}; struct jf_generation previous={0};
 	char *runtime=runtime_directory(compiler),*cache_path=join(root,"cache/filter-engine"),old[65]; int rc,attempt;
 	memset(result,0,sizeof *result); *error_path=NULL; previous.directory=-1;
 	if (error) memset(error,0,sizeof *error);
@@ -742,20 +873,19 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 		if (*old && previous_format(&l,old)) {
 			if ((rc=previous_export(&l,old))) goto done;
 		} else if (*old) {
-			if ((rc=pin_locked(&l,NULL,&previous,error)) ||
-				(rc=jf_cache_dependencies(&previous.cache,&prior.dependencies,&prior.dependency_count))) goto done;
+			if ((rc=pin_locked(&l,NULL,&previous,error))) goto done;
 		}
 		unlock(&l);
 	}
 	for (attempt=0;attempt<3;attempt++) {
 		struct jf_snapshot snapshot={0},recheck={0}; struct jf_products products={0};
+		struct jaro_contact_store *contacts=NULL;
 		unsigned char fingerprint[32],again[32]; char id[65],*temporary=NULL;
-		int stage_ready=0,retry=0,collected=0,rechecked=0;
+		int stage_ready=0,retry=0;
 		if (l.engine>=0 && (rc=lock(&l,0))) goto iteration;
 		if (l.engine>=0 && !same_root(&l,root)) { rc=6; retry=1; goto iteration; }
 		if (l.engine>=0 && unfinished(&l)) { rc=5; goto iteration; }
-		rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&prior,&snapshot,error);
-		if (!rc) collected=1;
+		rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,check,NULL,hook,&snapshot,error);
 		if (rc==6) retry=1;
 		if (l.engine>=0) unlock(&l);
 		if (rc) goto iteration;
@@ -766,8 +896,7 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 			struct jf_generation warm={0}; warm.directory=-1;
 			int repair=0;
 			if ((rc=lock(&l,0))) goto iteration;
-			rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&snapshot,&recheck,error);
-			if (!rc) rechecked=1;
+			rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,0,NULL,NULL,&recheck,error);
 			if (!rc) rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again);
 			if (!rc && memcmp(again,fingerprint,32)) { rc=6; retry=1; }
 			if (!rc) rc=pin_locked(&l,NULL,&warm,error);
@@ -784,15 +913,14 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 			}
 			/* A serialized legacy export can differ from the retained native
 			 * generation. Revalidate and transactionally repair that public view. */
-			rc=0; jf_snapshot_free(&recheck); rechecked=0;
+			rc=0; jf_snapshot_free(&recheck);
 		}
 		if (hook("parse")) { rc=3; goto iteration; }
 		if ((rc=jf_snapshot_parse(&snapshot,error)) ||
 			(rc=jf_products_build(snapshot.policy,&snapshot.profile,snapshot.dependencies,snapshot.dependency_count,&products,error))) goto iteration;
 		if (check) {
 			if (l.engine>=0 && (rc=lock(&l,0))) goto iteration;
-			rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&snapshot,&recheck,error);
-			if (!rc) rechecked=1;
+			rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,1,NULL,NULL,&recheck,error);
 			if (!rc) rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again);
 			if (!rc && memcmp(again,fingerprint,32)) { rc=6; retry=1; }
 			if (!rc) strcpy(result->id,products.id);
@@ -804,9 +932,9 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 		}
 		if ((rc=lock(&l,1)) || (rc=recover(&l))) goto iteration;
 		if (!same_root(&l,root)) { rc=6; retry=1; goto iteration; }
-		rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,&snapshot,&recheck,error);
-		if (!rc) rechecked=1;
-		if (rc || (rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) { if (recheck.changed) retry=1; goto iteration; }
+		rc=contact_transaction(root,0,&contacts,error);
+		if (!rc) rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,0,contacts,NULL,&recheck,error);
+		if (rc || (rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) { if (rc==6) retry=1; goto iteration; }
 		if (memcmp(fingerprint,again,32)) { rc=6; retry=1; goto iteration; }
 		if ((rc=selector(&l,old))) goto iteration;
 		if (exists(l.generations,products.id)==0) {
@@ -834,13 +962,14 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 		if (!strcmp(old,products.id)) {
 			struct jf_generation same={0}; same.sieve=products.sieve;
 			rc=public_status(&l,&same,1);
-			if (rc==5) { rc=publish(&l,old,&products); if (!rc) result->changed=1; }
+			if (rc==5) { rc=publish(&l,old,&products,NULL,error); if (!rc) result->changed=1; }
 		} else {
-			rc=publish(&l,old,&products);
+			rc=publish(&l,old,&products,NULL,error);
 			if (!rc) result->changed=1;
 		}
 		if (!rc) strcpy(result->id,products.id);
 	iteration:
+		if (contacts) { jaro_contact_rollback(contacts,NULL); jaro_contact_close(contacts,NULL); }
 		if (rc && !*error_path) {
 			const struct jf_rule *r=error && error->code && !strcmp(error->code,"E_REGEX_EXPORT") ? jf_policy_rule(snapshot.policy,error->source) : NULL;
 			const char *where=error && error->code && snapshot.error_path ? snapshot.error_path : root;
@@ -850,12 +979,6 @@ int jf_compile(const char *root,const char *accounts,const char *profile,const c
 		}
 		if (l.engine>=0) unlock(&l);
 		if (temporary && (stage_ready || exists(l.engine,temporary)==1)) discard_stage(l.engine,temporary);
-		if (rc==6 && retry && attempt<2 && (collected || rechecked)) {
-			struct jf_snapshot *latest=rechecked ? &recheck : &snapshot;
-			jf_snapshot_free(&prior);
-			prior.dependencies=latest->dependencies; prior.dependency_count=latest->dependency_count;
-			latest->dependencies=NULL; latest->dependency_count=0;
-		}
 		if (!rc) { result->warnings=snapshot.warnings; memset(&snapshot.warnings,0,sizeof snapshot.warnings); }
 		free(temporary); jf_snapshot_free(&snapshot); jf_snapshot_free(&recheck); jf_products_free(&products);
 		if (rc!=6 || !retry || attempt==2) break;
@@ -865,6 +988,6 @@ done:
 	location_close(&l);
 final:
 	if (rc && error && !error->code) jf_product_error(error,rc==6 ? "E_BUSY_OR_CHANGED" : rc==5 ? "E_GENERATION" : "E_IO",0,"native generation unavailable or publication failed");
-	jf_generation_close(&previous); jf_snapshot_free(&prior); free(cache_path); free(runtime);
+	jf_generation_close(&previous); free(cache_path); free(runtime);
 	return rc;
 }

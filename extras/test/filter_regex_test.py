@@ -47,7 +47,7 @@ class RegexTests(unittest.TestCase):
 
     def setUp(self):
         self.root = self.work / self._testMethodName
-        self.root.mkdir()
+        self.root.mkdir(mode=0o700)
         self.incoming = self.root / 'incoming'
         for name in ('cur', 'new', 'tmp'):
             (self.incoming / name).mkdir(parents=True)
@@ -177,6 +177,9 @@ class RegexTests(unittest.TestCase):
 
     def test_equivalent_mailbox_spellings_all_sources(self):
         corpus = json.loads((REPO / 'extras/test/fixtures/filter-contract/mailbox-normalization.json').read_text())
+        self.books({'known': ['"us\\er"@example.org', 'user@example.org'],
+                    'blacklist': ['"block\\ed"@example.org', 'blocked@example.org'],
+                    'own': ['"ow\\n"@example.org', 'own@example.org']})
         for index, group in enumerate(corpus['groups']):
             for policy in group['forms']:
                 generation = self.compile(['from-address '+json.dumps(policy)+' move matched'])
@@ -184,9 +187,6 @@ class RegexTests(unittest.TestCase):
                     self.decide(generation, {'id': 'normalization-%d' % index, 'headers': {'From': form},
                                              'parsed': [('From', form)], 'local': 'matched', 'sieve': 'matched'})
         # Each contact/own source normalizes before duplicate collapse and IDs.
-        self.books({'known': ['"us\\er"@example.org', 'user@example.org'],
-                    'blacklist': ['"block\\ed"@example.org', 'blocked@example.org'],
-                    'own': ['"ow\\n"@example.org', 'own@example.org']})
         generation = self.compile([])
         rows = provenance(generation)
         self.assertEqual(len(rows), 6)
@@ -210,13 +210,13 @@ class RegexTests(unittest.TestCase):
 
     def test_domain_and_casing_winners(self):
         target = json.loads((REPO / 'extras/test/fixtures/filter-policy/target.json').read_text())
+        corpus = json.loads((REPO / 'extras/test/fixtures/filter-policy/casing.json').read_text())
+        self.books(corpus)
         generation = self.compile(target['domain_rules'])
         for case in target['domain_cases']:
             self.decide(generation, case)
         for case in target['isolated_domain_cases']:
             self.decide(self.compile(case['rules']), case)
-        corpus = json.loads((REPO / 'extras/test/fixtures/filter-policy/casing.json').read_text())
-        self.books(corpus)
         generation = self.compile(corpus['rules'])
         for case in corpus['cases']:
             self.decide(generation, case)

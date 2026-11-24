@@ -24,7 +24,7 @@ enum jf_field { JF_FROM = 1, JF_SENDER = 2, JF_TO = 4, JF_CC = 8, JF_SPAM = 16 }
  * identity is root-relative (or accounts:relative/path for external accounts).
  * path is raw diagnostic/provenance bytes, excluding NUL. Account snapshots
  * are sorted by identity; accounts precede aliases for duplicate provenance.
- * Contact exports contain one raw mailbox per nonblank line (no comments or
+ * Contact memberships contain one mailbox per nonblank line (no comments or
  * JSON decoding, so quoted local parts and leading # remain mailbox data).
  * Alias/email account fields use the policy token lexer, with # comments.
  * Account records other than email are ignored, never interpreted as code.
@@ -65,7 +65,7 @@ struct jf_rule {
 	const char *logical, *local, *sieve;
 	const char *source, *source_identity;
 	size_t line, occurrence;
-	char id[75];             /* r:/known:/blacklist:/own: + SHA256 hex */
+	char id[75];             /* r:/allow:/block:/own: + SHA256 hex */
 };
 
 struct jf_policy;
@@ -76,6 +76,8 @@ struct jf_policy;
  */
 int jf_policy_parse(const struct jf_source *, size_t,
 	const struct jf_allocator *, struct jf_policy **out, struct jf_error *);
+int jf_policy_parse_import(const struct jf_source *, size_t,
+	struct jf_policy **out, struct jf_error *);
 void jf_policy_free(struct jf_policy *);
 size_t jf_policy_count(const struct jf_policy *);
 const struct jf_rule *jf_policy_rule(const struct jf_policy *, size_t);

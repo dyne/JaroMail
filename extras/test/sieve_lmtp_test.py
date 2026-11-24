@@ -219,7 +219,7 @@ def qualify(work):
     tools = stage / "share/jaromail/bin"
     env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"])
     local = work / "local"
-    local.mkdir()
+    local.mkdir(mode=0o700)
     source = maildir(local / "incoming")
     (local / "Accounts").mkdir()
     write_policy_fixture(local, RULES, known=["known@example.org"], blacklist=["blocked@example.org"],

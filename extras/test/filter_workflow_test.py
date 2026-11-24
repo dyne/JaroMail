@@ -67,7 +67,9 @@ class WorkflowTests(unittest.TestCase):
                               'with open(os.environ["JARO_WORKFLOW_PROCESS_LOG"],"ab") as f: f.write(%r)\n'
                               'os.execv(%r,[%r]+sys.argv[1:])\n' % ((name+'\n').encode(), real, real))
             script.chmod(0o700)
-        (cls.bins / 'notmuch').write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$JARO_WORKFLOW_INDEX_LOG"\nexit "${JARO_WORKFLOW_INDEX_STATUS:-0}"\n')
+        (cls.bins / 'notmuch').write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$*" >> "$JARO_WORKFLOW_INDEX_LOG"\n'
+            '[ "$2" != config ] || exit 0\nexit "${JARO_WORKFLOW_INDEX_STATUS:-0}"\n')
         (cls.bins / 'notmuch').chmod(0o700)
         cls.instrument_helpers()
 
@@ -108,7 +110,7 @@ class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.instrument_helpers()
         self.root = self.work / self._testMethodName / 'mail root'
-        self.root.mkdir(parents=True)
+        self.root.mkdir(mode=0o700, parents=True)
         self.accounts = self.root.parent / 'external accounts'
         self.accounts.mkdir()
         (self.accounts / 'default.txt').write_text('name Fixture\nemail own@example.org\nlogin fixture\nproto pop\nhost fixture.invalid\nport 995\n')
@@ -156,6 +158,41 @@ class WorkflowTests(unittest.TestCase):
         self.run_cli('update')
         self.assertIn('new', self.indexlog.read_text())
         self.assertEqual(self.snapshot(), first)
+
+    def test_installed_accounts_route_shared_sqlite_memberships(self):
+        self.message.unlink()
+        (self.root / 'Filters.txt').write_text('')
+        for name in ('alice', 'bob'):
+            (self.accounts / name).write_text(
+                f'name {name}\nemail {name}@example.org\nlogin {name}\nhost fixture.invalid\n')
+        legacy = {
+            'whitelist.abook': '[0]\nname=Allowed\nemail=allow@example.org\n'
+                              '[1]\nname=Overlap\nemail=BOTH@example.org\n',
+            'blacklist.abook': '[0]\nname=Blocked\nemail=block@example.org\n'
+                              '[1]\nname=Overlap\nemail=both@example.org\n',
+            'allow-block contacts.abook': '[0]\nname=Custom duplicate\nemail=block@example.org\n',
+        }
+        for name, contents in legacy.items():
+            (self.root / name).write_text(contents)
+        self.run_cli('-a', 'alice', 'sieve')
+        first = self.snapshot()
+        for name in legacy:
+            self.assertEqual((self.root / name).read_text(), legacy[name])
+            (self.root / name).unlink()
+        expected = {'allow': 'INBOX', 'block': 'zz.blacklist', 'both': 'INBOX', 'neither': 'unsorted'}
+        for account in ('alice', 'bob'):
+            for address, mailbox in expected.items():
+                message = (f'From: {address}@example.org\nMessage-ID: <{address}-{account}@example.org>\n'
+                           f'\n{mailbox} from {account}\n').encode()
+                (self.root / 'incoming/new' / f'{address}-{account}').write_bytes(message)
+            self.run_cli('-a', account, 'sieve')
+            self.assertEqual(self.snapshot(), first)
+            self.run_cli('-a', account, 'filter')
+            for address, mailbox in expected.items():
+                record = f'Message-ID: <{address}-{account}@example.org>\n'.encode()
+                mapped = [p.parent.parent.name for p in self.root.glob('*/cur/*') if record in p.read_bytes()]
+                self.assertEqual(mapped, [mailbox])
+        self.assertTrue((self.root / 'contacts.sqlite').is_file())
 
     def test_assigned_version_in_console_and_version_option(self):
         stamp = self.runtime / 'VERSION'
@@ -316,12 +353,12 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(self.tree_snapshot(), before)
         self.assertFalse(self.transportlog.exists())
         self.assertFalse(self.indexlog.exists())
+        (self.root / 'whitelist.abook').write_text('[0]\nname=Known\nemail=known@example.org\n')
         (self.root / 'Filters.txt').write_text('invalid-rule\n')
         self.run_cli('update', code=4)
         self.assertEqual(self.snapshot(), ('generations/' + old, source))
         self.assertTrue(self.message.exists())
         (self.root / 'Filters.txt').write_text('')
-        (self.root / 'whitelist.abook').write_text('[format]\nprogram=abook\nversion=0.6.1\n[0]\nname=Known\nemail=known@example.org\n')
         self.run_cli('update', engine='legacy')
         selected = (cache / 'current').resolve()
         self.assertNotEqual(selected, generation)
@@ -360,7 +397,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_native_import_validates_without_bootstrap_writes_then_publishes(self):
         donor = self.root.parent / 'import donor'
-        donor.mkdir()
+        donor.mkdir(mode=0o700)
         (donor / 'Filters.txt').write_text('from-domain imported.example move NativeImport\nknown-domain *.known.example\n')
         (donor / 'Aliases.txt').write_text('imported-alias@example.org\n')
         result = subprocess.run([str(self.runtime / 'bin/jaro-filter-compile'), '--root', str(donor)],

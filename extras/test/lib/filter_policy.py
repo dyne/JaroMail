@@ -53,7 +53,7 @@ def main():
     for address in target["known"]:
         cli("import", stdin=f"Known <{address}>\n")
     for address in target["blacklist"]:
-        cli("-l", "blacklist", "import", stdin=f"Blocked <{address}>\n")
+        cli("-l", "block", "import", stdin=f"Blocked <{address}>\n")
     for dest in {c["local"] for c in cases} | set(legacy["destinations"].values()) | {"incoming", "oldbucket", "secondbucket"}:
         maildir(dest)
     cli("sieve")

@@ -21,7 +21,7 @@ native_filter_records() {
         row=("${(@)fields[j,j+10]}")
         if [[ $row[1] != "$i" || -z $row[2] || $row[10] != (0|[1-9][0-9]#) ||
               $row[4] != (move|none) || $row[8] != (classified|moved|noop|error) ||
-              ( -n $row[3] && $row[3] != (r|known|blacklist|own):[0-9a-f](#c64) &&
+              ( -n $row[3] && $row[3] != (r|allow|block|own):[0-9a-f](#c64) &&
                 $row[3] != builtin:(bounce|spam|unsorted) ) ]]; then
             print -ru2 -- "Invalid native decision record $i"
             (( helper_result != 0 )) && return $helper_result

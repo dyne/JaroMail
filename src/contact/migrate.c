@@ -3,6 +3,7 @@
 #include "contact/migrate.h"
 #include "contact/legacy-import.h"
 #include "filter/sha256.h"
+#include "sqlite3.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -749,6 +750,123 @@ done:
 	free_sources(sources, count);
 	free(temporary);
 	free(destination);
+	free(real);
+	return status;
+}
+
+static int
+preview_sources(const char *profile, struct jaro_contact_store **store,
+	struct jaro_contact_migration_error *error)
+{
+	struct stat identity;
+	struct source *sources = NULL;
+	struct jaro_contact_error detail;
+	size_t count = 0;
+	int directory = open(profile, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+	int status;
+
+	if (directory < 0)
+		return system_failure(error, "cannot open contact profile");
+	if (fstat(directory, &identity) < 0)
+		status = system_failure(error, "cannot inspect contact profile");
+	else
+		status = check_directory(profile, &identity, error);
+	if (!status)
+		status = discover_sources(directory, &sources, &count, error);
+	if (!status) {
+		status = jaro_contact_open_memory(store, &detail);
+		if (!status)
+			status = jaro_contact_begin(*store, &detail);
+		if (status)
+			store_failure(error, status, &detail, 0);
+	}
+	if (!status) {
+		status = read_and_verify_sources(directory, *store, sources, count, error);
+		for (size_t i = 0; !status && i < count; i++)
+			status = verify_source(directory, &sources[i], i + 1, error);
+		if (!status) {
+			status = jaro_contact_commit(*store, &detail);
+			if (status)
+				store_failure(error, status, &detail, 0);
+		}
+	}
+	close(directory);
+	free_sources(sources, count);
+	if (status && *store) {
+		jaro_contact_close(*store, NULL);
+		*store = NULL;
+	}
+	return status;
+}
+
+int
+jaro_contact_profile_open(const char *profile, enum jaro_contact_profile_mode mode,
+	struct jaro_contact_store **store, struct jaro_contact_migration_error *error)
+{
+	struct jaro_contact_error detail;
+	struct stat identity, entry;
+	int status;
+
+	*store = NULL;
+	if (error)
+		*error = (struct jaro_contact_migration_error){0};
+	char *real = realpath(profile, NULL);
+	if (!real)
+		return system_failure(error, "cannot resolve contact profile");
+	char *path = NULL;
+	if (stat(real, &identity) < 0) {
+		status = system_failure(error, "cannot inspect contact profile");
+		goto done;
+	}
+	status = check_directory(real, &identity, error);
+	if (status)
+		goto done;
+	path = join_path(real, JARO_CONTACT_DATABASE);
+	if (!path) {
+		status = system_failure(error, "cannot allocate contact database path");
+		goto done;
+	}
+	status = lstat(path, &entry);
+	if (status < 0 && errno != ENOENT) {
+		status = system_failure(error, "cannot inspect contact database");
+		goto done;
+	}
+	if (status < 0 && mode == JARO_CONTACT_PROFILE_PREVIEW) {
+		status = preview_sources(real, store, error);
+		/* An initializer may have published a newer snapshot during the
+		 * preview. Prefer the published book if one is now visible. */
+		if (lstat(path, &entry) < 0 && errno == ENOENT)
+			goto done;
+		if (*store) {
+			jaro_contact_close(*store, NULL);
+			*store = NULL;
+		}
+		if (error)
+			*error = (struct jaro_contact_migration_error){0};
+	}
+	if (mode != JARO_CONTACT_PROFILE_PREVIEW && (status < 0 || entry.st_nlink > 1)) {
+		status = jaro_contact_initialize(real, NULL, NULL, error);
+		if (status)
+			goto done;
+	}
+	status = jaro_contact_open(path, mode == JARO_CONTACT_PROFILE_WRITE ? JARO_CONTACT_WRITE :
+		JARO_CONTACT_READ, store, &detail);
+	if (status && mode == JARO_CONTACT_PROFILE_READ && detail.native_code == SQLITE_READONLY_ROLLBACK) {
+		/* Recovery is separate from the read-only query. Dry runs never
+		 * trigger recovery writes. */
+		status = jaro_contact_open(path, JARO_CONTACT_WRITE, store, &detail);
+		if (!status) {
+			status = jaro_contact_close(*store, &detail);
+			*store = NULL;
+		}
+		if (!status)
+			status = jaro_contact_open(path, JARO_CONTACT_READ, store, &detail);
+	}
+	if (status)
+		store_failure(error, status, &detail, 0);
+
+done:
+	free(path);
 	free(real);
 	return status;
 }

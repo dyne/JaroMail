@@ -10,8 +10,8 @@ field_is(const struct jaro_legacy_field *field, const char *name)
 	return field->key_size == strlen(name) && !memcmp(field->key, name, field->key_size);
 }
 
-static int
-split_mailboxes(struct jaro_contact_text list, struct jaro_contact_text **output, size_t *count)
+int
+jaro_contact_split_mailboxes(struct jaro_contact_text list, struct jaro_contact_text **output, size_t *count)
 {
 	size_t start = 0, capacity = 0;
 	int quoted = 0;
@@ -81,7 +81,7 @@ jaro_contact_import_record(struct jaro_contact_store *store, int64_t book,
 			contact.notes = value;
 		} else if (field_is(field, "email")) {
 			email = i + 1;
-			status = split_mailboxes(value, &addresses, &contact.address_count);
+			status = jaro_contact_split_mailboxes(value, &addresses, &contact.address_count);
 			if (status) {
 				bad = email;
 				detail = (struct jaro_contact_error){"cannot split legacy mailboxes", "email", 0,

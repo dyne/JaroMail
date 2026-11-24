@@ -32,6 +32,7 @@ class OutboxControls(unittest.TestCase):
         self.mail = self.root / 'mail with spaces'
         self.home = self.root / 'home'
         self.bin = self.root / 'bin'
+        self.mail.mkdir(mode=0o700, parents=True)
         for path in (self.home, self.bin, *(self.mail/'outbox'/d for d in ('new','cur','tmp'))):
             path.mkdir(parents=True, exist_ok=True)
         self.calls = self.root/'smtp-calls'
@@ -82,7 +83,6 @@ exit "${JARO_TEST_SMTP_STATUS:-0}"
         accounts.mkdir()
         (accounts/'default').write_text('name Fixture\nemail fixture@example.org\nlogin fixture@example.org\nimap fixture.invalid\nsmtp fixture.invalid\npassword local-fixture\n')
         (self.mail/'Filters.txt').write_text('')
-        (self.mail/'whitelist.abook').write_text('[format]\nversion=1\n')
 
     def smtp_count(self):
         return len(self.calls.read_text().splitlines()) if self.calls.exists() else 0
@@ -180,10 +180,13 @@ exit "${JARO_TEST_SMTP_STATUS:-0}"
         self.assertFalse((self.mail/'outbox/new/first').exists())
         self.assertTrue((self.mail/'outbox/new/second').exists())
         self.assertTrue((self.mail/'outbox/new/eligible').exists())
-        result = self.cli('send',expected=1)
+        result = self.cli('-l','block','send',expected=1)
         self.assertIn(b'1 outbox item(s) held', result.stderr)
         self.assertEqual(self.smtp_count(), 2)
         self.assertEqual((self.root/'transport-2').read_bytes(), self.message)
+        allowed = self.cli('-q','-l','allow','addr','private-recipient')
+        self.assertEqual(allowed.stdout.lower().count(b'<private-recipient@example.org>'), 1)
+        self.cli('-q','-l','block','addr','private-recipient',expected=1)
         self.cli('outbox','archive',second)
         self.assertEqual(self.smtp_count(), 2)
         self.assertEqual(len(list((self.mail/'sent/new').iterdir())), 3)

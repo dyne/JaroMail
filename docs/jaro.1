@@ -10,12 +10,15 @@ jaro \- command line interface for Jaromail workflows
 \f[CR]jaro\f[R] is the operational CLI for Jaromail.
 It orchestrates account configuration, local maildir operations,
 addressbooks, filtering, indexing and SMTP/IMAP actions.
+Contacts live in \f[CR]contacts.sqlite\f[R] in the JaroMail directory
+and are shared across its accounts.
+Recipient completion searches allow and custom lists.
 .SS Options
 \f[CR]\-a ACCOUNT\f[R] use a specific account instead of
 \f[CR]default\f[R].
 .PP
-\f[CR]\-l LIST\f[R] use a specific addressbook/list (default:
-\f[CR]whitelist\f[R]).
+\f[CR]\-l LIST\f[R] select a contact list by exact name (default:
+\f[CR]allow\f[R]).
 .PP
 \f[CR]\-n\f[R] dry\-run mode where supported.
 .PP
@@ -209,7 +212,8 @@ inputs.
 .PP
 \f[CR]import\f[R] import addresses from stdin.
 .PP
-\f[CR]export\f[R] export addresses to another format.
+\f[CR]export [vcard]\f[R] export the selected contact list as vCard
+records.
 .PP
 \f[CR]learn\f[R], \f[CR]isknown\f[R], \f[CR]complete\f[R] contact
 learning/query/completion helpers.

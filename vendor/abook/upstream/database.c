@@ -8,6 +8,7 @@
  */
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -24,6 +25,7 @@
 #include "xmalloc.h"
 #include "search-fold.h"
 #include "contact/legacy-book.h"
+#include "sqlite-editor.h"
 
 abook_field_list *fields_list = NULL;
 int fields_count = 0;
@@ -32,6 +34,12 @@ list_item *database = NULL;
 static int items = 0;
 
 #define ITEM_SIZE (fields_count * sizeof(char *))
+struct item_storage {
+	int64_t contact_id;
+	char *values[];
+};
+#define ITEM_STORAGE_SIZE (offsetof(struct item_storage,values) + ITEM_SIZE)
+#define ITEM_STORAGE(item) ((struct item_storage *)((char *)(item) - offsetof(struct item_storage,values)))
 #define LAST_ITEM (items - 1)
 
 #define INITIAL_LIST_CAPACITY	30
@@ -236,6 +244,14 @@ list_custom_fields()
  * Declare a new field while database is already loaded
  * making it grow accordingly
  */
+static list_item
+grow_item(list_item item)
+{
+	struct item_storage *row = xrealloc(ITEM_STORAGE(item), ITEM_STORAGE_SIZE);
+	row->values[fields_count - 1] = NULL;
+	return row->values;
+}
+
 static void
 declare_unknown_field(char *key)
 {
@@ -248,10 +264,7 @@ declare_unknown_field(char *key)
 		return;
 
 	for(i = 0; i < items; i++)
-		if(database[i]) {
-			database[i] = xrealloc(database[i], ITEM_SIZE);
-			database[i][fields_count - 1] = NULL;
-		}
+		if(database[i]) database[i] = grow_item(database[i]);
 }
 
 /*
@@ -330,7 +343,7 @@ parse_database(FILE *in)
 			} else if(!strcasecmp(opt_get_str(STR_PRESERVE_FIELDS),
 						"all")){
 				declare_unknown_field(line);
-				item = xrealloc(item, ITEM_SIZE);
+				item = grow_item(item);
 				item[fields_count - 1] = xstrdup(tmp);
 			}
 		}
@@ -346,7 +359,8 @@ parse_database(FILE *in)
 			items--;
 		}
 	}
-	db_need_save = status ? original_need_save : FALSE;
+	db_need_save = status ? original_need_save :
+		jaro_editor_profile && (original_need_save || items != original_items);
 
 	return status;
 }
@@ -411,6 +425,14 @@ write_database(FILE *out, struct db_enumerator e)
 int
 save_database(int force_save)
 {
+	if (jaro_editor_profile) {
+		if (jaro_editor_save()) {
+			statusline_msg(jaro_editor_diagnostic());
+			return -1;
+		}
+		refresh_screen();
+		return 0;
+	}
 
 	// officialize this the day we are sure that db_need_save cover all possible
 	// modifications of the database using the UI
@@ -520,7 +542,7 @@ validate_item(list_item item)
 				assert(0);
 		}
 
-		if(max_field_len && item[i] &&
+		if(!jaro_editor_profile && max_field_len && item[i] &&
 				((int)strlen(item[i]) > max_field_len)) {
 			/* truncate field */
 			tmp = item[i];
@@ -923,7 +945,20 @@ init_db_enumerator(int mode)
 list_item
 item_create()
 {
-	return xmalloc0(ITEM_SIZE);
+	struct item_storage *row = xmalloc0(ITEM_STORAGE_SIZE);
+	return row->values;
+}
+
+int64_t
+item_contact_id(list_item item)
+{
+	return ITEM_STORAGE(item)->contact_id;
+}
+
+void
+item_set_contact_id(list_item item,int64_t id)
+{
+	ITEM_STORAGE(item)->contact_id=id;
 }
 
 void
@@ -931,7 +966,8 @@ item_free(list_item *item)
 {
 	assert(item);
 
-	xfree(*item);
+	if (*item) free(ITEM_STORAGE(*item));
+	*item=NULL;
 }
 
 void
@@ -949,6 +985,7 @@ item_empty(list_item item)
 void
 item_copy(list_item dest, list_item src)
 {
+	item_set_contact_id(dest,item_contact_id(src));
 	memmove(dest, src, ITEM_SIZE);
 	// called by parse_database(), that's why
 	// parse_database() re-init db_need_save to FALSE

@@ -191,7 +191,7 @@ extract_addresses() {
     fn extract_addresses $*
 
     # without arguments just list all entries in the active list
-    # default is whitelist
+    # default is allow
 
     arg=${1}
 

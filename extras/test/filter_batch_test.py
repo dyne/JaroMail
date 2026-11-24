@@ -106,7 +106,7 @@ class BatchTests(unittest.TestCase):
         self.case = self.work / self._testMethodName
         self.case.mkdir()
         self.root = self.case / 'mail root'
-        self.root.mkdir()
+        self.root.mkdir(mode=0o700)
         self.incoming = self.root / 'incoming'
         self.maildir(self.incoming)
 
@@ -190,6 +190,11 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(row['local'], os.fsencode(self.root / expected['sieve']), case['id'])
         self.assertEqual(row['sieve'], expected['sieve'].encode(), case['id'])
         source = expected['source'].replace('/mail/', str(self.root) + '/')
+        if expected['selector'] in ('allow', 'block'):
+            source = self.root / 'contacts.sqlite'
+            roster = books['known' if expected['selector'] == 'allow' else 'blacklist']
+            keys = sorted(set(authored.ascii_fold(mailbox) for mailbox in roster))
+            expected['line'] = str(keys.index(expected['predicate']) + 1)
         self.assertEqual(row['source'], os.fsencode(source), case['id'])
         self.assertEqual(row['line'], expected['line'].encode(), case['id'])
         self.assertEqual((row['action'], row['status'], row['detail']), (b'move', b'classified', b''))
@@ -197,6 +202,11 @@ class BatchTests(unittest.TestCase):
     def test_original_52_authored_targets(self):
         count = 0
         for group, (cases, rules, contacts) in enumerate(authored_groups()):
+            if group:
+                self.root = self.case / f'mail root {group}'
+                self.root.mkdir(mode=0o700)
+                self.incoming = self.root / 'incoming'
+                self.maildir(self.incoming)
             books = {key: contacts.get(key, []) for key in ['known', 'blacklist', 'own']}
             self.compile(rules, **books)
             paths = [self.message(('cur/' if i % 2 else 'new/') + '%d-%s:2,FS' % (group, case['id']), case['headers'])

@@ -19,6 +19,7 @@
 #include "ui.h"
 #include "edit.h"
 #include "database.h"
+#include "sqlite-editor.h"
 #include "gettext.h"
 #include "list.h"
 #include "misc.h"
@@ -779,7 +780,9 @@ ui_read_database()
 		free(msg);
 	}
 
-	load_database(datafile);
+	if (jaro_editor_profile) {
+		if (jaro_editor_load()) statusline_msg(jaro_editor_diagnostic());
+	} else load_database(datafile);
 	refresh_list();
 }
 
@@ -825,6 +828,10 @@ void
 ui_open_datafile()
 {
 	char *filename;
+	if (jaro_editor_profile) {
+		statusline_msg(_("Use jaro -l LIST abook to edit another contact list"));
+		return;
+	}
 
 	filename = ask_filename(_("File to open: "));
 

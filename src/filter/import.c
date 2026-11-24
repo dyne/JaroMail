@@ -8,7 +8,7 @@
 #include <strings.h>
 #include <limits.h>
 
-const char *const jf_import_names[JF_IMPORT_FILES]={"Filters.txt","Aliases.txt","whitelist.abook","blacklist.abook"};
+const char *const jf_import_names[JF_IMPORT_FILES]={"Filters.txt","Aliases.txt","allow","block"};
 enum { WORD=256, STRING };
 struct parser {
 	const unsigned char *data; size_t size,pos,line,token_line,rule_line,rules;
@@ -369,7 +369,7 @@ int jf_sieve_import(const struct jf_bytes *input,int legacy,const struct jf_prof
 		sources[i].identity=jf_import_names[i]; sources[i].path="imported Sieve";
 		sources[i].data=p.recovered[i].data; sources[i].size=p.recovered[i].size;
 	}
-	rc=jf_policy_parse(sources,4,NULL,out,error);
+	rc=jf_policy_parse_import(sources,4,out,error);
 	if (rc && error && error->source<4 && error->line && error->line<=p.line_counts[error->source])
 		error->line=p.source_lines[error->source][error->line-1];
 	if (!rc) {
@@ -406,34 +406,43 @@ static int indexed_compare(const void *a,const void *b)
 	return key_compare(((const struct indexed *)a)->rule,((const struct indexed *)b)->rule);
 }
 
-static int book_next(const struct jf_bytes *out,unsigned long *next_id)
+static int key_pointer(const void *left,const void *right)
 {
-	size_t i; unsigned long max=0;
-	/* abook section IDs must be fresh numeric IDs; retain existing records. */
-	for (i=0;i<out->size;i++) if ((i==0 || out->data[i-1]=='\n') && out->data[i]=='[') {
-		size_t j=i+1; unsigned long n=0;
-		while (j<out->size && out->data[j]>='0' && out->data[j]<='9') {
-			if (n>(ULONG_MAX-9)/10) return 4;
-			n=n*10+(unsigned)(out->data[j++]-'0');
-		}
-		if (j>i+1 && j<out->size && out->data[j]==']' && n>=max) { if (n==ULONG_MAX) return 4; max=n+1; }
-	}
-	*next_id=max; return 0;
+	return strcmp(*(const char *const *)left,*(const char *const *)right);
 }
 
-static int append_book(struct jf_bytes *out,const char *address,unsigned long *next_id)
+static int sort_contacts(struct jf_bytes *bytes)
 {
-	char number[64];
-	if (*next_id==ULONG_MAX) return 4;
-	snprintf(number,sizeof number,"\n[%lu]\nname=Imported Sieve\nemail=",(*next_id)++);
-	return jf_bytes_text(out,number) || jf_bytes_text(out,address) || jf_bytes_text(out,"\n") ? 3 : 0;
+	if (!bytes->size) return 0;
+	char **keys=NULL;
+	struct jf_bytes ordered={0};
+	size_t count=0, at=0, start=0;
+	int rc=3;
+	for (size_t i=0;i<bytes->size;i++) if (bytes->data[i]=='\n') count++;
+	if (count>SIZE_MAX/sizeof *keys || !(keys=malloc(count*sizeof *keys))) return 3;
+	for (size_t i=0;i<bytes->size;i++) if (bytes->data[i]=='\n') {
+		bytes->data[i]=0;
+		keys[at++]=(char *)bytes->data+start;
+		start=i+1;
+	}
+	qsort(keys,count,sizeof *keys,key_pointer);
+	for (size_t i=0;i<count;i++) {
+		if (i && !strcmp(keys[i-1],keys[i])) continue;
+		if (jf_bytes_text(&ordered,keys[i]) || jf_bytes_text(&ordered,"\n")) goto done;
+	}
+	jf_bytes_free(bytes);
+	*bytes=ordered;
+	memset(&ordered,0,sizeof ordered);
+	rc=0;
+done:
+	free(keys); jf_bytes_free(&ordered);
+	return rc;
 }
 
 int jf_import_merge(const struct jf_policy *current,const struct jf_policy *imported,
-	const struct jf_bytes original[JF_IMPORT_FILES],struct jf_bytes output[JF_IMPORT_FILES],struct jf_error *error)
+	const struct jf_bytes original[JF_IMPORT_FILES],struct jf_bytes output[JF_IMPORT_FILES],struct jf_bytes additions[2],struct jf_error *error)
 {
 	size_t i,last[9]={0},count=jf_policy_count(current); int rc=3;
-	unsigned long next_id[4]={0}; int book_ready[4]={0};
 	struct indexed *index=malloc(count*sizeof *index);
 	if (!index) return 3;
 	for (i=0;i<count;i++) { index[i].rule=jf_policy_rule(current,i); index[i].position=i; }
@@ -461,9 +470,9 @@ int jf_import_merge(const struct jf_policy *current,const struct jf_policy *impo
 		if (r->stage==3 || r->stage==4 || (r->stage==5 && r->kind!=JF_ADDRESS)) last[r->stage]=count+1;
 		file=r->stage==1 ? 3 : r->stage==7 ? 1 : r->stage==5 && r->kind==JF_ADDRESS ? 2 : 0;
 		if (file>=2) {
-			if (!book_ready[file] && book_next(&output[file],&next_id[file])) { rc=4; goto done; }
-			book_ready[file]=1;
-			if (append_book(&output[file],r->predicate,&next_id[file])) { rc=jf_product_error(error,"E_IMPORT_BOOK",r->line,"cannot append bounded abook record"); goto done; }
+			if (jf_bytes_text(&output[file],r->predicate) || jf_bytes_text(&output[file],"\n") ||
+				jf_bytes_text(&additions[file-2],r->predicate) || jf_bytes_text(&additions[file-2],"\n"))
+				goto done;
 		} else {
 			struct jf_bytes *b=&output[file];
 			if (b->size && b->data[b->size-1]!='\n' && jf_bytes_text(b,"\n")) goto done;
@@ -471,6 +480,7 @@ int jf_import_merge(const struct jf_policy *current,const struct jf_policy *impo
 				(!file && r->stage!=5 && (jf_bytes_text(b," move ") || quote(b,r->logical))) || jf_bytes_text(b,"\n")) goto done;
 		}
 	}
+	if (sort_contacts(&output[2]) || sort_contacts(&output[3])) goto done;
 	rc=0;
 done:
 	free(index); return rc;

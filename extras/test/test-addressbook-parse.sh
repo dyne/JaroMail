@@ -62,16 +62,16 @@ assert_equal "${alpha_count}" "1" "extract deduplicates case variants"
 
 import_line="Known Person <known@example.org>"
 print -- "${import_line}" | jaro_source import >/dev/null
-assert_contains "$(jaro_source addr 2>/dev/null)" "${import_line}" "import into whitelist"
+assert_contains "$(jaro_source addr 2>/dev/null)" "${import_line}" "import into allow"
 
-print -- "Blocked Person <blocked@example.org>" | jaro_source -l blacklist import >/dev/null
-assert_contains "$(jaro_source -l blacklist addr 2>/dev/null)" "Blocked Person <blocked@example.org>" "import into blacklist"
+print -- "Blocked Person <blocked@example.org>" | jaro_source -l block import >/dev/null
+assert_contains "$(jaro_source -l block addr 2>/dev/null)" "Blocked Person <blocked@example.org>" "import into block"
 
 # Mutt's A binding invokes this exact learning path. An email-shaped display
 # name must never replace the full mailbox with a shortened display string.
 long_email='contact.person@department.example.org'
 longer_email="$(printf 'a%.0s' {1..50})@$(printf 'b%.0s' {1..50}).example.org"
-cat <<EOF | jaro_source -l whitelist -q learn all
+cat <<EOF | jaro_source -l allow -q learn all
 From: "$long_email" <$long_email>
 To: "Previous Owner <old@example.org>" <new.owner@example.org>
 Cc: "Doe, Alex" <comma.name@example.org>, Long Contact <$longer_email>
@@ -84,20 +84,20 @@ assert_contains "$learned" "$long_email" "learn preserves email-shaped long disp
 assert_contains "$learned" "$longer_email" "learn preserves mailbox beyond abook header import limit"
 assert_contains "$learned" 'new.owner@example.org' "learn uses actual mailbox rather than email in display name"
 assert_contains "$learned" 'Doe, Alex' "learn preserves comma in display name"
-if grep -q '^email=.*\.\.\.$' "$mail_root/whitelist.abook"; then
+if print -r -- "$learned" | grep -q '\.\.\.>'; then
   print -u2 -- 'ASSERT FAIL: learning stored an abbreviated email address'
   exit 1
 fi
 
-before_learn="$(sha256sum "$mail_root/whitelist.abook")"
+before_learn="$(sha256sum "$mail_root/contacts.sqlite")"
 print -r -- $'From: Dry Run <dry.run@example.org>\n\nBody' | jaro_source -n -q learn all
-assert_equal "$(sha256sum "$mail_root/whitelist.abook")" "$before_learn" "dry-run learning preserves addressbook"
+assert_equal "$(sha256sum "$mail_root/contacts.sqlite")" "$before_learn" "dry-run learning preserves addressbook"
 if print -r -- $'From: Broken <broken@example...>\n\nBody' | jaro_source -q learn all 2> "$tmp_root/invalid-learn.log"; then
   print -u2 -- 'ASSERT FAIL: invalid-only learning succeeded'
   exit 1
 fi
 assert_contains "$(cat "$tmp_root/invalid-learn.log")" 'W_ADDRESS' "invalid learning warns even in quiet mode"
-assert_equal "$(sha256sum "$mail_root/whitelist.abook")" "$before_learn" "invalid learning preserves addressbook"
+assert_equal "$(sha256sum "$mail_root/contacts.sqlite")" "$before_learn" "invalid learning preserves addressbook"
 
 maddr_shim="${test_bin}/maddr"
 cat > "${maddr_shim}" <<'EOF'
@@ -139,3 +139,31 @@ fi
 headers="$(find "${mail_root}/outbox" -type f | sort | head -n 1 | jaro_source headers)"
 assert_contains "${headers}" "Parse_contract" "headers includes subject"
 assert_contains "${headers}" ":outbox:" "headers includes folder"
+
+# Give contact files the shape of indexable mail so a skipped scan is visible.
+index_profile="$tmp_root/contact-index"
+mkdir -m 700 "$index_profile"
+cat > "$index_profile/notmuch-config" <<EOF
+[database]
+path=$index_profile
+[user]
+name=Index Fixture
+primary_email=owner@example.org
+[new]
+tags=new
+ignore=retained-exclusion
+EOF
+for leaf in visible retained-exclusion contacts.sqlite contacts.sqlite-journal contacts.sqlite-wal contacts.sqlite-shm \
+        .contacts.sqlite.init.lock .contacts.sqlite.import .contacts.sqlite.import-journal archived.abook; do
+    cat > "$index_profile/$leaf" <<EOF
+From: owner@example.org
+To: reader@example.org
+Message-ID: <$leaf@example.org>
+Subject: Index fixture
+
+Message fixture.
+EOF
+done
+MAILDIRS="$index_profile" zsh -f -c 'source "$1"; notmuch_run new' contact-index "$work_root/zlibs/search" > /dev/null
+assert_equal "$(notmuch --config="$index_profile/notmuch-config" search --output=files '*')" \
+    "$index_profile/visible" "index excludes contact store, sidecars, archives and existing ignore entries"

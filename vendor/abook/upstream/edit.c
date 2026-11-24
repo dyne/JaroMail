@@ -15,6 +15,8 @@
 #include "ui.h"
 #include "abook.h"
 #include "database.h"
+#include "contact/text.h"
+#include "sqlite-editor.h"
 #include "gettext.h"
 #include "list.h"
 #include "edit.h"
@@ -109,7 +111,9 @@ get_first_email(char *str, int item)
 void
 roll_emails(int item, enum rotate_dir dir)
 {
-	abook_list *emails = csv_to_abook_list(db_fget(item, EMAIL));
+	char *csv=db_fget(item,EMAIL);
+	abook_list *emails = jaro_editor_profile ? mailbox_list_from_csv(safe_str(csv)) :
+		csv_to_abook_list(csv);
 
 	if(!emails)
 		return;
@@ -156,6 +160,7 @@ edit_undo(int item, int mode)
 			}
 			backup = item_create();
 			item_duplicate(backup, db_item_get(item));
+			item_set_contact_id(backup,item_contact_id(db_item_get(item)));
 			backed_up_item = item;
 			break;
 		case RESTORE_ITEM:
@@ -236,7 +241,9 @@ editor_print_data(int tab, int item)
 			abook_list *emails, *e;
 			
 			find_field_number(cur->field->key, &nb);
-			emails = csv_to_abook_list(db_fget_byid(item, nb));
+			char *csv=db_fget_byid(item,nb);
+			emails = jaro_editor_profile && cur->field->type==FIELD_EMAILS ?
+				mailbox_list_from_csv(safe_str(csv)) : csv_to_abook_list(csv);
 
 			for(e = emails; e; e = e->next) {
 				getyx(editw, y, x);
@@ -271,8 +278,12 @@ editor_print_data(int tab, int item)
 		} else {
 			find_field_number(cur->field->key, &nb);
 			str = safe_str(db_fget_byid(item, nb));
+			char *safe=jaro_editor_profile ?
+				jaro_contact_display_text((struct jaro_contact_text){str,strlen(str)}) : NULL;
+			if (jaro_editor_profile) str=safe ? safe : "";
 			mvwaddnstr(editw, y, TAB_COLON_POS + 2, str,
 				bytes2width(str, FIELD_MAX_WIDTH));
+			free(safe);
 		}
 
 		j++;
@@ -354,7 +365,9 @@ edit_list(int item, int nb, int isemail)
 	abook_list *list, *e;
 	int choice = 1, elem_count;
 
-	list = csv_to_abook_list(db_fget_byid(item, nb));
+	char *csv=db_fget_byid(item,nb);
+	list = jaro_editor_profile && isemail ? mailbox_list_from_csv(safe_str(csv)) :
+		csv_to_abook_list(csv);
 
 	for(e = list, elem_count = 0; e; e = e->next, elem_count++)
 		;
@@ -379,19 +392,24 @@ edit_list(int item, int nb, int isemail)
 		free(msg);
 	}
 
-	if(choice == 0)
+	if(choice == 0) {
+		abook_list_free(&list);
 		return;
+	}
 
 	field = (choice > 1) ?
 		xstrdup(abook_list_get(list, choice - 2)->data) :
 		NULL;
 
 	if(change_field(isemail ? _("E-mail: ") : _("Item: "),
-				&field, MAX_EMAIL_LEN))
+				&field, MAX_EMAIL_LEN)) {
+		free(field);
+		abook_list_free(&list);
 		return; /* user cancelled ( C-g ) */
+	}
 
 	/* TODO if list item contains commas, should use quotes instead */
-	if(field)
+	if(field && (!jaro_editor_profile || !isemail))
 		fix_email_str(field);
 
 	if(choice == 1)

@@ -390,7 +390,7 @@ At last, anything that is matched by filters configured in
 **Filters.txt** will be saved into the named maildir, whose name can be
 freely choosen.
 
-### Whitelist
+### Allow list
 
 The way whitelisting works if quite crucial to this setup and, at the
 same time, is fairly simple since it does not include any automatic
@@ -887,16 +887,15 @@ and *Date and time search* sections (extracts from the
 **notmuch-search-terms** manpage) and on the notmuch webpage at
 <http://notmuchmail.org>
 
-With the **addr** command the search will be run on the whitelist
-addressbook entries instead of actual email contents.
+The **addr** command searches contact entries in the allow list by default.
 
 ``` example
 jaro addr joe
 ```
 
 Will list all addresses matching the string \'joe\' inside the
-*whitelist* addressbook. Also the blacklist can be searched this way
-adding the switch **-l blacklist**.
+**allow** list. Search the **block** list
+adding the switch **-l block**.
 
 ### Combining terms
 
@@ -1243,25 +1242,16 @@ refinement can be done also in the domain of the search commands.
 
 ## Addressbook
 
-Addressbooks are the files storing the whitelist, the blacklist and
-optionally other custom lists of addresses. The format we use is native
-**abook** database files, by convention in
-*\$JAROMAILDIR/whitelist.abook* and *\$JAROMAILDIR/blacklist.abook*.
-More custom addressbooks can be used by specifying them using **-l** on
-the commandline, for instance **-l family** will query the
-*\$JAROMAILDIR/family.abook* addressbook; when not used, **whitelist**
-is the default.
+The allow, block, and custom lists share `$JAROMAILDIR/contacts.sqlite`.
+Every account using that directory shares the same contacts. A different
+JaroMail directory has its own store. On first use, JaroMail imports any
+legacy text addressbooks and leaves the input files in place.
 
-Addressbooks can be edited using a interactive console interface, for
-instance to add or delete entries by hand: use the **abook** command and
-optionally the **-l** option.
-
-``` example
-jaro abook
-```
-
-This will open the current whitelist for edit. To edit the blacklist add
-**-l blacklist** instead.
+`jaro abook` edits the default allow list. Use `jaro -l block abook` to
+edit block, or `jaro -l family abook` to edit the list named family. List
+names are matched exactly. Incoming mail uses the allow membership when
+a sender belongs to both allow and block. Tab completion searches allow and
+custom lists.
 
 To quickly dump to the console all names and addresses in the Jaro Mail
 addressbook, one can use the **list** command
@@ -1277,7 +1267,7 @@ command **addr** followed by strings, for instance:
 jaro addr dyne
 ```
 
-will list all addresses containing \'dyne\' in your whitelist.
+will list all addresses containing \'dyne\' in the allow list.
 
 ### Address lists
 
@@ -1313,7 +1303,7 @@ address list from stdin and imports it inside an addressbook specified
 using \'-l\' or a *group* list file provided as argument.
 
 ``` example
-jaro search folder:unsorted | jaro extract | jaro import -l blacklist
+jaro search folder:unsorted | jaro extract | jaro import -l block
 ```
 
 Will extract all addresses found in unsorted (the maildir collecting all
@@ -1358,61 +1348,26 @@ Group delivery modes are controlled by the first line:
 This behavior is implemented in the queueing path, so it also applies
 when messages are piped and queued from stdin.
 
-### Export to VCard and other formats
+### Export to vCard
 
-VCard is an exchange format useful to interface with other addressbook
-software and mobile phones, as well with spyware as Google and Apple
-mail. Jaro Mail supports converting address lists to a variety of
-formats thanks to *abook*:
+`jaro export vcard` writes the allow list to standard output as vCard records.
+Use `jaro -l family export vcard` to export a custom list. The export retains
+names, nicknames, notes, and all mailbox spellings.
 
 ``` example
-jaro addr | jaro export vcard
+jaro -l allow export vcard > contacts.vcf
 ```
 
-Will take the list of addresses in whitelist and convert it to the
-**vcard** format on stdout, ready to be redirected to a file.
+### Addressbook commands
 
-Here below a list of output formats supported as argument to export:
-
-  Format    Description
-  --------- -------------------------------------
-  abook     abook native format
-  ldif      ldif / Netscape addressbook (.4ld)
-  vcard     vCard 2 file
-  mutt      mutt alias
-  muttq     mutt query format (internal use)
-  html      html document
-  pine      pine addressbook
-  csv       comma separated values
-  allcsv    comma separated values (all fields)
-  palmcsv   Palm comma separated values
-  elm       elm alias
-  text      plain text
-  wl        Wanderlust address book
-  spruce    Spruce address book
-  bsdcal    BSD calendar
-  custom    Custom format
-
-Of course **export** works with any list of addresses from stdin, for
-instance the result of **extract** operations on search queries, so that
-multiple commands can be concatenated.
-
-### Addressbook in brief
-
-Here a roundup on the addressbook commands that are available from the
-*jaro* commandline script. Arguments \'-l abook\' take the string to
-identify
-
-  Command       Arguments     Function (print on stdout, import from stdin)
-  ------------- ------------- --------------------------------------------------
-  **abook**     -l listname   edit the addressbook (default whitelist)
-  **addr**      search expr   print list of addresses matching expression
-  **extract**   maildir       print address list of all mails in maildir
-  **extract**   gpg keyring   print address list of gpg public keyring
-  **extract**   gpg pubkey    print address list of gpg key signatures
-  **extract**   vcard file    print address list of entries in VCard file
-  **import**    -l listname   import address list from stdin to addressbook
-  **export**    format        convert address list to a format (default vcard)
+| Command | Action |
+| --- | --- |
+| `abook` | Edit the selected list |
+| `addr QUERY` | Find contacts by name, mailbox, nickname, or notes |
+| `list` | List contacts in the selected list |
+| `extract` | Extract addresses from messages, Maildirs, vCards or GPG keyrings |
+| `import` | Add unique addresses from standard input to the selected list |
+| `export vcard` | Export the selected list as vCard records |
 
 ## Filters
 

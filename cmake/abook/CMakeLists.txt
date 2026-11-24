@@ -63,14 +63,13 @@ configure_file(config.h.in generated/config.h)
 set(_sources abook.c abook_rl.c database.c edit.c filter.c getname.c getopt.c getopt1.c gettext.c
   ldif.c list.c mbswidth.c misc.c options.c remap.c ui.c views.c xmalloc.c)
 list(TRANSFORM _sources PREPEND "${_source}/")
-jaro_executable(abook ${_sources} search-fold.c search-fold-legacy.c
-  "${PROJECT_SOURCE_DIR}/src/contact/legacy-book.c")
+jaro_executable(abook ${_sources} search-fold-legacy.c sqlite-editor.c)
 set_target_properties(abook PROPERTIES C_EXTENSIONS ON)
 target_compile_definitions(abook PRIVATE HAVE_CONFIG_H=1 _GNU_SOURCE)
 target_compile_options(abook PRIVATE "$<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-fgnu89-inline>")
 target_include_directories(abook PRIVATE "${_source}" "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated"
   ${ABOOK_CURSES_INCLUDE_DIR} "${ABOOK_READLINE_INCLUDE_DIR}")
-target_link_libraries(abook PRIVATE "${ABOOK_READLINE_LIBRARY}" ${_curses_libraries})
+target_link_libraries(abook PRIVATE jaro-contacts "${ABOOK_READLINE_LIBRARY}" ${_curses_libraries})
 if(JARO_ABOOK_NLS)
   target_link_libraries(abook PRIVATE Intl::Intl)
   foreach(_language de fr it ja sv)

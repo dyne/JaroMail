@@ -6,5 +6,6 @@
 int jaro_contact_valid_text(struct jaro_contact_text text);
 int jaro_contact_mailbox_key(struct jaro_contact_text text, char **key);
 int jaro_contact_print_text(FILE *out, struct jaro_contact_text text);
+char *jaro_contact_display_text(struct jaro_contact_text text);
 
 #endif

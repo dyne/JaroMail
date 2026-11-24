@@ -3,6 +3,7 @@
 No Sieve interpreter lives here. Execution against Pigeonhole is in the parity
 suite; these tests decode the documented cache and exercise real publications.
 """
+from contextlib import closing
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -11,6 +12,7 @@ from pathlib import Path
 import signal
 import select
 import stat
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -51,9 +53,9 @@ class ImportTests(unittest.TestCase):
         self.case = self.work / self._testMethodName
         self.case.mkdir()
         self.source = self.case / 'source'
-        self.source.mkdir()
+        self.source.mkdir(mode=0o700)
         self.root = self.case / 'destination'
-        self.root.mkdir()
+        self.root.mkdir(mode=0o700)
         self.fixture_root(self.source)
         self.fixture_root(self.root, empty=True)
         self.compile(self.source)
@@ -107,7 +109,24 @@ class ImportTests(unittest.TestCase):
                 result[name] = ('file', stat.S_IMODE(path.stat().st_mode), path.read_bytes())
             else:
                 result[name] = None
+        result['membership'] = self.membership(self.root)
         return result
+
+    @staticmethod
+    def membership(root):
+        path = root / 'contacts.sqlite'
+        if not path.exists():
+            return []
+        with closing(sqlite3.connect(path)) as db, db:
+            return db.execute('SELECT b.name,a.spelling,c.name FROM addresses a '
+                              'JOIN books b ON b.id=a.book_id JOIN contacts c ON c.id=a.contact_id '
+                              'ORDER BY b.name,a.mailbox_key').fetchall()
+
+    def clear_source_memberships(self):
+        with closing(sqlite3.connect(self.source / 'contacts.sqlite')) as db, db:
+            db.execute('PRAGMA foreign_keys=ON')
+            db.execute('DELETE FROM contacts')
+        self.compile(self.source)
 
     def assert_restored(self, before, allow_abandoned=False):
         self.assertEqual(self.snapshot(), before)
@@ -158,6 +177,22 @@ class ImportTests(unittest.TestCase):
         self.assertFalse((self.root / 'cache').exists())
         self.assertEqual(check.stdout.split(b'\0')[1], self.do_import().stdout.split(b'\0')[1])
 
+    def test_import_preserves_overlapping_memberships_with_allow_routing(self):
+        text = self.script.read_text()
+        allow = next(line for line in text.splitlines(keepends=True) if '"known@friend.example"' in line)
+        self.script.write_text(text.replace(allow, allow + allow.replace(
+            'known@friend.example', 'blocked@example.org')))
+        before = self.snapshot()
+        self.do_import(args=('--check',))
+        self.assertEqual(self.snapshot(), before)
+        self.do_import()
+        membership = {(book, mailbox) for book, mailbox, _ in self.membership(self.root)}
+        self.assertIn(('allow', 'blocked@example.org'), membership)
+        self.assertIn(('block', 'blocked@example.org'), membership)
+        exported = [line for line in self.policy(self.root).splitlines() if b'blocked@example.org' in line]
+        self.assertEqual(len(exported), 1)
+        self.assertIn(b'"Inbox Known"', exported[0])
+
     def test_preserve_unrelated_rules_accounts_books_and_original_source(self):
         rules = b'# retain formatting\nfrom-address unrelated@elsewhere.example move Other\n'
         (self.root / 'Filters.txt').write_bytes(rules)
@@ -170,7 +205,8 @@ class ImportTests(unittest.TestCase):
         script = self.script.read_bytes()
         self.do_import()
         self.assertTrue((self.root / 'Filters.txt').read_bytes().startswith(rules))
-        self.assertTrue((self.root / 'whitelist.abook').read_bytes().startswith(book))
+        self.assertEqual((self.root / 'whitelist.abook').read_bytes(), book)
+        self.assertIn(('allow', 'existing@elsewhere.example', 'Existing Name'), self.membership(self.root))
         self.assertEqual(account.read_text(), 'email own@home.example\n')
         self.assertNotIn('own@home.example', (self.root / 'Aliases.txt').read_text())
         self.assertEqual(self.script.read_bytes(), script)
@@ -222,6 +258,7 @@ class ImportTests(unittest.TestCase):
     def test_named_mapping_and_noninvertible_namespace_fail_closed(self):
         (self.source / 'whitelist.abook').unlink()
         (self.source / 'blacklist.abook').unlink()
+        self.clear_source_memberships()
         for profile, rules in (('version 1\nprofile core-v1\ncapability fileinto\ncapability mailbox\n',
                                 'from-address one@example.org move INBOX\n'),
                                ('version 1\nprofile core-v1\ncapability fileinto\ncapability mailbox\nnamespace-separator .\n',
@@ -289,13 +326,15 @@ class ImportTests(unittest.TestCase):
         self.compile()
         self.compile()
         before = self.snapshot()
+        self.clear_source_memberships()
+        self.script.write_bytes((self.source / 'Filters.sieve').read_bytes())
         phases = ['import-backup', 'import-stage', 'import-journal', 'import-fsync-journal', 'import-prepared',
                   'import-rename-input', 'import-input-renamed', 'import-fsync-root', 'import-inputs-published',
                   'write-backup', 'write-export', 'write-journal', 'prepared', 'rename-export', 'export-renamed',
                   'rename-current', 'selector-renamed', 'fsync-root', 'fsync-engine', 'write-commit', 'commit-written',
                   'rename-commit', 'fsync-commit', 'committed']
         for phase in phases:
-            for at in (range(1, 5) if phase in ('import-rename-input', 'import-input-renamed') else (1,)):
+            for at in (range(1, 3) if phase in ('import-rename-input', 'import-input-renamed') else (1,)):
                 with self.subTest(phase=phase, at=at):
                     self.do_import(expected=3, extra={'JF_TEST_FAIL': phase, 'JF_TEST_FAIL_AT': str(at)})
                     self.assert_restored(before)
@@ -305,7 +344,8 @@ class ImportTests(unittest.TestCase):
         self.compile()
         self.compile()
         before = self.snapshot()
-        for phase in ('import-prepared', 'import-input-renamed', 'import-inputs-published', 'prepared', 'selector-renamed'):
+        for phase in ('import-prepared', 'import-input-renamed', 'import-inputs-published', 'prepared',
+                      'selector-renamed', 'import-before-sqlite-commit'):
             self.do_import(expected=-signal.SIGKILL, extra={'JF_TEST_CRASH': phase})
             self.run_command([self.reader, self.root], expected=5)
             self.compile(self.root, '--check', expected=5)
@@ -313,11 +353,25 @@ class ImportTests(unittest.TestCase):
             # A killed owner can leave its private immutable build directory.
             # Recovery never sweeps another owner's staging.
             self.assert_restored(before, allow_abandoned=True)
-        self.do_import(expected=-signal.SIGKILL, extra={'JF_TEST_CRASH': 'committed'})
+        self.do_import(expected=-signal.SIGKILL, extra={'JF_TEST_CRASH': 'import-after-sqlite-commit'})
         self.run_command([self.reader, self.root])
         self.compile()
         self.assertEqual(self.policy(self.source), self.policy(self.root))
         self.assertFalse((self.root / 'cache/filter-engine/import.journal').exists())
+        self.assertFalse((self.root / 'cache/filter-engine/import.contacts').exists())
+        self.assertEqual(self.do_import().stdout.split(b'\0')[2], b'0')
+
+    def test_error_between_file_and_sqlite_publication_rolls_back_and_retries(self):
+        self.compile()
+        self.compile()
+        before = self.snapshot()
+        self.do_import(expected=3, extra={'JF_TEST_FAIL': 'import-before-sqlite-commit'})
+        self.assert_restored(before)
+        self.assertEqual(self.membership(self.root), [])
+        self.do_import(expected=3, extra={'JF_TEST_FAIL': 'import-after-sqlite-commit'})
+        self.assertEqual(self.policy(self.source), self.policy(self.root))
+        self.assertEqual(self.do_import().stdout.split(b'\0')[2], b'0')
+        self.assertTrue(self.membership(self.root))
 
     def test_input_symlink_fails_without_replacement(self):
         (self.root / 'Aliases.txt').unlink()
@@ -406,6 +460,7 @@ class ImportTests(unittest.TestCase):
         self.assertIn(os.fsencode(self.script), result.stderr)
 
     def test_empty_policy_core_without_mailbox_extension_and_native_regex_roundtrips(self):
+        self.clear_source_memberships()
         for rules, profile in (('', 'version 1\nprofile core-v1\ncapability fileinto\ncreate-mailboxes no\n'),
                                ('from "^list\\\\+news@example[.]org$" move Lists\n', self.regex_profile())):
             for name in FILES:

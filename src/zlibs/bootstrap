@@ -74,7 +74,7 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 
     # global variables
     vars+=(DEBUG QUIET DRYRUN CALLMUTT MAILDIRS WORKDIR)
-    vars+=(ADDRESSBOOK ACCOUNTS)
+    vars+=(ACCOUNTS)
 
     QUIET=${QUIET:-0}
     DEBUG=${DEBUG:-0}
@@ -108,7 +108,7 @@ bootstrap_root="${bootstrap_file:A:h:h}"
     vars+=(account account_type)
     account=default
     vars+=(list)
-    list=whitelist
+    list=allow
 
     # global variables for accounts
     vars+=(name login iproto imap imap_port smtp smtp_port protocol password auth accountopt smtp_keep_password)
@@ -158,7 +158,6 @@ bootstrap_root="${bootstrap_file:A:h:h}"
     mkdir="`command -v mkdir` -m 700 -p"
 
     # default addressbook
-    ADDRESSBOOK="whitelist.abook"
 
     act "System in $WORKDIR"
     act "Mail in $MAILDIRS"
@@ -205,23 +204,23 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 
 # Native filtering requires explicit existing policy. In particular, a read-only
 # request must not materialize defaults before the option parser has run.
-[[ "$1" = "source" || ${@[(Ie)serve]} -gt 0 || ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 || ${@[(Ie)sieve-import]} -gt 0 ||
-      ${@[(Ie)sieve]} -gt 0 || ${@[(Ie)update]} -gt 0 ) ]] || {
-    # Validate selector/template before any bootstrap configuration write.
-    filter_policy_template || exit $?
-    filter_bootstrap_template=$REPLY
-    [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
+bootstrap_profile_defaults() {
+    if [[ "${1:-}" = "source" || ${@[(Ie)serve]} -gt 0 || ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 ||
+          ${@[(Ie)sieve-import]} -gt 0 || ${@[(Ie)sieve]} -gt 0 || ${@[(Ie)update]} -gt 0 ) ]]; then
+        return 0
+    fi
 
-        # make sure we have an addressbook
-    [[ -r "$MAILDIRS/$ADDRESSBOOK" ]] ||
-        create_addressbook "$MAILDIRS/$ADDRESSBOOK"
+    # Validate selector/template before any bootstrap configuration write.
+    filter_policy_template || return $?
+    local filter_bootstrap_template=$REPLY
+    [[ -d "$MAILDIRS" ]] || { ${=mkdir} "$MAILDIRS" }
 
     MUTTDIR="$MAILDIRS/.mutt"
     { test -d "$MUTTDIR" } || { ${=mkdir} "$MUTTDIR" }
 
         # make sure we have Filters.txt Applications.txt Mutt.txt
     [[ -z $filter_bootstrap_template ]] || {
-        cp -n -- "$filter_bootstrap_template" "$MAILDIRS/Filters.txt" || exit 3
+        cp -n -- "$filter_bootstrap_template" "$MAILDIRS/Filters.txt" || return 3
         notice "Default filters created" }
 
     { test -r "$MAILDIRS/Applications.txt" } || {
@@ -231,7 +230,11 @@ bootstrap_root="${bootstrap_file:A:h:h}"
     { test -r "$MAILDIRS/Mutt.txt" } || {
         cp "$WORKDIR/Mutt.txt" "$MAILDIRS/Mutt.txt"
         notice "Default Mutt configuration template created" }
+    return 0
 }
+if [[ ${jaro_defer_profile_defaults:-0} != 1 ]]; then
+    bootstrap_profile_defaults "$@" || exit $?
+fi
 
 # binary programs recognition
 check_required_bins() {

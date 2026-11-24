@@ -695,7 +695,7 @@ generic protection from random pieces of information.
 At last, anything that is matched by filters configured in
 \f[B]Filters.txt\f[R] will be saved into the named maildir, whose name
 can be freely choosen.
-.SS Whitelist
+.SS Allow list
 The way whitelisting works if quite crucial to this setup and, at the
 same time, is fairly simple since it does not include any automatic
 detection, learning filters, Markov chains or Bayesian A/I.
@@ -1410,17 +1410,16 @@ and time search\f[R] sections (extracts from the
 .UR http://notmuchmail.org
 .UE \c
 .PP
-With the \f[B]addr\f[R] command the search will be run on the whitelist
-addressbook entries instead of actual email contents.
+The \f[B]addr\f[R] command searches contact entries in the allow list by
+default.
 .IP
 .EX
 jaro addr joe
 .EE
 .PP
 Will list all addresses matching the string \[aq]joe\[aq] inside the
-\f[I]whitelist\f[R] addressbook.
-Also the blacklist can be searched this way adding the switch \f[B]\-l
-blacklist\f[R].
+\f[B]allow\f[R] list.
+Search the \f[B]block\f[R] list adding the switch \f[B]\-l block\f[R].
 .SS Combining terms
 In addition to individual terms, multiple terms can be combined with
 Boolean operators ( \f[B]and\f[R], \f[B]or\f[R], \f[B]not\f[R] , etc.).
@@ -1790,26 +1789,20 @@ To limit the stats to the \f[I]From:\f[R] field use the \f[B]extract
 stdin from\f[R] also shown in examples, any other refinement can be done
 also in the domain of the search commands.
 .SS Addressbook
-Addressbooks are the files storing the whitelist, the blacklist and
-optionally other custom lists of addresses.
-The format we use is native \f[B]abook\f[R] database files, by
-convention in \f[I]$JAROMAILDIR/whitelist.abook\f[R] and
-\f[I]$JAROMAILDIR/blacklist.abook\f[R].
-More custom addressbooks can be used by specifying them using
-\f[B]\-l\f[R] on the commandline, for instance \f[B]\-l family\f[R] will
-query the \f[I]$JAROMAILDIR/family.abook\f[R] addressbook; when not
-used, \f[B]whitelist\f[R] is the default.
+The allow, block, and custom lists share
+\f[CR]$JAROMAILDIR/contacts.sqlite\f[R].
+Every account using that directory shares the same contacts.
+A different JaroMail directory has its own store.
+On first use, JaroMail imports any legacy text addressbooks and leaves
+the input files in place.
 .PP
-Addressbooks can be edited using a interactive console interface, for
-instance to add or delete entries by hand: use the \f[B]abook\f[R]
-command and optionally the \f[B]\-l\f[R] option.
-.IP
-.EX
-jaro abook
-.EE
-.PP
-This will open the current whitelist for edit.
-To edit the blacklist add \f[B]\-l blacklist\f[R] instead.
+\f[CR]jaro abook\f[R] edits the default allow list.
+Use \f[CR]jaro \-l block abook\f[R] to edit block, or
+\f[CR]jaro \-l family abook\f[R] to edit the list named family.
+List names are matched exactly.
+Incoming mail uses the allow membership when a sender belongs to both
+allow and block.
+Tab completion searches allow and custom lists.
 .PP
 To quickly dump to the console all names and addresses in the Jaro Mail
 addressbook, one can use the \f[B]list\f[R] command
@@ -1825,7 +1818,7 @@ command \f[B]addr\f[R] followed by strings, for instance:
 jaro addr dyne
 .EE
 .PP
-will list all addresses containing \[aq]dyne\[aq] in your whitelist.
+will list all addresses containing \[aq]dyne\[aq] in the allow list.
 .SS Address lists
 Jaro Mail handles lists of addresses as plain text files or streams with
 entries formatted as \[aq]\f[I]Name <email>\f[R]\[aq] and newline
@@ -1861,7 +1854,7 @@ address list from stdin and imports it inside an addressbook specified
 using \[aq]\-l\[aq] or a \f[I]group\f[R] list file provided as argument.
 .IP
 .EX
-jaro search folder:unsorted | jaro extract | jaro import \-l blacklist
+jaro search folder:unsorted | jaro extract | jaro import \-l block
 .EE
 .PP
 Will extract all addresses found in unsorted (the maildir collecting all
@@ -1909,187 +1902,55 @@ address.
 .PP
 This behavior is implemented in the queueing path, so it also applies
 when messages are piped and queued from stdin.
-.SS Export to VCard and other formats
-VCard is an exchange format useful to interface with other addressbook
-software and mobile phones, as well with spyware as Google and Apple
-mail.
-Jaro Mail supports converting address lists to a variety of formats
-thanks to \f[I]abook\f[R]:
+.SS Export to vCard
+\f[CR]jaro export vcard\f[R] writes the allow list to standard output as
+vCard records.
+Use \f[CR]jaro \-l family export vcard\f[R] to export a custom list.
+The export retains names, nicknames, notes, and all mailbox spellings.
 .IP
 .EX
-jaro addr | jaro export vcard
+jaro \-l allow export vcard > contacts.vcf
 .EE
-.PP
-Will take the list of addresses in whitelist and convert it to the
-\f[B]vcard\f[R] format on stdout, ready to be redirected to a file.
-.PP
-Here below a list of output formats supported as argument to export:
+.SS Addressbook commands
 .PP
 .TS
 tab(@);
-l l.
-T{
-Format
-T}@T{
-Description
-T}
-_
-T{
-abook
-T}@T{
-abook native format
-T}
-T{
-ldif
-T}@T{
-ldif / Netscape addressbook (.4ld)
-T}
-T{
-vcard
-T}@T{
-vCard 2 file
-T}
-T{
-mutt
-T}@T{
-mutt alias
-T}
-T{
-muttq
-T}@T{
-mutt query format (internal use)
-T}
-T{
-html
-T}@T{
-html document
-T}
-T{
-pine
-T}@T{
-pine addressbook
-T}
-T{
-csv
-T}@T{
-comma separated values
-T}
-T{
-allcsv
-T}@T{
-comma separated values (all fields)
-T}
-T{
-palmcsv
-T}@T{
-Palm comma separated values
-T}
-T{
-elm
-T}@T{
-elm alias
-T}
-T{
-text
-T}@T{
-plain text
-T}
-T{
-wl
-T}@T{
-Wanderlust address book
-T}
-T{
-spruce
-T}@T{
-Spruce address book
-T}
-T{
-bsdcal
-T}@T{
-BSD calendar
-T}
-T{
-custom
-T}@T{
-Custom format
-T}
-.TE
-.PP
-Of course \f[B]export\f[R] works with any list of addresses from stdin,
-for instance the result of \f[B]extract\f[R] operations on search
-queries, so that multiple commands can be concatenated.
-.SS Addressbook in brief
-Here a roundup on the addressbook commands that are available from the
-\f[I]jaro\f[R] commandline script.
-Arguments \[aq]\-l abook\[aq] take the string to identify
-.PP
-.TS
-tab(@);
-l l l.
+lw(35.0n) lw(35.0n).
 T{
 Command
 T}@T{
-Arguments
-T}@T{
-Function (print on stdout, import from stdin)
+Action
 T}
 _
 T{
-\f[B]abook\f[R]
+\f[CR]abook\f[R]
 T}@T{
-\-l listname
-T}@T{
-edit the addressbook (default whitelist)
+Edit the selected list
 T}
 T{
-\f[B]addr\f[R]
+\f[CR]addr QUERY\f[R]
 T}@T{
-search expr
-T}@T{
-print list of addresses matching expression
+Find contacts by name, mailbox, nickname, or notes
 T}
 T{
-\f[B]extract\f[R]
+\f[CR]list\f[R]
 T}@T{
-maildir
-T}@T{
-print address list of all mails in maildir
+List contacts in the selected list
 T}
 T{
-\f[B]extract\f[R]
+\f[CR]extract\f[R]
 T}@T{
-gpg keyring
-T}@T{
-print address list of gpg public keyring
+Extract addresses from messages, Maildirs, vCards or GPG keyrings
 T}
 T{
-\f[B]extract\f[R]
+\f[CR]import\f[R]
 T}@T{
-gpg pubkey
-T}@T{
-print address list of gpg key signatures
+Add unique addresses from standard input to the selected list
 T}
 T{
-\f[B]extract\f[R]
+\f[CR]export vcard\f[R]
 T}@T{
-vcard file
-T}@T{
-print address list of entries in VCard file
-T}
-T{
-\f[B]import\f[R]
-T}@T{
-\-l listname
-T}@T{
-import address list from stdin to addressbook
-T}
-T{
-\f[B]export\f[R]
-T}@T{
-format
-T}@T{
-convert address list to a format (default vcard)
+Export the selected list as vCard records
 T}
 .TE
 .SS Filters

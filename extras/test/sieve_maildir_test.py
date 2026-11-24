@@ -66,7 +66,7 @@ class MaildirTest(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.base = self.root / "destination folders"
-        self.base.mkdir()
+        self.base.mkdir(mode=0o700)
         self.source = maildir(self.root / "incoming mail")
         self.script = self.root / "policy with spaces.sieve"
         self.script.write_text('require ["fileinto", "mailbox"]; fileinto :create "INBOX";')
@@ -235,7 +235,7 @@ if header :is "Subject" "explicit" { keep; stop; }
 
     def test_verified_generation_and_stale_bytecode(self):
         policy = self.root / "policy"
-        policy.mkdir()
+        policy.mkdir(mode=0o700)
         (policy / "Filters.txt").write_text("from-address user@example.org move Generated\n")
         subprocess.run([self.compiler, "--root", policy], check=True)
         generation = policy / "cache/filter-engine/current"
@@ -289,11 +289,11 @@ if header :is "Subject" "explicit" { keep; stop; }
         expected = {}
         witnesses = {}
         evidence = []
-        policy = self.root / "policy"
-        policy.mkdir()
         witness_base = self.root / "witness folders"
         witness_base.mkdir()
         for group, (cases, rules, contacts) in enumerate(authored_groups()):
+            policy = self.root / f"policy {group}"
+            policy.mkdir(mode=0o700)
             books = {key: contacts.get(key, []) for key in ("known", "blacklist", "own")}
             write_policy_fixture(policy, rules, **books)
             compiler_env = dict(os.environ, PATH=str(self.compiler.parent) + os.pathsep + os.environ["PATH"])

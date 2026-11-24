@@ -50,59 +50,45 @@ cmd_import() {
 }
 
 cmd_export() {
-    export_vcard ${option_params}
+    if (( ${#option_params} > 1 )) || [[ ${option_params[1]:-vcard} != vcard ]]; then
+        error "Usage: jaro [-l LIST] export [vcard]"
+        exitcode=2
+        return
+    fi
+    "${WORKDIR}/bin/jaro-filter-compile" --export-contacts "$MAILDIRS" "$list"
+    exitcode=$?
 }
 
 cmd_abook() {
     edit_abook ${option_params}
     exitcode=$?
 }
-# Jaro Brother DB
-create_addressbook() {
-    # $ADDRESSBOOK is set in jaro
-    ab="${MAILDIRS}/${ADDRESSBOOK}"
-    func "create addressbook: $ab"
-    [[ -r "$ab" ]] && {
-        error "Addressbook already exists: $ab"
-        return 1
-    }
-
-    touch "$ab"
-
-    # make sure is private
-    chmod 600 "$ab"
-    chown $_uid:$_gid "$ab"
-
-    return 0
-}
-
 insert_address() {
     local _email="${1}" _name="${2}"
     local -a contact_args
     func "insert address: $_name <$_email>"
-    contact_args=(--add-contact "${MAILDIRS}/${ADDRESSBOOK}" "$_email" "$_name")
+    contact_args=(--add-contact "$MAILDIRS" "$list" "$_email" "$_name")
     [[ $DRYRUN == 1 ]] && contact_args+=(--check)
     "${WORKDIR}/bin/jaro-filter-compile" "${contact_args[@]}"
 }
 
 search_addressbook() {
-    fn search_addressbook ${ADDRESSBOOK} $*
+    fn search_addressbook "$list" "$*"
 
     setopt localoptions pipefail
     addressbook_rows "$*" | awk -F '\t' 'NF >= 2 { print $2 " <" $1 ">" }'
 }
 
 all_addressbook_emails() {
-    fn all_addressbook_emails ${ADDRESSBOOK} $*
+    fn all_addressbook_emails "$list" "$*"
     setopt localoptions pipefail
     addressbook_rows '' | awk -F '\t' 'NF >= 2 { print $1 }'
 }
 
 addressbook_rows() {
     local result rc
-    result=$(abook --datafile "$MAILDIRS/$ADDRESSBOOK" --mutt-query "$1") || {
+    result=$("${WORKDIR}/bin/jaro-filter-compile" --query-contacts "$MAILDIRS" "$list" "$1") || {
         rc=$?
-        (( rc > 1 )) && [[ -n $result ]] && print -u2 -r -- "$result"
         return $rc
     }
     [[ $result == *$'\n'* ]] && print -r -- "${result#*$'\n'}"
@@ -111,7 +97,7 @@ addressbook_rows() {
 
 lookup_email() {
     func "lookup address $1 in $list"
-    "${WORKDIR}/bin/jaro-filter-compile" --has-contact "$MAILDIRS/$ADDRESSBOOK" "$1"
+    "${WORKDIR}/bin/jaro-filter-compile" --has-contact "$MAILDIRS" "$list" "$1"
 }
 
 complete_groups() {
@@ -164,15 +150,18 @@ complete() {
     local query="${1:-}" contacts groups query_status="" rows="" rc
     if [[ $query == group/* ]]; then
         query="${query#group/}"
-    else
-        act "Searching for \"$query\" in addressbook $list"
-        if contacts=$(abook --datafile "$MAILDIRS/$ADDRESSBOOK" --mutt-query "$query"); then
+    elif [[ ${contact_list_explicit:-0} != 1 || $list != block ]]; then
+        local -a selector=(--recipient-contacts "$MAILDIRS" "$query")
+        if [[ ${contact_list_explicit:-0} == 1 ]]; then
+            selector=(--query-contacts "$MAILDIRS" "$list" "$query")
+        fi
+        if contacts=$("${WORKDIR}/bin/jaro-filter-compile" "${selector[@]}"); then
             query_status="${contacts%%$'\n'*}"
             [[ $contacts == *$'\n'* ]] && rows="${contacts#*$'\n'}"
         else
             rc=$?
             if (( rc != 1 )); then
-                print -r -- "${contacts:-Cannot query addressbook}"
+                print -r -- 'Cannot query addressbook'
                 return $rc
             fi
         fi
@@ -235,87 +224,6 @@ learn() {
 }
 
 
-# import emails from VCard into abook
-# checks if the emails are already known
-import_vcard() {
-	fn import_vcard $*
-    vcard="$1"
-	req=(vcard ADDRESSBOOK)
-	freq=($vcard)
-	ckreq || return 1
-
-    head -n1 $vcard | grep '^BEGIN:VCARD' > /dev/null
-
-    [[ $? = 0 ]] || {
-        error "File to import is not a VCard: $vcard"
-        return 1
-    }
-
-    notice "Import VCard in addressbook: ${vcard}"
-
-    # parse the vcard and print a simple name and email list
-    # each value on a single line, entry tuples followed by a #
-    # we skip entries that don't have an email
-    addresses=`cat ${vcard} | awk '
-BEGIN { newcard=0; c=0; name=""; email=""; }
-/^BEGIN:VCARD/ { newcard=1 }
-/^FN:/ { if(newcard = 1) name=$0 }
-/^EMAIL/ { if(newcard = 1) email=$0 }
-/^END:VCARD/ {
-  if(newcard = 1) {
-    newcard=0
-    if(email != "") {
-      c+=1
-      print name
-      print email
-      print "# " c
-    }
-    email=""
-    next
-  }
-}
-' | cut -d: -f2`
-
-    # now parse the temporary list of name and emails
-    # made of name, email and a hash for each, newline separated
-
-    #    ${=rm} $tmp
-
-    lock ${MAILDIRS}/${ADDRESSBOOK}
-
-    newa=1; _name=""; _email=""
-    for a in ${(f)addresses}; do
-        { test "${a[1]}" = "#" } && {
-            newa=1; # its the end of the entry
-
-            # handle lines with multiple emails in vcard
-            # TODO: generate Groups/${_name} from this
-            for ee in ${=_email}; do
-                # check if we have this email already
-                _e=`print ${ee} | extract_emails`
-                func "lookup_email: ${_e}"
-                lookup_email "${_e}"
-
-                [[ $? = 0 ]] || {
-                    act "${a} ${_name} <${_e}>"
-                    [[ $DRYRUN = 0 ]] && insert_address "${_e}" "${_name}"
-                }
-            done
-
-            continue }
-        if [[ $newa -eq 1 ]]; then
-            # (V) makes special chars visible, we need to remove them..
-            _name="${(V)a[(ws:^:)1]}"; newa=0; continue
-        elif [[ $newa -eq 0 ]]; then
-            _email="${(V)a[(ws:^:)1]}"
-        fi
-    done
-
-    unlock ${MAILDIRS}/${ADDRESSBOOK}
-
-    notice "Done importing addresses"
-}
-
 # import address lists from stdin
 import() {
 	fn import $*
@@ -327,6 +235,10 @@ import() {
 	# and add addresses from stdin to it, eliminating duplicates and
 	# invalid lines
 	[[ -r "$1" ]] && {
+		if [[ $DRYRUN == 1 ]]; then
+			print -u2 -r -- "Dry run is only supported for contact-list imports"
+			return 2
+		fi
 		notice "Import address list into file: $1"
 		ztmp
 		local oldgroup=$ztmpfile
@@ -416,7 +328,11 @@ convert_addresses() {
 
 edit_abook() {
 	fn edit_abook $*
-	req=(ADDRESSBOOK)
+    if [[ $DRYRUN == 1 ]]; then
+        print -u2 -r -- "The contact editor requires a writable session"
+        return 2
+    fi
+	req=(list)
 	ckreq || return 1
 
     abook --config <(cat <<EOF
@@ -424,21 +340,7 @@ set autosave=true
 set mutt_command=jaro compose
 set sort_field=name
 EOF
-) --datafile "${MAILDIRS}/${ADDRESSBOOK}"
-}
-
-# print out all addresses into the selected addressbook
-list_abook() {
-	fn list_abook $*
-	req=(list ADDRESSBOOK)
-	ckreq || return 1
-
-    notice "Extracting all addresses in $list"
-    awk -F'=' '
-/^name/  { printf("%s ",$2)    }
-/^email/ { printf("<%s>\n",$2) }
-' ${MAILDIRS}/${ADDRESSBOOK}
-    return 0
+) --jaro-profile "$MAILDIRS" --jaro-list "$list"
 }
 
 ###################
