@@ -134,6 +134,46 @@ int jaro_editor_switch_book(const char *name)
 	return 0;
 }
 
+/* These lowercase Latin letters survive canonical folding. Each ASCII form
+ * fits in the two bytes of the original UTF-8 letter. */
+static const char *editor_latin_alias(const char *letter)
+{
+	static const struct {
+		char letter[3], ascii[3];
+	} aliases[] = {
+		{"æ", "ae"}, {"ð", "d"}, {"ø", "o"}, {"þ", "th"},
+		{"đ", "d"}, {"ħ", "h"}, {"ı", "i"}, {"ł", "l"},
+		{"œ", "oe"}, {"ŧ", "t"},
+	};
+	for (size_t i = 0; i < sizeof aliases / sizeof aliases[0]; i++)
+		if (!strncmp(letter, aliases[i].letter, 2))
+			return aliases[i].ascii;
+	return NULL;
+}
+
+static char *editor_search_key(const char *text, size_t length)
+{
+	char *key = abook_search_key_alloc(text, length, xmalloc);
+	if (!key)
+		abort();
+	const char *input = key;
+	char *output = key;
+	while (*input) {
+		unsigned char lead = (unsigned char)*input;
+		const char *alias = lead >= 0xc3 && lead <= 0xc5 ? editor_latin_alias(input) : NULL;
+		if (alias) {
+			size_t size = strlen(alias);
+			memcpy(output, alias, size);
+			output += size;
+			input += 2;
+		} else {
+			*output++ = *input++;
+		}
+	}
+	*output = '\0';
+	return key;
+}
+
 struct jaro_editor_query {
 	size_t count;
 	bool anchor_start, anchor_end, has_wildcard;
@@ -159,7 +199,7 @@ struct jaro_editor_query *jaro_editor_query_new(const char *pattern)
 	for (;;) {
 		const char *wildcard = memchr(term, '*', end - term);
 		const char *stop = wildcard ? wildcard : end;
-		char *folded = abook_search_key_alloc(term, stop - term, xmalloc);
+		char *folded = editor_search_key(term, stop - term);
 		if (*folded) {
 			if (!query->count)
 				query->anchor_start = anchor_start && !after_wildcard;
@@ -221,7 +261,7 @@ static int field_matches(const char *value, const struct jaro_editor_query *quer
 {
 	if (!value || !*value)
 		return 0;
-	char *folded = abook_search_key(value);
+	char *folded = editor_search_key(value, strlen(value));
 	int matches = folded_matches(folded, query);
 	free(folded);
 	return matches;

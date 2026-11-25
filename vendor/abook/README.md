@@ -47,9 +47,11 @@ use the committed data and require no Unicode library or generation step.
 Press `o` to switch lists and `/` to filter as you type. In search input,
 Enter focuses the results and Esc clears the filter. Plain text matches
 anywhere in a name, mailbox, nickname, or note, ignoring case and accents.
+The editor also folds common Latin letters such as `ø` to `o`, `ł` to `l`,
+`æ` to `ae`, and `œ` to `oe` when matching.
 Use `*` for any sequence of characters, `^` at the start of the query to
 anchor it to the beginning of a field, and `$` at the end to anchor it to
-the end. For example, `^ren*stone$` matches `Renée Stone`.
+the end. For example, `^rene*stone$` matches `Renée Stone`.
 
 Browse with the arrow keys, `j`/`k`, or Ctrl+N/Ctrl+P. The `>` marker
 shows the active contact. Space toggles its separate `[x]` mark, `+` marks

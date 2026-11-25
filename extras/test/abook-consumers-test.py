@@ -777,6 +777,7 @@ email=other@example.org
             ('reNee', ('Renée Stone', 'Team Renée Stone', 'Renée Stoneman')),
             ('^reNee', ('Renée Stone', 'Renée Stoneman')),
             ('stone$', ('Renée Stone', 'Team Renée Stone')),
+            ('^rene*stone$', ('Renée Stone',)),
             ('^renee*stone$', ('Renée Stone',)),
             ('^renee*stone*$', ('Renée Stone', 'Renée Stoneman')),
             ('^*renee**stone$', ('Renée Stone', 'Team Renée Stone')),
@@ -797,6 +798,28 @@ email=other@example.org
                     terminal.wait('/ ' + pattern, f'{len(expected)}/3 contacts', 'Enter edit')
                     rows = tuple(line[6:27].strip() for line in terminal.screen.text.splitlines()[3:3 + len(expected)])
                     self.assertEqual(rows, expected)
+            terminal.quit()
+
+    def test_contact_search_ascii_latin_letters(self):
+        names = ('Jörg Søren', 'Łucja Straße', 'Ægir Œdipe', 'Hakon Tora')
+        (self.mail / 'whitelist.abook').write_bytes(BOOK_HEADER + ''.join(
+            f'\n[{i}]\nname={name}\nemail=contact{i}@example.org\n'
+            for i, name in enumerate(names)).encode())
+        cases = [
+            ('^jorg*soren$', 0),
+            ('lucja', 1),
+            ('strasse$', 1),
+            ('^aegir*oedipe$', 2),
+            ('^Håkon*Töra$', 3),
+        ]
+        with Terminal([self.jaro, '-q', 'abook'], cwd=self.root,
+                      env=dict(self.env, LC_ALL='C.UTF-8'), cols=80, lines=24) as terminal:
+            terminal.wait('List: allow', '4/4 contacts')
+            for query, index in cases:
+                with self.subTest(query=query):
+                    terminal.send('/\x15' + query + '\r')
+                    terminal.wait('/ ' + query, '1/4 contacts', 'Enter edit', names[index],
+                                  f'contact{index}@example.org')
             terminal.quit()
 
     def test_contact_removal_session_and_search_marks(self):
