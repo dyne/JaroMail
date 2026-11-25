@@ -28,11 +28,28 @@ less install-jaromail.sh
 bash install-jaromail.sh --prefix "$HOME/.local"
 ```
 
-The installer needs Bash 4+, curl, tar and sha256sum. Unsupported systems,
+The installer needs Bash 4+, curl, GNU tar, GNU coreutils and flock. Unsupported systems,
 missing release assets or checksum errors stop the installation with an error.
 Its [source](https://github.com/dyne/JaroMail/blob/HEAD/build/install-release.sh) is in
 the repository. [Download packages directly](https://github.com/dyne/JaroMail/releases/latest)
 if you prefer to extract them yourself.
+
+## Update an existing Linux installation
+
+```sh
+jaro update
+```
+
+The updater uses the prefix of the running `jaro` and installs the complete
+latest stable release for its architecture. It checks the archive's SHA-256
+and stages the replacement runtime together with its libraries. It skips a
+release at or below the installed stable version. `jaro -n update` previews the
+operation without contacting GitHub or writing files.
+
+This command updates the software. To refresh a mail profile, use `jaro fresh`
+for filters and search, `jaro fresh-filters` for the Sieve generation, or
+`jaro fresh-search` for an existing notmuch index. If your installed version
+predates the software updater, run the installation one-liner above once.
 
 ## Install the mail tools
 

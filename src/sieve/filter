@@ -60,24 +60,24 @@ def snapshot(script, home, runtime, runtime_id, generation):
         source = product(parent / script.name, 128 << 20)
     except (FileNotFoundError, ValueError) as error:
         if generation:
-            raise FilterError(5, "selected generation is incomplete; run jaro update") from error
+            raise FilterError(5, "selected generation is incomplete; run jaro fresh-filters") from error
         raise
     (home / "script").write_bytes(source)
     if not (script.name == "Filters.sieve"
             and parent.parts[-4:-1] == ("cache", "filter-engine", "generations")
             and re.fullmatch("[0-9a-f]{64}", parent.name)):
         if generation:
-            raise FilterError(5, "workflow requires a pinned Sieve generation; run jaro update")
+            raise FilterError(5, "workflow requires a pinned Sieve generation; run jaro fresh-filters")
         return False
     if generation and generation != parent.name:
-        raise FilterError(5, "selected Sieve generation changed; run jaro update")
+        raise FilterError(5, "selected Sieve generation changed; run jaro fresh-filters")
     extra = [home / "provenance"] if generation else []
     with (home / "binary").open("xb") as binary:
         result = subprocess.run([runtime.parent / "bin/sieve-generation-read", parent.parents[3],
                         parent.name, hashlib.sha256(source).hexdigest(), runtime_id, *extra],
                        stdout=binary)
         if result.returncode:
-            raise FilterError(5, "cannot load selected generation; run jaro update")
+            raise FilterError(5, "cannot load selected generation; run jaro fresh-filters")
     return True
 
 

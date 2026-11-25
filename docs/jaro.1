@@ -40,8 +40,9 @@ Pigeonhole executes local filters.
 The default and the \f[CR]sieve\f[R], \f[CR]native\f[R] and
 \f[CR]legacy\f[R] values of \f[CR]JARO_FILTER_ENGINE\f[R] select the
 same installed runtime.
-Run \f[CR]jaro update\f[R] to migrate an older generation from your
-existing \f[CR]Filters.txt\f[R], aliases, accounts and addressbooks.
+Run \f[CR]jaro fresh\-filters\f[R] to migrate an older generation from
+your existing \f[CR]Filters.txt\f[R], aliases, accounts and
+addressbooks.
 Until then, filter and fetch report the required update before touching
 messages or starting transport.
 An unsuccessful migration preserves the last coherent policy and all
@@ -52,8 +53,9 @@ by default.
 Custom Sieve mailbox mappings apply locally and to the exported script.
 Existing files in the destination Maildir are preserved.
 .PP
-\f[CR]jaro sieve\f[R] publishes the shared local generation and portable
-Sieve export.
+\f[CR]jaro fresh\-filters\f[R] publishes the shared local generation and
+portable Sieve export.
+\f[CR]jaro sieve\f[R] can also regenerate the policy after migration.
 \f[CR]jaro filter [MAILDIR]\f[R] applies it to incoming mail.
 \f[CR]jaro fetch\f[R] applies it after transport and refreshes the index
 once after the batch, including partial failures.
@@ -61,8 +63,8 @@ Filter alone does not index.
 \f[CR]jaro filter \-\-explain [MAILDIR|MESSAGE]\f[R],
 \f[CR]jaro \-n filter\f[R] and \f[CR]jaro \-n fetch\f[R] inspect the
 selected generation without publication, delivery or indexing.
-A missing or stale generation requires \f[CR]jaro update\f[R] before
-preview.
+A missing or stale generation requires \f[CR]jaro fresh\-filters\f[R]
+before preview.
 A fresh \f[CR]jaro init\f[R] installs commented typed examples and
 active builtins.
 Supported legacy EREs work with the default profile.
@@ -218,7 +220,16 @@ records.
 \f[CR]learn\f[R], \f[CR]isknown\f[R], \f[CR]complete\f[R] contact
 learning/query/completion helpers.
 .SS Filtering and Sieve
-\f[CR]update\f[R] rebuild local filtering cache and regenerate Sieve.
+\f[CR]update\f[R] install a newer stable JaroMail release into the
+current Linux prefix.
+.PP
+\f[CR]fresh [MAIL_ROOT]\f[R] refresh filters and the existing search
+index.
+.PP
+\f[CR]fresh\-filters [MAIL_ROOT]\f[R] rebuild local filtering cache and
+regenerate Sieve.
+.PP
+\f[CR]fresh\-search [MAIL_ROOT]\f[R] refresh the existing notmuch index.
 .PP
 \f[CR]filter\f[R] apply filters to a maildir.
 .PP

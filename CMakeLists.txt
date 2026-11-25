@@ -253,7 +253,7 @@ configure_file(cmake/jaro.in generated/jaro @ONLY)
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/generated/VERSION" CONTENT "${JARO_RESOLVED_VERSION}\n")
 install(PROGRAMS "${CMAKE_BINARY_DIR}/generated/jaro" DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(CODE "file(REMOVE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}/bin/jaro-filter\" \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}/bin/jaro-filter-legacy\")")
-install(PROGRAMS src/jaro DESTINATION "${JARO_RUNTIME_DIR}/bin")
+install(PROGRAMS src/jaro build/install-release.sh DESTINATION "${JARO_RUNTIME_DIR}/bin")
 install(TARGETS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup jaro-filter-compile
   RUNTIME DESTINATION "${JARO_RUNTIME_DIR}/bin")
 install(FILES "${CMAKE_BINARY_DIR}/generated/VERSION" COPYING.txt DESTINATION "${JARO_RUNTIME_DIR}")

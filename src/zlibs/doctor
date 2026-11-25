@@ -317,11 +317,11 @@ doctor_run() {
     doctor_account || return 2
     doctor_keyring
     if [[ ! -r "$MAILDIRS/Filters.txt" || ! -f "$MAILDIRS/Filters.txt" ]]; then
-        doctor_check filters blocker 'Filter policy is missing or unreadable.' 'Run jaro init for a new root; review existing policy before jaro update.'
+        doctor_check filters blocker 'Filter policy is missing or unreadable.' 'Run jaro init for a new root; review existing policy before jaro fresh-filters.'
     elif [[ ${JARO_FILTER_ENGINE-sieve} == (native|legacy|sieve) ]]; then
         if [[ -r "$MAILDIRS/cache/filter-engine/current/manifest.json" ]]; then
-            doctor_check filters unknown 'Sieve generation manifest exists; content validity and freshness were not checked.' 'Run jaro -n filter --explain or jaro update after reviewing policy.'
-        else doctor_check filters warning 'No readable Sieve generation manifest.' 'Run jaro update after reviewing policy.'; fi
+            doctor_check filters unknown 'Sieve generation manifest exists; content validity and freshness were not checked.' 'Run jaro -n filter --explain or jaro fresh-filters after reviewing policy.'
+        else doctor_check filters warning 'No readable Sieve generation manifest.' 'Run jaro fresh-filters after reviewing policy.'; fi
     else doctor_check filters blocker 'Invalid filter engine selection (value redacted).' 'Set JARO_FILTER_ENGINE to sieve, native or legacy.'; fi
     if [[ -d "$MAILDIRS/.notmuch/xapian" ]]; then
         doctor_check index unknown 'Search index exists; index freshness was not assessed.' 'Run jaro index if an index refresh is needed.'

@@ -356,7 +356,7 @@ use the pinned generation, not the compatibility copy.
 
 Pigeonhole executes local filters. The default and the `sieve`, `native` and
 `legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
-Run `jaro update` to migrate an older generation from your existing
+Run `jaro fresh-filters` to migrate an older generation from your existing
 `Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
 report the required update before touching messages or starting transport.
 An unsuccessful migration preserves the last coherent policy and all mail.
@@ -379,9 +379,9 @@ transport failure and compilation failure stop before a batch/index attempt.
 Notmuch setup can write its configuration without refreshing the index first.
 `jaro -n fetch` explains the local incoming batch without transport, keyring,
 publication or indexing. These native filtering commands require an existing
-policy/root; bootstrap never creates default inputs for them, `sieve`, `update`
-or `sieve-import`. Native `-n sieve` and `-n update` validate without publishing
-or writing mblaze setup. Normal explicit `init` remains the initialization path.
+policy/root. The bootstrap leaves policy creation to `jaro init`.
+`jaro -n sieve`, `jaro -n fresh-filters`, and `jaro -n fresh` validate without
+publishing or writing mblaze setup.
 
 `jaro filter --explain [MAILDIR]` and `jaro -n filter [MAILDIR]` render the same
 native classification records. All selected bytes and the complete helper exit

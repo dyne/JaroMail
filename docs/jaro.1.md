@@ -41,7 +41,7 @@ release tags, with the v6.0.0 development baseline when no v6 tag exists.
 
 Pigeonhole executes local filters. The default and the `sieve`, `native` and
 `legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
-Run `jaro update` to migrate an older generation from your existing
+Run `jaro fresh-filters` to migrate an older generation from your existing
 `Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
 report the required update before touching messages or starting transport.
 An unsuccessful migration preserves the last coherent policy and all mail.
@@ -49,13 +49,14 @@ Historical messages stay in `known` and `zz.spam`. New known and spam deliveries
 use `INBOX` and `Spam` by default. Custom Sieve mailbox mappings apply locally
 and to the exported script. Existing files in the destination Maildir are preserved.
 
-`jaro sieve` publishes the shared local generation and portable Sieve export.
+`jaro fresh-filters` publishes the shared local generation and portable Sieve
+export. `jaro sieve` can also regenerate the policy after migration.
 `jaro filter [MAILDIR]` applies it to incoming mail. `jaro fetch` applies it
 after transport and refreshes the index once after the batch, including partial
 failures. Filter alone does not index. `jaro filter --explain [MAILDIR|MESSAGE]`,
 `jaro -n filter` and `jaro -n fetch` inspect the selected generation without
 publication, delivery or indexing. A missing or stale generation requires
-`jaro update` before preview. A fresh `jaro init` installs commented typed
+`jaro fresh-filters` before preview. A fresh `jaro init` installs commented typed
 examples and active builtins. Supported legacy EREs work with the default profile.
 
 Native `filter --compare FILE [MAILDIR]` compares retained actual final legacy
@@ -191,7 +192,13 @@ first line may set `#mode individual`, `#mode cc`/`#mode carboncopy`, or
 
 ### Filtering and Sieve
 
-`update` rebuild local filtering cache and regenerate Sieve.
+`update` install a newer stable JaroMail release into the current Linux prefix.
+
+`fresh [MAIL_ROOT]` refresh filters and the existing search index.
+
+`fresh-filters [MAIL_ROOT]` rebuild local filtering cache and regenerate Sieve.
+
+`fresh-search [MAIL_ROOT]` refresh the existing notmuch index.
 
 `filter` apply filters to a maildir.
 

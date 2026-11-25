@@ -237,7 +237,7 @@ alot_search() {
     notice "Searching emails for: ${=option_params}"
 	[[ -r "$MAILDIRS"/notmuch-config ]] || {
 		error "notmuch configuration not found"
-		error "run: jaro update"
+		error "run: jaro index"
 		return 1
 	}
 

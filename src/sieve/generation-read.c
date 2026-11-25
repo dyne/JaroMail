@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	if (argc != 5 && argc != 6)
 		return 2;
 	if (jf_generation_pin(argv[1], argv[2], &generation, &error) != 0) {
-		fprintf(stderr, "Invalid Sieve generation %s; run jaro update\n", argv[2]);
+		fprintf(stderr, "Invalid Sieve generation %s; run jaro fresh-filters\n", argv[2]);
 		return 1;
 	}
 	jf_digest(generation.sieve.data, generation.sieve.size, digest);
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 		}
 	}
 	if (!ok)
-		fputs("Stale Sieve source or runtime; run jaro update\n", stderr);
+		fputs("Stale Sieve source or runtime; run jaro fresh-filters\n", stderr);
 	else
 		ok = fwrite(generation.bytecode.data, 1, generation.bytecode.size, stdout)
 			== generation.bytecode.size && fflush(stdout) == 0;

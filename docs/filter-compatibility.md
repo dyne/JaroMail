@@ -129,7 +129,7 @@ still stops compilation; it is not silently treated as an empty addressbook.
 
 Pigeonhole executes local filters. The default and the `sieve`, `native` and
 `legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
-Run `jaro update` to migrate an older generation from your existing
+Run `jaro fresh-filters` to migrate an older generation from your existing
 `Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
 report the required update before touching messages or starting transport.
 An unsuccessful migration preserves the last coherent policy and all mail.
@@ -137,7 +137,7 @@ Historical messages stay in `known` and `zz.spam`. New known and spam deliveries
 use `INBOX` and `Spam` by default. Custom Sieve mailbox mappings apply locally
 and to the exported script. Existing files in the destination Maildir are preserved.
 
-Use `jaro -n update` to check authored inputs and `jaro update` to publish.
+Use `jaro -n fresh-filters` to check authored inputs and `jaro fresh-filters` to publish.
 `jaro sieve-import --legacy-generated FILE` recovers the bounded older
 Jaromail export grammar. A failed import leaves the original policy, books
 and public export in place. `jaro -n sieve-import FILE` previews an import.

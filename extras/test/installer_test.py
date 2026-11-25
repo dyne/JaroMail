@@ -3,6 +3,7 @@ import hashlib
 import io
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -27,6 +28,8 @@ import os, pathlib, shutil, sys
 args=sys.argv[1:]; root=pathlib.Path(os.environ['INSTALL_FIXTURE'])
 if os.environ.get('INSTALL_DOWNLOAD_FAIL'): sys.exit(22)
 url=args[-1]
+with (root/'downloads').open('a') as calls:
+    calls.write(url+'\\n')
 if url.endswith('/latest'):
     print('https://github.com/dyne/JaroMail/releases/tag/'+os.environ.get('INSTALL_TAG','v6.1.0'),end='')
 else:
@@ -48,6 +51,8 @@ else:
                                      ('share/jaromail/VERSION', '6.1.0\n', 0o644),
                                      ('share/jaromail/Accounts/default.txt', '# account\n', 0o644),
                                      ('share/jaromail/bin/abook', 'bundled\n', 0o755),
+                                     ('share/jaromail/zlibs/setup', '# new shell module\n', 0o644),
+                                     ('share/jaromail/sieve/lib/libfixture.so', 'new runtime library\n', 0o644),
                                      ('share/man/man1/jaro.1', 'manual\n', 0o644)]:
                 entry = tarfile.TarInfo('jaromail-6.1.0-linux-'+arch+'/'+name)
                 entry.size = len(text.encode()); entry.mode = mode
@@ -106,6 +111,75 @@ else:
         custom = self.root/'custom'
         self.run_installer('--prefix', str(custom))
         self.assertTrue((custom/'bin/jaro').exists())
+
+    def existing_installation(self, version='6.0.0'):
+        runtime = self.prefix / 'share/jaromail'
+        (runtime / 'bin').mkdir(parents=True)
+        (runtime / 'zlibs').mkdir()
+        (self.prefix / 'bin').mkdir()
+        jaro = self.prefix / 'bin/jaro'
+        jaro.write_text('#!/usr/bin/env zsh\nexport JAROWORKDIR="${0:A:h:h}/share/jaromail"\n'
+                        'exec "$JAROWORKDIR/bin/jaro" "$@"\n')
+        jaro.chmod(0o755)
+        shutil.copy2(REPO / 'src/jaro', runtime / 'bin/jaro')
+        shutil.copy2(REPO / 'src/zlibs/bootstrap', runtime / 'zlibs/bootstrap')
+        shutil.copy2(REPO / 'src/zlibs/version', runtime / 'zlibs/version')
+        shutil.copy2(REPO / 'build/install-release.sh', runtime / 'bin/install-release.sh')
+        (runtime / 'VERSION').write_text(version + '\n')
+        return jaro, runtime
+
+    def run_cli(self, jaro, *args):
+        env = dict(self.env, JARO_INSTALL_PREFIX=str(self.root / 'ignored prefix'),
+                   JAROMAILDIR=str(self.root / 'untouched mail'))
+        return subprocess.run([jaro, *args], env=env, capture_output=True, text=True, timeout=15)
+
+    def test_installed_jaro_update_and_preview(self):
+        jaro, runtime = self.existing_installation()
+        (runtime / 'obsolete').write_text('old runtime')
+        unrelated = self.prefix / 'bin/other'
+        unrelated.write_text('unrelated executable')
+        for args, status in [(('-n', 'update'), 0), (('update', '/legacy/profile'), 2)]:
+            result = self.run_cli(jaro, *args)
+            self.assertEqual(result.returncode, status, result.stderr)
+            self.assertFalse((self.root / 'downloads').exists())
+        result = self.run_cli(jaro, 'update')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((runtime / 'VERSION').read_text(), '6.1.0\n')
+        self.assertEqual((runtime / 'zlibs/setup').read_text(), '# new shell module\n')
+        self.assertEqual((runtime / 'sieve/lib/libfixture.so').read_text(), 'new runtime library\n')
+        self.assertEqual(unrelated.read_text(), 'unrelated executable')
+        self.assertFalse((runtime / 'obsolete').exists())
+        self.assertFalse((self.root / 'ignored prefix').exists())
+        self.assertFalse((self.root / 'untouched mail').exists())
+
+    def test_installed_jaro_skips_equal_or_older_releases(self):
+        jaro, runtime = self.existing_installation()
+        for version in ('6.1.0', '6.1.0+local', '6.10.0'):
+            with self.subTest(version=version):
+                (self.root / 'downloads').write_text('')
+                (runtime / 'VERSION').write_text(version + '\n')
+                result = self.run_cli(jaro, 'update')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('up to date', result.stdout)
+                calls = (self.root / 'downloads').read_text().splitlines()
+                self.assertEqual(calls, ['https://github.com/dyne/JaroMail/releases/latest'])
+                self.assertEqual((runtime / 'VERSION').read_text(), version + '\n')
+
+    def test_failed_activation_restores_previous_runtime_and_launcher(self):
+        jaro, runtime = self.existing_installation()
+        original_launcher = jaro.read_bytes()
+        real_mv = shutil.which('mv')
+        self.stub('mv', f'''#!/bin/bash
+case "$*" in
+  *'/new/jaro '*) exit 1 ;;
+  *) exec "{real_mv}" "$@" ;;
+esac
+''')
+        result = self.run_cli(jaro, 'update')
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertEqual((runtime / 'VERSION').read_text(), '6.0.0\n')
+        self.assertEqual(jaro.read_bytes(), original_launcher)
+        self.assertEqual(list(self.prefix.glob('*/.jaromail-install.*')), [])
 
 
 if __name__ == '__main__':

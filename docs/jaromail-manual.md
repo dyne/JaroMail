@@ -1384,7 +1384,7 @@ Partial-address rules work without adding `*` or `.*`; `save` and `move` are
 aliases. An optional profile can override capabilities or mailbox mappings.
 The default and the `sieve`, `native` and
 `legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
-Run `jaro update` to migrate an older generation from your existing
+Run `jaro fresh-filters` to migrate an older generation from your existing
 `Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
 report the required update before touching messages or starting transport.
 An unsuccessful migration preserves the last coherent policy and all mail.
@@ -1404,7 +1404,7 @@ and `a+b+shop@mx.example.ch` match. The plus and dot are literal.
 to-glob *+shop@*.ch move shopping
 ```
 
-Run `jaro update`, inspect the result with `jaro -n filter`, then run
+Run `jaro fresh-filters`, inspect the result with `jaro -n filter`, then run
 `jaro filter` on incoming mail or `jaro filter any-maildir/` for a chosen
 Maildir. The standalone command can also use a generated or hand-authored
 Sieve file. Give it absolute roots and an existing source Maildir.

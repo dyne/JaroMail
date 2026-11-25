@@ -76,6 +76,42 @@ if (( $# == 1 )) && [[ $1 == -v || $1 == --version ]]; then
     print -r -- "Jaro Mail v${VERSION}"
     exit 0
 fi
+
+jaro_release_update() {
+    local arg prefix installer="${script_dir}/install-release.sh"
+    local preview=0 seen=0
+    for arg in "$@"; do
+        case "$arg" in
+            update) (( ! seen )) || return 2; seen=1 ;;
+            -n|--dry-run) preview=1 ;;
+            -q|--quiet|-D|--debug|--) ;;
+            -h|--help)
+                print -r -- 'Usage: jaro [-n] update'
+                print -r -- 'Install the latest stable Linux release into this installation.'
+                return 0 ;;
+            *)
+                print -u2 -r -- 'Usage: jaro [-n] update'
+                print -u2 -r -- 'For mail profiles, use jaro fresh [MAIL_ROOT].'
+                return 2 ;;
+        esac
+    done
+    prefix="${script_dir:h:h:h}"
+    if [[ "$script_dir" != "$prefix/share/jaromail/bin" ||
+          ! -x "$prefix/bin/jaro" || ! -r "$installer" ]]; then
+        print -u2 -r -- 'jaro update requires an installed Linux release layout. See the installation guide.'
+        return 2
+    fi
+    if (( preview )) || [[ ${DRYRUN:-0} == 1 ]]; then
+        print -r -- "Would check for a newer stable JaroMail release and install it in $prefix."
+        return 0
+    fi
+    exec bash "$installer" --prefix "$prefix" --installed-version "$(<"$script_dir/../VERSION")"
+}
+
+if jaro_early_command update "$@"; then
+    jaro_release_update "$@"
+    exit $?
+fi
 # Select the command before bootstrap can initialize files or touch a keyring.
 # Skip option values so `queue outbox` and account names never become a route.
 jaro_outbox_route() {
@@ -132,6 +168,7 @@ Main commands:
  serve  run localhost IMAP over local maildirs (single-user)
  index  build or update the search index for all maildirs
  search search maildirs or addressbook for expressions
+ update download and install the latest stable JaroMail release
 
 Options:
 
@@ -205,11 +242,10 @@ a pipe | in front indicate they take an email body from stdin
 
  merge    merge a source maildir into destination, then delete source
 
- update   updates all filter engine according to Filters.txt
-          (also generates Sieve format rules ready for server use)
-
- sieve    regenerate $MAILDIRS/Filters.sieve from local filters,
-          aliases, and addressbooks without updating the mail index
+ fresh          regenerate filters and refresh the search index
+ fresh-filters  regenerate local filters and the portable Sieve script
+ fresh-search   refresh the existing search index
+ sieve          regenerate Sieve after any required filter migration
 
  sieve-import FILE
           import a Jaromail-generated Sieve file into Filters.txt,
@@ -246,7 +282,9 @@ main() {
 
     option_subcommands[help]=""
 
-    option_subcommands[update]=""
+    option_subcommands[fresh]=""
+    option_subcommands[fresh-filters]=""
+    option_subcommands[fresh-search]=""
     option_subcommands[sieve]=""
     option_subcommands[sieve-import]="L -legacy-generated=L"
 
@@ -396,9 +434,9 @@ main() {
 
     init) cmd_init ;;
 
-    update) cmd_update ;;
-
-	sieve) cmd_sieve ;;
+    fresh) cmd_fresh ;;
+    fresh-filters|sieve) cmd_fresh_filters ;;
+    fresh-search) cmd_fresh_search ;;
 
     sieve-import) cmd_sieve_import ;;
 
