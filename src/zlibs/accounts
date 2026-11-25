@@ -189,8 +189,8 @@ _wizard_write_account() {
     _account_write_field smtp_port "$smtp_port" || return 1
     _account_write_field auth plain || return 1
     _account_write_field cert check || return 1
-    _account_write_field transport TLS1 || return 1
-    _account_write_field options keep || return 1
+    _account_write_field transport tls || return 1
+    _account_write_field options keep ssl || return 1
     _account_write_field exclude "${exclude[@]}" || return 1
     _account_quote_value "$name" || return 1
     # my_hdr is passed verbatim to Mutt, whose config reader also expands
@@ -473,12 +473,16 @@ _account_load_file() {
     name=${name:-$account}
     login=${login:-$email}
     email=${email:-$login}
-    transport=${transport:-TLS1}
+    transport=${transport:-tls}
     imap_port=${imap_port:-993}
     smtp_port=${smtp_port:-587}
     auth=${auth:-plain}
-    cert=${cert:-ignore}
+    cert=${cert:-check}
     accountopt=${accountopt:-keep}
+    # Enable Fetchmail's implicit TLS for the modern implicit transport names.
+    if [[ -z ${account_lines[options]-} && $transport == (tls|implicit) ]]; then
+        accountopt='keep ssl'
+    fi
     _account_validate "$source" || { _account_reset; return 1; }
     return 0
 }

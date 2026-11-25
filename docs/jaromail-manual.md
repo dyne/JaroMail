@@ -444,16 +444,18 @@ This section goes through a scenario of simple usage for Jaro Mail
 ### Fetch and read your mail at home
 
 IMAP inspection and automatic folder discovery obey the account's transport
-and certificate policy. `transport TLS1` (the default), `tls` and `implicit`
+and certificate policy. `transport tls` (the default), `implicit` and `TLS1`
 use implicit TLS; the historical `SSL2`, `SSL23`, `SSL3` and `ssl` labels,
 and `starttls`, use STARTTLS. These labels retain the existing inspection
 connection styles and do not force obsolete SSL versions. `plain` explicitly
 requests unencrypted IMAP and warns. Fetchmail's `sslproto` and Mutt's `peek`
-settings remain separate; see `Accounts/README.txt` for their account context.
+settings remain separate. With `transport tls` or `implicit`, omitted
+Fetchmail options default to `options keep ssl`, which keeps server copies and
+uses implicit TLS. See `Accounts/README.txt` for details.
 
-Set `cert check` to verify the IMAP certificate chain and DNS hostname or IP
-address using system trust or your `certfile` CA bundle. The historical
-`cert ignore` default skips IMAP verification with a warning. Neither failed
+The default `cert check` verifies the IMAP certificate chain and DNS hostname or
+IP address using system trust or your `certfile` CA bundle. An explicit
+`cert ignore` skips IMAP verification with a warning. Neither failed
 verification nor rejected STARTTLS retries in plaintext. IMAP inspection
 requires OpenSSL 1.1.1 or newer; explicit plaintext uses `nc`. Connection and
 query waits share a 30-second deadline, configurable with

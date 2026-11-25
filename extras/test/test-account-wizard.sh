@@ -59,8 +59,8 @@ smtp mail.example.org
 smtp_port 587
 auth plain
 cert check
-transport TLS1
-options keep
+transport tls
+options keep ssl
 exclude zz.spam zz.bounces zz.blacklist zz.social
 my_hdr From: person <person@example.org>
 EOF
