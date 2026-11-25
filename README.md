@@ -81,6 +81,8 @@ The installer checks the published SHA-256 checksum and installs under
 `$HOME/.local` without sudo. Install the external mail tools listed below
 separately. See the [installation guide](docs/install.md) for details and
 custom prefixes. The one-liner is served by the documentation deployment.
+Use `jaro update` on an installation that includes the updater. It installs
+the latest stable release into the running command's installation prefix.
 
 Make sure you have installed the following dependencies on your operating system, they should be named in a similar way across distributions, here below the names of the packages are referring to those found in APT distros:
 
@@ -247,7 +249,7 @@ Current policy for this branch:
 
 - `stats` and `publish` are retained for compatibility but treated as legacy.
 - default maintenance and regression checks focus on the core CLI path:
-  `init`, `update`, `filter`, `search`, `fetch`, `send`, and addressbook flows.
+  `init`, `fresh`, `filter`, `search`, `fetch`, `send`, and addressbook flows.
 
 Local filtering on Linux requires a build configured with the signed Dovecot and
 Pigeonhole dependency prefix. The private runtime and its shared libraries are
@@ -255,7 +257,7 @@ installed together. See [Sieve runtime prerequisites](docs/sieve-tools.md).
 
 Pigeonhole executes local filters. The default and the `sieve`, `native` and
 `legacy` values of `JARO_FILTER_ENGINE` select the same installed runtime.
-Run `jaro update` to migrate an older generation from your existing
+Run `jaro fresh-filters` to migrate an older generation from your existing
 `Filters.txt`, aliases, accounts and addressbooks. Until then, filter and fetch
 report the required update before touching messages or starting transport.
 An unsuccessful migration preserves the last coherent policy and all mail.

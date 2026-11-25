@@ -35,7 +35,7 @@ sieve_generation_ready() {
     local selected="$MAILDIRS/cache/filter-engine/current"
     if [[ -L $selected || -e $selected ]]; then
         [[ -f "$selected/dependencies" && -s "$selected/Filters.svbin" ]] || {
-            print -ru2 -- 'This filter generation needs migration; run jaro update explicitly'
+            print -ru2 -- 'This filter generation needs migration; run jaro fresh-filters explicitly'
             return 5
         }
     fi

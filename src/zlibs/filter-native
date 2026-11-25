@@ -136,10 +136,10 @@ native_filter_maildir() {
     if [[ $native_filter_readonly == 1 ]]; then
         local -a target
         zstat -L -A target +link -- "$MAILDIRS/cache/filter-engine/current" || {
-            print -ru2 -- 'Native generation missing; run jaro update explicitly'; return 5
+            print -ru2 -- 'Native generation missing; run jaro fresh-filters explicitly'; return 5
         }
         [[ ${#target} == 1 && $target[1] == "generations/$selected" ]] || {
-            print -ru2 -- 'Native generation stale; run jaro update explicitly'; return 5
+            print -ru2 -- 'Native generation stale; run jaro fresh-filters explicitly'; return 5
         }
     fi
     # Keep all helper bytes, including invalid trailing LF. Removing only our

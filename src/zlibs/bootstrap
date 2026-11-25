@@ -206,7 +206,8 @@ bootstrap_root="${bootstrap_file:A:h:h}"
 # request must not materialize defaults before the option parser has run.
 bootstrap_profile_defaults() {
     if [[ "${1:-}" = "source" || ${@[(Ie)serve]} -gt 0 || ( ${@[(Ie)filter]} -gt 0 || ${@[(Ie)fetch]} -gt 0 ||
-          ${@[(Ie)sieve-import]} -gt 0 || ${@[(Ie)sieve]} -gt 0 || ${@[(Ie)update]} -gt 0 ) ]]; then
+          ${@[(Ie)sieve-import]} -gt 0 || ${@[(Ie)sieve]} -gt 0 || ${@[(Ie)fresh]} -gt 0 ||
+          ${@[(Ie)fresh-filters]} -gt 0 || ${@[(Ie)fresh-search]} -gt 0 ) ]]; then
         return 0
     fi
 
@@ -319,13 +320,13 @@ mblaze_ensure() {
 check_bin() {
     local cmd="${1:-$subcommand}"
     case "$cmd" in
-        update|sieve|fetch|filter|sieve-import)
+        fresh|fresh-filters|sieve|fetch|filter|sieve-import)
             filter_engine || return $?
             [[ -x "$WORKDIR/bin/jaro-filter-compile" ]] || {
                 error "Missing native compiler: $WORKDIR/bin/jaro-filter-compile"
                 return 127
             }
-            if [[ $cmd != update ]]; then
+            if [[ $cmd != fresh && $cmd != fresh-filters ]]; then
                 sieve_generation_ready || return $?
             fi
             if [[ $cmd == filter || $cmd == fetch ]]; then

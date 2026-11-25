@@ -11,12 +11,15 @@ This file documents current behavior from `src/jaro` and `src/zlibs/*` without r
   set `exitcode` must capture it immediately after the operation they report.
   Pipelines that forward tool output must preserve producer failures.
 
-## Setup family (`init`, `update`)
+## Setup and maintenance
 
 - `init [MAILDIR]`: creates canonical maildir tree and default config files.
-- `update`: refreshes filters, mutt configs, and notmuch indexes.
-- IO: reads `Accounts/*`, `Aliases.txt`, `Filters.txt`; writes `cache/filters*`, `.mutt/*`, `notmuch-config`.
-- Test-safe: yes (`extras/test/run-source.sh`, `extras/test/test-filtering.sh`).
+- `update` checks and installs a newer stable Linux release in the current
+  installation prefix. `-n update` previews without network or filesystem changes.
+- `fresh [MAIL_ROOT]` refreshes filters and the existing notmuch index.
+- `fresh-filters [MAIL_ROOT]` publishes the shared local generation and portable
+  Sieve script. `sieve` retains the filter-only workflow for migrated profiles.
+- `fresh-search [MAIL_ROOT]` refreshes the existing index. `index` initializes it.
 
 ## Transport family (`fetch`, `send`, `smtp`, `imap`)
 

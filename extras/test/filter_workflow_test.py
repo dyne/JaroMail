@@ -145,8 +145,8 @@ class WorkflowTests(unittest.TestCase):
     def snapshot(self):
         return os.readlink(self.root / 'cache/filter-engine/current'), (self.root / 'Filters.sieve').read_bytes()
 
-    def test_native_sieve_update_repeats_and_index_boundary(self):
-        self.run_cli('sieve')
+    def test_fresh_filters_search_and_combined_command(self):
+        self.run_cli('fresh-filters')
         first = self.snapshot()
         self.assertIn(b'"First"', first[1])
         self.assertIn(b'own@example.org', first[1])
@@ -155,8 +155,22 @@ class WorkflowTests(unittest.TestCase):
         self.run_cli('sieve', engine='native')
         self.assertEqual(self.snapshot(), first)
         (self.root / '.notmuch/xapian').mkdir(parents=True)
-        self.run_cli('update')
+        self.rules = self.root / 'Filters.txt'
+        rules = self.rules.read_bytes()
+        self.rules.write_bytes(b'invalid-rule\n')
+        self.run_cli('-n', 'fresh-search')
+        self.assertFalse(self.indexlog.exists())
+        self.processlog.write_text('')
+        self.run_cli('fresh-search')
         self.assertIn('new', self.indexlog.read_text())
+        self.assertNotIn('jaro-filter-compile', self.processlog.read_text().splitlines())
+        self.assertEqual(self.snapshot(), first)
+        self.rules.write_bytes(rules)
+        self.indexlog.write_text('')
+        self.processlog.write_text('')
+        self.run_cli('fresh')
+        self.assertIn('new', self.indexlog.read_text())
+        self.assertEqual(self.processlog.read_text().splitlines().count('jaro-filter-compile'), 1)
         self.assertEqual(self.snapshot(), first)
 
     def test_installed_accounts_route_shared_sqlite_memberships(self):
@@ -249,7 +263,7 @@ class WorkflowTests(unittest.TestCase):
         for engine in (None, 'legacy', 'native', 'sieve'):
             before = worker_trace.stat().st_size if worker_trace.exists() else 0
             self.message.write_bytes(original)
-            self.run_cli('update', engine=engine)
+            self.run_cli('fresh', engine=engine)
             self.run_cli('filter', '--explain', str(self.message), engine=engine)
             self.run_cli('-n', 'fetch', engine=engine)
             self.run_cli('filter', engine=engine)
@@ -272,7 +286,7 @@ class WorkflowTests(unittest.TestCase):
         (self.root / '.notmuch/xapian').mkdir(parents=True)
         for rules in ('invalid rule\n', 'from unsupported+ move Bad\n'):
             (self.root / 'Filters.txt').write_text(rules)
-            self.run_cli('update', code=4)
+            self.run_cli('fresh', code=4)
             self.assertEqual(self.snapshot(), before)
             self.assertFalse(self.indexlog.exists())
         self.assertTrue(self.message.exists())
@@ -308,7 +322,7 @@ class WorkflowTests(unittest.TestCase):
     def test_custom_update_root_and_native_dry_check(self):
         second = self.root.parent / 'selected mail root'
         shutil.copytree(self.root, second)
-        self.run_cli('update', str(second))
+        self.run_cli('fresh', str(second))
         self.assertTrue((second / 'cache/filter-engine/current').is_symlink())
         self.assertFalse((self.root / 'Filters.sieve').exists())
         self.run_cli('-n', 'sieve')
@@ -349,17 +363,17 @@ class WorkflowTests(unittest.TestCase):
             for args in [('filter',), ('-n', 'filter'), ('filter', '--explain', str(self.message)), ('fetch',),
                          ('sieve',), ('sieve-import', str(self.root / 'Filters.sieve'))]:
                 result = self.run_cli(*args, code=5, engine=engine)
-                self.assertIn(b'jaro update', result.stderr)
+                self.assertIn(b'jaro fresh-filters', result.stderr)
                 self.assertEqual(self.tree_snapshot(), before)
         self.assertFalse(self.transportlog.exists())
         self.assertFalse(self.indexlog.exists())
         (self.root / 'whitelist.abook').write_text('[0]\nname=Known\nemail=known@example.org\n')
         (self.root / 'Filters.txt').write_text('invalid-rule\n')
-        self.run_cli('update', code=4)
+        self.run_cli('fresh', code=4)
         self.assertEqual(self.snapshot(), ('generations/' + old, source))
         self.assertTrue(self.message.exists())
         (self.root / 'Filters.txt').write_text('')
-        self.run_cli('update', engine='legacy')
+        self.run_cli('fresh-filters', engine='legacy')
         selected = (cache / 'current').resolve()
         self.assertNotEqual(selected, generation)
         self.assertEqual({p.name for p in selected.iterdir()}, {'Filters.sieve','Filters.svbin','manifest.json','dependencies','provenance'})
@@ -488,7 +502,7 @@ class WorkflowTests(unittest.TestCase):
         policy.write_text('from-address other@example.org move First\nfrom-address route@example.org move First\n')
         trace = self.work / 'sieve-execs.jsonl'
         start = trace.stat().st_size if trace.exists() else 0
-        self.run_cli('update')
+        self.run_cli('fresh')
         generation = (self.root / 'cache/filter-engine/current').resolve()
         self.assertTrue((generation / 'Filters.svbin').stat().st_size)
         before = self.tree_snapshot()
@@ -530,7 +544,7 @@ class WorkflowTests(unittest.TestCase):
     def test_fetch_failed_save_retries_only_retained_input(self):
         (self.root / 'FilterProfile.txt').write_text(
             'version 1\nprofile core-v1\ncapability fileinto\ncreate-mailboxes no\n')
-        self.run_cli('update')
+        self.run_cli('fresh')
         other = self.message.with_name('other')
         other.write_bytes(b'From: unknown@example.net\nSubject: independent\n\nFallback.\n')
         body = self.message.read_bytes()
@@ -550,8 +564,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.index_count(), 2)
 
     def test_public_filter_respects_existing_batch_lock(self):
-        self.run_cli('update')
-        self.run_cli('update')  # Finish the compiler's committed publication journal.
+        self.run_cli('fresh')
+        self.run_cli('fresh')  # Finish the compiler's committed publication journal.
         lock = self.root / 'cache/filter-engine/batch.lock'
         with lock.open('wb') as held:
             lock.chmod(0o600)
@@ -719,7 +733,7 @@ class WorkflowTests(unittest.TestCase):
     def test_default_and_explicit_native_readonly_setup_never_materializes_inputs(self):
         before = self.tree_snapshot()
         for engine in (None, 'native', 'sieve', 'legacy'):
-            for command in ('sieve', 'update'):
+            for command in ('sieve', 'fresh'):
                 self.run_cli('-n', command, engine=engine)
                 self.assertEqual(self.tree_snapshot(), before)
             for args in [('filter', '--explain'), ('-n', 'filter'), ('-n', 'fetch')]:
