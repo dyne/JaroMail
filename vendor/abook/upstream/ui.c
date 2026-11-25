@@ -67,6 +67,7 @@ static WINDOW *top = NULL, *bottom = NULL;
 static char contact_query[1024];
 static char contact_feedback[256];
 static bool entering_query;
+static bool confirm_all_single_removals;
 static void inspect_contact_mailboxes(void);
 
 static int min_lines(void) { return jaro_editor_profile ? 12 : MIN_LINES; }
@@ -378,10 +379,9 @@ ui_browse_footer(void)
 				tail++;
 		}
 		mvwprintw(bottom, 1, 0, "%c %s", ui_binding('/'), tail);
-		char *keys = entering_query ? xstrdup(_("Enter edit  Tab mailboxes  Esc clear  Up/Down")) :
-			strdup_printf(_("Enter edit  Tab mailboxes  Esc clear  %c help"), ui_binding('?'));
+		const char *keys = entering_query ? _("Enter results  Esc clear  Up/Down  Tab mailboxes") :
+			_("Enter edit  Space mark  Esc clear  Tab mailboxes");
 		mvwaddnstr(bottom, 0, 0, keys, bytes2width(keys, COLS - 1));
-		free(keys);
 		if(entering_query)
 			wmove(bottom, 1, 2 + strwidth(tail));
 	} else {
@@ -465,6 +465,19 @@ contact_prompt(const char *question, const char *choices)
 	wrefresh(bottom);
 	int choice = getch();
 	return choice >= 0 && choice <= UCHAR_MAX ? tolower(choice) : choice;
+}
+
+static bool
+confirm_marked_action(const char *format, int count)
+{
+	if(!jaro_editor_profile || count < 2)
+		return TRUE;
+	char *question = strdup_printf(format, count);
+	bool confirmed = contact_prompt(question, _("y confirm  Esc cancel")) == 'y';
+	free(question);
+	if(!confirmed)
+		refresh_list();
+	return confirmed;
 }
 
 static bool
@@ -753,12 +766,13 @@ display_contact_help(void)
 	headerline(_("Contacts help"));
 	mvprintw(2, 0, _("Arrows, %c/%c or Ctrl+P/N: move"), ui_binding('j'), ui_binding('k'));
 	mvaddstr(3, 0, _("Enter: edit  Tab: inspect mailboxes"));
-	mvprintw(4, 0, _("%c: filter as you type  Esc: clear"), ui_binding('/'));
+	mvprintw(4, 0, _("%c: filter as you type  Enter: results"), ui_binding('/'));
 	mvprintw(5, 0, _("%c: choose list  %c: load/reload"), ui_binding('o'), ui_binding('l'));
 	mvprintw(6, 0, _("Space: mark  %c: remove marked or current"), ui_binding('d'));
 	mvprintw(7, 0, _("%c: save  %c: quit  %c: discard and quit"), ui_binding('w'), ui_binding('q'), ui_binding('Q'));
 	mvprintw(8, 0, _("%c: add  %c: duplicate  %c: merge"), ui_binding('a'), ui_binding('D'), ui_binding('M'));
 	mvprintw(9, 0, _("%c: compose  %c: open URL  %c: sort"), ui_binding('m'), ui_binding('v'), ui_binding('s'));
+	mvaddstr(10, 0, _("Search: * wildcard  ^ start  $ end  Esc clear"));
 	mvaddstr(LINES - 1, 0, _("Press any key to return"));
 	refresh();
 	getch();
@@ -825,8 +839,6 @@ display_help(int help)
  * end of help
  */
 
-extern char *selected;
-
 static void
 set_contact_query(void)
 {
@@ -837,7 +849,7 @@ set_contact_query(void)
 static void
 filter_contacts(void)
 {
-	int action = 0;
+	bool inspect_mailboxes = FALSE;
 	entering_query = TRUE;
 	show_cursor();
 	for(;;) {
@@ -871,14 +883,14 @@ filter_contacts(void)
 		else if(kind == KEY_CODE_YES && key == KEY_PPAGE)
 			page_up();
 		else if((kind == KEY_CODE_YES && key == KEY_ENTER) ||
-		        (kind == OK && (key == '\r' || key == '\n'))) {
-			action = '\r';
+		        (kind == OK && (key == '\r' || key == '\n')))
 			break;
-		} else if(kind == OK && key == '\t') {
-			action = '\t';
+		else if(kind == OK && key == '\t') {
+			inspect_mailboxes = TRUE;
 			break;
 		} else if(kind == OK && (key == 27 || key == 7)) {
 			*contact_query = 0;
+			list_set_query(contact_query);
 			break;
 		} else if((kind == KEY_CODE_YES && key == KEY_BACKSPACE) ||
 		       (kind == OK && (key == 8 || key == 127))) {
@@ -906,10 +918,8 @@ filter_contacts(void)
 	entering_query = FALSE;
 	if(!opt_get_bool(BOOL_SHOW_CURSOR))
 		hide_cursor();
-	set_contact_query();
-	if(action == '\r')
-		edit_item(-1);
-	else if(action == '\t')
+	refresh_list();
+	if(inspect_mailboxes)
 		inspect_contact_mailboxes();
 }
 
@@ -1077,9 +1087,14 @@ get_commands()
 		switch(ch) {
 			case 'q': return;
 			case 'Q': quit_abook(QUIT_DONTSAVE);	break;
-			case 'P': print_stderr(selected_items() ?
-						  -1 : list_get_curitem());
-				  return;
+			case 'P': {
+				int marked = selected_items();
+				if(confirm_marked_action(_("Output %d marked contacts?"), marked)) {
+					print_stderr(marked ? -1 : list_get_curitem());
+					return;
+				}
+				break;
+			}
 			case '?':
 				  display_help(HELP_MAIN);
 				  refresh_screen();
@@ -1092,7 +1107,12 @@ get_commands()
 			case 'd':
 			case 'r': ui_remove_items();	break;
 			case 'M': ui_merge_items();	break;
-			case 'D': duplicate_item();	break;
+			case 'D': {
+				int marked = jaro_editor_profile ? selected_items() : 0;
+				if(confirm_marked_action(_("Duplicate %d marked contacts?"), marked))
+					duplicate_items(marked != 0);
+				break;
+			}
 			case 'U': ui_remove_duplicates(); break;
 			case 12: refresh_screen();	break;
 
@@ -1164,10 +1184,14 @@ get_commands()
 			case 'Z': move_curitem(MOVE_ITEM_DOWN);
 				break;
 
-			case 'm': launch_mutt(selected_items() ?
-						  -1 : list_get_curitem());
-				  refresh_screen();
-				  break;
+			case 'm': {
+				int marked = selected_items();
+				if(confirm_marked_action(_("Compose to %d marked contacts?"), marked)) {
+					launch_mutt(marked ? -1 : list_get_curitem());
+					refresh_screen();
+				}
+				break;
+			}
 
 			case 'p': ui_print_database(); break;
 
@@ -1190,14 +1214,24 @@ ui_remove_items()
 			visible += !!is_selected(list_visible_item(row));
 		int hidden = count - visible;
 		count = max(count, 1);
-		char *question = hidden ? strdup_printf(_("Remove %d here (%d hidden by filter)?"), count, hidden) :
-			strdup_printf(count == 1 ? _("Remove %d contact from this list?") :
-				_("Remove %d contacts from this list?"), count);
-		if(contact_prompt(question, _("y confirm  Esc cancel")) == 'y') {
+		bool allow_all = count == 1 && !hidden;
+		bool confirmed = allow_all && confirm_all_single_removals;
+		if(!confirmed) {
+			char *question = hidden ? strdup_printf(_("Remove %d here (%d hidden by filter)?"), count, hidden) :
+				strdup_printf(count == 1 ? _("Remove %d contact from this list?") :
+					_("Remove %d contacts from this list?"), count);
+			int choice = contact_prompt(question, allow_all ?
+				_("y confirm  Esc cancel  a all this session") : _("y confirm  Esc cancel"));
+			free(question);
+			if(allow_all && choice == 'a')
+				confirm_all_single_removals = confirmed = TRUE;
+			else
+				confirmed = choice == 'y';
+		}
+		if(confirmed) {
 			remove_selected_items();
 			set_contact_feedback(_("Removal pending; save to commit"));
 		}
-		free(question);
 		list_update_matches();
 		refresh_list();
 		return;

@@ -10,5 +10,8 @@ int jaro_editor_failed_item(void);
 const char *jaro_editor_failed_field(void);
 int jaro_editor_books(abook_list **books);
 int jaro_editor_switch_book(const char *name);
-int jaro_editor_matches(int item, const char *key);
+struct jaro_editor_query;
+struct jaro_editor_query *jaro_editor_query_new(const char *pattern);
+void jaro_editor_query_free(struct jaro_editor_query *query);
+int jaro_editor_matches(int item, const struct jaro_editor_query *query);
 #endif

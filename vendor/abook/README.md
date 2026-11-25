@@ -32,7 +32,7 @@ configure; the built-in vCard importer remains available.
 
 Install puts abook in `share/jaromail/bin` alongside Jaromail's helpers, and
 Jaromail's existing runtime PATH selects it first. `abook --help` identifies the
-private build as `0.6.2+jaromail.4`, following the existing upstream version line.
+private build as `0.6.2+jaromail.5`, following the existing upstream version line.
 The native format header still uses the upstream version. Manuals, the sample
 configuration and the original `COPYING` and `AUTHORS` notices ship with the
 private executable. User/system prefixes and `DESTDIR` follow the main project.
@@ -44,12 +44,26 @@ under `cmake/abook/`, with its license and a generator for maintainers. Builds
 use the committed data and require no Unicode library or generation step.
 
 `jaro abook` opens the selected list in the profile's `contacts.sqlite`.
-Press `o` to switch lists, `/` to filter as you type, and Esc to clear the
-filter. Browse with the arrow keys, `j`/`k`, or Ctrl+N/Ctrl+P. The `>`
-marker shows the active contact, and Space toggles its separate `[x]` mark.
-Enter edits the contact, and Tab shows its mailboxes. Wider terminals also
-show a contact preview. The list picker includes block, which recipient
-completion excludes.
+Press `o` to switch lists and `/` to filter as you type. In search input,
+Enter focuses the results and Esc clears the filter. Plain text matches
+anywhere in a name, mailbox, nickname, or note, ignoring case and accents.
+Use `*` for any sequence of characters, `^` at the start of the query to
+anchor it to the beginning of a field, and `$` at the end to anchor it to
+the end. For example, `^ren*stone$` matches `Renée Stone`.
+
+Browse with the arrow keys, `j`/`k`, or Ctrl+N/Ctrl+P. The `>` marker
+shows the active contact. Space toggles its separate `[x]` mark, `+` marks
+all visible results, and `-` clears all marks. Enter edits the active
+contact, and Tab shows its mailboxes. Wider terminals also show a contact
+preview. The list picker includes block, which recipient completion excludes.
+
+`d` removes marked contacts, or the active contact when nothing is marked.
+For a single visible contact, press `a` at the confirmation to remove it
+and approve subsequent single deletions until abook closes. Batch deletions
+always require confirmation. Marks persist when the filter changes. The
+deletion prompt counts any marked contacts hidden by the filter.
+`D` duplicates marked contacts or the active contact, and `M` merges marked
+contacts. Both ask for confirmation when multiple contacts are marked.
 In the form, use arrows, Tab, or Ctrl+N/Ctrl+P to focus a field and Enter
 to edit it. The number and letter shortcuts still edit fields directly.
 Use Left/Right, `h`/`l`, or Ctrl+B/Ctrl+F to switch field groups, and

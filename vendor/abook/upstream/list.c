@@ -22,7 +22,6 @@
 #include "color.h"
 #include "contact/text.h"
 #include "sqlite-editor.h"
-#include "search-fold.h"
 
 
 int curitem = -1;
@@ -34,14 +33,14 @@ extern abook_field_list *fields_list;
 struct index_elem *index_elements = NULL;
 
 static WINDOW *list = NULL;
-static char *query_key;
+static struct jaro_editor_query *contact_filter;
 static int *matches;
 static int matches_count;
 
 int
 list_visible_count(void)
 {
-	return query_key ? matches_count : db_n_items();
+	return contact_filter ? matches_count : db_n_items();
 }
 
 int
@@ -49,13 +48,13 @@ list_visible_item(int row)
 {
 	if(row < 0 || row >= list_visible_count())
 		return -1;
-	return query_key ? matches[row] : row;
+	return contact_filter ? matches[row] : row;
 }
 
 static int
 visible_row(int item)
 {
-	if(!query_key)
+	if(!contact_filter)
 		return is_valid_item(item) ? item : -1;
 	/* Results are in database order. */
 	int lo = 0, hi = matches_count;
@@ -81,10 +80,10 @@ list_update_matches(void)
 	free(matches);
 	matches = NULL;
 	matches_count = 0;
-	if(query_key && db_n_items() > 0) {
+	if(contact_filter && db_n_items() > 0) {
 		matches = xmalloc((size_t)db_n_items() * sizeof *matches);
 		for(int item = 0; item < db_n_items(); item++)
-			if(jaro_editor_matches(item, query_key))
+			if(jaro_editor_matches(item, contact_filter))
 				matches[matches_count++] = item;
 	}
 }
@@ -92,8 +91,8 @@ list_update_matches(void)
 void
 list_set_query(const char *query)
 {
-	free(query_key);
-	query_key = *query ? abook_search_key(query) : NULL;
+	jaro_editor_query_free(contact_filter);
+	contact_filter = jaro_editor_query_new(query);
 	list_update_matches();
 }
 
@@ -467,7 +466,7 @@ refresh_list()
 	if(!list_visible_count()) {
 		curitem = first_list_item = -1;
 		if(jaro_editor_profile) {
-			const char *empty = query_key ? _("No matching contacts") : _("No contacts in this list");
+			const char *empty = contact_filter ? _("No matching contacts") : _("No contacts in this list");
 			mvwaddstr(list, 0, 1, empty);
 		}
 		draw_list();
@@ -567,7 +566,7 @@ scroll_down()
 void
 scroll_list_up()
 {
-	if(query_key) {
+	if(contact_filter) {
 		scroll_up();
 		return;
 	}
@@ -593,7 +592,7 @@ scroll_list_up()
 void
 scroll_list_down()
 {
-	if(query_key) {
+	if(contact_filter) {
 		scroll_down();
 		return;
 	}
@@ -774,26 +773,37 @@ list_set_curitem(int i)
 	curitem = i;
 }
 
-int
-duplicate_item()
+void
+duplicate_items(bool marked)
 {
-	list_item item;
-	
-	if(curitem < 0)
-		return 1;
-
-	item = item_create();
-	item_duplicate(item, db_item_get(curitem));
-	if(add_item2database(item)) {
-		item_free(&item);
-		return 1;
+	if(!marked && !is_valid_item(curitem))
+		return;
+	int first = marked ? 0 : curitem;
+	int last = marked ? last_item() : curitem;
+	/* Validate every source before adding any copies to the draft. */
+	for(int i = first; i <= last; i++) {
+		if((!marked || selected[i]) && !*safe_str(db_name_get(i))) {
+			if(jaro_editor_profile) {
+				ui_contact_draft_changed();
+				statusline_msg(_("Cannot duplicate a contact without a name"));
+				refresh_list();
+			}
+			return;
+		}
 	}
-	item_free(&item);
+	for(int i = first; i <= last; i++) {
+		if(marked && !selected[i])
+			continue;
+		list_item item = item_create();
+		item_duplicate(item, db_item_get(i));
+		add_item2database(item);
+		item_free(&item);
+	}
 
 	curitem = last_item();
+	if(jaro_editor_profile)
+		ui_contact_draft_changed();
 	list_update_matches();
 	refresh_list();
-
-	return 0;
 }
 
