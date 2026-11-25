@@ -35,6 +35,7 @@ static struct view current;
 static char diagnostic[256];
 static char *chosen_list;
 static int failed_item = -1;
+static const char *failed_field;
 
 const char *jaro_editor_diagnostic(void)
 {
@@ -51,8 +52,14 @@ int jaro_editor_failed_item(void)
 	return failed_item;
 }
 
+const char *jaro_editor_failed_field(void)
+{
+	return failed_field;
+}
+
 static void save_diagnostic(int status, const char *reason, const char *field, int64_t id)
 {
+	failed_field = status == JARO_CONTACT_INVALID ? field : NULL;
 	if (status == JARO_CONTACT_BUSY)
 		snprintf(diagnostic, sizeof diagnostic, "Contact store is busy. Retry save.");
 	else if (status == JARO_CONTACT_CONFLICT)
@@ -383,6 +390,7 @@ int jaro_editor_save(void)
 	struct view committed={0};
 	int64_t selected_id=list_current_contact_id(), affected_id=0;
 	failed_item=-1;
+	failed_field=NULL;
 	if (!db_need_save) return 0;
 
 	int items=db_n_items(),status=0;

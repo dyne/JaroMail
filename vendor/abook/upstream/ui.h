@@ -40,6 +40,7 @@ void		ui_print_database();
 void		ui_open_datafile();
 void		ui_browse_footer(void);
 char		ui_binding(char command);
+int		ui_emacs_key(int key);
 int		ui_handle_resize(void);
 enum ui_contact_leave {
 	UI_CONTACT_STAY,
@@ -50,6 +51,7 @@ enum ui_contact_leave ui_leave_contacts(bool discard);
 int		ui_save_contacts(void);
 int		ui_reload_contacts(bool confirm);
 void		ui_contact_editor_footer(void);
+const char *	ui_contact_field_error(int item);
 void		ui_contact_draft_changed(void);
 
 #if NCURSES_MOUSE_VERSION != 2

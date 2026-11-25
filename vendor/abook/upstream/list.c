@@ -114,12 +114,17 @@ list_restore_contact_id(int64_t id)
 			}
 }
 
+int
+list_browse_width(void)
+{
+	return jaro_editor_profile && COLS >= 96 ? COLS - COLS / 3 : COLS;
+}
+
 static int
 mailbox_column(void)
 {
-	return min(26, COLS / 3 + 2);
+	return max(23, min(28, list_browse_width() / 3 + 2));
 }
-
 
 static void
 index_elem_add(int type, char *a, char *b)
@@ -335,29 +340,46 @@ print_list_line(int item, int line, int highlight)
 	else
 		wattrset(list, COLOR_PAIR(CP_LIST_ODD));
 	scrollok(list, FALSE);
-	if(highlight)
+	if(highlight && jaro_editor_profile) {
+		wattron(list, A_REVERSE);
+		mvwhline(list, line, 0, ' ', list_browse_width());
+	} else if(highlight)
 		highlight_line(list, line);
-
-	if(selected[item])
-		mvwaddch(list, line, 0, '*' );
-	else if(jaro_editor_profile && highlight)
-		mvwaddch(list, line, 0, '>');
 
 	if(jaro_editor_profile) {
 		int col = mailbox_column();
+		int width = list_browse_width() - col - 1;
 		const char *name = db_name_get(item);
 		char *safe = jaro_contact_display_text((struct jaro_contact_text){name, strlen(name)});
 		const char *csv = safe_str(db_fget(item, EMAIL));
 		abook_list *addresses = mailbox_list_from_csv(csv);
+		mvwprintw(list, line, 0, "%c %s", highlight ? '>' : ' ', selected[item] ? "[x]" : "   ");
 		if(safe) {
-			mvwaddnstr(list, line, 1, safe, bytes2width(safe, col - 2));
+			mvwaddnstr(list, line, 6, safe, bytes2width(safe, col - 7));
 			free(safe);
 		}
-		if(addresses)
-			mvwaddnstr(list, line, col, addresses->data, bytes2width(addresses->data, COLS - col - 1));
+		if(addresses) {
+			int extra = 0;
+			char suffix[24] = "";
+			for(abook_list *next = addresses->next; next; next = next->next)
+				extra++;
+			if(extra)
+				snprintf(suffix, sizeof suffix, " +%d", extra);
+			int room = max(0, width - (int)strlen(suffix));
+			safe = jaro_contact_display_text((struct jaro_contact_text){
+				addresses->data, strlen(addresses->data)});
+			if(safe) {
+				mvwaddnstr(list, line, col, safe, bytes2width(safe, room));
+				waddstr(list, suffix);
+				free(safe);
+			}
+		}
 		abook_list_free(&addresses);
-	} else for(cur = index_elements; cur; cur = cur->next)
-		switch(cur->type) {
+	} else {
+		if(selected[item])
+			mvwaddch(list, line, 0, '*');
+		for(cur = index_elements; cur; cur = cur->next)
+			switch(cur->type) {
 			case INDEX_TEXT:
 				mvwaddstr(list, line, x_pos, cur->d.text);
 				x_pos += strwidth(cur->d.text);
@@ -367,7 +389,8 @@ print_list_line(int item, int line, int highlight)
 				break;
 			default:
 				assert(0);
-		}
+			}
+	}
 
 	scrollok(list, TRUE);
 	if(highlight)
@@ -375,9 +398,53 @@ print_list_line(int item, int line, int highlight)
 }
 
 static void
+preview_text(int line, int col, const char *text)
+{
+	char *safe = jaro_contact_display_text((struct jaro_contact_text){text, strlen(text)});
+	if(safe) {
+		mvwaddnstr(list, line, col, safe, bytes2width(safe, COLS - col - 1));
+		free(safe);
+	}
+}
+
+static void
+draw_contact_preview(void)
+{
+	int divider = list_browse_width();
+	if(divider == COLS)
+		return;
+	wattrset(list, A_NORMAL);
+	mvwvline(list, 0, divider, UI_VLINE_CHAR, LIST_LINES);
+	if(!is_valid_item(curitem))
+		return;
+
+	int col = divider + 2, line = 0;
+	wattron(list, A_BOLD);
+	preview_text(line++, col, db_name_get(curitem));
+	wattroff(list, A_BOLD);
+	const char *notes = safe_str(db_fget(curitem, NOTES));
+	abook_list *addresses = mailbox_list_from_csv(safe_str(db_fget(curitem, EMAIL)));
+	abook_list *address = addresses;
+	int limit = LIST_LINES - (*notes ? 3 : 1);
+	for(; address && line < limit; address = address->next)
+		preview_text(line++, col, address->data);
+	if(address)
+		preview_text(line++, col, _("Tab shows all mailboxes"));
+	if(!addresses)
+		preview_text(line++, col, _("No mailbox"));
+	abook_list_free(&addresses);
+
+	if(*notes && line < LIST_LINES - 1) {
+		preview_text(line++, col, _("Notes"));
+		preview_text(line, col, notes);
+	}
+}
+
+static void
 draw_list(void)
 {
 	if(jaro_editor_profile) {
+		draw_contact_preview();
 		wnoutrefresh(stdscr);
 		wnoutrefresh(list);
 		ui_browse_footer();
@@ -446,8 +513,10 @@ list_headerline()
 	mvhline(2, 0, ' ', COLS);
 
 	if(jaro_editor_profile) {
-		mvaddstr(2, 1, _("Name"));
+		mvaddstr(2, 6, _("Name"));
 		mvaddstr(2, mailbox_column(), _("Mailbox"));
+		if(list_browse_width() < COLS)
+			mvaddstr(2, list_browse_width() + 2, _("Contact preview"));
 		attrset(A_NORMAL);
 		return;
 	}

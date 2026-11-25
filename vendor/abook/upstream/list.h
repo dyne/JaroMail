@@ -53,6 +53,7 @@ int		list_get_curitem();
 int		list_get_firstitem();
 void		list_set_curitem(int i);
 int		list_visible_count(void);
+int		list_browse_width(void);
 int		list_visible_item(int row);
 int		list_adjacent_item(int item, int direction);
 void		list_set_query(const char *query);
