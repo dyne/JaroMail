@@ -86,7 +86,7 @@ assert_equal "${whitelist}" "Imported Sieve <known@example.org>" "import whiteli
 blacklist="$(jaro_source -l block addr 2>/dev/null | sort)"
 assert_equal "${blacklist}" "Imported Sieve <blocked@example.org>" "import blacklist"
 
-jaro_source update >/dev/null
+jaro_source fresh-filters >/dev/null
 
 generated="$(cat "${mail_root}/Filters.sieve")"
 assert_contains "${generated}" '"team@example.org" { fileinto :create "team"; stop; }' "round-trip to filter"

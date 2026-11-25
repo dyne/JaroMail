@@ -68,7 +68,7 @@ make_maildir_message "${mail_root}/known" "new" "backup-b.eml" \
   "Subject: backup-token-b" \
   "Date: Thu, 01 Jan 1970 00:00:00 +0000" >/dev/null
 
-jaro_source update >/dev/null
+jaro_source fresh-search >/dev/null
 jaro_source index >/dev/null
 
 backup_stderr="${tmp_root}/backup.err"

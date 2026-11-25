@@ -58,7 +58,7 @@ deliver_msg "White Person <white@example.org>" "reader@example.org" "whitelist"
 deliver_msg "Private Sender <private@example.org>" "USERNAME@gmail.com" "private"
 deliver_msg "Unknown Sender <unknown@example.org>" "reader@example.org" "unsorted"
 
-jaro_source update >/dev/null
+jaro_source fresh-filters >/dev/null
 filter_log="$(jaro_source filter "${mail_root}/incoming" 2>&1)"
 
 count_new() {
