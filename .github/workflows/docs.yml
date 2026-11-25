@@ -27,8 +27,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Install Pandoc
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y pandoc
+      - name: Install documentation and installer test dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y pandoc zsh
       - run: npm ci
       - name: Test the Linux installer
         run: python3 extras/test/installer_test.py

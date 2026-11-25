@@ -72,10 +72,10 @@ else
 	r "IMPORT ERROR"
 fi
 
-if j update &&
+if j fresh &&
 		j index &&
 		j filter outbox; then
-	r "UPDATE and INDEX and FILTER OK"
+	r "FRESH and INDEX and FILTER OK"
 else
 	return 1
 fi

@@ -90,8 +90,8 @@ else
   exit 1
 fi
 
-if jaro_source update && jaro_source index && jaro_source filter "${mail_root}/outbox" && jaro_source index; then
-  r "UPDATE and INDEX and FILTER OK"
+if jaro_source fresh && jaro_source index && jaro_source filter "${mail_root}/outbox" && jaro_source index; then
+  r "FRESH and INDEX and FILTER OK"
 else
   exit 1
 fi
