@@ -563,7 +563,7 @@ class InstalledConsumers(unittest.TestCase):
             terminal.wait('List: allow', 'Renée New', 'Zoë One')
             terminal.send('/renee')
             terminal.wait('/ renee', 'Added@Example.org')
-            terminal.send('\r1')
+            terminal.send('\r\r1')
             terminal.wait('Name: Renée New')
             terminal.send('\x15Renée Edited\rq')
             terminal.wait('List: allow', 'Renée Edited', 'Saved to this list')
@@ -732,7 +732,7 @@ class InstalledConsumers(unittest.TestCase):
             terminal.send('k\r')
             terminal.wait('List: block', 'blocked@example.org', 'Tab mailboxes',
                           cursor=selected('blocked@example.org'))
-            terminal.send('/blocked\r')
+            terminal.send('/blocked\r\r')
             terminal.wait('List: block', '< CONTACT >', 'Blocked Fixture', 'blocked@example.org')
             terminal.send('1')
             terminal.wait('Name:')
@@ -756,6 +756,127 @@ class InstalledConsumers(unittest.TestCase):
 
     def test_contact_browse_compact(self):
         self.browse_contacts(48, 12)
+
+    def test_contact_search_patterns(self):
+        (self.mail / 'whitelist.abook').write_bytes(BOOK_HEADER + '''
+[0]
+name=Renée Stone
+email=first@example.org,relay@sample.net
+notes=Meets Tuesday
+
+[1]
+name=Team Renée Stone
+email=team@example.org
+nick=Night Owl
+
+[2]
+name=Renée Stoneman
+email=other@example.org
+'''.encode())
+        cases = [
+            ('reNee', ('Renée Stone', 'Team Renée Stone', 'Renée Stoneman')),
+            ('^reNee', ('Renée Stone', 'Renée Stoneman')),
+            ('stone$', ('Renée Stone', 'Team Renée Stone')),
+            ('^renee*stone$', ('Renée Stone',)),
+            ('^renee*stone*$', ('Renée Stone', 'Renée Stoneman')),
+            ('^*renee**stone$', ('Renée Stone', 'Team Renée Stone')),
+            ('^Renée Stone$', ('Renée Stone',)),
+            ('relay*net$', ('Renée Stone',)),
+            ('^meets*tuesday$', ('Renée Stone',)),
+            ('night*owl$', ('Team Renée Stone',)),
+            ('^renee*renee$', ()),
+            ('relay*exampleorg$', ()),
+            ('*', ('Renée Stone', 'Team Renée Stone', 'Renée Stoneman')),
+        ]
+        with Terminal([self.jaro, '-q', 'abook'], cwd=self.root,
+                      env=dict(self.env, LC_ALL='C.UTF-8'), cols=80, lines=24) as terminal:
+            terminal.wait('List: allow', '3/3 contacts')
+            for pattern, expected in cases:
+                with self.subTest(pattern=pattern):
+                    terminal.send('/\x15' + pattern + '\r')
+                    terminal.wait('/ ' + pattern, f'{len(expected)}/3 contacts', 'Enter edit')
+                    rows = tuple(line[6:27].strip() for line in terminal.screen.text.splitlines()[3:3 + len(expected)])
+                    self.assertEqual(rows, expected)
+            terminal.quit()
+
+    def test_contact_removal_session_and_search_marks(self):
+        names = ('Alpha Solo', 'Beta Solo', 'Group One', 'Group Two', 'Group Three', 'Keep Contact')
+        (self.mail / 'whitelist.abook').write_bytes(BOOK_HEADER + ''.join(
+            f'\n[{i}]\nname={name}\nemail=contact{i}@example.org\n'
+            for i, name in enumerate(names)).encode())
+        command = [self.jaro, '-q', 'abook']
+        with Terminal(command, cwd=self.root, env=self.env, cols=80, lines=24) as terminal:
+            terminal.wait('List: allow', '6/6 contacts')
+            terminal.send('/solo')
+            terminal.wait('Enter results', '/ solo', '2/6 contacts')
+            terminal.send('\r')
+            terminal.wait('Enter edit', 'Space mark', '/ solo')
+            terminal.send('d')
+            terminal.wait('Remove 1 contact from this list?', 'a all this session')
+            terminal.send('a')
+            terminal.wait('Removal pending; save to commit', 'Beta Solo', '1/5 contacts')
+            terminal.send('d')
+            terminal.wait('No matching contacts', '0/4 contacts')
+
+            terminal.send('/\x15group\r')
+            terminal.wait('3/4 contacts', '>     Group One', '/ group',
+                          cursor=lambda screen: not screen.cursor_visible)
+            terminal.send(' j jj')
+            terminal.wait('2 marked', '>     Group Three')
+            terminal.send('d')
+            terminal.wait('Remove 2 contacts from this list?', 'y confirm  Esc cancel')
+            self.assertNotIn('a all this session', terminal.screen.text)
+            terminal.send('a')
+            terminal.wait('2 marked', '3/4 contacts', 'Space toggle mark')
+            terminal.send('d')
+            terminal.wait('Remove 2 contacts from this list?')
+            terminal.send('y')
+            terminal.wait('Removal pending; save to commit', 'Group Three', '1/2 contacts')
+            terminal.send('\x1b')
+            terminal.wait('2/2 contacts', 'Keep Contact', '/ filter')
+            terminal.send('G /three\rd')
+            terminal.wait('Remove 1 here (1 hidden by filter)?', 'y confirm  Esc cancel')
+            self.assertNotIn('a all this session', terminal.screen.text)
+            terminal.send('\x1b-\x1b')
+            terminal.wait('2/2 contacts', '/ filter')
+            terminal.quit()
+
+        with Terminal(command, cwd=self.root, env=self.env, cols=80, lines=24) as terminal:
+            terminal.wait('Group Three', 'Keep Contact', '2/2 contacts')
+            terminal.send('d')
+            terminal.wait('Remove 1 contact from this list?', 'a all this session')
+            terminal.send('\x1b')
+            terminal.wait('/ filter', '2/2 contacts')
+            terminal.quit()
+        with closing(sqlite3.connect(self.mail / 'contacts.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT c.name FROM contacts c JOIN books b ON b.id=c.book_id '
+                                        "WHERE b.name='allow' ORDER BY c.ordinal").fetchall(),
+                             [('Group Three',), ('Keep Contact',)])
+
+    def test_contact_duplicate_marked_search_results(self):
+        names = ('Keep Contact', 'Match First', 'Match Second')
+        (self.mail / 'whitelist.abook').write_bytes(BOOK_HEADER + ''.join(
+            f'\n[{i}]\nname={name}\nemail=contact{i}@example.org\n'
+            for i, name in enumerate(names)).encode())
+        with Terminal([self.jaro, '-q', 'abook'], cwd=self.root, env=self.env,
+                      cols=80, lines=24) as terminal:
+            terminal.wait('3/3 contacts')
+            terminal.send('/^match\r+P')
+            terminal.wait('Output 2 marked contacts?', 'y confirm  Esc cancel')
+            terminal.send('nD')
+            terminal.wait('Duplicate 2 marked contacts?', 'y confirm  Esc cancel')
+            self.assertNotIn('a all this session', terminal.screen.text)
+            terminal.send('a')
+            terminal.wait('2/3 contacts', '2 marked', 'Space toggle mark')
+            terminal.send('D')
+            terminal.wait('Duplicate 2 marked contacts?')
+            terminal.send('y')
+            terminal.wait('4/5 contacts', 'Unsaved changes')
+            terminal.quit()
+        with closing(sqlite3.connect(self.mail / 'contacts.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT c.name, count(*) FROM contacts c JOIN books b ON b.id=c.book_id '
+                                        "WHERE b.name='allow' GROUP BY c.name ORDER BY c.name").fetchall(),
+                             [('Keep Contact', 1), ('Match First', 2), ('Match Second', 2)])
 
     def test_contact_terminal_colors_and_monochrome(self):
         config = self.root / 'test.abookrc'
@@ -1175,8 +1296,8 @@ email=third@example.org
                 self.assertEqual([line for line in draft.read_text().splitlines() if line.startswith('To: ')],
                                  ['To: ' + recipient])
 
-    def run_contact_actions(self, mutt_command, url, keys_after):
-        book = self.root / 'actions.abook'
+    def run_contact_actions(self, mutt_command, url, keys_after, profile=False):
+        book = self.mail / 'whitelist.abook' if profile else self.root / 'actions.abook'
         book.write_text(
             "[0]\nname=Anne O'Neil\nemail=\"anne,one\"@example.org,other@example.org\n"
             f"url={url}\n\n[1]\nname=Pat \"Junior\" Contact\nemail=pat@example.org\n")
@@ -1201,12 +1322,24 @@ email=third@example.org
                           f"set www_command='{recorder}' browser \"new window\"\n")
         log = self.root / 'action.log'
         abook = self.runtime / 'bin/abook'
+        source = ['--jaro-profile', self.mail, '--jaro-list', 'allow'] if profile else ['--datafile', book]
         status, tty = run_client(
-            [abook, '--config', config, '--datafile', book], cwd=self.root,
+            [abook, '--config', config, *source], cwd=self.root,
             env=dict(self.env, PATH=str(self.root) + os.pathsep + self.env['PATH'],
                      CONTACT_ACTION_LOG=str(log)), keys_after=keys_after)
         self.assertEqual(status, 0, repr(tty[-600:]))
         return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+    def test_profile_compose_confirms_marked_contacts(self):
+        records = self.run_contact_actions(
+            'jaro compose', 'https://example.org/contact',
+            [(b'Pat ', b'+m'),
+             (b'Compose to 2 marked contacts?', b'am'),
+             (b'Compose to 2 marked contacts?', b'yq')], profile=True)
+        self.assertEqual(records, [
+            [['compose', '"Anne O\'Neil" <"anne,one"@example.org>,"Pat \\"Junior\\" Contact" <pat@example.org>'],
+             True, True],
+        ])
 
     def test_external_actions_pass_argv_and_restore_terminal(self):
         recorder = self.root / 'record contact action'

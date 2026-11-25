@@ -60,7 +60,7 @@ void		list_set_query(const char *query);
 void		list_update_matches(void);
 int64_t		list_current_contact_id(void);
 void		list_restore_contact_id(int64_t id);
-int		duplicate_item();
+void		duplicate_items(bool marked);
 
 
 enum {

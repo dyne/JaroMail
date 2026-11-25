@@ -134,30 +134,112 @@ int jaro_editor_switch_book(const char *name)
 	return 0;
 }
 
-static int field_matches(const char *value, const char *key)
+struct jaro_editor_query {
+	size_t count;
+	bool anchor_start, anchor_end, has_wildcard;
+	char *terms[];
+};
+
+struct jaro_editor_query *jaro_editor_query_new(const char *pattern)
+{
+	if (!*pattern)
+		return NULL;
+
+	const char *end = pattern + strlen(pattern);
+	bool anchor_start = *pattern == '^', anchor_end = end[-1] == '$';
+	size_t capacity = 1;
+	for (const char *p = pattern; *p; p++)
+		capacity += *p == '*';
+	struct jaro_editor_query *query = xmalloc(sizeof *query + capacity * sizeof *query->terms);
+	*query = (struct jaro_editor_query){0};
+
+	const char *term = pattern + anchor_start;
+	end -= anchor_end;
+	bool after_wildcard = FALSE;
+	for (;;) {
+		const char *wildcard = memchr(term, '*', end - term);
+		const char *stop = wildcard ? wildcard : end;
+		char *folded = abook_search_key_alloc(term, stop - term, xmalloc);
+		if (*folded) {
+			if (!query->count)
+				query->anchor_start = anchor_start && !after_wildcard;
+			query->terms[query->count++] = folded;
+			after_wildcard = FALSE;
+		} else {
+			free(folded);
+		}
+		if (!wildcard)
+			break;
+		query->has_wildcard = after_wildcard = TRUE;
+		term = wildcard + 1;
+	}
+	query->anchor_end = anchor_end && !after_wildcard;
+	return query;
+}
+
+void jaro_editor_query_free(struct jaro_editor_query *query)
+{
+	if (query)
+		for (size_t i = 0; i < query->count; i++)
+			free(query->terms[i]);
+	free(query);
+}
+
+static int folded_matches(const char *value, const struct jaro_editor_query *query)
+{
+	size_t count = query->count;
+	if (!count)
+		return query->has_wildcard;
+
+	const char *end = value + strlen(value);
+	if (query->anchor_end) {
+		const char *suffix = query->terms[--count];
+		size_t length = strlen(suffix);
+		if (length > (size_t)(end - value) || strcmp(end - length, suffix))
+			return 0;
+		end -= length;
+		if (!count)
+			return !query->anchor_start || value == end;
+	}
+
+	/* Earliest matches leave the most room for the remaining terms. */
+	for (size_t i = 0; i < count; i++) {
+		const char *term = query->terms[i];
+		size_t length = strlen(term);
+		if (i || !query->anchor_start)
+			value = strstr(value, term);
+		else if (strncmp(value, term, length))
+			return 0;
+		if (!value || value > end || length > (size_t)(end - value))
+			return 0;
+		value += length;
+	}
+	return 1;
+}
+
+static int field_matches(const char *value, const struct jaro_editor_query *query)
 {
 	if (!value || !*value)
 		return 0;
 	char *folded = abook_search_key(value);
-	int matches = strstr(folded, key) != NULL;
+	int matches = folded_matches(folded, query);
 	free(folded);
 	return matches;
 }
 
-int jaro_editor_matches(int item, const char *key)
+int jaro_editor_matches(int item, const struct jaro_editor_query *query)
 {
-	/* Use the store's folded substring semantics on the current editor rows,
-	 * which may include a draft that is not yet in SQLite. */
-	if (!*key)
+	/* Match the current editor rows, including drafts not yet in SQLite. */
+	if (!query->count && !query->has_wildcard)
 		return 0;
-	if (field_matches(db_fget(item, NAME), key) ||
-	    field_matches(db_fget(item, NICK), key) ||
-	    field_matches(db_fget(item, NOTES), key))
+	if (field_matches(db_fget(item, NAME), query) ||
+	    field_matches(db_fget(item, NICK), query) ||
+	    field_matches(db_fget(item, NOTES), query))
 		return 1;
 	abook_list *mail = mailbox_list_from_csv(safe_str(db_fget(item, EMAIL)));
 	int matches = 0;
 	for (abook_list *address = mail; address && !matches; address = address->next)
-		matches = field_matches(address->data, key);
+		matches = field_matches(address->data, query);
 	abook_list_free(&mail);
 	return matches;
 }
