@@ -90,6 +90,10 @@ int jaro_contact_finish(struct jaro_contact_store *store, int status, struct jar
  * An id of zero appends a contact. An existing id requires its current revision. */
 int jaro_contact_book(struct jaro_contact_store *store, struct jaro_contact_text name,
 	int create, int64_t *book_id, struct jaro_contact_error *error);
+/* Rename a custom book, or remove it and its contacts (empty new_name).
+ * The caller holds a write transaction and checks the observed generation. */
+int jaro_contact_change_book(struct jaro_contact_store *store, struct jaro_contact_text name,
+	struct jaro_contact_text new_name, struct jaro_contact_error *error);
 typedef int (*jaro_contact_book_visitor)(struct jaro_contact_text, void *);
 /* Visit the stored list names in creation order. Each name is borrowed. */
 int jaro_contact_visit_books(struct jaro_contact_store *store,

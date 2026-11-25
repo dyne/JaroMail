@@ -319,13 +319,14 @@ int main(int argc, char **argv)
 	struct jf_sha256 hash;
 	char *identity = NULL, *flags;
 	const char *op, *relative;
-	int created = 0, rc = 1, inspect, source_needed;
+	int created = 0, rc = 1, inspect, completed, source_needed;
 	memset(&r, 0, sizeof r);
 	r.root = r.journal = r.directory = r.queue = r.source = r.claims = -1;
 	umask(077);
 	if (argc != 4) { fprintf(stderr, "usage: jaro-outbox OP ROOT {new,cur}/NAME\n"); return 2; }
 	op = argv[1]; relative = argv[3]; inspect = !strcmp(op, "inspect");
-	if (strcmp(op, "prepare") && !inspect && strcmp(op, "inflight") && strcmp(op, "accepted") &&
+	completed = !strcmp(op, "completed");
+	if (strcmp(op, "prepare") && !inspect && !completed && strcmp(op, "inflight") && strcmp(op, "accepted") &&
 		strcmp(op, "uncertain") && strcmp(op, "not-started") && strcmp(op, "finish") &&
 		strcmp(op, "retry") && strcmp(op, "archive")) goto done;
 	source_needed = !strcmp(op, "prepare") || inspect || !strcmp(op, "inflight") ||
@@ -374,7 +375,7 @@ int main(int argc, char **argv)
 			goto done;
 		}
 		if (regular(claim, 1) || fstat(claim, &s) || s.st_size != 0 ||
-			(!inspect && (sync_at(claim, "claim-file-sync") || sync_at(r.claims, "claim-directory-sync")))) {
+			(!inspect && !completed && (sync_at(claim, "claim-file-sync") || sync_at(r.claims, "claim-directory-sync")))) {
 			close(claim); goto done;
 		}
 		close(claim);
@@ -390,10 +391,12 @@ int main(int argc, char **argv)
 	if (r.directory < 0) {
 		goto done;
 	}
-	if (!inspect && sync_at(r.journal, "record-claim-sync")) goto done;
+	if (!inspect && !completed && sync_at(r.journal, "record-claim-sync")) goto done;
 	if (!created && load_record(&r)) goto done;
 	if (created && create_record(&r)) goto done;
-	if (!strcmp(op, "prepare") || inspect) {
+	if (completed) {
+		if (!strcmp(r.state, "complete") && printf("%s\n", r.digest) > 0) rc = 0;
+	} else if (!strcmp(op, "prepare") || inspect) {
 		if (queue_current(&r)) goto done;
 		/* Re-establish checked durability after an earlier failed fsync. */
 		if (!inspect && (fsync(r.source) || sync_at(r.queue, "queue-presend-sync") ||

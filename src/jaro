@@ -49,6 +49,51 @@ jaro_early_command() {
     done
     [[ ${1:-} == "$wanted" ]]
 }
+if [[ "${1:-}" == replay-record ]]; then
+    shift
+    source "$bootstrap_path" doctor || exit $?
+    exec python3 -I "$WORKDIR/profile/replay.py" "$MAILDIRS" "$@"
+fi
+if [[ "${1:-}" == stats0 ]]; then
+    shift
+    (( $# == 1 )) || exit 2
+    source "${bootstrap_path:h}/stats" || exit $?
+    stats_records "$1"
+    exit $?
+fi
+if [[ "${1:-}" == maildir ]]; then
+    shift
+    source "$bootstrap_path" doctor || exit $?
+    exec python3 -I "$WORKDIR/maildir/operations.py" "$MAILDIRS" "$@"
+fi
+if [[ "${1:-}" == (account|group) ]]; then
+    profile_kind="$1"
+    shift
+    source "$bootstrap_path" doctor || exit $?
+    profile_dir="$ACCOUNTS"
+    [[ "$profile_kind" == account ]] || profile_dir="$MAILDIRS/Groups"
+    exec python3 -I "$WORKDIR/profile/records.py" "$profile_kind" "$WORKDIR" "$profile_dir" "$@"
+fi
+if [[ "${1:-}" == policy ]]; then
+    shift
+    source "$bootstrap_path" doctor || exit $?
+    exec python3 -I "$WORKDIR/filter/candidate.py" "$WORKDIR" "$MAILDIRS" "$ACCOUNTS" "$@"
+fi
+if [[ "${1:-}" == contacts ]]; then
+    shift
+    source "$bootstrap_path" doctor || exit $?
+    [[ -d "$MAILDIRS" ]] || exit 1
+    contact_helper="$WORKDIR/bin/jaro-contact-records"
+    [[ -x "$contact_helper" ]] || contact_helper="$WORKDIR/../build/gnu/cmake/jaro-contact-records"
+    "$contact_helper" "$MAILDIRS" "$@" || exit $?
+    if [[ "$1" == (put|delete) && "$2" == (allow|block) ]]; then
+        "$WORKDIR/bin/jaro-filter-compile" --root "$MAILDIRS" --accounts-dir "$ACCOUNTS" || {
+            print -u2 -- 'contacts: edit committed; policy refresh failed'
+            exit 3
+        }
+    fi
+    exit 0
+fi
 if jaro_early_command dedup "$@"; then
     source "${bootstrap_path:h}/dedup" || exit 1
     dedup_cli "$bootstrap_path" "$@"
@@ -203,6 +248,10 @@ a pipe | in front indicate they take an email body from stdin
 
  outbox list
           read-only IDs, delivery states and classified outcomes
+ outbox submit
+          enqueue or look up frozen SMTP envelopes from standard input
+ outbox send ID --expect STATE
+          send one eligible or prepared envelope
  outbox retry ID --confirm-duplicate
           retry only this held ID; previously accepted mail may duplicate
  outbox archive ID
@@ -221,6 +270,15 @@ a pipe | in front indicate they take an email body from stdin
 
 |smtp     read a mail from stdin and send it via [accounts]'s smtp
 
+
+== Machine-readable profile commands
+ account, group   list, get or update native profile records by revision
+ contacts         read and edit books or multi-address contacts by revision
+ maildir          browse, preview and apply occurrence-based changes
+ policy           preview and apply native rule or alias edits with a sample
+ replay-record    read one named or last replay with its producer
+ stats0           count a NUL-delimited selection by folder, name, email or domain
+ See docs/command-contracts.md for request and response formats.
 
 == Storage commands
 
@@ -476,6 +534,8 @@ main() {
     preview) cmd_preview ;;
 
     mkdir) cmd_mkdir ;;
+
+    merge) cmd_merge ;;
 
     rmdupes) cmd_rmdupes ;;
 

@@ -290,6 +290,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true",
                         help="preview each message against the existing mailboxes; simulated saves do not create folders")
     parser.add_argument("--report0", metavar="GENERATION")
+    parser.add_argument("--preview-provenance", type=Path,
+                        help="compiler provenance for a standalone read-only candidate report")
     parser.add_argument("--message", type=Path)
     parser.add_argument("script", type=Path)
     args = parser.parse_args()
@@ -328,9 +330,14 @@ def main():
             fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=source_fd)
             roots.callback(os.close, fd)
             dirs[name] = fd
-        if args.report0 and args.script != base / "cache/filter-engine/generations" / args.report0 / "Filters.sieve":
+        candidate = args.preview_provenance is not None
+        if candidate and not (args.dry_run and args.report0 and re.fullmatch("[0-9a-f]{64}", args.report0)):
+            parser.error("candidate provenance requires a dry-run report")
+        if args.report0 and not candidate and args.script != base / "cache/filter-engine/generations" / args.report0 / "Filters.sieve":
             raise FilterError(5, "workflow policy must belong to its selected mail root")
-        cached = snapshot(args.script, home, runtime, runtime_id, args.report0)
+        cached = snapshot(args.script, home, runtime, runtime_id, None if candidate else args.report0)
+        if candidate:
+            (home / "provenance").write_bytes(product(args.preview_provenance, 128 << 20))
         if args.report0 and not args.dry_run:
             lock_workflow(base_fd, roots)
         (home / "incoming").mkdir()
