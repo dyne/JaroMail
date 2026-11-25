@@ -68,6 +68,8 @@ if (state / 'deliver-sample').exists():
     assert [p.read_bytes() for p in (incoming / 'new').iterdir()] == [message]
 names = user['mailboxes']
 (state / 'folders.json').write_text(json.dumps(names))
+(state / 'fetch-tls.json').write_text(json.dumps({key: user[key] for key in
+                                                  ('ssl', 'sslproto', 'sslcertck', 'keep')}))
 sys.exit(1 if '-c' in sys.argv else 0) # Successful empty poll, no download.
 EOF
 chmod +x "$test_bin/"{openssl,nc,notmuch,pinentry,fetchmail}
@@ -87,9 +89,6 @@ password secret
 proto imap
 imap localhost
 imap_port 993
-transport TLS1
-cert check
-options keep
 EOF
 }
 header() { printf '%s\r\n' '* OK ready' 'B00000 OK capability' 'B00001 OK authenticated'; }
@@ -152,6 +151,11 @@ received=("$mail_root"/*/cur/*(.N))
 assert_equal "${#received}" 1 "fetch filtered the delivered sample"
 grep -Fxq "Subject: MDA fixture" "$received[1]"
 assert_fetch_folders "${expected_folders[@]}"
+python3 - "$IMAP_TEST_STATE/fetch-tls.json" <<'PY'
+import json, pathlib, sys
+actual = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert actual == {'ssl': True, 'sslproto': 'tls', 'sslcertck': True, 'keep': True}, actual
+PY
 [[ "$(wc -l < "$IMAP_TEST_STATE/fetch-calls" | tr -d ' ')" == 1 ]]
 [[ ! -e NEVER ]]
 print -- 'PASS: CLI LIST and real fetchmail parser preserve 13 exact folder boundaries'

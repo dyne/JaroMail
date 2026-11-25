@@ -784,22 +784,25 @@ This section goes through a scenario of simple usage for Jaro Mail
 .SS Fetch and read your mail at home
 IMAP inspection and automatic folder discovery obey the account\[cq]s
 transport and certificate policy.
-\f[CR]transport TLS1\f[R] (the default), \f[CR]tls\f[R] and
-\f[CR]implicit\f[R] use implicit TLS; the historical \f[CR]SSL2\f[R],
+\f[CR]transport tls\f[R] (the default), \f[CR]implicit\f[R] and
+\f[CR]TLS1\f[R] use implicit TLS; the historical \f[CR]SSL2\f[R],
 \f[CR]SSL23\f[R], \f[CR]SSL3\f[R] and \f[CR]ssl\f[R] labels, and
 \f[CR]starttls\f[R], use STARTTLS.
 These labels retain the existing inspection connection styles and do not
 force obsolete SSL versions.
 \f[CR]plain\f[R] explicitly requests unencrypted IMAP and warns.
 Fetchmail\[cq]s \f[CR]sslproto\f[R] and Mutt\[cq]s \f[CR]peek\f[R]
-settings remain separate; see \f[CR]Accounts/README.txt\f[R] for their
-account context.
+settings remain separate.
+With \f[CR]transport tls\f[R] or \f[CR]implicit\f[R], omitted Fetchmail
+options default to \f[CR]options keep ssl\f[R], which keeps server
+copies and uses implicit TLS.
+See \f[CR]Accounts/README.txt\f[R] for details.
 .PP
-Set \f[CR]cert check\f[R] to verify the IMAP certificate chain and DNS
-hostname or IP address using system trust or your \f[CR]certfile\f[R] CA
-bundle.
-The historical \f[CR]cert ignore\f[R] default skips IMAP verification
-with a warning.
+The default \f[CR]cert check\f[R] verifies the IMAP certificate chain
+and DNS hostname or IP address using system trust or your
+\f[CR]certfile\f[R] CA bundle.
+An explicit \f[CR]cert ignore\f[R] skips IMAP verification with a
+warning.
 Neither failed verification nor rejected STARTTLS retries in plaintext.
 IMAP inspection requires OpenSSL 1.1.1 or newer; explicit plaintext uses
 \f[CR]nc\f[R].

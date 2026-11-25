@@ -107,7 +107,7 @@ doctor_account() {
     case "$transport" in
         TLS1|tls|implicit|SSL2|SSL23|SSL3|ssl|starttls) ;;
         plain)
-            doctor_check trust warning 'Explicit plaintext transport; credentials are unencrypted.' 'Set transport TLS1 or starttls and cert check in the account.'
+            doctor_check trust warning 'Explicit plaintext transport; credentials are unencrypted.' 'Set transport tls or starttls and cert check in the account.'
             return ;;
         *)
             doctor_check trust blocker 'Unsupported account transport (value redacted).' 'Set a documented account transport.'

@@ -43,8 +43,10 @@ literals, without whitespace or shell punctuation. Ports must be decimal
 integers from 1 through 65535. The old host directive supplies imap and smtp
 when absent; imap supplies host. port supplies imap_port, and an explicit
 imap_port supplies smtp_port when absent. Otherwise the port defaults are
-993 and 587. Other defaults remain TLS1, auth plain, cert ignore and options
-keep. Each read starts with empty account state, including password and lists.
+993 and 587. Omitted settings use transport tls, auth plain and cert check.
+Omitted Fetchmail options use keep ssl with transport tls or implicit and keep
+with other transport settings. An explicit options value controls the Fetchmail
+flags. Each read starts with empty account state, including password and lists.
 An explicit SMTP batch may reuse its password only for the same account and
 unchanged SMTP identity; selecting another account discards that cached value.
 
@@ -81,7 +83,7 @@ styles. The historical names retain their existing IMAP meaning:
   SSL2, SSL23, SSL3, ssl, starttls STARTTLS (usually port 143)
   plain                          explicitly unencrypted IMAP
 
-An omitted transport uses TLS1. Unknown values fail before connecting. The
+An omitted transport uses tls. Unknown values fail before connecting. The
 historical SSL labels select STARTTLS, not obsolete SSL protocol versions;
 OpenSSL negotiates the TLS version. Do not infer an IMAP style from the spelling
 of a fetchmail sslproto option. These aliases describe inspection, not a change
@@ -90,9 +92,9 @@ to fetchmail's separate sslproto configuration or Mutt's peek settings.
 For IMAP, cert check verifies both the chain and the DNS name (or IP address)
 on the connection carrying authentication. It uses system trust unless a
 readable certfile CA bundle is supplied. Verification and STARTTLS failures
-are errors with no plaintext retry. The historical cert ignore default remains
-an explicit, warned opt-out from IMAP verification; set cert check for verified
-inspection. transport plain also warns because LOGIN is sent unencrypted.
+are errors with no plaintext retry. An explicit cert ignore skips IMAP
+verification and prints a warning. transport plain also warns because LOGIN
+is sent unencrypted.
 IMAP uses OpenSSL s_client with hostname/IP verification support (1.1.1 or newer)
 and nc only for explicit plain. JARO_IMAP_TIMEOUT bounds the entire connection
 and query to 30 seconds by default; accepted values are 1..300 seconds. Timeout

@@ -46,6 +46,8 @@ host legacy.example.org
 port 00995
 proto pop
 password first-secret
+transport TLS1
+cert ignore
 options keep fetchall
 folders INBOX
 exclude ignored
@@ -58,16 +60,22 @@ assert_equal "$imap" legacy.example.org 'legacy host alias'
 assert_equal "$smtp" legacy.example.org 'legacy SMTP host fallback'
 assert_equal "$imap_port:$smtp_port:$port" 00995:00995:00995 'legacy ports'
 assert_equal "$proto" pop 'POP remains supported'
+assert_equal "$transport:$cert:$accountopt" 'TLS1:ignore:keep fetchall' 'explicit settings win'
 
 # No terminating newline is required; .txt fallback remains supported.
 printf '%s' 'imap second.example.org' > "$ACCOUNTS/second.txt"
 account=second
 read_account
 assert_equal "$password:$port:$certfile:$my_hdr" ::: 'credentials and optional scalars reset'
-assert_equal "$accountopt" keep 'options reset to default'
+assert_equal "$accountopt" 'keep ssl' 'options reset to default'
 assert_equal "$imap_port:$smtp_port" 993:587 'ports reset to defaults'
-assert_equal "$proto:$name:$login:$email:$transport:$auth:$cert" imap:second:::TLS1:plain:ignore 'compatible defaults'
+assert_equal "$proto:$name:$login:$email:$transport:$auth:$cert" imap:second:::tls:plain:check 'account defaults'
 assert_equal "${#folders}:${#exclude}" 0:0 'arrays reset'
+
+printf 'imap starttls.example.org\ntransport starttls\n' > "$ACCOUNTS/explicit-starttls"
+account=explicit-starttls
+read_account
+assert_equal "$transport:$cert:$accountopt" 'starttls:check:keep' 'default options respect STARTTLS'
 
 cat > "$ACCOUNTS/duplicate" <<'EOF'
 imap first.example.org
@@ -123,6 +131,7 @@ cp "$repo_root/docs/Accounts/default.txt" "$ACCOUNTS/shipped"
 read_account
 assert_equal "$auth" plain 'shipped template parses'
 assert_equal "$smtp_port" 587 'shipped SMTP port'
+assert_equal "$transport:$cert:$accountopt" 'tls:check:keep ssl' 'shipped template uses the TLS defaults'
 
 # Existing SMTP batching explicitly requests credential reuse. Scope that
 # request to the same account and SMTP identity after the parser reset.
