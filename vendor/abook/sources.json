@@ -51,8 +51,8 @@
       },
       {
         "path": "edit.c",
-        "size": 21354,
-        "sha256": "b055ef5ea7f09443c8a952e8b06ea7b85049c8bf482b51764d27c83270c87073"
+        "size": 24597,
+        "sha256": "f709dc66d5acf672db6346d41fede3b369595dc0e64ab6abdd6590ad16edd354"
       },
       {
         "path": "filter.c",
@@ -66,13 +66,13 @@
       },
       {
         "path": "list.c",
-        "size": 13185,
-        "sha256": "dc1a688ec3723909f5d714dcb1fe00962f75cb0b733c834fd1f9a3aa0d34c1aa"
+        "size": 15243,
+        "sha256": "6aed4b4d1e5b25297c088ed033a99ad625be48b2ba4e387e544604f40909dc6d"
       },
       {
         "path": "list.h",
-        "size": 1669,
-        "sha256": "ab014a39daddfee5e76ed33c174030765322ef09bb445880b7fb1e4b85111052"
+        "size": 1699,
+        "sha256": "a74a279ab46761d68147ba31d1d60db5d4ac3eb6b0c10ee3c0010c2f6d2fe2b6"
       },
       {
         "path": "misc.c",
@@ -85,19 +85,24 @@
         "sha256": "43e824fadc96e23b289cc58561497d88ddcc058fc1829c639df111ce8c79be28"
       },
       {
+        "path": "options.c",
+        "size": 11666,
+        "sha256": "0c2135b6d3ef6242826509f3dd2030dacb98853d08009d82aa4a5173c55b299d"
+      },
+      {
         "path": "sample.abookrc",
         "size": 3627,
         "sha256": "6288ae20c7846dec57019ccbe649e99ceb83875f7c5f2165ff9b0d8a2b15f108"
       },
       {
         "path": "ui.c",
-        "size": 30935,
-        "sha256": "b1c317b325a355fdffbf9f6ae2a1ea5000bab4e046c1d9e25b0d5d7d27fb608b"
+        "size": 34590,
+        "sha256": "176b785910237b3e35356261ba7315d2df990ff3a73bdf5d7382b16763158a3a"
       },
       {
         "path": "ui.h",
-        "size": 2331,
-        "sha256": "c1d600f70da37eabe7e87c6f178efd3e9ba56a286b7395f44c53b57af5229396"
+        "size": 2406,
+        "sha256": "20760bb61ec792d52a5a187c6a14a38d00ed3b3e8a32902115df61d293a0c345"
       }
     ]
   },

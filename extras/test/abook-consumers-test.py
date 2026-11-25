@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import re
 import select
 import signal
 import sqlite3
@@ -704,7 +705,7 @@ class InstalledConsumers(unittest.TestCase):
             terminal.wait('/ 木 Café', 'wide@example.org', cursor=filtering_at_end)
             other = (48, 12) if cols == 80 else (80, 24)
             terminal.resize(*other)
-            terminal.wait('List: allow', '/ 木 Café', 'wide@example.org', 'Up/Down', 'l load',
+            terminal.wait('List: allow', '/ 木 Café', 'wide@example.org', 'Up/Down',
                           cursor=filtering_at_end)
             self.assertTrue(selected('wide@example.org')(terminal.screen))
             snapshot(terminal, 'resized-query')
@@ -755,6 +756,83 @@ class InstalledConsumers(unittest.TestCase):
 
     def test_contact_browse_compact(self):
         self.browse_contacts(48, 12)
+
+    def test_contact_terminal_colors_and_monochrome(self):
+        config = self.root / 'test.abookrc'
+        command = [self.runtime / 'bin/abook', '--config', config,
+                   '--jaro-profile', self.mail, '--jaro-list', 'allow']
+        custom = 'set color_header_fg=white\nset color_header_bg=black\n'
+        cases = [
+            ('xterm-256color', '', set()),
+            ('xterm-256color', custom, {37, 40}),
+            ('xterm-256color', custom + 'set use_colors=false\n', set()),
+            ('xterm-mono', custom, set()),
+        ]
+        for term, options, expected_colors in cases:
+            with self.subTest(term=term, options=options):
+                config.write_text(options)
+                env = dict(self.env, TERM=term)
+                with Terminal(command, cwd=self.root, env=env, cols=80, lines=24) as terminal:
+                    terminal.wait('JaroMail v', 'List: allow', '>     Pat Contact')
+                    sgr = re.findall(rb'\x1b\[([0-9;]*)m', bytes(terminal.output))
+                    codes = {int(code) for sequence in sgr for code in sequence.split(b';') if code}
+                    self.assertIn(7, codes)
+                    palette = {code for code in codes if 30 <= code <= 38 or 40 <= code <= 48
+                               or 90 <= code <= 97 or 100 <= code <= 107}
+                    self.assertEqual(palette, expected_colors)
+                    terminal.quit()
+
+    def test_contact_focus_preview_and_editor_navigation(self):
+        (self.mail / 'whitelist.abook').write_bytes(
+            BOOK_HEADER + b'[0]\nname=First Contact\nemail=first@example.org\n'
+            b'\n[1]\nname=Second Contact\nemail=second@example.org,alt@example.org,third@example.org\n'
+            b'notes=Meet on Tuesday\n')
+        title = 'JaroMail v' + (self.runtime / 'VERSION').read_text().strip()
+
+        def cursor_at(label):
+            return lambda screen: any(
+                row.lstrip().startswith('>') and label in row for row in screen.text.splitlines())
+
+        with Terminal([self.jaro, '-q', 'abook'], cwd=self.root, env=self.env,
+                      cols=110, lines=24) as terminal:
+            terminal.wait(title, '2/2 contacts', 'Contact preview', 'Space mark',
+                          cursor=cursor_at('first@example.org'))
+            self.assertRegex(bytes(terminal.output), rb'\x1b\[(?:[0-9;]*;)?7m')
+            terminal.send('\x0e')
+            terminal.wait('second@example.org +2', 'alt@example.org', 'third@example.org', 'Meet on Tuesday',
+                          cursor=cursor_at('second@example.org'))
+            terminal.send(' ')
+            terminal.wait('> [x]', 'd Remove 1 marked')
+            terminal.send('\x10')
+            terminal.wait('1 marked', cursor=cursor_at('first@example.org'))
+            terminal.send('j')
+            terminal.wait('> [x]', cursor=cursor_at('second@example.org'))
+            terminal.send('\x01')
+            terminal.wait('1 marked', cursor=cursor_at('first@example.org'))
+            terminal.send('\x05')
+            terminal.wait('> [x]', cursor=cursor_at('second@example.org'))
+
+            terminal.send('\r')
+            terminal.wait(title, '< CONTACT >', 'Up/Down fields', cursor=cursor_at('1 - Name'))
+            terminal.send('\x0e')
+            terminal.wait('Enter edit', cursor=cursor_at('2 -'))
+            terminal.send('\t')
+            terminal.wait('Enter edit', cursor=cursor_at('1 - Name'))
+            terminal.send('\x06')
+            terminal.wait('< ADDRESS >')
+            terminal.send('\x02')
+            terminal.wait('< CONTACT >', cursor=cursor_at('1 - Name'))
+            terminal.send('\r')
+            terminal.wait('Name: Second Contact')
+            terminal.send('\x15Renamed Contact\rw')
+            terminal.wait('Saved to this list', 'Renamed Contact')
+            terminal.send('qo')
+            terminal.wait('Contact lists', '>* allow')
+            terminal.send('\x0e')
+            terminal.wait('Enter open', cursor=cursor_at('block'))
+            terminal.send('\x10\r')
+            terminal.wait('List: allow', 'Renamed Contact')
+            terminal.quit()
 
     def test_contact_browse_remapped_help(self):
         config = self.root / 'test.abookrc'
@@ -913,7 +991,7 @@ email=shared@example.org
             change_name(alice, 'Busy Draft')
             change_mailbox(alice, 'shared@example.org', 'broken mailbox')
             alice.send('w')
-            alice.wait('Invalid email:', 'broken mailbox', 'Unsaved changes', 'Ctrl+R reload/discard')
+            alice.wait('Invalid email:', 'broken mailbox', 'Unsaved changes', 'Ctrl+R reload/discard', '>!2 -')
             snapshot(alice, 'validation')
             self.assertEqual(rows(), busy_saved)
             change_mailbox(alice, 'broken mailbox', 'Shared@Example.org')

@@ -156,11 +156,9 @@ ui_init_curses()
 		ui_enable_mouse(TRUE);
 	}
 	keypad(stdscr, TRUE);
-	if(opt_get_bool(BOOL_USE_COLORS) && has_colors()) {
-		start_color();
-		use_default_colors();
-		ui_init_color_pairs_user();
-	}
+	if(opt_get_bool(BOOL_USE_COLORS) && has_colors() && start_color() == OK)
+		if(use_default_colors() == OK || !jaro_editor_profile)
+			ui_init_color_pairs_user();
 }
 
 void
@@ -281,23 +279,44 @@ close_ui()
 
 
 static void
-draw_contact_scope(void)
+draw_contact_header(const char *context, bool browsing)
 {
-	const char *name = jaro_editor_list;
-	const char *label = _("List: ");
+	const char *title = "JaroMail v" JARO_MAIL_VERSION;
 	const char *pending = _("Unsaved changes");
-	int col = strwidth(label);
-	int end = db_need_save ? max(col + 1, COLS - strwidth(pending) - 1) : COLS;
-	char *safe = jaro_contact_display_text((struct jaro_contact_text){name, strlen(name)});
+	int title_end = db_need_save ? max(1, COLS - strwidth(pending) - 1) : COLS;
 	wattrset(top, COLOR_PAIR(CP_HEADER));
-	mvwhline(top, 0, 0, ' ', COLS);
-	mvwaddstr(top, 0, 0, label);
+	werase(top);
+	wattron(top, A_BOLD);
+	mvwaddnstr(top, 0, 0, title, bytes2width(title, title_end - 1));
+	wattroff(top, A_BOLD);
+	if(db_need_save)
+		mvwaddnstr(top, 0, title_end, pending, bytes2width(pending, COLS - title_end - 1));
+	if(context) {
+		mvwaddnstr(top, 1, 0, context, bytes2width(context, COLS - 1));
+		return;
+	}
+
+	const char *label = _("List: ");
+	int col = strwidth(label);
+	char count[96] = "";
+	if(browsing) {
+		int marked = selected_items();
+		snprintf(count, sizeof count, _("%d/%d contacts"), list_visible_count(), db_n_items());
+		if(marked) {
+			size_t size = strlen(count);
+			snprintf(count + size, sizeof count - size, _("  %d marked"), marked);
+		}
+	}
+	int end = max(col + 1, COLS - strwidth(count) - 1);
+	char *safe = jaro_contact_display_text((struct jaro_contact_text){
+		jaro_editor_list, strlen(jaro_editor_list)});
+	mvwaddstr(top, 1, 0, label);
 	if(safe) {
-		mvwaddnstr(top, 0, col, safe, bytes2width(safe, end - col - 1));
+		mvwaddnstr(top, 1, col, safe, bytes2width(safe, end - col - 1));
 		free(safe);
 	}
-	if(db_need_save)
-		mvwaddnstr(top, 0, end + 1, pending, bytes2width(pending, COLS - end - 1));
+	if(*count)
+		mvwaddnstr(top, 1, end, count, bytes2width(count, COLS - end - 1));
 }
 
 void
@@ -309,11 +328,9 @@ headerline(const char *str)
 	mvwhline(top, 0, 0, ' ', COLS);
 	mvwhline(top, 1, 0, UI_HLINE_CHAR, COLS);
 
-	if(jaro_editor_profile) {
-		draw_contact_scope();
-		mvwhline(top, 1, 0, ' ', COLS);
-		mvwaddnstr(top, 1, 0, str, bytes2width(str, COLS - 1));
-	} else
+	if(jaro_editor_profile)
+		draw_contact_header(str, FALSE);
+	else
 		mvwprintw(top, 0, 0, "%s | %s", PACKAGE " " VERSION, str);
 
 	refresh();
@@ -331,10 +348,25 @@ ui_binding(char command)
 	return command;
 }
 
+int
+ui_emacs_key(int key)
+{
+	switch(key) {
+		case 1:  return KEY_HOME;  /* Ctrl+A */
+		case 2:  return KEY_LEFT;  /* Ctrl+B */
+		case 5:  return KEY_END;   /* Ctrl+E */
+		case 6:  return KEY_RIGHT; /* Ctrl+F */
+		case 14: return KEY_DOWN;  /* Ctrl+N */
+		case 16: return KEY_UP;    /* Ctrl+P */
+		case 22: return KEY_NPAGE; /* Ctrl+V */
+		default: return key;
+	}
+}
+
 void
 ui_browse_footer(void)
 {
-	draw_contact_scope();
+	draw_contact_header(NULL, TRUE);
 	wnoutrefresh(top);
 	werase(bottom);
 	wattrset(bottom, COLOR_PAIR(CP_FOOTER));
@@ -346,19 +378,29 @@ ui_browse_footer(void)
 				tail++;
 		}
 		mvwprintw(bottom, 1, 0, "%c %s", ui_binding('/'), tail);
-		mvwaddstr(bottom, 0, 0, entering_query ? _("Enter edit  Tab mailboxes  Esc clear  Up/Down") :
-			_("Enter edit  Tab mailboxes  Esc clear"));
+		char *keys = entering_query ? xstrdup(_("Enter edit  Tab mailboxes  Esc clear  Up/Down")) :
+			strdup_printf(_("Enter edit  Tab mailboxes  Esc clear  %c help"), ui_binding('?'));
+		mvwaddnstr(bottom, 0, 0, keys, bytes2width(keys, COLS - 1));
+		free(keys);
 		if(entering_query)
 			wmove(bottom, 1, 2 + strwidth(tail));
 	} else {
-		mvwaddstr(bottom, 0, 0, _("Enter edit  Tab mailboxes"));
-		mvwprintw(bottom, 1, 0, _("%c filter  %c lists  %c reload"),
-			ui_binding('/'), ui_binding('o'), ui_binding('l'));
+		mvwaddstr(bottom, 0, 0, _("Enter edit  Tab mailboxes  Space mark"));
+		char *keys = strdup_printf(_("%c filter  %c lists  %c add  %c save  %c help"),
+			ui_binding('/'), ui_binding('o'), ui_binding('a'), ui_binding('w'), ui_binding('?'));
+		mvwaddnstr(bottom, 1, 0, keys, bytes2width(keys, COLS - 1));
+		free(keys);
 	}
-	if(!entering_query && *contact_feedback) {
+	if(!entering_query && (*contact_feedback || selected_items())) {
 		wmove(bottom, 0, 0);
 		wclrtoeol(bottom);
-		mvwaddnstr(bottom, 0, 0, contact_feedback, bytes2width(contact_feedback, COLS - 1));
+		const char *message = contact_feedback;
+		char *remove = NULL;
+		if(!*message)
+			message = remove = strdup_printf(_("%c Remove %d marked  Space toggle mark"),
+				ui_binding('d'), selected_items());
+		mvwaddnstr(bottom, 0, 0, message, bytes2width(message, COLS - 1));
+		free(remove);
 	}
 	wnoutrefresh(bottom);
 }
@@ -368,8 +410,12 @@ ui_contact_editor_footer(void)
 {
 	werase(bottom);
 	wattrset(bottom, COLOR_PAIR(CP_FOOTER));
-	mvwaddnstr(bottom, 0, 0, contact_feedback, bytes2width(contact_feedback, COLS - 1));
-	mvwprintw(bottom, 1, 0, _("%c save  Ctrl+R reload/discard"), ui_binding('w'));
+	const char *hint = *contact_feedback ? contact_feedback : _("Up/Down fields  Enter edit  Left/Right views");
+	mvwaddnstr(bottom, 0, 0, hint, bytes2width(hint, COLS - 1));
+	char *keys = strdup_printf(_("%c save  Ctrl+R reload/discard  %c back  %c help"),
+		ui_binding('w'), ui_binding('q'), ui_binding('?'));
+	mvwaddnstr(bottom, 1, 0, keys, bytes2width(keys, COLS - 1));
+	free(keys);
 	wnoutrefresh(bottom);
 }
 
@@ -377,6 +423,15 @@ void
 ui_contact_draft_changed(void)
 {
 	*contact_feedback = 0;
+}
+
+const char *
+ui_contact_field_error(int item)
+{
+	if(jaro_editor_failed_item() != item || strcmp(contact_feedback, jaro_editor_diagnostic()))
+		return NULL;
+	const char *key = jaro_editor_failed_field();
+	return key && !strcmp(key, "nickname") ? "nick" : key;
 }
 
 static void
@@ -470,11 +525,7 @@ refresh_screen()
 	refresh_statusline();
 
 	if(jaro_editor_profile) {
-		char *actions = strdup_printf(_("%c help  %c add  %c save  %c quit  %c lists  %c load"),
-			ui_binding('?'), ui_binding('a'), ui_binding('w'), ui_binding('q'),
-			ui_binding('o'), ui_binding('l'));
-		headerline(actions);
-		free(actions);
+		headerline(NULL);
 		list_update_matches();
 		list_headerline();
 		refresh_list();
@@ -700,12 +751,14 @@ display_contact_help(void)
 {
 	erase();
 	headerline(_("Contacts help"));
-	mvprintw(2, 0, _("Arrows or %c/%c: move"), ui_binding('j'), ui_binding('k'));
+	mvprintw(2, 0, _("Arrows, %c/%c or Ctrl+P/N: move"), ui_binding('j'), ui_binding('k'));
 	mvaddstr(3, 0, _("Enter: edit  Tab: inspect mailboxes"));
 	mvprintw(4, 0, _("%c: filter as you type  Esc: clear"), ui_binding('/'));
-	mvprintw(5, 0, _("%c: choose list  %c: reload"), ui_binding('o'), ui_binding('l'));
-	mvprintw(6, 0, _("%c: add  %c: remove  %c: duplicate"), ui_binding('a'), ui_binding('r'), ui_binding('D'));
+	mvprintw(5, 0, _("%c: choose list  %c: load/reload"), ui_binding('o'), ui_binding('l'));
+	mvprintw(6, 0, _("Space: mark  %c: remove marked or current"), ui_binding('d'));
 	mvprintw(7, 0, _("%c: save  %c: quit  %c: discard and quit"), ui_binding('w'), ui_binding('q'), ui_binding('Q'));
+	mvprintw(8, 0, _("%c: add  %c: duplicate  %c: merge"), ui_binding('a'), ui_binding('D'), ui_binding('M'));
+	mvprintw(9, 0, _("%c: compose  %c: open URL  %c: sort"), ui_binding('m'), ui_binding('v'), ui_binding('s'));
 	mvaddstr(LINES - 1, 0, _("Press any key to return"));
 	refresh();
 	getch();
@@ -727,6 +780,20 @@ display_help(int help)
 			tbl = mainhelp;
 			break;
 		case HELP_EDITOR:
+			if(jaro_editor_profile) {
+				erase();
+				headerline(_("Editor keys"));
+				mvaddstr(2, 0, _("Up/Down, Tab or Ctrl+P/N: focus field"));
+				mvaddstr(3, 0, _("Enter or 1-9/A-Z: edit field"));
+				mvprintw(4, 0, _("%c/%c or Ctrl+B/F: change view"), ui_binding('h'), ui_binding('l'));
+				mvprintw(5, 0, _("%c/%c: previous/next contact"), ui_binding('k'), ui_binding('j'));
+				mvprintw(6, 0, _("%c: save  Ctrl+R: reload/discard"), ui_binding('w'));
+				mvprintw(7, 0, _("%c: undo  %c: back"), ui_binding('u'), ui_binding('q'));
+				mvaddstr(LINES - 1, 0, _("Press any key to return"));
+				refresh();
+				getch();
+				return;
+			}
 			tbl = editorhelp;
 			break;
 		default:return;
@@ -784,10 +851,25 @@ filter_contacts(void)
 		if(kind == ERR)
 			continue;
 		size_t length = strlen(contact_query);
+		if(kind == OK && key < 32) {
+			int movement = ui_emacs_key((int)key);
+			if(movement != (int)key) {
+				key = movement;
+				kind = KEY_CODE_YES;
+			}
+		}
 		if(kind == KEY_CODE_YES && key == KEY_UP)
 			scroll_up();
 		else if(kind == KEY_CODE_YES && key == KEY_DOWN)
 			scroll_down();
+		else if(kind == KEY_CODE_YES && key == KEY_HOME)
+			goto_home();
+		else if(kind == KEY_CODE_YES && key == KEY_END)
+			goto_end();
+		else if(kind == KEY_CODE_YES && key == KEY_NPAGE)
+			page_down();
+		else if(kind == KEY_CODE_YES && key == KEY_PPAGE)
+			page_up();
 		else if((kind == KEY_CODE_YES && key == KEY_ENTER) ||
 		        (kind == OK && (key == '\r' || key == '\n'))) {
 			action = '\r';
@@ -889,6 +971,7 @@ contact_menu(const char *title, abook_list *rows, const char *active, const char
 			break;
 		if(key > 0 && key < 127)
 			key = remap[key];
+		key = ui_emacs_key(key);
 		if(key == 'q')
 			break;
 		if(key == '\r' || key == '\n' || key == KEY_ENTER) {
@@ -902,9 +985,17 @@ contact_menu(const char *title, abook_list *rows, const char *active, const char
 		} else if((key == KEY_DOWN || key == 'j') && choice + 1 < count) {
 			choice++;
 			column_offset = 0;
-		} else if(key == KEY_LEFT) {
+		} else if(key == KEY_HOME || key == KEY_END || key == KEY_NPAGE || key == KEY_PPAGE) {
+			if(count) {
+				if(key == KEY_HOME) choice = 0;
+				if(key == KEY_END) choice = count - 1;
+				if(key == KEY_NPAGE) choice = min(count - 1, choice + height);
+				if(key == KEY_PPAGE) choice = max(0, choice - height);
+				column_offset = 0;
+			}
+		} else if(key == KEY_LEFT || key == 'h') {
 			column_offset = max(0, column_offset - 8);
-		} else if(key == KEY_RIGHT) {
+		} else if(key == KEY_RIGHT || key == 'l') {
 			column_offset = min(max_column_offset, column_offset + 8);
 		}
 	}
@@ -961,7 +1052,8 @@ get_commands()
 						return;
 					}
 					int item = list_visible_item(event.y + list_get_firstitem() - LIST_TOP);
-					if(jaro_editor_profile && (event.y < LIST_TOP || event.y >= LIST_BOTTOM || item < 0))
+					if(jaro_editor_profile && (event.y < LIST_TOP || event.y >= LIST_BOTTOM ||
+					   event.x >= list_browse_width() || item < 0))
 						continue;
 					list_set_curitem(item);
 					if(double_clicked) {
@@ -979,6 +1071,8 @@ get_commands()
 
 		if (ch > 0 && ch < 127)
 			ch = remap_table[ch];
+		if(jaro_editor_profile)
+			ch = ui_emacs_key(ch);
 
 		switch(ch) {
 			case 'q': return;
@@ -1035,6 +1129,7 @@ get_commands()
 				  break;
 			case '\t': if(jaro_editor_profile) inspect_contact_mailboxes();
 				   break;
+			case 7:
 			case 27: if(jaro_editor_profile && *contact_query) {
 					*contact_query = 0;
 					set_contact_query();
@@ -1047,17 +1142,21 @@ get_commands()
 
 			case ' ': if(list_get_curitem() >= 0) {
 				   list_invert_curitem_selection();
+				   ui_contact_draft_changed();
 				   ui_print_number_of_items();
 				   refresh_list();
 				  }
 				break;
 			case '+': select_all();
+				  ui_contact_draft_changed();
 				  refresh_list();
 				break;
 			case '-': select_none();
+				  ui_contact_draft_changed();
 				  refresh_list();
 				break;
 			case '*': invert_selection();
+				  ui_contact_draft_changed();
 				  refresh_list();
 				 break;
 			case 'A': move_curitem(MOVE_ITEM_UP);

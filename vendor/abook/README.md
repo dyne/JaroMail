@@ -45,9 +45,18 @@ use the committed data and require no Unicode library or generation step.
 
 `jaro abook` opens the selected list in the profile's `contacts.sqlite`.
 Press `o` to switch lists, `/` to filter as you type, and Esc to clear the
-filter. Use the arrow keys to choose a result, Enter to edit, or Tab to inspect
-its mailboxes. The list picker includes block, which recipient Tab completion
-excludes.
+filter. Browse with the arrow keys, `j`/`k`, or Ctrl+N/Ctrl+P. The `>`
+marker shows the active contact, and Space toggles its separate `[x]` mark.
+Enter edits the contact, and Tab shows its mailboxes. Wider terminals also
+show a contact preview. The list picker includes block, which recipient
+completion excludes.
+In the form, use arrows, Tab, or Ctrl+N/Ctrl+P to focus a field and Enter
+to edit it. The number and letter shortcuts still edit fields directly.
+Use Left/Right, `h`/`l`, or Ctrl+B/Ctrl+F to switch field groups, and
+`j`/`k` to move to the next or previous contact.
+The editor uses the terminal theme's foreground and background on
+color-capable terminals. Reverse video distinguishes focus, and the cursor
+and mark symbols are visible on monochrome terminals too.
 Press `w` to save and `q` to return from the form. With autosave enabled,
 leaving a draft saves it first. A failed save keeps the draft visible. Use
 `Ctrl+R` in the form or `l` in the list to discard the draft and reload after

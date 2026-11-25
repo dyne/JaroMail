@@ -17,6 +17,7 @@
 #include "abook.h"
 #include "gettext.h"
 #include "misc.h"
+#include "sqlite-editor.h"
 #include "views.h"
 #include "xmalloc.h"
 
@@ -115,7 +116,7 @@ set_bool(enum bool_opts opt, bool value)
 }
 
 static void
-set_str(enum str_opts opt, char *value)
+set_str(enum str_opts opt, const char *value)
 {
 	assert(opt >= 0 && opt < STR_MAX);
 
@@ -175,6 +176,11 @@ init_opts()
 
 	for(i = 0; abook_vars[i].option; i++)
 		restore_default(&abook_vars[i]);
+	if(jaro_editor_profile) {
+		set_bool(BOOL_USE_COLORS, TRUE);
+		for(i = STR_COLOR_HEADER_FG; i <= STR_COLOR_FIELD_VALUE_BG; i++)
+			set_str(i, "default");
+	}
 }
 
 void
