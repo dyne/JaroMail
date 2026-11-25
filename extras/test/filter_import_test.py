@@ -383,6 +383,26 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(target.read_bytes(), b'')
 
+    def test_candidate_failure_after_source_replacement_restores_selector(self):
+        self.compile()
+        before = self.snapshot()
+        candidate = self.case / 'candidate'
+        candidate.write_bytes(b'# candidate comment\nfrom-address editor@example.org move reviewed\n')
+        sample = self.root / 'box/new/sample'
+        sample.parent.mkdir(parents=True)
+        sample.write_bytes(b'Subject: fixture\n\nbody\n')
+        command = [self.compiler, '--root', self.root, '--candidate-file', candidate,
+                   '--candidate-source', 'Filters.txt', '--sample-file', 'box/new/sample']
+        preview = self.run_command(command)
+        token = preview.stdout.split(b' ', 1)[0].decode('ascii')
+        self.assertEqual(len(token), 64)
+        result = self.run_command(command + ['--expect-preview', token], expected=3,
+                                  extra={'JF_TEST_FAIL':'import-input-renamed'})
+        self.assertIn(b'INJECTED:import-input-renamed', result.stderr)
+        self.assert_restored(before)
+        self.run_command(command + ['--expect-preview', token])
+        self.assertEqual((self.root / 'Filters.txt').read_bytes(), candidate.read_bytes())
+
     def test_production_executable_does_not_enable_faults(self):
         self.run_command([self.objects / 'jaro-filter-compile', '--root', self.root,
                           '--import-sieve', self.script], extra={'JF_TEST_FAIL': 'import-input-renamed'})

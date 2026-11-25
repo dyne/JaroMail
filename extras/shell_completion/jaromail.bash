@@ -25,8 +25,8 @@ _jaro() {
     suggestions='--json --help'
   elif [[ "${COMP_WORDS[command_index]}" == outbox ]] && (( COMP_CWORD > command_index )); then
     case "$previous" in
-      outbox) suggestions='list retry archive' ;;
-      retry|archive)
+      outbox) suggestions='list submit send retry archive' ;;
+      send|retry|archive)
         while IFS= read -r word; do
           [[ "$word" == "$cur"* ]] && COMPREPLY+=("$word")
         done < <(jaro outbox list 2>/dev/null | awk 'NR > 1 { print $1 }') ;;

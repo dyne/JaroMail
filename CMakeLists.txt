@@ -146,6 +146,8 @@ target_include_directories(jaro-contacts PUBLIC "${PROJECT_SOURCE_DIR}/src"
   PRIVATE "${PROJECT_SOURCE_DIR}/cmake/abook")
 target_compile_options(jaro-contacts PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(jaro-contacts PRIVATE jaro-contact-sqlite)
+jaro_executable(jaro-contact-records src/contact/records.c)
+target_link_libraries(jaro-contact-records PRIVATE jaro-contacts)
 # These retained helpers previously used the compiler's GNU dialect. Keep its
 # POSIX declarations while the shared filter core remains strict C99.
 set_target_properties(fetchaddr parsedate dotlock gpgewrap PROPERTIES C_EXTENSIONS ON)
@@ -254,12 +256,16 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/generated/VERSION" CONTENT "${JARO_RES
 install(PROGRAMS "${CMAKE_BINARY_DIR}/generated/jaro" DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(CODE "file(REMOVE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}/bin/jaro-filter\" \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${JARO_RUNTIME_DIR}/bin/jaro-filter-legacy\")")
 install(PROGRAMS src/jaro build/install-release.sh DESTINATION "${JARO_RUNTIME_DIR}/bin")
-install(TARGETS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup jaro-filter-compile
+install(TARGETS fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup jaro-filter-compile jaro-contact-records
   RUNTIME DESTINATION "${JARO_RUNTIME_DIR}/bin")
 install(FILES "${CMAKE_BINARY_DIR}/generated/VERSION" COPYING.txt DESTINATION "${JARO_RUNTIME_DIR}")
 install(DIRECTORY docs/ DESTINATION "${JARO_RUNTIME_DIR}"
   PATTERN ".vitepress" EXCLUDE PATTERN "manual" EXCLUDE PATTERN "public" EXCLUDE)
 install(DIRECTORY src/mutt/ DESTINATION "${JARO_RUNTIME_DIR}/mutt" USE_SOURCE_PERMISSIONS)
+install(FILES src/outbox/submission.py DESTINATION "${JARO_RUNTIME_DIR}/outbox")
+install(FILES src/filter/candidate.py DESTINATION "${JARO_RUNTIME_DIR}/filter")
+install(FILES src/profile/records.py src/profile/replay.py DESTINATION "${JARO_RUNTIME_DIR}/profile")
+install(FILES src/maildir/operations.py DESTINATION "${JARO_RUNTIME_DIR}/maildir")
 install(DIRECTORY src/stats/ DESTINATION "${JARO_RUNTIME_DIR}/stats" USE_SOURCE_PERMISSIONS)
 install(DIRECTORY src/zlibs/ DESTINATION "${JARO_RUNTIME_DIR}/zlibs" USE_SOURCE_PERMISSIONS PATTERN "*.zwc" EXCLUDE)
 file(GLOB _zuper CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/zuper/zuper*")
@@ -277,8 +283,8 @@ endif()
 
 find_program(ZSH_EXECUTABLE zsh)
 if(ZSH_EXECUTABLE)
-  add_custom_target(check COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup abook USES_TERMINAL)
-  add_custom_target(check-strict COMMAND "${CMAKE_COMMAND}" -E env JARO_TEST_REQUIRE_ALL=1 "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup abook USES_TERMINAL)
+  add_custom_target(check COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile jaro-contact-records fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup abook USES_TERMINAL)
+  add_custom_target(check-strict COMMAND "${CMAKE_COMMAND}" -E env JARO_TEST_REQUIRE_ALL=1 "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh" DEPENDS filter-compile jaro-contact-records fetchaddr parsedate dotlock gpgewrap jaro-outbox jaro-snapshot jaro-dedup abook USES_TERMINAL)
   if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME source-regressions COMMAND "${ZSH_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/extras/test/run-tests.sh")
     set_tests_properties(source-regressions PROPERTIES ENVIRONMENT "JARO_TEST_REQUIRE_ALL=1")

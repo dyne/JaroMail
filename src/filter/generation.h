@@ -7,7 +7,11 @@ struct jf_generation {
 	struct jf_bytes cache,sieve,bytecode,provenance;
 	struct jf_sieve_binding binding;
 };
-struct jf_compile_result { char id[65]; char *directory; int changed; struct jf_bytes warnings; };
+struct jf_compile_result {
+	char id[65], preview_token[65]; char *directory; int changed;
+	struct jf_bytes warnings, preview_sieve, preview_provenance;
+};
+struct jf_candidate { const char *source, *sample_path, *expected; };
 /* Read-only; takes shared lock, rejects unfinished journals and pins a verified
  * immutable directory. Every subsequent open is relative to directory. */
 int jf_generation_pin(const char *, const char *, struct jf_generation *, struct jf_error *);
@@ -17,6 +21,8 @@ int jf_compile(const char *, const char *, const char *, const char *, int,
 	struct jf_compile_result *, struct jf_error *, char **);
 int jf_compile_import(const char *, const char *, const char *, const char *,
 	const char *, int, int, struct jf_compile_result *, struct jf_error *, char **);
+int jf_compile_candidate(const char *, const char *, const char *, const char *,
+	const char *, const struct jf_candidate *, struct jf_compile_result *, struct jf_error *, char **);
 void jf_compile_result_free(struct jf_compile_result *);
 #ifdef JF_TESTING
 int jf_generation_test_hook(const char *);

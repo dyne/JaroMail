@@ -29,8 +29,8 @@ _jaromail() {
     fi
     if [[ "$words[command_index]" == outbox ]] && (( CURRENT > command_index )); then
         case "$words[CURRENT-1]" in
-            outbox) compadd list retry archive ;;
-            retry|archive)
+            outbox) compadd list submit send retry archive ;;
+            send|retry|archive)
                 results=("${(@f)$(jaro outbox list 2>/dev/null | awk 'NR > 1 { print $1 }')}")
                 compadd -a results ;;
             *) [[ "${words[*]}" == *' retry '* ]] && compadd -- --confirm-duplicate ;;

@@ -47,6 +47,8 @@ static void escaped(const char *s)
 int main(int argc,char **argv)
 {
 	const char *root=NULL,*accounts=NULL,*profile=NULL,*import=NULL;
+	const char *candidate_path=NULL;
+	struct jf_candidate candidate={0};
 	int check=0,report=0,legacy=0,i,rc=2;
 	char *resolved=NULL,*compiler=NULL,*error_path=NULL;
 	struct jf_compile_result result={0}; struct jf_error error={0};
@@ -81,6 +83,10 @@ int main(int argc,char **argv)
 		else if (!strcmp(argv[i],"--accounts-dir")) slot=&accounts;
 		else if (!strcmp(argv[i],"--profile")) slot=&profile;
 		else if (!strcmp(argv[i],"--import-sieve")) slot=&import;
+		else if (!strcmp(argv[i],"--candidate-file")) slot=&candidate_path;
+		else if (!strcmp(argv[i],"--candidate-source")) slot=&candidate.source;
+		else if (!strcmp(argv[i],"--sample-file")) slot=&candidate.sample_path;
+		else if (!strcmp(argv[i],"--expect-preview")) slot=&candidate.expected;
 		else if (!strcmp(argv[i],"--check") && !check) check=1;
 		else if (!strcmp(argv[i],"--report0") && !report) report=1;
 		else if (!strcmp(argv[i],"--legacy-generated") && !legacy) legacy=1;
@@ -89,6 +95,9 @@ int main(int argc,char **argv)
 		if (slot) { if (*slot || i+1==argc || !*argv[i+1]) goto usage; *slot=argv[++i]; }
 	}
 	if (!root || !*root || (legacy && !import)) goto usage;
+	if (candidate_path || candidate.source || candidate.sample_path || candidate.expected) {
+		if (!candidate_path || !candidate.source || !candidate.sample_path || import || check || report) goto usage;
+	}
 	resolved=absolute(root);
 #ifdef __linux__
 	compiler=strdup("/proc/self/exe");
@@ -96,7 +105,8 @@ int main(int argc,char **argv)
 	compiler=executable(argv[0]);
 #endif
 	if (!resolved || !compiler) { rc=3; goto done; }
-	rc=import ? jf_compile_import(resolved,accounts,profile,compiler,import,legacy,check,&result,&error,&error_path) :
+	rc=candidate_path ? jf_compile_candidate(resolved,accounts,profile,compiler,candidate_path,&candidate,&result,&error,&error_path) :
+		import ? jf_compile_import(resolved,accounts,profile,compiler,import,legacy,check,&result,&error,&error_path) :
 		jf_compile(resolved,accounts,profile,compiler,check,&result,&error,&error_path);
 	if (result.warnings.size && (fwrite(result.warnings.data,1,result.warnings.size,stderr)!=result.warnings.size || fflush(stderr))) {
 		rc=jf_product_error(&error,"E_IO",0,"cannot write addressbook warnings");
@@ -106,6 +116,13 @@ int main(int argc,char **argv)
 		fwrite(result.changed ? "1" : "0",1,2,stdout);
 		fwrite(result.directory ? result.directory : "",1,result.directory ? strlen(result.directory)+1 : 1,stdout);
 		if (fflush(stdout) || ferror(stdout)) rc=3;
+	}
+	if (!rc && candidate_path) {
+		/* Both binary products have explicit lengths, including embedded NULs. */
+		if (printf("%s %s %zu %zu\n",result.preview_token,result.id,result.preview_sieve.size,result.preview_provenance.size)<0 ||
+			(result.preview_sieve.size && fwrite(result.preview_sieve.data,1,result.preview_sieve.size,stdout)!=result.preview_sieve.size) ||
+			(result.preview_provenance.size && fwrite(result.preview_provenance.data,1,result.preview_provenance.size,stdout)!=result.preview_provenance.size) ||
+			fflush(stdout) || ferror(stdout)) rc=3;
 	}
 done:
 	if (rc) {

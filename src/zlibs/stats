@@ -22,70 +22,57 @@
 
 
 
-stats() {
-    fn stats $*
-
-    # make index of all maildirs
-    notice "Computing statistics on stdin"
-    typeset -A count
-    num=0
-
-    case $1 in
-
-	# timecloud) timecloud ;;
-
-	# weeks) weeks ;;
-
-        domain*)
-            _domain=""
-	    for i in "${(f)$(cat)}"; do
-                _domain=${i[(ws:@:)-1]/>/}
-                num=${count[$_domain]:-0}
-                count[$_domain]=$(( $num + 1 ))
-	    done
-
-            ;;
-
-        email*)
-            _email=""
-	    for i in "${(f)$(cat)}"; do
-                _email=${i[(ws:<:)2]/>/}
-                num=${count[$_email]:-0}
-                count[$_email]=$(( $num + 1 ))
-	    done
-            ;;
-
-        name*)
-            _name=""
-	    for i in "${(f)$(cat)}"; do
-                _name=${i[(ws:<:)1]//}
-                num=${count[$_name]:-0}
-                count[$_name]=$(( $num + 1 ))
-	    done
-            ;;
-
-	folder*)
-
-            _folder=""
-
-	    for i in `cat`; do
-                _folder=${i[(ws:/:)-3]}
-
-		# find maildir prefixes
-		# pfx="${_folder[(ws:.:)1]}"
-		# is it a new prefix?
-                num=${count[$_folder]:-0}
-                count[$_folder]=$(( $num + 1 ))
-	    done
-
-	    ;;
-
-        *)
-            error "Stats type not specified, available:"
-            error "domain, email, name, folder"
-            return 1
-            ;;
+# Count a selected occurrence or address using the same dimensions for both UIs.
+_stats_key() {
+    local dimension="$1" row="$2"
+    case "$dimension" in
+        domain*) REPLY=${row[(ws:@:)-1]/>/} ;;
+        email*)  REPLY=${row[(ws:<:)2]/>/} ;;
+        name*)   REPLY=${row[(ws:<:)1]} ;;
+        folder*) REPLY=${row:h:h:t} ;;
+        *) return 1 ;;
     esac
+}
+
+stats_records() {
+    setopt localoptions
+    local LC_ALL=C dimension="$1" chunk data='' row REPLY
+    local -A count
+    [[ "$dimension" == (folder|name|email|domain) ]] || return 2
+    zmodload zsh/system || return 3
+    local rc
+    while true; do
+        sysread -s 65536 chunk
+        rc=$?
+        (( rc == 5 )) && break
+        (( rc == 0 )) || return 3
+        data+="$chunk"
+        (( ${#data} <= 8388608 )) || return 2
+    done
+    [[ -z "$data" || "$data" == *$'\0' ]] || return 2
+    local -a rows
+    rows=("${(@0)data}")
+    (( ${#rows} <= 100001 )) || return 2
+    for row in "${rows[@]}"; do
+        [[ -n "$row" ]] || continue
+        _stats_key "$dimension" "$row" && [[ -n "$REPLY" ]] || return 2
+        count[$REPLY]=$(( ${count[$REPLY]:-0} + 1 ))
+    done
+    print -rN -- JST1
+    for row in "${(@ok)count}"; do print -rN -- "$row" "${count[$row]}"; done
+}
+
+stats() {
+    fn stats "$@"
+    notice "Computing statistics on stdin"
+    local -A count
+    local row REPLY
+    [[ "$1" == (domain*|email*|name*|folder*) ]] || { error "Stats type must be domain, email, name or folder"; return 1; }
+    while IFS= read -r row || [[ -n "$row" ]]; do
+        [[ -n "$row" ]] || continue
+        _stats_key "$1" "$row" || return 1
+        count[$REPLY]=$(( ${count[$REPLY]:-0} + 1 ))
+    done
 
     # calculate screen size and bigger tot
     maxtot=0

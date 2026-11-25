@@ -562,6 +562,40 @@ jaro_contact_book(struct jaro_contact_store *store, struct jaro_contact_text nam
 }
 
 int
+jaro_contact_change_book(struct jaro_contact_store *store, struct jaro_contact_text name,
+	struct jaro_contact_text new_name, struct jaro_contact_error *error)
+{
+	int64_t id;
+	int status = require_write(store, error);
+	if (status)
+		return status;
+	if ((name.size == 5 && (!memcmp(name.data,"allow",5) || !memcmp(name.data,"block",5))) ||
+		(new_name.size == 5 && (!memcmp(new_name.data,"allow",5) || !memcmp(new_name.data,"block",5))) ||
+		(new_name.size && !jaro_contact_valid_text(new_name)))
+		return failure(error, JARO_CONTACT_INVALID, "invalid book change", "book", 0, 0);
+	status = jaro_contact_book(store, name, 0, &id, error);
+	if (status)
+		return status;
+	const char *queries[] = {
+		new_name.size ? "UPDATE books SET name=?2 WHERE id=?1" : "DELETE FROM contacts WHERE book_id=?1",
+		new_name.size ? NULL : "DELETE FROM books WHERE id=?1"
+	};
+	for (size_t i = 0; i < 2 && queries[i]; i++) {
+		sqlite3_stmt *stmt = NULL;
+		int rc = sqlite3_prepare_v2(store->db, queries[i], -1, &stmt, NULL);
+		if (rc == SQLITE_OK) rc = sqlite3_bind_int64(stmt, 1, id);
+		if (rc == SQLITE_OK && new_name.size) rc = bind_text(stmt, 2, new_name);
+		if (rc == SQLITE_OK) rc = sqlite3_step(stmt);
+		sqlite3_finalize(stmt);
+		if ((rc & 0xff) == SQLITE_CONSTRAINT)
+			return failure(error, JARO_CONTACT_CONFLICT, "book name already in use", "book", 0, rc);
+		if (rc != SQLITE_DONE) return sql_failure(error, rc, "cannot change contact book");
+	}
+	return execute(store->db, "UPDATE metadata SET generation=generation+1",
+		error, "cannot update book generation");
+}
+
+int
 jaro_contact_visit_books(struct jaro_contact_store *store,
 	jaro_contact_book_visitor visit, void *data, struct jaro_contact_error *error)
 {

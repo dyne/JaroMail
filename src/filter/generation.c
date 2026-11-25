@@ -2,11 +2,13 @@
 #define _XOPEN_SOURCE 700
 #include "generation.h"
 #include "import.h"
+#include "sha256.h"
 #include "contact/migrate.h"
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
@@ -673,7 +675,8 @@ done:
 
 void jf_compile_result_free(struct jf_compile_result *r)
 {
-	free(r->directory); jf_bytes_free(&r->warnings); memset(r,0,sizeof *r);
+	free(r->directory); jf_bytes_free(&r->warnings); jf_bytes_free(&r->preview_sieve);
+	jf_bytes_free(&r->preview_provenance); memset(r,0,sizeof *r);
 }
 
 static int contact_transaction(const char *root,int writable,struct jaro_contact_store **store,
@@ -718,8 +721,66 @@ static int learn_imported_contacts(struct jaro_contact_store *store,const struct
 	return 0;
 }
 
-int jf_compile_import(const char *root,const char *accounts,const char *profile,const char *compiler,
-	const char *script,int legacy,int check,struct jf_compile_result *result,struct jf_error *error,char **error_path)
+/* Resolve the occurrence from the same root at preview and before publication.
+ * Recording path, inode, content and times distinguishes a moved or replaced sample. */
+static int candidate_sample(const char *root, const char *relative, char digest[65])
+{
+	struct jf_sha256 hash;
+	struct stat st;
+	char *parts = strdup(relative), *part = parts, *slash;
+	int parent = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+	int fd = -1, rc = 3, maildir_part = 0;
+	char metadata[256];
+	size_t total = 0;
+	if (!parts || parent < 0) goto done;
+	while ((slash = strchr(part, '/')) != NULL) {
+		int child;
+		*slash = 0;
+		if (!*part || !strcmp(part, ".") || !strcmp(part, "..")) goto done;
+		maildir_part = !strcmp(part, "new") || !strcmp(part, "cur");
+		child = openat(parent, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+		if (child < 0) goto done;
+		close(parent);
+		parent = child;
+		part = slash + 1;
+	}
+	if (!maildir_part || !*part || part[0] == '.') goto done;
+	fd = openat(parent, part, O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC);
+	if (fd < 0 || fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size > JF_INPUT_MAX) goto done;
+#ifdef __APPLE__
+	struct timespec mtime = st.st_mtimespec, ctime = st.st_ctimespec;
+#else
+	struct timespec mtime = st.st_mtim, ctime = st.st_ctim;
+#endif
+	int length = snprintf(metadata, sizeof metadata, "%ju %ju %jd %jd %ld %jd %ld",
+		(uintmax_t)st.st_dev, (uintmax_t)st.st_ino, (intmax_t)st.st_size,
+		(intmax_t)mtime.tv_sec, mtime.tv_nsec, (intmax_t)ctime.tv_sec, ctime.tv_nsec);
+	if (length < 0 || (size_t)length >= sizeof metadata) goto done;
+	jf_sha256_init(&hash);
+	jf_sha256_update(&hash, relative, strlen(relative) + 1);
+	jf_sha256_update(&hash, metadata, (size_t)length + 1);
+	for (;;) {
+		unsigned char block[16384];
+		ssize_t count = read(fd, block, sizeof block);
+		if (count < 0 && errno == EINTR) continue;
+		if (count < 0 || !jf_bytes_fits(total,(size_t)count,JF_INPUT_MAX)) goto done;
+		if (!count) break;
+		jf_sha256_update(&hash, block, (size_t)count);
+		total += (size_t)count;
+	}
+	if ((off_t)total != st.st_size) goto done;
+	jf_sha256_hex(&hash,digest);
+	rc = 0;
+done:
+	if (fd >= 0) close(fd);
+	if (parent >= 0) close(parent);
+	free(parts);
+	return rc;
+}
+
+static int compile_replacement(const char *root,const char *accounts,const char *profile,const char *compiler,
+	const char *script,int legacy,int check,const struct jf_candidate *candidate,
+	struct jf_compile_result *result,struct jf_error *error,char **error_path)
 {
 	struct location l={-1,-1,-1,-1,NULL}; struct jf_snapshot before={0},after={0},recheck={0};
 	struct jf_policy *imported=NULL; struct jf_products products={0}; struct jf_bytes input={0};
@@ -728,14 +789,14 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 	struct jf_input_override overrides[4]; char *paths[4]={0},*temporary=NULL,*engine=join(root,"cache/filter-engine");
 	int present[4]={0},changed[4]={0},rc=3,fd=-1,prepared=0,stage_ready=0,contact_change=0,file_change=0;
 	mode_t modes[4]={0600,0600,0600,0600};
-	unsigned char fingerprint[32],again[32]; char old[65]; size_t i,count=0;
+	unsigned char fingerprint[32],again[32]; char old[65],sample_digest[65]; size_t i,count=0;
 	struct stat st; char *runtime=runtime_directory(compiler);
 	struct jaro_contact_store *contacts=NULL;
 	memset(result,0,sizeof *result); *error_path=NULL; if (error) memset(error,0,sizeof *error);
 	if (!engine || (rc=run_sieve(runtime,-1,"identity",error))) goto done;
 	rc=3;
 	/* Snapshot the source descriptor; never modify or remove the import file. */
-	fd=open(script,O_RDONLY|O_NONBLOCK);
+	fd=open(script,O_RDONLY|O_NONBLOCK|(candidate ? O_NOFOLLOW : 0));
 	if (fd<0 || fstat(fd,&st) || !S_ISREG(st.st_mode)) goto script_error;
 	for (;;) {
 		unsigned char bytes[16384]; ssize_t n=read(fd,bytes,sizeof bytes);
@@ -750,8 +811,9 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 	if (rc && !(check && rc==5)) goto done;
 	if (!rc && ((rc=lock(&l,!check)) || (check ? unfinished(&l) ? (rc=5) : 0 : (rc=recover(&l))))) goto done;
 	if (l.root>=0 && !same_root(&l,root)) { rc=6; goto done; }
-	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,1,NULL,NULL,&before,error)) || (rc=jf_snapshot_parse(&before,error))) goto source_error;
-	if ((rc=jf_sieve_import(&input,legacy,&before.profile,&imported,error))) goto script_error;
+	if ((rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,1,NULL,NULL,&before,error)) ||
+		(!candidate && (rc=jf_snapshot_parse(&before,error)))) goto source_error;
+	if (!candidate && (rc=jf_sieve_import(&input,legacy,&before.profile,&imported,error))) goto script_error;
 	if (legacy) fputs("W_LEGACY_SIEVE recovered generated header-contains rules; parsed-address/ERE semantics replace legacy substring behavior\n",stderr);
 	/* Read complete originals for byte-preserving merge and rollback. Import
 	 * deliberately refuses to replace input symlinks or nonregular objects. */
@@ -771,7 +833,12 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 		const struct jf_dependency *dependency=jf_snapshot_dependency(&before,jf_contact_roles[i],paths[slot]);
 		if (!dependency || jf_bytes_add(&original[slot],dependency->auxiliary.data,dependency->auxiliary.size)) { rc=3; goto done; }
 	}
-	if ((rc=jf_import_merge(before.policy,imported,original,output,additions,error))) goto done;
+	if (candidate) {
+		for (i=0;i<JF_IMPORT_FILES;i++) {
+			const struct jf_bytes *bytes=!strcmp(jf_import_names[i],candidate->source) ? &input : &original[i];
+			if (jf_bytes_add(&output[i],bytes->data,bytes->size)) { rc=3; goto done; }
+		}
+	} else if ((rc=jf_import_merge(before.policy,imported,original,output,additions,error))) goto done;
 	for (i=0;i<JF_IMPORT_FILES;i++) {
 		changed[i]=original[i].size!=output[i].size || (original[i].size && memcmp(original[i].data,output[i].data,original[i].size));
 		if (i<JF_IMPORT_DISK_FILES) {
@@ -791,6 +858,24 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 		(rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,1,NULL,NULL,&recheck,error)) ||
 		(rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) goto source_error;
 	if (memcmp(fingerprint,again,32)) { rc=6; goto done; }
+	if (candidate) {
+		struct jf_sha256 hash;
+		jf_sha256_init(&hash);
+		jf_sha256_update(&hash,fingerprint,sizeof fingerprint);
+		jf_sha256_update(&hash,products.id,64);
+		if ((rc=candidate_sample(root,candidate->sample_path,sample_digest))) goto done;
+		jf_sha256_update(&hash,sample_digest,64);
+		jf_sha256_update(&hash,candidate->source,strlen(candidate->source)+1);
+		jf_sha256_update(&hash,input.data,input.size);
+		jf_sha256_hex(&hash,result->preview_token);
+		if (!check && strcmp(result->preview_token,candidate->expected)) {
+			rc=6; jf_product_error(error,"E_STALE_PREVIEW",0,"candidate, sample or policy inputs changed"); goto done;
+		}
+		if (check) {
+			result->preview_sieve=products.sieve; memset(&products.sieve,0,sizeof products.sieve);
+			result->preview_provenance=products.provenance; memset(&products.provenance,0,sizeof products.provenance);
+		}
+	}
 	if (check) { strcpy(result->id,products.id); rc=0; goto done; }
 	if ((rc=selector(&l,old))) goto done;
 	if (!same_root(&l,root)) { rc=6; goto done; }
@@ -814,6 +899,12 @@ int jf_compile_import(const char *root,const char *accounts,const char *profile,
 		(rc=jf_snapshot_collect(root,accounts,profile,compiler,runtime,0,contacts,NULL,&recheck,error)) ||
 		(rc=jf_dependencies_fingerprint(recheck.dependencies,recheck.dependency_count,again))) goto source_error;
 	if (memcmp(fingerprint,again,32)) { rc=6; goto done; }
+	if (candidate) {
+		char current[65];
+		if (candidate_sample(root,candidate->sample_path,current) || strcmp(sample_digest,current)) {
+			rc=6; jf_product_error(error,"E_STALE_PREVIEW",0,"sample changed during publication"); goto done;
+		}
+	}
 	{
 		char *generations=join(engine,"generations");
 		result->directory=generations ? join(generations,products.id) : NULL; free(generations);
@@ -858,6 +949,22 @@ done:
 	for (i=0;i<2;i++) jf_bytes_free(&additions[i]);
 	jf_bytes_free(&input); jf_policy_free(imported); jf_snapshot_free(&before); jf_snapshot_free(&after); jf_snapshot_free(&recheck);
 	jf_products_free(&products); free(temporary); free(engine); free(runtime); location_close(&l); return rc;
+}
+
+int jf_compile_import(const char *root,const char *accounts,const char *profile,const char *compiler,
+	const char *script,int legacy,int check,struct jf_compile_result *result,struct jf_error *error,char **error_path)
+{
+	return compile_replacement(root,accounts,profile,compiler,script,legacy,check,NULL,result,error,error_path);
+}
+
+int jf_compile_candidate(const char *root,const char *accounts,const char *profile,const char *compiler,
+	const char *script,const struct jf_candidate *candidate,struct jf_compile_result *result,
+	struct jf_error *error,char **error_path)
+{
+	if ((strcmp(candidate->source,"Filters.txt") && strcmp(candidate->source,"Aliases.txt")) ||
+		(candidate->expected && !valid_id(candidate->expected))) return 2;
+	return compile_replacement(root,accounts,profile,compiler,script,0,!candidate->expected,
+		candidate,result,error,error_path);
 }
 
 int jf_compile(const char *root,const char *accounts,const char *profile,const char *compiler,int check,

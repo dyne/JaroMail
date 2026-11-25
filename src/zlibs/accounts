@@ -507,7 +507,7 @@ read_account() {
     # find the account
     func "read_account looking for $account"
     acct="$ACCOUNTS/$account";
-    { test -r "$acct" } || {
+    [[ -n "${2:-}" || -r "$acct" ]] || {
         acct="$ACCOUNTS/${account}.txt"
         { test -r "$acct" } || {
             error "no account found: $acct"
@@ -518,7 +518,7 @@ read_account() {
         }
     }
 
-    _account_load_file "$acct" || return 1
+    _account_load_file "${2:-$acct}" || return 1
     _account_smtp_identity=("$acct" "$login" "$email" "$smtp" "$smtp_port" "$auth" "$transport" "$certfile")
     if [[ -z "$password" && "${(qqq)previous_identity}" == "${(qqq)_account_smtp_identity}" ]]; then
         password="$cached_password"

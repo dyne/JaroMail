@@ -518,7 +518,7 @@ smtp_send() {
     req=(account)
     ckreq || return 1
 
-    read_account ${account}
+    read_account "${account}" "${outbox_account_source:-}"
     [[ $? = 0 ]] || {
         error "Invalid account: $account"
         return 1
@@ -570,7 +570,11 @@ EOF
     then
         [[ "${smtp_keep_password:-0}" = 1 ]] || unset password
         smtp_delivery_outcome=uncertain
-        msmtp -C "$msmtpcfg" -t
+        if (( $# )); then
+            msmtp -C "$msmtpcfg" -- "$@"
+        else
+            msmtp -C "$msmtpcfg" -t
+        fi
         smtp_status=$?
         (( smtp_status == 0 )) && smtp_delivery_outcome=accepted
     fi
@@ -597,7 +601,9 @@ learn_allowed_recipients() {
 
 outbox_send_one() {
     local qbody="$1" relative="${1:h:t}/${1:t}" report id state res
-    local -a fields
+    local -a fields recipients
+    local account="${account:-default}" binding binding_helper bound_fd outbox_account_source=''
+    local -A bound_stat
     outbox_item_held=0
     if ! report=$(outbox_state prepare "$relative"); then
         error "Outbox item held: recovery state or message validation failed"
@@ -621,14 +627,40 @@ outbox_send_one() {
         prepared) ;;
         *) outbox_item_held=1; return 1 ;;
     esac
+    if [[ "${qbody:t}" == jaro-v1-* ]]; then
+        binding_helper="$WORKDIR/bin/jaro-outbox"
+        [[ -x "$binding_helper" ]] || binding_helper="$WORKDIR/../build/gnu/jaro-outbox"
+        binding=$(python3 -I "$WORKDIR/outbox/submission.py" binding "$MAILDIRS" "$binding_helper" "${qbody:t}") || {
+            outbox_item_held=1; return 1
+        }
+        fields=("${(@0)binding}")
+        (( ${#fields} >= 4 )) || { outbox_item_held=1; return 1; }
+        account="$fields[1]"
+        zmodload zsh/system && zmodload zsh/stat &&
+            sysopen -r -o cloexec,nofollow,nonblock -u bound_fd "$ACCOUNTS/$account" || {
+                outbox_item_held=1; return 1
+            }
+        # Pin the exact account opened by this worker through the config read.
+        # A concurrent rename must never select a different account or alias.
+        outbox_account_source="/dev/fd/$bound_fd"
+        if ! zstat -H bound_stat -f "$bound_fd" || [[ "$bound_stat[device]:$bound_stat[inode]" != "$fields[2]:$fields[3]" ]]; then
+            exec {bound_fd}<&-
+            outbox_item_held=1; return 1
+        fi
+        recipients=("${fields[@]:3}")
+    fi
     # A checked durable transition is required before even invoking smtp_send.
-    outbox_state inflight "$relative" || { outbox_item_held=1; return 1; }
+    outbox_state inflight "$relative" || {
+        [[ -z "$outbox_account_source" ]] || exec {bound_fd}<&-
+        outbox_item_held=1; return 1
+    }
     act "Sending out email via ${account:-default} account (outbox $id)"
     smtp_keep_password=1
     smtp_delivery_outcome=uncertain
     # Transport reads the private snapshot, never changing live queue bytes.
-    smtp_send < "$MAILDIRS/.outbox-state/$id/message"
+    smtp_send "${recipients[@]}" < "$MAILDIRS/.outbox-state/$id/message"
     res=$?
+    [[ -z "$outbox_account_source" ]] || exec {bound_fd}<&-
     if [[ "$smtp_delivery_outcome" == accepted || $res == 0 ]]; then
         # Also preserve acceptance if removing the private SMTP config failed.
         outbox_state accepted "$relative" || { outbox_item_held=1; return 1; }
@@ -683,7 +715,7 @@ send() {
         # Anonymous mail keeps its legacy transport, but changing an already
         # journaled SMTP item's From header must not bypass its recovery hold.
         anonymous=0
-        if hdr "$qbody" | grep -i '^from: anon' > /dev/null; then
+        if [[ "${qbody:t}" != jaro-v1-* ]] && hdr "$qbody" | grep -i '^from: anon' > /dev/null; then
             if anon_report=$(outbox_state inspect "${qbody:h:t}/${qbody:t}") &&
                 [[ "$anon_report" == *' eligible no-attempt' ]]; then anonymous=1; fi
         fi
@@ -862,6 +894,6 @@ cmd_peek() {
 }
 
 cmd_smtp() {
-    smtp_send ${option_params}
+    smtp_send
     exitcode=$?
 }

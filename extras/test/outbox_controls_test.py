@@ -266,11 +266,11 @@ exit "${JARO_TEST_SMTP_STATUS:-0}"
         bash = subprocess.run(['bash','-c', 'source "$1"; COMP_WORDS=(jaro outbox ""); COMP_CWORD=2; _jaro; printf "%s\\n" "${COMPREPLY[@]}"',
                                'fixture', str(REPO/'extras/shell_completion/jaromail.bash')], capture_output=True, timeout=5)
         self.assertEqual(bash.returncode, 0)
-        self.assertEqual(set(bash.stdout.decode().splitlines()), {'list','retry','archive'})
+        self.assertEqual(set(bash.stdout.decode().splitlines()), {'list','submit','send','retry','archive'})
         zsh = subprocess.run(['zsh','-c', 'curcontext=""; words=(jaro outbox ""); CURRENT=3; compadd() { print -l -- "$@"; }; source "$1"',
                               'fixture', str(REPO/'extras/shell_completion/_jaromail')], capture_output=True, timeout=5)
         self.assertEqual(zsh.returncode, 0)
-        self.assertEqual(set(zsh.stdout.decode().splitlines()), {'list','retry','archive'})
+        self.assertEqual(set(zsh.stdout.decode().splitlines()), {'list','submit','send','retry','archive'})
         bash = subprocess.run(['bash','-c', 'source "$1"; COMP_WORDS=(jaro outbox retry fixture ""); COMP_CWORD=4; _jaro; printf "%s\\n" "${COMPREPLY[@]}"',
                                'fixture', str(REPO/'extras/shell_completion/jaromail.bash')], capture_output=True, timeout=5)
         self.assertEqual(bash.stdout.decode().splitlines(), ['--confirm-duplicate'])

@@ -126,6 +126,14 @@ maildir_refile() {
 
     maildircheck "$dest" || maildirmake "$dest" || return 1
 
+    if [[ "$mode" == (move|copy) && -n "${WORKDIR:-}" && "${msg:a}" == "${MAILDIRS:a}/"* && "${dest:a}" == "${MAILDIRS:a}/"* &&
+          "${msg:h:t}" == (new|cur) ]]; then
+        local relative_dest="${dest:a}"
+        local -a copy_option
+        [[ "$mode" == copy ]] && copy_option=(--copy)
+        python3 -I "$WORKDIR/maildir/operations.py" "${MAILDIRS:a}" refile "${msg:a}" "${relative_dest#${MAILDIRS:a}/}" "${copy_option[@]}"
+        return $?
+    fi
     if command -v mrefile >/dev/null; then
         msg=${msg:a}
         dest=${dest:a}
@@ -197,14 +205,22 @@ list_maildirs() {
 
 rmdupes() {
 	fn rmdupes $*
+    command -v formail >/dev/null || { error 'formail is required for Message-ID cleanup'; return 127; }
 
     ## special argument lastlog
     { test "$1" = "lastlog" } && {
-        lastdirs=(`maildirs_lastlog`)
+        local listing
+        listing="$(maildirs_lastlog)" || { error 'Cannot read lastlog destinations'; return 1; }
+        lastdirs=("${(@f)listing}")
+        # Older providers emitted one space-delimited line.
+        if (( ${#lastdirs} == 1 )) && [[ ! -d "$MAILDIRS/$listing" && ! -d "$listing" ]]; then
+            lastdirs=(${=listing})
+        fi
+        [[ -n "$listing" ]] || { error 'No lastlog destinations'; return 1; }
         act "Pruning duplicates across ${#lastdirs} destination maildirs:"
         act "${lastdirs}"
         # recursion here
-        rmdupes ${=lastdirs}
+        rmdupes "${lastdirs[@]}" || return $?
         notice "Done pruning"
         # all the prioritization above is so that duplicates are spotted
         # across different maildirs and deleted from the filtered source
@@ -218,7 +234,7 @@ rmdupes() {
     ztmp
     formail_cache=$ztmpfile
     
-    for folder in ${=@}; do
+    for folder in "$@"; do
         { test -r "$folder" } || { folder="$MAILDIRS/$folder" }
         { test -r "$folder" } || {
             error "Directory not found: $folder"
@@ -303,7 +319,18 @@ cmd_mkdir() {
 }
 
 cmd_rmdupes() {
-    rmdupes ${option_params}
+    rmdupes "${option_params[@]}"
+    exitcode=$?
+}
+
+cmd_merge() {
+    (( ${#option_params} == 2 )) || { error 'merge requires source and destination'; return 2; }
+    local source="${option_params[1]}" dest="${option_params[2]}"
+    local -a apply
+    [[ $DRYRUN == 1 ]] || apply=(--apply --remove-empty)
+    python3 -I "$WORKDIR/maildir/operations.py" "$MAILDIRS" merge \
+        "${source#${MAILDIRS%/}/}" "${dest#${MAILDIRS%/}/}" "${apply[@]}"
+    exitcode=$?
 }
 
 cmd_deliver() {

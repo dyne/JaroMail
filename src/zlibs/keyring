@@ -134,6 +134,10 @@ new_password() {
         return 1
     }
 
+    store_password
+}
+
+store_password() {
     case $OS in
         MAC)
             act "using Mac/OSX keyring password storage"
@@ -166,7 +170,7 @@ new_password() {
             # USE GNOME KEYRING
             elif [[ $SECRET_TOOL = 1 ]]; then
                 act "using secret-tool password storage"
-                print -n - $password \
+                print -rn -- "$password" \
                     | secret-tool store --label "jaromail stored password" \
                                   protocol email \
                                   username "$login" \
