@@ -49,6 +49,14 @@ jaro_early_command() {
     done
     [[ ${1:-} == "$wanted" ]]
 }
+if [[ "${1:-}" == api ]]; then
+    [[ "$#" == 2 && "$2" == --stdio ]] || {
+        print -u2 -- 'usage: jaro api --stdio'
+        exit 2
+    }
+    source "$bootstrap_path" doctor >&2 || exit $?
+    exec python3 -I -B "$WORKDIR/api/stdio.py" "$WORKDIR" "$MAILDIRS"
+fi
 if [[ "${1:-}" == replay-record ]]; then
     shift
     source "$bootstrap_path" doctor || exit $?

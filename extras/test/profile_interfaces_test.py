@@ -146,6 +146,40 @@ class Contracts(unittest.TestCase):
             code=7,
         )
 
+    def test_stdio_api_shares_native_folder_and_contact_state(self):
+        self.md("Existing")
+        generation = self.cli("contacts", "books").split(b"\0")[1]
+        book = self.cli("contacts", "create-book", "shared", generation).split(b"\0")[1]
+        self.cli("contacts", "put", "shared", "0", book, data=b"Shared\0\0\0owner@example.test\0")
+        requests = [
+            {"id": 1, "method": "capabilities"},
+            {"id": 2, "method": "maildir.list"},
+            {"id": 3, "method": "contacts.books"},
+            {"id": 4, "method": "contacts.list", "params": {"book": "shared"}},
+            {"id": 5, "method": "maildir.create", "params": {"folder": "Parent/Nested"}},
+            {"id": 6, "method": "maildir.create", "params": {"folder": "Parent/Nested"}},
+            {"id": 7, "method": "maildir.create", "params": {"folder": "../Escape"}},
+            {"id": 8, "method": "maildir.list"},
+            {"id": 9, "method": "unknown"},
+        ]
+        data = b"invalid JSON\n" + b"".join(json.dumps(row).encode() + b"\n" for row in requests)
+        output = self.cli("api", "--stdio", data=data)
+        invalid, *replies = map(json.loads, output.splitlines())
+        self.assertEqual(invalid, {"id": None, "error": {"code": "invalid_request"}})
+        self.assertEqual([r["id"] for r in replies], list(range(1, 10)))
+        self.assertEqual(replies[0]["result"]["protocol"], 1)
+        self.assertIn("Existing", replies[1]["result"]["folders"])
+        self.assertIn("shared", replies[2]["result"]["books"])
+        self.assertEqual(replies[3]["result"]["contacts"][0]["addresses"], ["owner@example.test"])
+        if "maildir.create" in replies[0]["result"]["methods"]:
+            self.assertEqual(replies[4]["result"], {"folder": "Parent/Nested"})
+            self.assertEqual(replies[5]["error"]["code"], "folder_exists")
+            self.assertEqual(replies[6]["error"]["code"], "invalid_resource")
+            self.assertIn("Parent/Nested", replies[7]["result"]["folders"])
+            self.assertEqual(set(os.listdir(self.mail / "Parent/Nested")), {"cur", "new", "tmp"})
+        self.assertFalse((self.root / "Escape").exists())
+        self.assertEqual(replies[8]["error"]["code"], "unsupported_method")
+
     def test_contact_and_group_revisions(self):
         def records(*args, **kwargs):
             return self.cli("contacts", *args, **kwargs).split(b"\0")[:-1]
