@@ -1,6 +1,7 @@
 """Serve the version 1 local API on the caller's stdin and stdout."""
 
 from contextlib import contextmanager
+from functools import partial
 import ctypes
 import json
 import os
@@ -95,6 +96,8 @@ def dispatch(root, workdir, methods, method, params, store, jobs):
         return search_api.operation(workdir, root, method, params)
     if method in filing_api.METHODS:
         return filing_api.operation(workdir, root, params)
+    if method in local_api.METHODS:
+        return local_api.operation(workdir, root, method, params)
     if method in profile_api.METHODS:
         return profile_api.operation(workdir, root, method, params)
     if method in contact_api.METHODS:
@@ -128,6 +131,8 @@ def serve(workdir, root):
     jobs = jobs_api.Jobs({
         "index.refresh": lambda args: index_api.refresh(workdir, root, args),
         **workflows_api.handlers(workdir, root),
+        **local_api.handlers(workdir, root),
+        **{kind: partial(transport_api.operation, workdir, root, kind) for kind in transport_api.KINDS},
     })
     try:
         return serve_requests(workdir, root, store, jobs)
@@ -137,7 +142,7 @@ def serve(workdir, root):
 
 
 def serve_requests(workdir, root, store, jobs):
-    methods = ["capabilities", "maildir.list", *mailstore_api.METHODS, *search_api.METHODS, *jobs_api.METHODS]
+    methods = ["capabilities", "maildir.list", *mailstore_api.METHODS, *search_api.METHODS, *jobs_api.METHODS, *local_api.METHODS]
     if sys.platform == "linux" and hasattr(ctypes.CDLL(None), "renameat2"):
         methods.extend(("maildir.create", *filing_api.METHODS))
     if os.access(workdir / "bin/jaro-contact-records", os.X_OK):
@@ -187,6 +192,8 @@ if __name__ == "__main__":
     import mailstore_api
     import search_api
     import workflows_api
+    import transport_api
+    import local_api
 
     try:
         sys.exit(serve(runtime, mail_root))
