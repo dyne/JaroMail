@@ -20,7 +20,7 @@ MAX_RECORDS = 16
 RETAIN_SECONDS = 300
 INLINE = 640 * 1024
 CHUNK = 192 * 1024
-MAX_INPUT = 32 * 1024 * 1024
+MAX_INPUT = 96 * 1024 * 1024
 MAX_OUTPUT = 12 * 1024 * 1024
 MAX_UPLOADS = 4
 
@@ -40,9 +40,12 @@ class Jobs:
 
     def expire(self):
         now = time.monotonic()
-        for token, (future, started) in tuple(self.records.items()):
-            if future.done() and now - started > RETAIN_SECONDS:
-                del self.records[token]
+        for token, (future, completed) in tuple(self.records.items()):
+            if future.done():
+                if completed is None:
+                    self.records[token] = (future, now)
+                elif now - completed > RETAIN_SECONDS:
+                    del self.records[token]
         for token, (_, updated) in tuple(self.uploads.items()):
             if now - updated > RETAIN_SECONDS:
                 self.release_upload(token)
@@ -120,7 +123,7 @@ class Jobs:
             raise ProfileApiError("invalid_request")
         ident = secrets.token_hex(16)
         future = self.pool.submit(self.encode, self.handlers[kind], args)
-        self.records[ident] = (future, time.monotonic())
+        self.records[ident] = (future, None)
         return {"job": ident}
 
     def status(self, params, *, reading=False):
