@@ -77,6 +77,9 @@ fi
 if [[ "${1:-}" == policy ]]; then
     shift
     source "$bootstrap_path" doctor || exit $?
+    if [[ "$#" == 1 && "$1" == default-profile ]]; then
+        exec "$WORKDIR/bin/jaro-filter-compile" --default-profile
+    fi
     exec python3 -I "$WORKDIR/filter/candidate.py" "$WORKDIR" "$MAILDIRS" "$ACCOUNTS" "$@"
 fi
 if [[ "${1:-}" == contacts ]]; then
@@ -275,7 +278,7 @@ a pipe | in front indicate they take an email body from stdin
  account, group   list, get or update native profile records by revision
  contacts         read and edit books or multi-address contacts by revision
  maildir          browse, preview and apply occurrence-based changes
- policy           preview and apply native rule or alias edits with a sample
+ policy           preview and apply native rule, alias or mailbox mapping edits with a sample
  replay-record    read one named or last replay with its producer
  stats0           count a NUL-delimited selection by folder, name, email or domain
  See docs/command-contracts.md for request and response formats.

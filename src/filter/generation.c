@@ -293,6 +293,21 @@ int jf_generation_open(const struct jf_generation *g,const char *name)
 }
 
 static int committed_journal(struct location *,char [65]);
+/* Slots 0–3 retain the historical import journal layout. Only a profile
+ * replacement uses the versioned fifth slot. Older pending journals can
+ * still restore the original text address books. */
+enum { PROFILE_SLOT=JF_IMPORT_FILES, REPLACEMENT_SLOTS=JF_IMPORT_FILES+1 };
+static const char profile_name[]="FilterProfile.txt";
+static const char profile_journal[]="JFI2\n";
+static const char *const disk_names[REPLACEMENT_SLOTS]={
+	"Filters.txt","Aliases.txt","whitelist.abook","blacklist.abook",profile_name
+};
+
+static int disk_slot(size_t i)
+{
+	return i<JF_IMPORT_DISK_FILES || i==PROFILE_SLOT;
+}
+
 static int recover_inputs(struct location *,int);
 
 static int unfinished(struct location *l)
@@ -476,35 +491,37 @@ static void input_name(char name[40],size_t i,const char *suffix)
 
 static int recover_inputs(struct location *l,int committed)
 {
-	/* The old journal used two text books. A pending pre-cutover rollback
-	 * still addresses its original paths. New journals use only files 0–1. */
-	static const char *const recovery_names[]={"Filters.txt","Aliases.txt","whitelist.abook","blacklist.abook"};
-	struct jf_bytes journal={0}; size_t i; int rc=3;
-	int changed[4]={0},present[4]={0}; unsigned modes[4]={0};
+	struct jf_bytes journal={0}; size_t i,slots=JF_IMPORT_FILES; int rc=3;
+	int changed[REPLACEMENT_SLOTS]={0},present[REPLACEMENT_SLOTS]={0};
+	unsigned modes[REPLACEMENT_SLOTS]={0};
 	if (exists(l->engine,"import.journal")) {
 		char canonical[160]; size_t offset=0; int pos=0,n;
 		if (load(l->engine,"import.journal",&journal,160) || jf_bytes_add(&journal,"",1)) goto done;
-		for (i=0;i<4;i++) {
+		if (journal.size>sizeof profile_journal-1 && !memcmp(journal.data,profile_journal,sizeof profile_journal-1)) {
+			offset=sizeof profile_journal-1; slots=REPLACEMENT_SLOTS;
+		}
+		for (i=0;i<slots;i++) {
 			if (sscanf((char *)journal.data+offset,"%1d %1d %3o%n",&changed[i],&present[i],&modes[i],&pos)!=3 ||
 				changed[i]>1 || present[i]>1 || modes[i]>0777 || journal.data[offset+(size_t)pos]!='\n') goto done;
+			if (slots==REPLACEMENT_SLOTS && changed[i]!=(i==PROFILE_SLOT)) goto done;
 			n=snprintf(canonical,sizeof canonical,"%d %d %o\n",changed[i],present[i],modes[i]);
 			if (n!=pos+1 || offset+(size_t)n>=journal.size || memcmp(canonical,journal.data+offset,(size_t)n)) goto done;
 			offset+=(size_t)n;
 		}
 		if (offset+1!=journal.size) goto done;
-		if (!committed) for (i=0;i<4;i++) if (changed[i]) {
+		if (!committed) for (i=0;i<slots;i++) if (changed[i]) {
 			char backup[40],restore[40]; int fd;
 			input_name(backup,i,"backup"); input_name(restore,i,"restore");
 			if (present[i]) {
 				if (remove_file(l->engine,restore) || copy_file(l->engine,backup,l->engine,restore,"import-restore")) goto done;
 				fd=openat(l->engine,restore,O_RDONLY|O_NOFOLLOW); if (fd<0) goto done;
 				if (fchmod(fd,(mode_t)modes[i]) || fsync(fd)) { close(fd); goto done; } close(fd);
-				if (renameat(l->engine,restore,l->root,recovery_names[i])) goto done;
-			} else if (remove_file(l->root,recovery_names[i])) goto done;
+				if (renameat(l->engine,restore,l->root,disk_names[i])) goto done;
+			} else if (remove_file(l->root,disk_names[i])) goto done;
 		}
 		if (fsync(l->root) || fsync(l->engine) || remove_file(l->engine,"import.journal") || fsync(l->engine)) goto done;
 	}
-	for (i=0;i<JF_IMPORT_FILES;i++) {
+	for (i=0;i<REPLACEMENT_SLOTS;i++) {
 		char name[40]; size_t j; const char *suffixes[]={"backup","next","restore"};
 		for (j=0;j<3;j++) { input_name(name,i,suffixes[j]); if (remove_file(l->engine,name)) goto done; }
 	}
@@ -515,29 +532,30 @@ done:
 }
 
 static int prepare_inputs(struct location *l,const struct jf_bytes *original,const struct jf_bytes *output,
-	const int *present,const mode_t *modes,const int *changed)
+	const int *present,const mode_t *modes,const int *changed,size_t slots)
 {
 	size_t i; struct jf_bytes journal={0}; int rc=3;
-	for (i=0;i<4;i++) {
+	if (slots==REPLACEMENT_SLOTS && jf_bytes_text(&journal,profile_journal)) goto done;
+	for (i=0;i<slots;i++) {
 		char name[40],line[40];
-		if (i<JF_IMPORT_DISK_FILES && changed[i]) {
+		if (disk_slot(i) && changed[i]) {
 			input_name(name,i,"backup");
 			if (present[i] && save(l->engine,name,original[i].data,original[i].size,"import-backup")) goto done;
 			input_name(name,i,"next");
 			if (save(l->engine,name,output[i].data,output[i].size,"import-stage")) goto done;
 		}
-		snprintf(line,sizeof line,"%d %d %o\n",i<JF_IMPORT_DISK_FILES && changed[i],
+		snprintf(line,sizeof line,"%d %d %o\n",disk_slot(i) && changed[i],
 			present[i],(unsigned)modes[i]);
 		if (jf_bytes_text(&journal,line)) goto done;
 	}
 	if (save(l->engine,"import.journal.next",journal.data,journal.size,"import-journal") ||
 		renameat(l->engine,"import.journal.next",l->engine,"import.journal") || syncfd(l->engine,"import-fsync-journal") ||
 		hook("import-prepared")) goto done;
-	for (i=0;i<JF_IMPORT_DISK_FILES;i++) if (changed[i]) {
+	for (i=0;i<slots;i++) if (disk_slot(i) && changed[i]) {
 		char name[40]; int fd; input_name(name,i,"next");
 		fd=openat(l->engine,name,O_RDONLY|O_NOFOLLOW); if (fd<0) goto done;
 		if (fchmod(fd,modes[i]) || fsync(fd)) { close(fd); goto done; } close(fd);
-		if (hook("import-rename-input") || renameat(l->engine,name,l->root,jf_import_names[i]) || hook("import-input-renamed")) goto done;
+		if (hook("import-rename-input") || renameat(l->engine,name,l->root,disk_names[i]) || hook("import-input-renamed")) goto done;
 	}
 	if (syncfd(l->root,"import-fsync-root") || hook("import-inputs-published")) goto done;
 	rc=0;
@@ -784,11 +802,12 @@ static int compile_replacement(const char *root,const char *accounts,const char 
 {
 	struct location l={-1,-1,-1,-1,NULL}; struct jf_snapshot before={0},after={0},recheck={0};
 	struct jf_policy *imported=NULL; struct jf_products products={0}; struct jf_bytes input={0};
-	struct jf_bytes original[4]={{0}},output[4]={{0}};
+	size_t slots=candidate && !strcmp(candidate->source,profile_name) ? REPLACEMENT_SLOTS : JF_IMPORT_FILES;
+	struct jf_bytes original[REPLACEMENT_SLOTS]={{0}},output[REPLACEMENT_SLOTS]={{0}};
 	struct jf_bytes additions[2]={{0}};
-	struct jf_input_override overrides[4]; char *paths[4]={0},*temporary=NULL,*engine=join(root,"cache/filter-engine");
-	int present[4]={0},changed[4]={0},rc=3,fd=-1,prepared=0,stage_ready=0,contact_change=0,file_change=0;
-	mode_t modes[4]={0600,0600,0600,0600};
+	struct jf_input_override overrides[REPLACEMENT_SLOTS]; char *paths[REPLACEMENT_SLOTS]={0},*temporary=NULL,*engine=join(root,"cache/filter-engine");
+	int present[REPLACEMENT_SLOTS]={0},changed[REPLACEMENT_SLOTS]={0},rc=3,fd=-1,prepared=0,stage_ready=0,contact_change=0,file_change=0;
+	mode_t modes[REPLACEMENT_SLOTS]={0};
 	unsigned char fingerprint[32],again[32]; char old[65],sample_digest[65]; size_t i,count=0;
 	struct stat st; char *runtime=runtime_directory(compiler);
 	struct jaro_contact_store *contacts=NULL;
@@ -817,12 +836,14 @@ static int compile_replacement(const char *root,const char *accounts,const char 
 	if (legacy) fputs("W_LEGACY_SIEVE recovered generated header-contains rules; parsed-address/ERE semantics replace legacy substring behavior\n",stderr);
 	/* Read complete originals for byte-preserving merge and rollback. Import
 	 * deliberately refuses to replace input symlinks or nonregular objects. */
-	for (i=0;i<JF_IMPORT_DISK_FILES;i++) {
+	for (i=0;i<slots;i++) {
 		int rootfd=l.root;
-		paths[i]=join(root,jf_import_names[i]); if (!paths[i]) { rc=3; goto done; }
+		modes[i]=0600;
+		if (!disk_slot(i)) continue;
+		paths[i]=join(root,disk_names[i]); if (!paths[i]) { rc=3; goto done; }
 		if (rootfd<0) { rootfd=open(root,O_RDONLY|O_DIRECTORY); if (rootfd<0) { rc=3; goto done; } }
-		present[i]=exists(rootfd,jf_import_names[i]);
-		rc=present[i]<0 ? 3 : present[i] ? load_mode(rootfd,jf_import_names[i],&original[i],JF_INPUT_MAX,0,&modes[i]) : 0;
+		present[i]=exists(rootfd,disk_names[i]);
+		rc=present[i]<0 ? 3 : present[i] ? load_mode(rootfd,disk_names[i],&original[i],JF_INPUT_MAX,0,&modes[i]) : 0;
 		if (l.root<0) close(rootfd);
 		if (rc) { jf_product_error(error,"E_IMPORT_INPUT",0,"import inputs must be regular files, never replacement symlinks"); goto done; }
 	}
@@ -834,14 +855,14 @@ static int compile_replacement(const char *root,const char *accounts,const char 
 		if (!dependency || jf_bytes_add(&original[slot],dependency->auxiliary.data,dependency->auxiliary.size)) { rc=3; goto done; }
 	}
 	if (candidate) {
-		for (i=0;i<JF_IMPORT_FILES;i++) {
-			const struct jf_bytes *bytes=!strcmp(jf_import_names[i],candidate->source) ? &input : &original[i];
+		for (i=0;i<slots;i++) {
+			const struct jf_bytes *bytes=disk_slot(i) && !strcmp(disk_names[i],candidate->source) ? &input : &original[i];
 			if (jf_bytes_add(&output[i],bytes->data,bytes->size)) { rc=3; goto done; }
 		}
 	} else if ((rc=jf_import_merge(before.policy,imported,original,output,additions,error))) goto done;
-	for (i=0;i<JF_IMPORT_FILES;i++) {
+	for (i=0;i<slots;i++) {
 		changed[i]=original[i].size!=output[i].size || (original[i].size && memcmp(original[i].data,output[i].data,original[i].size));
-		if (i<JF_IMPORT_DISK_FILES) {
+		if (disk_slot(i)) {
 			if (changed[i]) {
 				overrides[count++]=(struct jf_input_override){paths[i],&output[i],NULL};
 				file_change=1;
@@ -922,7 +943,7 @@ static int compile_replacement(const char *root,const char *accounts,const char 
 	}
 	if (file_change) {
 		prepared=1;
-		if ((rc=prepare_inputs(&l,original,output,present,modes,changed))) goto done;
+		if ((rc=prepare_inputs(&l,original,output,present,modes,changed,slots))) goto done;
 	}
 	if (!strcmp(old,products.id) && !file_change && !contact_change) {
 		struct jf_generation same={0}; same.sieve=products.sieve;
@@ -945,7 +966,7 @@ done:
 	if (temporary && (stage_ready || exists(l.engine,temporary)==1)) discard_stage(l.engine,temporary);
 	if (rc && error && !error->code) jf_product_error(error,rc==6 ? "E_BUSY_OR_CHANGED" : "E_IMPORT_IO",0,"cannot finish filter import; retry to reconcile the profile");
 	if (fd>=0) close(fd);
-	for (i=0;i<4;i++) { free(paths[i]); jf_bytes_free(&original[i]); jf_bytes_free(&output[i]); }
+	for (i=0;i<slots;i++) { free(paths[i]); jf_bytes_free(&original[i]); jf_bytes_free(&output[i]); }
 	for (i=0;i<2;i++) jf_bytes_free(&additions[i]);
 	jf_bytes_free(&input); jf_policy_free(imported); jf_snapshot_free(&before); jf_snapshot_free(&after); jf_snapshot_free(&recheck);
 	jf_products_free(&products); free(temporary); free(engine); free(runtime); location_close(&l); return rc;
@@ -961,8 +982,10 @@ int jf_compile_candidate(const char *root,const char *accounts,const char *profi
 	const char *script,const struct jf_candidate *candidate,struct jf_compile_result *result,
 	struct jf_error *error,char **error_path)
 {
-	if ((strcmp(candidate->source,"Filters.txt") && strcmp(candidate->source,"Aliases.txt")) ||
-		(candidate->expected && !valid_id(candidate->expected))) return 2;
+	if (!strcmp(candidate->source,profile_name)) {
+		if (profile) return 2; /* Only replace the canonical root profile. */
+	} else if (strcmp(candidate->source,"Filters.txt") && strcmp(candidate->source,"Aliases.txt")) return 2;
+	if (candidate->expected && !valid_id(candidate->expected)) return 2;
 	return compile_replacement(root,accounts,profile,compiler,script,0,!candidate->expected,
 		candidate,result,error,error_path);
 }

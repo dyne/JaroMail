@@ -293,6 +293,62 @@ class Contracts(unittest.TestCase):
             0,
         )
 
+    def test_profile_mapping_preview_concurrent_publish_and_filing(self):
+        sample = "incoming/new/example"
+        incoming = self.md("incoming")
+        (self.mail / sample).write_bytes(MSG)
+        rules = self.mail / "Filters.txt"
+        # The legacy ERE requires the qualified capabilities of an absent profile.
+        rules.write_bytes(b'from "^author@example[.]test$" move reviewed\n')
+        profile = self.mail / "FilterProfile.txt"
+        self.assertFalse(profile.exists())
+        self.cli("fresh-filters")
+        selector = self.mail / "cache/filter-engine/current"
+        original = os.readlink(selector)
+        seed = self.cli("policy", "default-profile")
+        unrelated = seed + b'# unrelated authored setting\r\nmailbox spam "Other Spam"\r\n'
+        proposed = unrelated + b'mailbox reviewed "Reviewed Mail"\n'
+
+        def preview(data):
+            return self.obj("policy", "preview", profile.name, sample, data=data)
+
+        def publish(data, token):
+            return self.run_cli("policy", "publish", profile.name, sample,
+                                "--expect", token, data=data)
+
+        first = preview(proposed)
+        self.assertEqual(first["decision"]["folder"], "Reviewed Mail")
+        self.assertFalse(profile.exists())
+        self.assertEqual(os.readlink(selector), original)
+        invalid = proposed + b'mailbox reviewed duplicate\n'
+        self.cli("policy", "preview", profile.name, sample, data=invalid, code=4)
+        self.assertEqual(publish(invalid, first["token"]).returncode, 4)
+        self.assertFalse(profile.exists())
+        aliases = self.mail / "Aliases.txt"
+        aliases.write_bytes(aliases.read_bytes() + b'other@example.test\n')
+        self.assertEqual(publish(proposed, first["token"]).returncode, 6)
+        self.assertFalse(profile.exists())
+        first = preview(proposed)
+        self.assertEqual(publish(proposed, first["token"]).returncode, 0)
+        self.assertEqual(profile.read_bytes(), proposed)
+        self.assertEqual(os.readlink(selector).split("/")[-1], first["generation"])
+
+        choices = {}
+        for folder in ("Filed A", "Filed B"):
+            candidate = proposed.replace(b"Reviewed Mail", folder.encode())
+            choices[folder] = (candidate, preview(candidate)["token"])
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            writers = {folder: pool.submit(publish, *choice) for folder, choice in choices.items()}
+        status = {folder: writer.result().returncode for folder, writer in writers.items()}
+        self.assertEqual(sorted(status.values()), [0, 6])
+        winner = next(folder for folder in choices if status[folder] == 0)
+        self.assertEqual(profile.read_bytes(), choices[winner][0])
+        self.assertTrue(profile.read_bytes().startswith(unrelated))
+        self.cli("filter", str(incoming))
+        self.assertFalse((self.mail / sample).exists())
+        filed = list((self.mail / winner / "cur").iterdir())
+        self.assertEqual([p.read_bytes() for p in filed], [MSG])
+
     def test_recursive_maildir_moves_merge_and_selection(self):
         src = self.md("Shared/Nested")
         dest = self.md("Archive")

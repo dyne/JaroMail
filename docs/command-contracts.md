@@ -221,8 +221,8 @@ Missing records return 1, invalid records 4, busy or stale revisions 6.
 
 ### Rule preview and publication
 
-`jaro policy preview SOURCE SAMPLE` reads replacement bytes for Filters.txt
-or Aliases.txt on stdin. SAMPLE is an existing root-relative new/cur Maildir
+`jaro policy preview SOURCE SAMPLE` reads the complete replacement for Filters.txt,
+Aliases.txt or FilterProfile.txt on stdin. SAMPLE is an existing root-relative new/cur Maildir
 occurrence. The configured Pigeonhole runtime returns a JSON `decision` with
 rule, action, folder, status, source and line, along with `version`, `token`
 and `generation`. No rule text is published during preview.
@@ -230,6 +230,14 @@ and `generation`. No rule text is published during preview.
 returns the published generation. The token binds the native compiler inputs,
 candidate and selected occurrence. A stale comparison returns 6. Publication
 uses the existing policy journal and rollback. Inputs are limited to 64 MiB.
+
+For a guided mailbox edit, retain the other FilterProfile.txt lines, including
+comments, mappings, namespace settings and capabilities. When that file is
+absent or empty, `jaro policy default-profile` prints its built-in settings as
+valid profile text, including the installed regex qualification. Append a native
+`mailbox LOGICAL "Mailbox Name"` record to that text for the first mapping.
+Preview and publish the resulting bytes through the same two commands. Reading
+the defaults and previewing leave an absent profile absent.
 
 ### SMTP submission
 

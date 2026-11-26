@@ -52,6 +52,11 @@ int main(int argc,char **argv)
 	int check=0,report=0,legacy=0,i,rc=2;
 	char *resolved=NULL,*compiler=NULL,*error_path=NULL;
 	struct jf_compile_result result={0}; struct jf_error error={0};
+	if (argc==2 && !strcmp(argv[1],"--default-profile")) {
+		return printf("version 1\nprofile pigeonhole-2.4.5-posix-ere-v1\n"
+			"capability fileinto\ncapability mailbox\ncapability regex\nregex-qualification %s\n",
+			jf_regex_qualification())<0 || fflush(stdout) ? 3 : 0;
+	}
 	if (argc==3 && !strcmp(argv[1],"--check-address")) {
 		char *copy=strdup(argv[2]); int valid;
 		if (!copy) return 3;
