@@ -67,11 +67,11 @@ def contacts_list(helper, root, book):
     return dict(generation=generation, contacts=contacts)
 
 
-def dispatch(root, workdir, methods, method, params):
+def dispatch(root, workdir, methods, method, params, store, jobs):
     if method not in methods:
         raise ApiError("unsupported_method")
     if method == "capabilities":
-        return dict(protocol=1, methods=methods)
+        return dict(protocol=1, methods=methods, jobs=list(jobs.handlers))
     if method == "maildir.list":
         with open_root(root) as fd:
             return dict(folders=operations.bounded(operations.inventory(fd)))
@@ -87,6 +87,14 @@ def dispatch(root, workdir, methods, method, params):
             except (NotADirectoryError, ValueError):
                 raise ApiError("invalid_resource") from None
         return dict(folder=name)
+    if method in jobs_api.METHODS:
+        return jobs.operation(method, params)
+    if method in mailstore_api.METHODS:
+        return store.operation(method, params)
+    if method in search_api.METHODS:
+        return search_api.operation(workdir, root, method, params)
+    if method in filing_api.METHODS:
+        return filing_api.operation(workdir, root, params)
     if method in profile_api.METHODS:
         return profile_api.operation(workdir, root, method, params)
     if method in contact_api.METHODS:
@@ -116,14 +124,28 @@ def reply(message_id, *, result=None, code=None):
 
 
 def serve(workdir, root):
-    methods = ["capabilities", "maildir.list"]
+    store = mailstore_api.Mailstore(root)
+    jobs = jobs_api.Jobs({
+        "index.refresh": lambda args: index_api.refresh(workdir, root, args),
+        **workflows_api.handlers(workdir, root),
+    })
+    try:
+        return serve_requests(workdir, root, store, jobs)
+    finally:
+        store.close()
+        jobs.close()
+
+
+def serve_requests(workdir, root, store, jobs):
+    methods = ["capabilities", "maildir.list", *mailstore_api.METHODS, *search_api.METHODS, *jobs_api.METHODS]
     if sys.platform == "linux" and hasattr(ctypes.CDLL(None), "renameat2"):
-        methods.append("maildir.create")
+        methods.extend(("maildir.create", *filing_api.METHODS))
     if os.access(workdir / "bin/jaro-contact-records", os.X_OK):
         methods.extend(("contacts.books", "contacts.list", *contact_api.METHODS))
     if (workdir / "profile/records.py").is_file():
         methods.extend(profile_api.METHODS)
     while line := sys.stdin.buffer.readline(MAX_REQUEST + 1):
+        store.expire()
         if len(line) > MAX_REQUEST or not line.endswith(b"\n"):
             print("jaro api: incomplete or oversized request", file=sys.stderr)
             return 2
@@ -138,8 +160,8 @@ def serve(workdir, root):
             message_id = ident
             if not isinstance(method, str) or not isinstance(params, dict):
                 raise ApiError("invalid_request")
-            result = dispatch(root, workdir, methods, method, params)
-        except (ApiError, profile_api.ProfileApiError) as error:
+            result = dispatch(root, workdir, methods, method, params, store, jobs)
+        except (ApiError, profile_api.ProfileApiError, mailstore_api.MailstoreApiError) as error:
             reply(message_id, code=str(error))
         except (UnicodeError, json.JSONDecodeError, RecursionError):
             reply(message_id, code="invalid_request")
@@ -159,6 +181,12 @@ if __name__ == "__main__":
     sys.path.insert(0, str(runtime / "api"))
     import contact_api
     import profile_api
+    import filing_api
+    import index_api
+    import jobs_api
+    import mailstore_api
+    import search_api
+    import workflows_api
 
     try:
         sys.exit(serve(runtime, mail_root))

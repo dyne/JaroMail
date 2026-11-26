@@ -25,17 +25,17 @@ def text(params, key):
     return value
 
 
-def run_native(args, root, workdir, data=b"", *, writing=False):
+def run_native(args, root, workdir, data=b"", *, writing=False, timeout=8, output_limit=MAX_RECORD):
     env = dict(os.environ, JAROWORKDIR=str(workdir), JAROMAILDIR=str(root), QUIET="1")
     with tempfile.TemporaryFile() as output:
         try:
             result = subprocess.run(args, input=data, stdout=output, stderr=subprocess.DEVNULL,
-                                    env=env, timeout=8)
+                                    env=env, timeout=timeout)
         except subprocess.TimeoutExpired as error:
             raise ProfileApiError("write_uncertain" if writing else "timeout") from error
         output.seek(0)
-        raw = output.read(MAX_RECORD + 1)
-        if len(raw) > MAX_RECORD:
+        raw = output.read(output_limit + 1)
+        if len(raw) > output_limit:
             raise ProfileApiError("limit")
     return result.returncode, raw
 

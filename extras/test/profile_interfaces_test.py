@@ -6,6 +6,7 @@ import json
 import importlib.util
 from unittest.mock import patch
 import os
+import select
 from pathlib import Path
 import subprocess
 import sys
@@ -211,6 +212,53 @@ class Contracts(unittest.TestCase):
             self.assertEqual(set(os.listdir(self.mail / "Parent/Nested")), {"cur", "new", "tmp"})
         self.assertFalse((self.root / "Escape").exists())
         self.assertEqual(replies[8]["error"]["code"], "unsupported_method")
+
+    def test_stdio_paged_maildir_inventory_releases_abandoned_cursors(self):
+        inbox = self.md("Page fixture")
+        for n in range(300):
+            (inbox / "new" / str(n)).write_bytes(MSG)
+        worker = subprocess.Popen([PREFIX / "bin/jaro", "api", "--stdio"], env=self.env, cwd=self.root,
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        serial = 0
+
+        def request(method, params):
+            nonlocal serial
+            serial += 1
+            worker.stdin.write(json.dumps({"id": serial, "method": method, "params": params}).encode() + b"\n")
+            worker.stdin.flush()
+            self.assertTrue(select.select([worker.stdout], [], [], 10)[0])
+            reply = json.loads(worker.stdout.readline())
+            self.assertEqual(reply["id"], serial)
+            return reply
+
+        try:
+            folder = "Page fixture"
+            first = request("maildir.messages", {"folder": folder})["result"]
+            self.assertEqual(len(first["rows"]), 128)
+            cursor = first["cursor"]
+            self.assertTrue(cursor)
+            self.assertTrue(request("maildir.release", {"cursor": cursor})["result"]["released"])
+            self.assertEqual(request("maildir.messages", {"folder": folder, "cursor": cursor})["error"]["code"],
+                             "inventory_expired")
+            names = set()
+            cursor = None
+            while True:
+                page = request("maildir.messages", {"folder": folder, "cursor": cursor})["result"]
+                self.assertFalse(names.intersection(row["name"] for row in page["rows"]))
+                names.update(row["name"] for row in page["rows"])
+                cursor = page["cursor"]
+                if cursor is None:
+                    break
+            self.assertEqual(names, {str(n) for n in range(300)})
+        finally:
+            worker.stdin.close()
+            try:
+                self.assertEqual(worker.wait(timeout=5), 0)
+            finally:
+                if worker.poll() is None:
+                    worker.kill()
+                    worker.wait()
+                worker.stdout.close()
 
     def test_contact_and_group_revisions(self):
         def records(*args, **kwargs):
