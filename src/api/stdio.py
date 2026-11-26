@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-MAX_REQUEST = 64 * 1024
+MAX_REQUEST = 1024 * 1024 + 8192
 MAX_REPLY = 1024 * 1024
 
 
@@ -87,6 +87,10 @@ def dispatch(root, workdir, methods, method, params):
             except (NotADirectoryError, ValueError):
                 raise ApiError("invalid_resource") from None
         return dict(folder=name)
+    if method in profile_api.METHODS:
+        return profile_api.operation(workdir, root, method, params)
+    if method in contact_api.METHODS:
+        return contact_api.operation(workdir, root, method, params)
     helper = workdir / "bin/jaro-contact-records"
     if method == "contacts.books":
         generation, books = contact_records(helper, root, "books")
@@ -116,7 +120,9 @@ def serve(workdir, root):
     if sys.platform == "linux" and hasattr(ctypes.CDLL(None), "renameat2"):
         methods.append("maildir.create")
     if os.access(workdir / "bin/jaro-contact-records", os.X_OK):
-        methods.extend(("contacts.books", "contacts.list"))
+        methods.extend(("contacts.books", "contacts.list", *contact_api.METHODS))
+    if (workdir / "profile/records.py").is_file():
+        methods.extend(profile_api.METHODS)
     while line := sys.stdin.buffer.readline(MAX_REQUEST + 1):
         if len(line) > MAX_REQUEST or not line.endswith(b"\n"):
             print("jaro api: incomplete or oversized request", file=sys.stderr)
@@ -133,7 +139,7 @@ def serve(workdir, root):
             if not isinstance(method, str) or not isinstance(params, dict):
                 raise ApiError("invalid_request")
             result = dispatch(root, workdir, methods, method, params)
-        except ApiError as error:
+        except (ApiError, profile_api.ProfileApiError) as error:
             reply(message_id, code=str(error))
         except (UnicodeError, json.JSONDecodeError, RecursionError):
             reply(message_id, code="invalid_request")
@@ -149,6 +155,10 @@ if __name__ == "__main__":
     runtime, mail_root = map(Path, sys.argv[1:])
     sys.path.insert(0, str(runtime / "maildir"))
     import operations
+
+    sys.path.insert(0, str(runtime / "api"))
+    import contact_api
+    import profile_api
 
     try:
         sys.exit(serve(runtime, mail_root))
