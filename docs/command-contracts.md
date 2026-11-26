@@ -193,7 +193,21 @@ Each request contains an integer `id`, a `method` and an optional `params` objec
 | `contacts.books` | None | `generation` and `books` |
 | `contacts.list` | `book` | `generation` and contact records with `id`, `revision`, `name`, `nickname`, `notes` and `addresses` |
 
-Check capabilities at startup. Atomic folder creation is available on Linux with `renameat2`. An existing destination yields `folder_exists`. If the connection drops during creation, list folders before retrying. Contact IDs and revisions are decimal strings. Requests are limited to 64 KiB and replies to 1 MiB including the newline.
+Check capabilities at startup. Atomic folder creation is available on Linux with `renameat2`. An existing destination yields `folder_exists`. If the connection drops during creation, list folders before retrying. Contact IDs and revisions are decimal strings. Requests are limited to 1 MiB plus 8 KiB and replies to 1 MiB including the newline.
+
+The same API exposes account and recipient-group records. The methods share the native editor and revision checks with the commands below.
+
+| Method | Parameters |
+| --- | --- |
+| `account.list`, `group.list` | None |
+| `account.get`, `group.get` | `id` |
+| `account.put`, `group.put` | `id`, `revision`, `fields` |
+| `group.delete` | `id`, `revision` |
+| `account.credential` | `id`, `revision`, `service`, `secret` |
+
+Credentials travel over the caller-owned stdin channel and are never included in an API result or diagnostic. Keep request bodies out of logs.
+
+Contact writes use `contacts.create-book`, `contacts.rename-book` and `contacts.delete-book` with the book name and its generation. Rename also takes `name`. Use `contacts.put` and `contacts.delete` with `book`, `id` and `revision`. Put also takes `name`, `nickname`, `notes` and an array of `addresses`. Edits use the native contact editor, including filter refresh for the allow and block books. The error `contact_policy` means the contact was saved and the filter refresh failed. `contacts.complete` takes a literal `query` and optional `book`. `contacts.export` exports the specified book in vCard format.
 
 ### Accounts and recipient groups
 

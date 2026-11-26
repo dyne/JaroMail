@@ -146,6 +146,38 @@ class Contracts(unittest.TestCase):
             code=7,
         )
 
+    def test_stdio_account_and_group_records_share_native_revisions(self):
+        account = self.obj("account", "get", "default.txt")
+        mock = self.bin / "secret-tool"
+        mock.write_text("#!/bin/sh\n[ \"$1\" = store ] && [ \"$(cat)\" = stdio-secret ]\n")
+        mock.chmod(0o700)
+        self.env["JARO_KEYRING"] = "secret-tool"
+        requests = [
+            {"id": 1, "method": "account.list"},
+            {"id": 2, "method": "account.get", "params": {"id": "default.txt"}},
+            {"id": 3, "method": "account.credential", "params": {
+                "id": "default.txt", "revision": account["revision"], "service": "imap", "secret": "stdio-secret"}},
+            {"id": 4, "method": "account.put", "params": {
+                "id": "default.txt", "revision": account["revision"], "fields": {"name": "Updated Name"}}},
+            {"id": 5, "method": "account.put", "params": {
+                "id": "default.txt", "revision": account["revision"], "fields": {"name": "Stale Writer"}}},
+            {"id": 6, "method": "group.put", "params": {
+                "id": "team", "revision": "absent", "fields": {"mode": "cc", "members": ["owner@example.test"]}}},
+            {"id": 7, "method": "group.list"},
+        ]
+        result = self.run_cli("api", "--stdio",
+                              data=b"".join(json.dumps(row).encode() + b"\n" for row in requests))
+        self.assertEqual(result.returncode, 0)
+        self.assertNotIn(b"stdio-secret", result.stdout + result.stderr)
+        replies = list(map(json.loads, result.stdout.splitlines()))
+        self.assertIn("default.txt", replies[0]["result"]["ids"])
+        self.assertEqual(replies[1]["result"], account)
+        self.assertTrue(replies[2]["result"]["stored"])
+        self.assertEqual(replies[3]["result"], self.obj("account", "get", "default.txt"))
+        self.assertEqual(replies[4]["error"]["code"], "stale_account")
+        self.assertEqual(replies[5]["result"], self.obj("group", "get", "team"))
+        self.assertIn("team", replies[6]["result"]["ids"])
+
     def test_stdio_api_shares_native_folder_and_contact_state(self):
         self.md("Existing")
         generation = self.cli("contacts", "books").split(b"\0")[1]
