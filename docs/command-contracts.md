@@ -209,6 +209,16 @@ Credentials travel over the caller-owned stdin channel and are never included in
 
 Contact writes use `contacts.create-book`, `contacts.rename-book` and `contacts.delete-book` with the book name and its generation. Rename also takes `name`. Use `contacts.put` and `contacts.delete` with `book`, `id` and `revision`. Put also takes `name`, `nickname`, `notes` and an array of `addresses`. Edits use the native contact editor, including filter refresh for the allow and block books. The error `contact_policy` means the contact was saved and the filter refresh failed. `contacts.complete` takes a literal `query` and optional `book`. `contacts.export` exports the specified book in vCard format.
 
+The Maildir API returns inventories in pages of up to 128 occurrences. Call `maildir.messages` with `folder` and reuse the response's `cursor` until it is null. Call `maildir.release` with the cursor if you stop early. A cursor expires after 60 seconds of inactivity. `maildir.file` accepts a supported `action`, a `destination` for moves and selected `items` with the native occurrence revision and the source directory's device and inode. The result reports a disposition for each occurrence.
+
+Search uses the native notmuch configuration for the selected root. `search.status` returns message count, index revision and lock status. `search.summary` takes `query` and `offset`. `search.messages` takes a query, an exclusion boolean and an offset when requesting all messages. `search.files` resolves the physical files for a query, and `search.busy` reports the index lock.
+
+The capability response lists supported long-running operations under `jobs`. Call `jobs.start` with `kind` and an `args` object, then pass the returned `job` to `jobs.status`. Status is `running`, `complete` with a result, or `failed` with a code. Release a completed job with `jobs.release`. The `index.refresh` job accepts optional revision-checked stale occurrences and uses the native notmuch writer lock. Jobs settle before the worker exits on stdin EOF.
+
+The `policy`, `maintenance` and `snapshot` jobs accept a named `op` and a JSON `request`. Snapshot also takes the caller's approved storage, recovery and private state settings. These jobs return the native preview, revision and outcome records. `stats.count` accepts `dimension` and `rows`. `replay.get` accepts `producer`.
+
+For a large job request, open an upload with `jobs.upload-open`, pass the returned `upload` to `jobs.upload-append` with the expected byte `offset` and base64 `data`, and supply the upload ID in place of inline `args` to `jobs.start`. The resulting JSON object is consumed when the job starts. Use `jobs.upload-release` to abandon an upload. A large completed job returns its byte count in `bytes`. Read it using `jobs.read` with its `job` and byte `offset`, then decode the returned base64 chunks before parsing the JSON. Chunks are at most 192 KiB before encoding. Job input and output are bounded at 32 MiB and 12 MiB respectively.
+
 ### Accounts and recipient groups
 
 `jaro account list` and `jaro group list` return `{"version":1,"ids":[...]}`.

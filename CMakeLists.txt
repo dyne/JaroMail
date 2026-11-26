@@ -266,7 +266,11 @@ install(FILES src/outbox/submission.py DESTINATION "${JARO_RUNTIME_DIR}/outbox")
 install(FILES src/filter/candidate.py DESTINATION "${JARO_RUNTIME_DIR}/filter")
 install(FILES src/profile/records.py src/profile/replay.py DESTINATION "${JARO_RUNTIME_DIR}/profile")
 install(FILES src/maildir/operations.py DESTINATION "${JARO_RUNTIME_DIR}/maildir")
-install(FILES src/api/stdio.py src/api/profile_api.py src/api/contact_api.py DESTINATION "${JARO_RUNTIME_DIR}/api")
+install(FILES src/api/stdio.py src/api/profile_api.py src/api/contact_api.py
+  src/api/mailstore_api.py src/api/filing_api.py src/api/search_api.py
+  src/api/index_api.py src/api/jobs_api.py src/api/reconcile.py
+  src/api/workflows_api.py src/api/policy_workflow.py src/api/maintenance_workflow.py src/api/snapshot_workflow.py
+  DESTINATION "${JARO_RUNTIME_DIR}/api")
 install(DIRECTORY src/stats/ DESTINATION "${JARO_RUNTIME_DIR}/stats" USE_SOURCE_PERMISSIONS)
 install(DIRECTORY src/zlibs/ DESTINATION "${JARO_RUNTIME_DIR}/zlibs" USE_SOURCE_PERMISSIONS PATTERN "*.zwc" EXCLUDE)
 file(GLOB _zuper CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/zuper/zuper*")
