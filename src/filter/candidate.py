@@ -49,7 +49,7 @@ def main():
     p.add_argument("root", type=Path)
     p.add_argument("accounts", type=Path)
     p.add_argument("action", choices=("preview", "publish"))
-    p.add_argument("source", choices=("Filters.txt", "Aliases.txt"))
+    p.add_argument("source", choices=("Filters.txt", "Aliases.txt", "FilterProfile.txt"))
     p.add_argument("sample")
     p.add_argument("--expect")
     a = p.parse_args()

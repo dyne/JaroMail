@@ -403,6 +403,42 @@ class ImportTests(unittest.TestCase):
         self.run_command(command + ['--expect-preview', token])
         self.assertEqual((self.root / 'Filters.txt').read_bytes(), candidate.read_bytes())
 
+    def test_profile_candidate_recovers_absent_and_existing_source(self):
+        profile = self.root / 'FilterProfile.txt'
+        original = profile.read_bytes()
+        candidate = self.case / 'candidate'
+        candidate.write_bytes(original + b'# authored mapping edit\n')
+        sample = self.root / 'box/new/sample'
+        sample.parent.mkdir(parents=True)
+        sample.write_bytes(b'Subject: fixture\n\nbody\n')
+        command = [self.compiler, '--root', self.root, '--candidate-file', candidate,
+                   '--candidate-source', profile.name, '--sample-file', 'box/new/sample']
+        for present in (False, True):
+            if present:
+                profile.write_bytes(original)
+                profile.chmod(0o640)
+            else:
+                profile.unlink()
+            self.compile()
+            before = self.snapshot()
+            token = self.run_command(command).stdout.split(b' ', 1)[0].decode()
+            self.run_command(command + ['--expect-preview', token], expected=-signal.SIGKILL,
+                             extra={'JF_TEST_CRASH': 'selector-renamed'})
+            self.assertEqual(profile.read_bytes(), candidate.read_bytes())
+            self.compile(self.root, '--check', expected=5)
+            self.compile()
+            self.assert_restored(before, allow_abandoned=True)
+            if present:
+                self.assertEqual(profile.read_bytes(), original)
+                self.assertEqual(stat.S_IMODE(profile.stat().st_mode), 0o640)
+            else:
+                self.assertFalse(profile.exists())
+        self.run_command(command + ['--expect-preview', token], expected=-signal.SIGKILL,
+                         extra={'JF_TEST_CRASH': 'committed'})
+        self.compile()
+        self.assertEqual(profile.read_bytes(), candidate.read_bytes())
+        self.assertEqual(stat.S_IMODE(profile.stat().st_mode), 0o640)
+
     def test_production_executable_does_not_enable_faults(self):
         self.run_command([self.objects / 'jaro-filter-compile', '--root', self.root,
                           '--import-sieve', self.script], extra={'JF_TEST_FAIL': 'import-input-renamed'})
