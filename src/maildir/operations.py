@@ -2,6 +2,8 @@
 
 import argparse
 from contextlib import contextmanager, ExitStack
+import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -77,6 +79,53 @@ def folder(root, name, *, validate=True):
                 os.close(os.open(part, DIR, dir_fd=fd))
         yield fd
 
+
+
+def create_folder(root, name, workdir, *, existing_ok=False):
+    parts = folder_parts(name)
+    require(parts and parts[0] != "outbox" and len(parts) < 64, "invalid folder")
+    if not parts:
+        raise FileExistsError()
+    with ExitStack() as stack:
+        parent = root
+        for index, part in enumerate(parts):
+            try:
+                child = os.open(part, DIR, dir_fd=parent)
+            except FileNotFoundError:
+                break
+            parent = child
+            stack.callback(os.close, child)
+        else:
+            if existing_ok:
+                with folder(parent, "."):
+                    return
+            raise FileExistsError()
+        # Neither CLI mkdir nor POSIX rename protects an existing empty target.
+        # Build with the native command in an undiscoverable Maildir tmp subtree,
+        # then publish the first missing component with Linux RENAME_NOREPLACE.
+        with tempfile.TemporaryDirectory(prefix=".jaro-folder-", dir=f"/proc/self/fd/{parent}") as stage:
+            staging = Path(stage) / "tmp"
+            staging.mkdir(mode=0o700)
+            target = staging.joinpath(*parts[index:])
+            target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            make = 'source "$1/zlibs/bootstrap" source || exit 1; ' \
+                   'source "$1/zlibs/maildirs" || exit 1; maildirmake "$2"'
+            subprocess.run(["zsh", "-fc", make, "jaro-api-mkdir", str(workdir), str(target)], check=True,
+                           pass_fds=(parent,), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            new = os.open(target, DIR)
+            try:
+                with folder(new, "."):
+                    pass
+            finally:
+                os.close(new)
+            libc = ctypes.CDLL(None, use_errno=True)
+            if libc.renameat2(-100, os.fsencode(staging / part), parent, os.fsencode(part), 1) != 0:
+                code = ctypes.get_errno()
+                if code == errno.EEXIST and existing_ok:
+                    with folder(root, name):
+                        return
+                raise OSError(code, os.strerror(code))
+            os.fsync(parent)
 
 def inventory(fd, name=".", depth=0):
     require(depth < 64, "folder depth exceeded")

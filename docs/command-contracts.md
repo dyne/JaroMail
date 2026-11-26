@@ -175,6 +175,26 @@ These commands use the selected JaroMail installation and profile. JSON is UTF-8
 A consumer must check the exit status before consuming a result. Diagnostics go
 to stderr. Preserve revisions and IDs verbatim between reading and editing.
 
+### Persistent local API
+
+Start `jaro api --stdio` under the mail owner's account with the selected local profile. Write one UTF-8 JSON request per line to stdin. Read one reply per line from stdout. Close stdin to end the session. Requests are processed in order. The service flushes every reply and emits diagnostics on stderr.
+
+Each request contains an integer `id`, a `method` and an optional `params` object. Replies echo the ID and contain either `result` or `error` with a stable `code`. A malformed request whose ID could not be read uses a null reply ID.
+
+```json
+{"id":1,"method":"capabilities"}
+{"id":1,"result":{"protocol":1,"methods":["capabilities","maildir.list","maildir.create","contacts.books","contacts.list"]}}
+```
+
+| Method | Parameters | Result |
+| --- | --- | --- |
+| `maildir.list` | None | `folders`, an array of root-relative folder names |
+| `maildir.create` | `folder` | The new root-relative `folder` |
+| `contacts.books` | None | `generation` and `books` |
+| `contacts.list` | `book` | `generation` and contact records with `id`, `revision`, `name`, `nickname`, `notes` and `addresses` |
+
+Check capabilities at startup. Atomic folder creation is available on Linux with `renameat2`. An existing destination yields `folder_exists`. If the connection drops during creation, list folders before retrying. Contact IDs and revisions are decimal strings. Requests are limited to 64 KiB and replies to 1 MiB including the newline.
+
 ### Accounts and recipient groups
 
 `jaro account list` and `jaro group list` return `{"version":1,"ids":[...]}`.
