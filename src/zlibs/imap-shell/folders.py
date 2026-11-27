@@ -486,7 +486,8 @@ class FolderTree:
                 self.current = self.root
                 print("Mailbox encoding changed; observations unavailable; returned to /", file=sys.stderr)
                 return outcome
-            for label, (name, delim) in zip(("old", "new") if source else ("new",), roots):
+            labels = ("target",) if command == "DELETE" else ("old", "new") if source else ("new",)
+            for label, (name, delim) in zip(labels, roots):
                 try:
                     state = "present" if self.probe(name, delim) else "not listed"
                 except ValueError:
