@@ -14,6 +14,8 @@ sys.dont_write_bytecode = True
 from folders import FolderTree
 import headers
 import sizes
+import rename_preview
+import renames
 
 
 def account_record():
@@ -128,6 +130,7 @@ def connect(config):
 def command_loop(client, seconds, reconnect):
     tree = FolderTree(client, seconds, deadline, reconnect)
     pager = headers.Pager()
+    rename_session = renames.Session()
     interactive = sys.stdin.isatty()
     if interactive:
         try:
@@ -140,9 +143,20 @@ def command_loop(client, seconds, reconnect):
             line = input("imap> " if interactive else "")
         except EOFError:
             return 0
+        first = None
         try:
+            # Recognize an authorization attempt even if later arguments are
+            # malformed. A lazy token read uses the same quoting rules as split.
+            lexer = shlex.shlex(line, posix=True)
+            lexer.whitespace_split, lexer.commenters = True, ""
+            first = lexer.get_token()
             words = shlex.split(line)
+            if words and words[0] == "rename-glob":
+                rename_session.saved = None
+                words = rename_preview.tokenize(line)
         except ValueError:
+            if first in ("rename-glob", "apply"):
+                rename_session.saved = None
             print("Invalid quoted command", file=sys.stderr)
             continue
         if not words:
@@ -150,12 +164,22 @@ def command_loop(client, seconds, reconnect):
         if words in (["quit"], ["exit"]):
             return 0
         if words == ["help"]:
-            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], mkdir PATH, mv OLD NEW (alias rename; NEW is the complete path), help, quit")
+            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], mkdir PATH, mv OLD NEW (alias rename; NEW is the complete path), rename-glob SOURCE TEMPLATE (preview), apply ID, help, quit")
         elif words == ["pwd"]:
             print(tree.current.path)
-        elif words[0] in ("folders", "refresh", "ls", "cd", "more", "du", "mkdir", "mv", "rename"):
+        elif words[0] in ("folders", "refresh", "ls", "cd", "more", "du", "mkdir", "mv", "rename", "rename-glob", "apply"):
             try:
-                if words[0] == "mkdir" and len(words) == 2:
+                if words[0] == "rename-glob" and len(words) == 3:
+                    try:
+                        rename_session.preview(tree, words[1], words[2])
+                    except ValueError as exc:
+                        print("Rename preview blocked: " + str(exc), file=sys.stderr)
+                elif words[0] == "apply":
+                    try:
+                        rename_session.apply(tree, words[1] if len(words) == 2 else "")
+                    finally:
+                        pager.reset()
+                elif words[0] == "mkdir" and len(words) == 2:
                     try:
                         tree.mkdir(words[1])
                     finally:
@@ -237,7 +261,7 @@ def command_loop(client, seconds, reconnect):
                 if tree.current.selectable:
                     with deadline(seconds):
                         headers.examine(tree.client, tree.current.raw)
-                operation = "Size" if words[0] == "du" else "Header"
+                operation = "Rename preview" if words[0] == "rename-glob" else "Size" if words[0] == "du" else "Header"
                 print(operation + " operation cancelled; connection renewed", file=sys.stderr)
         else:
             print("Unknown command; use help", file=sys.stderr)
