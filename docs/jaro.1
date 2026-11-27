@@ -146,36 +146,139 @@ Read the current file for each new server session.
 See the manual\[cq]s local IMAP section for credential lifetime and
 client behavior.
 .SS IMAP folder shell
-Start \f[CR]jaro \-a ACCOUNT imap shell\f[R] from the directory where
-you want the archive.
-Choose the account in \f[CR]$JAROMAILDIR/Accounts/\f[R].
-The shell uses its usual login and keyring.
-Set \f[CR]proto imap\f[R], \f[CR]imap HOST\f[R],
-\f[CR]imap_port 993\f[R], \f[CR]transport implicit\f[R] and
-\f[CR]cert check\f[R] for verified implicit TLS.
-For STARTTLS use the provider\[cq]s port (usually 143) and
+The IMAP terminal opens a persistent connection to a remote account.
+Use it to browse folders, inspect message headers, measure mailbox
+sizes, export messages, and reorganize folders.
+Browsing, sizing, and exporting are read\-only on the server.
+The commands below run at the \f[CR]imap>\f[R] prompt unless marked as
+system\-shell commands.
+.SS Start a session
+Run \f[CR]jaro \-a ACCOUNT imap shell\f[R] from your system shell.
+Replace \f[CR]ACCOUNT\f[R] with the name of a file in
+\f[CR]$JAROMAILDIR/Accounts/\f[R].
+Omit \f[CR]\-a ACCOUNT\f[R] to use \f[CR]default\f[R].
+The shell uses Jaro Mail\[cq]s account login and credential lookup.
+For implicit TLS, set \f[CR]proto imap\f[R], \f[CR]imap HOST\f[R], the
+provider\[cq]s IMAP port (usually \f[CR]imap_port 993\f[R]),
+\f[CR]transport implicit\f[R], and \f[CR]cert check\f[R].
+For STARTTLS use the provider\[cq]s STARTTLS port (usually 143) and
 \f[CR]transport starttls\f[R].
-Set \f[CR]certfile /path/to/ca.pem\f[R] for a private CA.
-Set the certificate policy explicitly.
-Legacy \f[CR]cert ignore\f[R] disables identity checks and
-\f[CR]transport plain\f[R] sends unencrypted credentials.
-Python 3.9+ is required, with sqlite3 for downloads.
-\f[CR]JARO_IMAP_TIMEOUT\f[R] sets the network deadline in seconds
-(1\[en]300, default 30).
+Certificate checks use system trust or the CA bundle in
+\f[CR]certfile /path/to/ca.pem\f[R].
+A failed certificate check or STARTTLS negotiation ends the connection
+attempt.
+Legacy \f[CR]cert ignore\f[R] disables identity checks, and
+\f[CR]transport plain\f[R] sends credentials unencrypted.
 .PP
-At the prompt, \f[CR]help\f[R] lists commands and \f[CR]quit\f[R] or
-Ctrl\-D exits.
+Python 3.9 or newer is required.
+\f[CR]JARO_IMAP_PYTHON\f[R] selects the interpreter (default
+\f[CR]python3\f[R]), and downloads also require its \f[CR]sqlite3\f[R]
+module.
+\f[CR]JARO_IMAP_TIMEOUT\f[R] sets the deadline for each network
+operation in seconds (1\[en]300, default 30).
+Start from the directory where you want relative archive paths to be
+written.
+.SS Folder paths
+The session starts at the logical root \f[CR]/\f[R].
+A leading slash makes a path absolute.
+Other paths start at the folder shown by \f[CR]pwd\f[R].
+Use \f[CR].\f[R] for the current folder and \f[CR]..\f[R] for its
+parent.
+Separate components with \f[CR]/\f[R] even when the server uses dots.
+For example, \f[CR]Projects.Café team\f[R] on a dot\-delimited server
+appears as \f[CR]/Projects/Café%20team\f[R].
+A flat folder has no children.
+\f[CR][container]\f[R] marks a folder you can navigate through whose
+messages cannot be selected.
+.PP
+Copy percent escapes as displayed.
+Examples include \f[CR]%20\f[R] for a space, \f[CR]%2F\f[R] for a
+literal slash within a name, \f[CR]%25\f[R] for a percent sign, and
+\f[CR]%2A\f[R] for a literal asterisk.
+A folder named \f[CR].\f[R] or \f[CR]..\f[R] is written \f[CR]%2E\f[R]
+or \f[CR]%2E%2E\f[R].
+You can also put spaces inside quotes, as in
+\f[CR]cd \[aq]Café team\[aq]\f[R].
+The prompt reads one command per line and treats shell expansions such
+as \f[CR]$HOME\f[R] and \f[CR]\[ti]\f[R] as literal text.
+.SS Command reference
+.TP
+\f[CR]help\f[R]
+List commands and their options.
+.TP
+\f[CR]quit\f[R] or \f[CR]exit\f[R]
+Close the session.
+Ctrl\-D at an empty prompt also exits.
+.TP
+\f[CR]pwd\f[R] and \f[CR]cd [PATH]\f[R]
+Print or change the current folder.
+With no argument, \f[CR]cd\f[R] returns to \f[CR]/\f[R].
+.TP
+\f[CR]folders\f[R] and \f[CR]refresh\f[R]
+List immediate children of the current folder.
+\f[CR]refresh\f[R] rereads them from the server and resets header
+paging.
+.TP
+\f[CR]ls [\-\-folders | \-\-messages] [\-\-limit N]\f[R] and \f[CR]more\f[R]
+Show immediate children and, in a selectable folder, a page of message
+headers.
+\f[CR]\-\-folders\f[R] shows children only, and \f[CR]\-\-messages\f[R]
+shows headers only.
+Use \f[CR]\-\-limit N\f[R] for 1\[en]500 headers per page (default 50).
+\f[CR]more\f[R] continues the same header listing toward lower UIDs.
+.TP
+\f[CR]du [PATH] [\-\-exact] [\-\-recursive] [\-\-depth N] [\-\-top N]\f[R]
+Measure logical message bytes in \f[CR]PATH\f[R], or in the current
+folder when omitted.
+\f[CR]\-\-exact\f[R] counts size metadata for a captured UID inventory.
+\f[CR]\-\-recursive\f[R] includes descendants.
+\f[CR]\-\-depth N\f[R] limits the scan to \f[CR]N\f[R] child levels,
+with \f[CR]0\f[R] for the starting folder only.
+\f[CR]\-\-top N\f[R] shows the \f[CR]N\f[R] largest selectable mailboxes
+by their own message bytes, where \f[CR]N\f[R] is positive.
+Both options enable recursive mode.
+.TP
+\f[CR]mkdir PATH\f[R]
+Create one folder under an existing parent.
+.TP
+\f[CR]mv OLD NEW\f[R] or \f[CR]rename OLD NEW\f[R]
+Rename or move an exact folder and its descendants.
+Supply the complete new path, including the new leaf name.
+The destination must be unused and its parent must exist.
+.TP
+\f[CR]rename\-glob SOURCE TEMPLATE\f[R] and \f[CR]apply ID\f[R]
+Preview wildcard matches and then apply the saved mapping in the same
+session.
+Quote both arguments.
+The source\[cq]s parent path is literal.
+Its final component contains one unescaped \f[CR]*\f[R], which captures
+zero or more characters case\-sensitively.
+Use \f[CR]{1}\f[R] in the template for the capture and \f[CR]%2A\f[R]
+for a literal star.
+Destinations must have existing parents.
+The preview reports every mapping and any reason it is blocked.
+Applying requires confirmation and a fresh check of the saved mapping.
+.TP
+\f[CR]rmdir EXACT\-PATH [\-\-recursive] [\-\-yes]\f[R]
+Delete a folder and its messages.
+Root and INBOX are protected.
+\f[CR]\-\-recursive\f[R] includes descendants and deletes them first.
+The default prompt shows the targets and available message counts.
+Use \f[CR]\-\-yes\f[R] only for a deliberate deletion of a target you
+have checked.
+It bypasses the confirmation prompt.
+.TP
+\f[CR]download FOLDER \-\-output PATH.tar.gz [\-\-recursive] [\-\-resume]\f[R]
+Export a mailbox to a verified local archive.
+Use \f[CR].\f[R] for the current mailbox.
+\f[CR]\-\-recursive\f[R] includes descendants and allows starting from a
+nonselectable container.
+Choose a folder below the virtual root.
+\f[CR]\-\-resume\f[R] reuses the staging directory for the same export.
+.SS Browse and measure
 The examples use a disposable account with a dot hierarchy, three
 messages in \f[CR]Projects.Café team\f[R], and a folder named
 \f[CR]Projects.List\-Dev\f[R].
-Start at the logical root.
-A slash separates components for every server delimiter.
-A flat folder has no children.
-Copy the displayed percent escapes for literal slashes, wildcards and
-other special characters.
-A space can be written as \f[CR]%20\f[R] or included inside quotes.
-\f[CR][container]\f[R] marks a navigable folder that cannot hold
-messages.
 .IP
 .EX
 folders
@@ -188,29 +291,35 @@ more
 du /Projects \-\-depth 1 \-\-top 3
 .EE
 .PP
-\f[CR]ls\f[R] shows children and a page of headers.
-\f[CR]ls \-\-folders\f[R] lists only children.
-The page holds 50 messages by default (1\[en]500).
+Headers show UID, message size, date, sender, and subject.
 Highest UID appears first.
 The displayed Date header can be older or newer than its neighbors.
-A missing or invalid date falls back to INTERNALDATE.
-\f[CR]more\f[R] continues the same inventory boundary.
-Run \f[CR]ls\f[R] again for new arrivals or after a UIDVALIDITY change.
-\f[CR]refresh\f[R] rereads children and resets paging.
+A missing or invalid date falls back to the server\[cq]s INTERNALDATE.
+Each header listing keeps its starting upper UID bound.
+Run \f[CR]ls\f[R] again for new arrivals, after a UIDVALIDITY change, or
+after navigation, \f[CR]refresh\f[R], or connection recovery resets
+paging.
 .PP
-\f[CR]du\f[R] uses server\-reported message bytes where available.
-Its fallback and \f[CR]\-\-exact\f[R] read size metadata.
-\f[CR]\-\-top\f[R] ranks direct mailbox bytes.
-The subtree column sums descendants within the requested depth.
-Partial totals give lower bounds.
-Shared copies can count twice.
-Account quota, filesystem use and compressed archive size have different
-accounting.
-.PP
+\f[CR]du\f[R] uses server\-reported mailbox bytes where available.
+Both its fallback and \f[CR]\-\-exact\f[R] read only size metadata.
+The direct column covers a single mailbox, and the subtree column adds
+its descendants within the requested depth.
+Check the coverage labels before comparing totals.
+A partial total is a lower bound, and shared copies can count twice.
+Account quota, filesystem use, and compressed archive size have
+different accounting.
+Ctrl\-C can stop a recursive scan and leave a partial report.
+Run \f[CR]du\f[R] again for a fresh scan.
+.SS Download, resume, and verify an archive
 From the IMAP prompt, write a new archive on a filesystem supporting
 hard links.
-Allow space for raw message bytes plus the compressed tar, inventory and
-tar headers.
+Choose an unused filename under an existing directory.
+Output paths refer to the local filesystem, with relative paths anchored
+to the directory where you started Jaro Mail.
+Use ordinary path components.
+Symlinks and \f[CR]..\f[R] are refused.
+Allow space for raw message bytes plus the compressed tar, inventory,
+and tar headers.
 For incompressible mail, budget roughly twice the message bytes plus
 overhead and extra headroom for many small messages.
 Add \f[CR]\-\-recursive\f[R] to include descendants.
@@ -221,19 +330,28 @@ download \[aq]/Projects/Café team\[aq] \-\-output cafe\-team.tar.gz
 .PP
 After an interruption keep \f[CR].cafe\-team.tar.gz.incomplete\f[R] next
 to the intended output.
-Reconnect to the same account and repeat the same selection and path.
+Reconnect if the session ended.
+Use the same account, mailbox, recursive setting, and output path.
 .IP
 .EX
 download \[aq]/Projects/Café team\[aq] \-\-output cafe\-team.tar.gz \-\-resume
 .EE
 .PP
 Resume verifies completed messages locally and restarts any partial
-message.
-Missing captured UIDs or a replaced mailbox require a new filename and a
-fresh inventory.
-Publication verifies the archive and preserves an existing output.
-In your system shell, extract your verified copy into a fresh private
-directory and compare each original with the manifest.
+message from byte zero.
+If packaging failed after all messages were staged, resume can rebuild
+the archive from those files.
+Free space before retrying a disk\-full failure.
+Missing captured UIDs or a changed UIDVALIDITY require a new filename
+and a fresh inventory.
+The export records each folder\[cq]s captured UID range separately.
+Concurrent delivery or folder changes can affect what a later export
+sees.
+.PP
+Publication verifies the archive before exposing the final filename and
+preserves any existing output.
+In your system shell, extract the archive into a fresh private directory
+and check the message bytes against the manifest.
 .IP
 .EX
 umask 077
@@ -259,14 +377,17 @@ PY
 )
 .EE
 .PP
-The versioned JSON Lines manifest maps generated \f[CR].eml\f[R] members
-to original folder names, UIDs, dates, flags, sizes and SHA\-256
-digests.
-After verifying the copy, the following IMAP commands reorganize the
-disposable account.
-\f[CR]mv\f[R] (alias \f[CR]rename\f[R]) takes a complete destination
-whose parent already exists.
-Each source\[cq]s descendants move with it.
+The archive contains raw \f[CR].eml\f[R] files and a versioned
+\f[CR]manifest.jsonl\f[R].
+Folder records describe the original paths and names, including empty
+folders.
+Message records give the generated member path, folder ID, UID,
+INTERNALDATE, flags, byte length, and SHA\-256 digest.
+The export preserves the message bytes the server returns and leaves its
+Seen flags alone.
+.SS Reorganize or delete folders
+After verifying the copy, use the following IMAP commands to reorganize
+the disposable account.
 .IP
 .EX
 mkdir /Projects/Lists
@@ -278,9 +399,15 @@ Read every old and new path in the preview.
 To accept this mapping, replace \f[CR]ID\f[R] with the printed ID in
 \f[CR]apply ID\f[R] in the same session, then type \f[CR]yes\f[R] on the
 controlling terminal.
-A refusal, drift or unknown reply stops the serial renames.
-Inspect completed, failed, unknown and pending pairs before a fresh
-preview.
+The preview prints every mapping in one pass.
+For a large preview, use terminal scrollback or capture the
+session\[cq]s standard output to a file and read it before confirming.
+A new preview replaces the old ID.
+Every apply attempt consumes its ID, including cancellations.
+A refusal, a detected change, or an unknown reply stops the serial
+renames.
+Inspect completed, failed, unknown, and pending pairs before making a
+fresh preview.
 .PP
 For deletion practice, create a new empty folder in the disposable
 account.
@@ -294,23 +421,47 @@ rmdir /Projects/Practice
 .PP
 Check the target and message count, then type \f[CR]yes\f[R] on the
 controlling terminal.
-Enter cancels.
-Deletion includes messages.
+A blank answer or Ctrl\-C at the confirmation prompt cancels the
+operation.
 Descendants require \f[CR]\-\-recursive\f[R], which lists the target set
 before confirmation.
-Scripted deletion requires deliberate \f[CR]\-\-yes\f[R] when no
-controlling terminal is available.
-Downloading never initiates deletion.
-Inspect surviving and unknown paths before another write.
-.PP
+Keep archive verification and deletion as separate steps.
+The shell checks the scope again after confirmation.
+Another client or new mail can still change it between the last check
+and the server write.
+If a write returns an unknown outcome, inspect the refreshed folders and
+any surviving or unknown paths before retrying.
+Folder writes may change subscriptions on the server.
+The shell reports any differences it can see.
+.SS Batch input and exit status
+Read one command per line from a file with
+\f[CR]jaro \-a ACCOUNT imap shell < commands.txt > results.txt\f[R].
 Piped input omits the prompt.
-Header rows retain tab\-separated fields when redirected.
+Redirected header rows use tab\-separated fields.
 Progress and diagnostics go to stderr.
-Batch commands continue after a recoverable failure.
-Exit 1 at EOF or \f[CR]quit\f[R] records any failed, cancelled or
-partial command, even when a later command succeeds.
-A fatal network timeout exits 124 and a session interrupted by Ctrl\-C
-exits 130.
+The \f[CR]apply\f[R] and \f[CR]rmdir\f[R] confirmation prompts read from
+the controlling terminal.
+Lines on command stdin cannot confirm a write.
+For a run without a controlling terminal, use \f[CR]rename\-glob\f[R] to
+inspect mappings.
+To apply them, generate a fresh preview in an interactive session and
+use its ID.
+An explicit \f[CR]rmdir EXACT\-PATH \-\-yes\f[R] can delete in batch
+mode.
+.PP
+A normal interactive exit returns \f[CR]0\f[R].
+In batch mode, \f[CR]0\f[R] indicates success and \f[CR]1\f[R] records
+any failed, cancelled, or partial command, even when a later command
+succeeds.
+A connection or authentication failure also exits with \f[CR]1\f[R].
+An unhandled network deadline exits with \f[CR]124\f[R].
+When Ctrl\-C ends the session, it exits with \f[CR]130\f[R].
+.PP
+If startup fails, check the account name, credentials, host, port,
+transport, and certificate settings.
+If a folder is missing, check its parent with \f[CR]folders\f[R] or
+\f[CR]refresh\f[R] and copy the displayed spelling and escapes.
+Server permissions can hide folders.
 .SS Message snapshots
 \f[CR]snapshot create DEST\f[R] copy regular Maildir
 \f[CR]new\f[R]/\f[CR]cur\f[R] messages and filename flags from
