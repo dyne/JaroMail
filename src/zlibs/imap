@@ -391,7 +391,7 @@ _imap_shell() (
     # Descriptor 3 is a private inherited pipe; terminal input remains stdin.
     # Never serialize account data into argv, environment or a temporary file.
     "$interpreter" "$helper" 3< <(
-        for field in "$imap" "$imap_port" "$style" "${cert:-ignore}" "$certfile" "$login" "$password" "$deadline"; do
+        for field in "$imap" "$imap_port" "$style" "${cert:-ignore}" "$certfile" "$login" "$password" "$deadline" "$account"; do
             printf '%s:' "${#field}"
             print -rn -- "$field"
         done

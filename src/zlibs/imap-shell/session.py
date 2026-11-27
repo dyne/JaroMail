@@ -22,7 +22,7 @@ import deletions
 def account_record():
     fields = []
     with os.fdopen(3, "rb") as source:
-        for _ in range(8):
+        for _ in range(9):
             size = bytearray()
             while True:
                 char = source.read(1)
@@ -128,7 +128,7 @@ def connect(config):
         raise
 
 
-def command_loop(client, seconds, reconnect):
+def command_loop(client, seconds, reconnect, account_identity):
     tree = FolderTree(client, seconds, deadline, reconnect)
     pager = headers.Pager()
     rename_session = renames.Session()
@@ -139,11 +139,12 @@ def command_loop(client, seconds, reconnect):
             readline.set_auto_history(False)
         except ImportError:
             pass
+    batch_status = 0
     while True:
         try:
             line = input("imap> " if interactive else "")
         except EOFError:
-            return 0
+            return batch_status
         first = None
         try:
             # Recognize an authorization attempt even if later arguments are
@@ -158,14 +159,48 @@ def command_loop(client, seconds, reconnect):
         except ValueError:
             if first in ("rename-glob", "apply"):
                 rename_session.saved = None
+            if first == "download" and not interactive:
+                batch_status = 1
             print("Invalid quoted command", file=sys.stderr)
             continue
         if not words:
             continue
         if words in (["quit"], ["exit"]):
-            return 0
+            return batch_status
         if words == ["help"]:
-            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], mkdir PATH, mv OLD NEW (alias rename; NEW is the complete path), rename-glob SOURCE TEMPLATE (preview), apply ID, rmdir EXACT-PATH [--recursive] [--yes], help, quit")
+            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], mkdir PATH, mv OLD NEW (alias rename; NEW is the complete path), rename-glob SOURCE TEMPLATE (preview), apply ID, rmdir EXACT-PATH [--recursive] [--yes], download FOLDER --output PATH.tar.gz [--recursive] [--resume], help, quit")
+        elif words[0] == "download":
+            try:
+                import download
+            except ModuleNotFoundError as exc:
+                if exc.name not in ("sqlite3", "_sqlite3"):
+                    raise
+                print("Download requires Python sqlite3 support", file=sys.stderr)
+                if not interactive:
+                    batch_status = 1
+                continue
+            try:
+                download.run(tree, words[1:], account_identity)
+            except download.PublishedError as exc:
+                print(str(exc), file=sys.stderr)
+                if not interactive:
+                    batch_status = 1
+            except download.DownloadError as exc:
+                print("Download incomplete: " + str(exc), file=sys.stderr)
+                if not interactive:
+                    batch_status = 1
+            except (KeyboardInterrupt, headers.LiteralLimit) as exc:
+                with contextlib.suppress(OSError):
+                    tree.client.shutdown()
+                reason = "interrupted" if isinstance(exc, KeyboardInterrupt) else "rejected an unexpected literal"
+                print(f"Download {reason}; repeat with --resume if staging exists", file=sys.stderr)
+                if not interactive:
+                    return 130 if isinstance(exc, KeyboardInterrupt) else 1
+                old_encoding = tree.client.utf8_enabled
+                tree.client = reconnect()
+                pager.reset()
+                if tree.client.utf8_enabled != old_encoding:
+                    tree = FolderTree(tree.client, seconds, deadline, reconnect)
         elif words == ["pwd"]:
             print(tree.current.path)
         elif words[0] in ("folders", "refresh", "ls", "cd", "more", "du", "mkdir", "mv", "rename", "rename-glob", "apply", "rmdir"):
@@ -277,13 +312,14 @@ def main():
     client = None
     seconds = 1
     try:
-        config = account_record()
+        *config, account = account_record()
         client, seconds = connect(config)
         def reconnect():
             nonlocal client
             client, _ = connect(config)
             return client
-        return command_loop(client, seconds, reconnect)
+        identity = (account, server_host(config[0]).lower(), int(config[1]), config[2], config[5])
+        return command_loop(client, seconds, reconnect, identity)
     except KeyboardInterrupt:
         print("IMAP session cancelled", file=sys.stderr)
         return 130
