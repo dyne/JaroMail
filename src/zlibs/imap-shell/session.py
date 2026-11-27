@@ -12,6 +12,7 @@ import sys
 # Helpers are installed as data; invocation must not modify that installation.
 sys.dont_write_bytecode = True
 from folders import FolderTree
+import headers
 
 
 def account_record():
@@ -123,8 +124,9 @@ def connect(config):
         raise
 
 
-def command_loop(client, seconds):
+def command_loop(client, seconds, reconnect):
     tree = FolderTree(client, seconds, deadline)
+    pager = headers.Pager()
     interactive = sys.stdin.isatty()
     if interactive:
         try:
@@ -147,22 +149,69 @@ def command_loop(client, seconds):
         if words in (["quit"], ["exit"]):
             return 0
         if words == ["help"]:
-            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages], help, quit")
+            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, help, quit")
         elif words == ["pwd"]:
             print(tree.current.path)
-        elif words[0] in ("folders", "refresh", "ls", "cd"):
+        elif words[0] in ("folders", "refresh", "ls", "cd", "more"):
             try:
                 if words[0] == "cd" and len(words) <= 2:
                     tree.cd(words[1] if len(words) == 2 else "/")
-                elif words == ["ls", "--messages"]:
-                    print("Header browsing is unavailable" if tree.current.selectable else
-                          "Choose a selectable folder", file=sys.stderr)
-                elif words in (["folders"], ["refresh"], ["ls"], ["ls", "--folders"]):
+                    pager.reset()
+                elif words in (["folders"], ["refresh"]):
                     tree.show(refresh=words == ["refresh"])
+                    if words == ["refresh"]:
+                        pager.reset()
+                elif words == ["more"]:
+                    if not tree.current.selectable:
+                        raise headers.PagingError("Choose a selectable folder")
+                    pager.show(tree.client, tree.current, seconds, deadline, more=True)
+                elif words[0] == "ls":
+                    options, limit, mode = list(words[1:]), headers.PAGE_SIZE, None
+                    seen = set()
+                    while options:
+                        option = options.pop(0)
+                        if option in seen:
+                            raise headers.PagingError("Invalid ls options; use help")
+                        seen.add(option)
+                        if option in ("--messages", "--folders") and mode is None:
+                            mode = option
+                        elif option == "--limit" and options:
+                            value = options.pop(0)
+                            if len(value) > 3 or not value.isascii() or not value.isdecimal() or not 1 <= int(value) <= 500:
+                                raise headers.PagingError("--limit must be an integer from 1 to 500")
+                            limit = int(value)
+                        else:
+                            raise headers.PagingError("Invalid ls options; use help")
+                    if mode != "--messages":
+                        tree.show()
+                    if mode != "--folders" and tree.current.selectable:
+                        pager.show(tree.client, tree.current, seconds, deadline, limit)
+                    elif mode == "--messages":
+                        raise headers.PagingError("Choose a selectable folder")
                 else:
                     print("Invalid folder command; use help", file=sys.stderr)
+            except headers.PagingError as exc:
+                print(str(exc), file=sys.stderr)
             except (ValueError, UnicodeError):
                 print("Folder operation failed", file=sys.stderr)
+            except (KeyboardInterrupt, headers.LiteralLimit):
+                # A partial literal leaves imaplib's parser unsynchronized.
+                # Close without LOGOUT, reconnect, and revalidate the raw name
+                # before another command can use this connection.
+                with contextlib.suppress(OSError):
+                    tree.client.shutdown()
+                old_encoding = tree.client.utf8_enabled
+                pager.reset()
+                renewed = reconnect()
+                if renewed.utf8_enabled != old_encoding:
+                    tree = FolderTree(renewed, seconds, deadline)
+                    print("Mailbox encoding changed; returned to /; rediscover folders", file=sys.stderr)
+                else:
+                    tree.client = renewed
+                if tree.current.selectable:
+                    with deadline(seconds):
+                        headers.examine(tree.client, tree.current.raw)
+                print("Header operation cancelled; connection renewed", file=sys.stderr)
         else:
             print("Unknown command; use help", file=sys.stderr)
 
@@ -173,8 +222,11 @@ def main():
     try:
         config = account_record()
         client, seconds = connect(config)
-        del config
-        return command_loop(client, seconds)
+        def reconnect():
+            nonlocal client
+            client, _ = connect(config)
+            return client
+        return command_loop(client, seconds, reconnect)
     except KeyboardInterrupt:
         print("IMAP session cancelled", file=sys.stderr)
         return 130

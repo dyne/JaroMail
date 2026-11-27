@@ -50,11 +50,20 @@ for name, host in (("trusted", "localhost"), ("wrong", "wrong.invalid")):
 class Server:
     def __init__(self, mode="implicit", cert="trusted", version="IMAP4rev1", denied=False,
                  login_disabled=False, preauth=False, ipv6=False, folders=None, utf8=False,
-                 enable_reply="confirmed"):
+                 enable_reply="confirmed", messages=None, header_mode=None, events=None):
         self.mode, self.version, self.denied = mode, version, denied
         self.login_disabled, self.preauth = login_disabled, preauth
         self.folders, self.utf8 = folders, utf8
         self.enable_reply = enable_reply
+        self.messages, self.header_mode = messages or [], header_mode
+        self.literal_started = threading.Event()
+        self.connections = 0
+        self.fetch_ranges = []
+        self.header_fetches = []
+        self.events = events or {}
+        self.validity = 44
+        self.header_bytes = 0
+        self.flags = {uid: {"\\Flagged"} for uid, _ in self.messages}
         self.patterns = []
         self.wire = []
         self.commands = []
@@ -72,10 +81,18 @@ class Server:
         self.thread = threading.Thread(target=self.serve)
 
     def serve(self):
+        for _ in range(2 if self.header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 1):
+            self.serve_once()
+            if self.failure or self.stop.is_set():
+                return
+
+    def serve_once(self):
         try:
             conn, _ = self.listener.accept()
+            self.connections += 1
             self.conn = conn
             conn.settimeout(5)
+            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             if self.mode == "timeout":
                 self.stop.wait(5)
                 return
@@ -105,8 +122,13 @@ class Server:
                                       "line": safe.decode("utf-8")})
                     conn.sendall(response)
 
+                event = self.events.get((command, self.commands.count(command)))
+                if event:
+                    event(self, send)
                 if command == "CAPABILITY":
                     caps = self.version + " UIDPLUS"
+                    if self.header_mode == "encoding" and self.connections == 2:
+                        caps = "IMAP4rev2 UIDPLUS"
                     if self.mode == "starttls" and not secure:
                         caps += " STARTTLS LOGINDISABLED"
                     elif self.login_disabled:
@@ -128,6 +150,73 @@ class Server:
                 elif command == "LOGOUT":
                     send(b"* BYE goodbye\r\n" + tag + b" OK logout\r\n")
                     return
+                elif command == "EXAMINE":
+                    assert args and args[0].startswith(b'"'), "EXAMINE mailbox not quoted"
+                    if self.header_mode == "encoding":
+                        assert self.connections == 1, "cached raw name reused after encoding changed"
+                    uidnext = max((uid for uid, _ in self.messages), default=0) + 1
+                    send(f"* {len(self.messages)} EXISTS\r\n* OK [UIDVALIDITY {self.validity}] generation\r\n* OK [UIDNEXT {uidnext}] next\r\n".encode()
+                         + tag + b" OK [READ-ONLY] examined\r\n")
+                elif command in ("FETCH", "UID"):
+                    operands = args[0]
+                    if command == "UID":
+                        assert operands.startswith(b"FETCH ")
+                        operands = operands[6:]
+                    sequence, attrs = operands.split(b" ", 1)
+                    if command == "FETCH":
+                        assert attrs == b"(UID)", "sequence FETCH must only probe UID metadata"
+                        if self.header_mode == "inventory-oversized" and self.connections == 1:
+                            send(b"* 1 FETCH (UID 1 BODY[] {999999999}\r\n")
+                            assert conn.recv(1) == b"", "client buffered unexpected inventory literal"
+                            return
+                        start, end = map(int, sequence.split(b":"))
+                        assert 1 <= start <= end and end - start < 10
+                        self.fetch_ranges.append((start, end))
+                        for index in range(start, min(end, len(self.messages)) + 1):
+                            send(f"* {index} FETCH (UID {self.messages[index - 1][0]})\r\n".encode())
+                        send(tag + b" OK inventory\r\n")
+                        continue
+                    assert attrs == b"(UID RFC822.SIZE INTERNALDATE BODY.PEEK[HEADER.FIELDS (DATE FROM SUBJECT)]<0.8192>)"
+                    requested = list(map(int, sequence.split(b",")))
+                    assert len(requested) <= 10 and len(requested) == len(set(requested))
+                    self.header_fetches.append(requested)
+                    indices = [index for index, (uid, _) in enumerate(self.messages, 1) if uid in requested]
+                    start = indices[0] if indices else 0
+                    if self.header_mode == "rejected" and len(self.header_fetches) == 1:
+                        send(tag + b" NO unavailable right now\r\n")
+                        continue
+                    for index in indices:
+                        uid, raw = self.messages[index - 1]
+                        literal = raw[:8192]
+                        metadata = (f'* {index} FETCH (UID {uid} RFC822.SIZE {uid * 1024} '
+                                    'INTERNALDATE "02-Jan-2020 03:04:05 +0000" '
+                                    'BODY[HEADER.FIELDS (DATE FROM SUBJECT)]<0> ').encode()
+                        if self.header_mode == "oversized" and self.connections == 1:
+                            send(metadata + b"{999999999}\r\n")
+                            assert conn.recv(1) == b"", "client buffered an oversized literal"
+                            return
+                        if self.header_mode in ("cancel", "encoding") and self.connections == 1:
+                            send(metadata + b"{8192}\r\nDate: ")
+                            self.literal_started.set()
+                            assert conn.recv(1) == b"", "client sent command on partial literal connection"
+                            return
+                        if self.header_mode == "malformed" and len(self.header_fetches) == 1:
+                            metadata = metadata.replace(f"UID {uid} ".encode(), b"")
+                        suffix = b")\r\n"
+                        if self.header_mode in ("suffix", "empty"):
+                            metadata = f'* {index} FETCH (BODY[HEADER.FIELDS (DATE FROM SUBJECT)]<0> '.encode()
+                            suffix = (f' UID {uid} RFC822.SIZE {uid * 1024} '
+                                      'INTERNALDATE "02-Jan-2020 03:04:05 +0000")\r\n').encode()
+                            if self.header_mode == "empty":
+                                if index == start:
+                                    send(metadata + b"NIL" + suffix)
+                                    continue
+                                literal = b""
+                        self.header_bytes += len(literal)
+                        send(metadata + b"{" + str(len(literal)).encode() + b"}\r\n" + literal + suffix)
+                        if self.header_mode == "suffix":
+                            send(f"* {index} FETCH (FLAGS (\\Flagged))\r\n".encode())
+                    send(tag + b" OK fetched\r\n")
                 elif command == "ENABLE":
                     assert self.utf8 and args == [b"UTF8=ACCEPT"]
                     if self.enable_reply == "confirmed":
@@ -240,8 +329,10 @@ def run(name, installed=False, mode="implicit", cert="trusted", policy="check", 
         version="IMAP4rev1", denied=False, expected=0, commands=b"help\nhelp\nquit\n", interrupt=False,
         interpreter=None, debug=False, login_disabled=False, preauth=False, ipv6=False,
         prompt=False, terminal=False, folders=None, utf8=False, expected_out=None, patterns=None,
-        expected_err=(), enable_reply="confirmed", enable_count=None):
-    with Server(mode, cert, version, denied, login_disabled, preauth, ipv6, folders, utf8, enable_reply) as server:
+        expected_err=(), enable_reply="confirmed", enable_count=None, messages=None, header_mode=None,
+        expected_uids=None, expected_contains=(), expected_subjects=None, events=None, max_inventory=None):
+    with Server(mode, cert, version, denied, login_disabled, preauth, ipv6, folders, utf8, enable_reply,
+                messages, header_mode, events) as server:
         account = work / "mail/Accounts/shell-fixture"
         account.write_text(f'''name fixture
 email fixture@example.org
@@ -254,7 +345,7 @@ transport {"starttls" if mode in ("starttls", "no-starttls") else "plain" if mod
 cert {policy}
 certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
 ''')
-        env = dict(os.environ, JAROMAILDIR=str(work / "mail"), JARO_IMAP_TIMEOUT="1",
+        env = dict(os.environ, JAROMAILDIR=str(work / "mail"), JARO_IMAP_TIMEOUT="10" if events or len(messages or []) > 100 else "1",
                    password="private-marker-password", login="fixture user",
                    JAROWORKDIR=str(prefix / "share/jaromail" if installed else repo / "src"))
         env["JARO_IMAP_PYTHON"] = interpreter or str(audit)
@@ -263,6 +354,13 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
         master, slave = pty.openpty() if terminal else (None, subprocess.PIPE)
         try:
             with client_process(argv, env, slave) as process:
+                if header_mode in ("cancel", "encoding"):
+                    process.stdin.write(b"cd Caf\xc3\xa9\nls --messages\n" if header_mode == "encoding"
+                                        else b"cd Inbox\nls --messages\n")
+                    process.stdin.flush()
+                    assert server.literal_started.wait(5), "header literal did not begin"
+                    os.killpg(process.pid, signal.SIGINT)
+                    commands = b"pwd\nls --messages\nquit\n"
                 if interrupt:
                     assert server.ready.wait(5), "login did not finish"
                     # Wait for the post-login CAPABILITY before cancellation.
@@ -272,7 +370,7 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
                     os.killpg(process.pid, signal.SIGINT)
                 if terminal:
                     os.write(master, b"help\n\x04")
-                out, err = process.communicate(None if terminal else commands, timeout=7)
+                out, err = process.communicate(None if terminal else commands, timeout=20)
         finally:
             if terminal:
                 os.close(master)
@@ -285,11 +383,11 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert json.loads(audit.with_suffix('.json').read_text()) == {"secretExposed": False}
         assert not (Path(env["HOME"]) / ".python_history").exists()
         if expected == 0 or interrupt:
-            assert server.commands.count("LOGIN") == 1, server.commands
+            assert server.commands.count("LOGIN") == (2 if header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 1), server.commands
             assert server.commands[-1] == "LOGOUT", server.commands
         if expected == 0:
-            assert server.commands.count("CAPABILITY") == (3 if mode == "starttls" else 2)
-            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "ENABLE") for c in server.commands)
+            assert server.commands.count("CAPABILITY") == (4 if header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 3 if mode == "starttls" else 2)
+            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "ENABLE", "EXAMINE", "FETCH", "UID") for c in server.commands)
         if expected_out is not None:
             assert out.decode("utf-8") == expected_out, (name, out.decode("utf-8"), expected_out)
         for message in expected_err:
@@ -298,7 +396,28 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert server.patterns == patterns, (name, server.patterns, patterns)
         if enable_count is not None:
             assert server.commands.count("ENABLE") == enable_count
-        assert "FETCH" not in server.commands and "SELECT" not in server.commands
+        assert "SELECT" not in server.commands and "STORE" not in server.commands
+        if expected_uids is not None:
+            rows = [line.split(b"\t") for line in out.splitlines() if line[:1].isdigit()]
+            assert [int(row[0]) for row in rows] == expected_uids, (name, rows)
+            assert server.header_bytes <= len(expected_uids) * 8192
+            assert all(len(row) == 5 for row in rows)
+            if expected_subjects is not None:
+                assert {int(row[0]): row[4].decode() for row in rows} == expected_subjects
+            assert b"\x1b" not in out and b"\xc2\x9b" not in out
+            assert server.flags == {uid: {"\\Flagged"} for uid, _ in server.messages}
+            for value in expected_contains:
+                assert value.encode() in out, (name, "missing header field", value)
+            if len(messages or []) == 65 and events is None:
+                assert server.fetch_ranges == [(16, 25), (26, 35), (36, 45), (46, 55), (56, 65)]
+            if max_inventory is not None:
+                assert len(server.fetch_ranges) <= max_inventory, (name, server.fetch_ranges)
+            if header_mode in ("cancel", "oversized", "inventory-oversized"):
+                assert b"/Inbox\n" in out, "command immediately after cancellation did not run"
+                assert server.connections == 2
+            if header_mode in ("rejected", "malformed"):
+                assert server.connections == 1 and server.commands.count("FETCH") == 2
+                assert b"/Inbox\n" in out
         if expected and not denied and not interrupt:
             assert "LOGIN" not in server.commands, server.commands
         if mode == "starttls":
@@ -358,7 +477,7 @@ root_listing = '%2E\n%2E%2E\nA%2A%25 [container]\nArchive\nCafé\nProjects [cont
 run("mixed shallow folders", folders=mixed,
     commands=b'ls\ncd Projects\npwd\nls --folders\nls --messages\ncd Leaf\npwd\nls --messages\ncd /Archive\nfolders\ncd folder%2Fwith%2Fslash\npwd\ncd /A%2A%25\nls\nrefresh\nls\ncd /flat%2Fslash\nls\npwd\ncd /%2E\npwd\ncd /%2E%2E\npwd\ncd /\nls\nquit\n',
     expected_out=root_listing + '/Projects\n%2E\n%2E%2E\nLeaf\n/Projects/Leaf\nLeaf\nfolder%2Fwith%2Fslash\n/Archive/folder%2Fwith%2Fslash\nLeaf\nNewLeaf\nNewLeaf\n/flat%2Fslash\n/%2E\n/%2E%2E\n' + root_listing,
-    expected_err=("Choose a selectable folder", "Header browsing is unavailable"),
+    expected_err=("Choose a selectable folder",),
     patterns=[b"%", b"Projects/%", b"Archive.%", b"A*%/%", b"A*%/%"])
 utf8_folders = {b"%": [mailbox("旅行".encode(), b"/", (b"\\Noselect",), True)],
                 "旅行/%".encode(): [mailbox("旅行/Étage".encode(), b"/", literal=True)]}
@@ -402,4 +521,123 @@ run("NonExistent parent retains children", folders=missing,
     commands=b'folders\ncd Missing\nls --messages\nls\ncd Leaf\npwd\nquit\n',
     expected_out='Missing [container]\nLeaf\n/Missing/Leaf\n',
     expected_err=("Choose a selectable folder",), patterns=[b"%", b"Missing/%"])
+header_folders = {b"%": [mailbox(b"Inbox")]}
+normal_header = (b"Date: Fri, 27 Nov 2026 15:20:00 +0100\r\n"
+                 b"From: =?utf-8?b?SsO2cmc=?= <fixture@example.org>\r\n"
+                 b"Subject: =?utf-8?q?Folded_caf=C3=A9?=\r\n continuation\r\n\r\n")
+messages = [(index * 100003, normal_header) for index in range(1, 66)]
+messages[-1] = (messages[-1][0], b"Date: broken\r\nFrom: bad\x1b[2J\x00name\r\nSubject: controls\x1b]0;title\x07\r\n\r\n")
+messages[-2] = (messages[-2][0], b"From: missing date\r\n\r\n")
+messages[-3] = (messages[-3][0], b"Date: Fri, 27 Nov 2026 15:20:00 +0100\r\nSubject: " + b"x" * 12000 + b"\r\n\r\n")
+for installed in (False, True):
+    run("bounded header page " + ("installed" if installed else "source"), installed=installed,
+        folders=header_folders, messages=messages, commands=b"cd Inbox\nls --messages\nquit\n",
+        expected_uids=[uid for uid, _ in reversed(messages[-50:])],
+        expected_contains=("Jörg <fixture@example.org>", "Folded café continuation", "[missing]",
+                           "2026-11-27 15:20:00+01:00", "02-Jan-2020 03:04:05 +0000 [INTERNALDATE]",
+                           "[headers truncated]", "GiB", "[malformed]", "controls�]0;title�"))
+run("headers alongside folders", folders=header_folders, messages=messages[:1],
+    commands=b"cd Inbox\nls\nquit\n", expected_uids=[messages[0][0]])
+for mode in ("cancel", "oversized", "inventory-oversized"):
+    run("header recovery " + mode, folders=header_folders, messages=messages[:1], header_mode=mode,
+        commands=b"cd Inbox\nls --messages\npwd\nls --messages\nquit\n",
+        expected_err=("connection renewed",), expected_uids=[messages[0][0]])
+adjacent = [(100003, b"Subject: first UID 999 RFC822.SIZE 1\r\n\r\n"),
+            (200006, b"Subject: second\r\n\r\n")]
+run("suffix FETCH metadata with adjacent rows and unsolicited FLAGS", folders=header_folders,
+    messages=adjacent, header_mode="suffix", commands=b"cd Inbox\nls --messages\nquit\n",
+    expected_uids=[200006, 100003], expected_subjects={100003: "first UID 999 RFC822.SIZE 1", 200006: "second"})
+run("NIL and empty header fields", folders=header_folders, messages=adjacent, header_mode="empty",
+    commands=b"cd Inbox\nls --messages\nquit\n", expected_uids=[200006, 100003],
+    expected_subjects={100003: "[missing]", 200006: "[missing]"}, expected_contains=("[INTERNALDATE]",))
+for mode in ("rejected", "malformed"):
+    run("synchronized header failure " + mode, folders=header_folders, messages=messages[:1], header_mode=mode,
+        commands=b"cd Inbox\nls --messages\npwd\nls --messages\nquit\n",
+        expected_uids=[messages[0][0]], expected_err=("Folder operation failed",))
+run("reconnect mailbox encoding drift", folders={b"%": [mailbox(b"Caf&AOk-")]}, messages=messages[:1],
+    header_mode="encoding", expected_out="/\n", expected_uids=[],
+    expected_err=("Mailbox encoding changed", "Choose a selectable folder"))
+
+sparse = [(uid, normal_header) for uid in (1, 70, 900000, 2147483648, 4294967200, 4294967280, 4294967290)]
+run("sparse UID pages near 32-bit boundary", installed=True, folders=header_folders, messages=sparse,
+    commands=b"cd Inbox\nls --messages --limit 2\nmore\nmore\nmore\nmore\nquit\n",
+    expected_uids=[uid for uid, _ in reversed(sparse)], expected_contains=("No more messages",), max_inventory=18)
+run("limit one", folders=header_folders, messages=sparse,
+    commands=b"cd Inbox\nls --limit 1 --messages\nmore\nquit\n", expected_uids=[4294967290, 4294967280], max_inventory=5)
+many = [(index * 100003, normal_header) for index in range(1, 502)]
+run("limit 500 bounded window", installed=True, folders=header_folders, messages=many,
+    commands=b"cd Inbox\nls --limit 500 --messages\nquit\n",
+    expected_uids=[uid for uid, _ in reversed(many[-500:])], max_inventory=50)
+run("empty folder paging", folders=header_folders, messages=[],
+    commands=b"cd Inbox\nmore\nls --messages\nmore\nquit\n", expected_uids=[],
+    expected_err=("Run ls",), expected_contains=("No more messages",), max_inventory=0)
+run("limits and command syntax", folders=header_folders, messages=sparse,
+    commands=b"cd Inbox\nls --limit 0\nls --limit 501\nls --limit -1\nls --limit +1\nls --limit x\nls --limit 1.5\nls --limit\nls --limit 2 --limit 3\nls --messages --folders\nmore junk\nmore\nquit\n",
+    expected_uids=[], expected_err=("--limit must be an integer from 1 to 500", "Invalid ls options", "Run ls"),
+    max_inventory=0)
+run("container and root do not fetch pages", folders={b"%": [mailbox(b"Parent", b"/", (b"\\Noselect",))], b"Parent/%": []},
+    commands=b"ls --limit 2\nmore\ncd Parent\nls --messages --limit 2\nmore\nquit\n",
+    expected_uids=[], expected_err=("Choose a selectable folder",), max_inventory=0)
+
+def expunge(server, send, position):
+    uid, _ = server.messages.pop(position - 1)
+    server.flags.pop(uid)
+    send(f"* {position} EXPUNGE\r\n".encode())
+
+
+def arrival(server, send, uid):
+    server.messages.append((uid, normal_header))
+    server.messages.sort()
+    server.flags[uid] = {"\\Flagged"}
+    send(f"* {len(server.messages)} EXISTS\r\n".encode())
+
+
+def between_pages(server, send):
+    expunge(server, send, 2)  # An unseen old message vanishes.
+    expunge(server, send, len(server.messages))  # Previously displayed UID vanishes.
+    arrival(server, send, 4294967293)
+
+
+run("arrival and expunges between pages", folders=header_folders, messages=list(sparse),
+    events={("EXAMINE", 2): between_pages},
+    commands=b"cd Inbox\nls --messages --limit 2\nmore\nmore\nmore\nquit\n",
+    expected_uids=[4294967290, 4294967280, 4294967200, 2147483648, 900000, 1], max_inventory=20)
+
+def probe_change(server, send):
+    expunge(server, send, 1)
+    arrival(server, send, 4294967293)
+
+
+run("expunge and arrival during continuation probe", folders=header_folders, messages=list(sparse),
+    events={("FETCH", 2): probe_change},
+    commands=b"cd Inbox\nls --messages --limit 2\nmore\nmore\nmore\nquit\n",
+    expected_uids=[4294967290, 4294967280, 4294967200, 2147483648, 900000, 70], max_inventory=20)
+run("arrival during continuation probe", folders=header_folders, messages=list(sparse),
+    events={("FETCH", 2): lambda s, send: arrival(s, send, 4294967293)},
+    commands=b"cd Inbox\nls --messages --limit 2\nmore\nmore\nmore\nquit\n",
+    expected_uids=[uid for uid, _ in reversed(sparse)], max_inventory=20)
+run("first inventory expunge retry freezes upper UID", folders=header_folders, messages=list(sparse),
+    events={("FETCH", 1): probe_change},
+    commands=b"cd Inbox\nls --messages --limit 2\nmore\nmore\nquit\n",
+    expected_uids=[4294967290, 4294967280, 4294967200, 2147483648, 900000, 70], max_inventory=20)
+run("expunge after captured inventory", folders=header_folders, messages=list(sparse),
+    events={("UID", 1): lambda s, send: expunge(s, send, len(s.messages))},
+    commands=b"cd Inbox\nls --messages --limit 2\nmore\nmore\nmore\nquit\n",
+    expected_uids=[4294967280, 4294967200, 2147483648, 900000, 70, 1], max_inventory=20)
+
+def replace_mailbox(server, send):
+    server.validity += 1
+
+
+run("UIDVALIDITY replacement discards cursor", folders=header_folders, messages=list(sparse),
+    events={("EXAMINE", 2): replace_mailbox},
+    commands=b"cd Inbox\nls --messages --limit 2\nmore\nmore\nquit\n",
+    expected_uids=[4294967290, 4294967280], expected_err=("UIDVALIDITY changed", "run ls to refresh", "Run ls"), max_inventory=1)
+run("refresh resets paging", folders=header_folders, messages=list(sparse),
+    commands=b"cd Inbox\nls --messages --limit 2\nrefresh\nmore\nquit\n",
+    expected_uids=[4294967290, 4294967280], expected_err=("Run ls",), max_inventory=1)
+run("repeated probe churn is bounded and leaves shell usable", folders=header_folders, messages=list(sparse),
+    events={("FETCH", count): lambda s, send: expunge(s, send, 1) for count in (1, 2, 3)},
+    commands=b"cd Inbox\nls --messages --limit 2\npwd\nmore\nquit\n", expected_uids=[],
+    expected_contains=("/Inbox",), expected_err=("Mailbox changed repeatedly", "Run ls"), max_inventory=3)
 print(f"PASS: {len(results)} public shell scenarios; all endpoints joined")
