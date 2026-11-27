@@ -208,11 +208,11 @@ class Server:
                 elif command == "LOGOUT":
                     send(b"* BYE goodbye\r\n" + tag + b" OK logout\r\n")
                     return
-                elif command in ("CREATE", "RENAME"):
+                elif command in ("CREATE", "RENAME", "DELETE"):
                     assert self.write_state is not None, "unexpected mailbox write"
                     remaining = args[0]
                     operands = []
-                    for _ in range(1 if command == "CREATE" else 2):
+                    for _ in range(2 if command == "RENAME" else 1):
                         if remaining.startswith(b'"'):
                             raw, end = folderlib.read_quoted(remaining, 0)
                             remaining = remaining[end:]
@@ -243,6 +243,10 @@ class Server:
                     self.writes.append((command, *operands))
                     if self.write_disconnect == "before":
                         return
+                    if self.write_disconnect == "hold-before":
+                        self.literal_started.set()
+                        assert conn.recv(1) == b"", "command sent before interrupted write reconciled"
+                        return
                     reply = self.write_replies.get((command, len(self.writes)), self.write_replies.get(command, "OK"))
                     if reply != "OK":
                         send(tag + b" " + reply.encode() + b" [NOPERM] private-marker-password denied\r\n")
@@ -250,6 +254,13 @@ class Server:
                     if command == "CREATE":
                         assert operands[0] not in self.write_state
                         self.write_state[operands[0]] = ()
+                    elif command == "DELETE":
+                        assert operands[0] in self.write_state
+                        del self.write_state[operands[0]]
+                        for container in sorted(self.sizes.get("auto_containers", ()), key=len, reverse=True):
+                            if not any(raw != container and subtree_contains(container, self.write_namespace, raw)
+                                       for raw in self.write_state):
+                                self.write_state.pop(container, None)
                     else:
                         old, new = operands
                         assert old in self.write_state and new not in self.write_state
@@ -273,12 +284,24 @@ class Server:
                         return
                     send(tag + b" OK mailbox changed\r\n")
                 elif command == "EXAMINE":
-                    assert args and args[0].startswith(b'"'), "EXAMINE mailbox not quoted"
-                    raw, end = folderlib.read_quoted(args[0], 0)
-                    assert end == len(args[0])
+                    assert args
+                    if args[0].startswith(b"{"):
+                        length = int(args[0][1:-1])
+                        send(b"+ examine literal\r\n")
+                        value = bytearray()
+                        while len(value) < length + 2:
+                            value.extend(conn.recv(length + 2 - len(value)))
+                        assert value[-2:] == b"\r\n"
+                        raw = bytes(value[:-2])
+                    else:
+                        raw, end = folderlib.read_quoted(args[0], 0)
+                        assert end == len(args[0])
+                    if self.write_state is not None:
+                        assert raw in self.write_state
+                        self.messages = [(uid, b"") for uid in self.write_state[raw]]
                     if "mailboxes" in self.sizes:
                         self.current_size = self.sizes["mailboxes"][raw]
-                        self.messages = list(self.current_size.get("messages", []))
+                        self.messages = list(self.current_size.get("messages", self.messages if self.write_state is not None else []))
                     if "raw" in self.sizes:
                         assert args[0] == folderlib.quoted(self.sizes["raw"])
                     if self.current_size.get("denied"):
@@ -441,7 +464,8 @@ class Server:
                         if subscribed and self.sizes.get("inject_unsubscribed"):
                             names = self.subscriptions | self.write_state.keys()
                         values = [(b"", self.write_namespace, (), False)] if pattern == b"" else [
-                            (raw, self.write_namespace, (b"\\Subscribed",) if subscribed and raw in self.subscriptions else (),
+                            (raw, self.write_namespace, (b"\\Subscribed",) if subscribed and raw in self.subscriptions
+                             else self.sizes.get("write_flags", {}).get(raw, ()),
                              b"\n" in raw or b"\r" in raw)
                             for raw in names if re.fullmatch(expression, raw, re.DOTALL)
                             or (self.write_namespace is not None and raw.endswith(self.write_namespace)
@@ -566,6 +590,29 @@ def apply_dialogue(process, master, server, steps):
             process.stdin.flush()
         elif "hook" in step:
             step["hook"](server)
+        elif "delete" in step:
+            offset, terminal_offset = len(output), len(terminal)
+            previous_writes = list(server.writes)
+            process.stdin.write(step["delete"] + b"\n")
+            process.stdin.flush()
+            if master is not None and not step.get("no_prompt"):
+                read_until(master, terminal, terminal_offset, lambda data: b"[no] Type yes: " in data)
+                assert b"Delete /" in terminal[terminal_offset:]
+                assert server.writes == previous_writes, "DELETE before consent"
+                if "after_prompt" in step:
+                    step["after_prompt"](server)
+                if step.get("answer") == "interrupt-prompt":
+                    os.killpg(process.pid, signal.SIGINT)
+                else:
+                    os.write(master, b"yes\n" if step.get("answer") == "interrupt-write" else step.get("answer", b"yes\n"))
+                    if step.get("answer") == "interrupt-write":
+                        assert server.literal_started.wait(5), "DELETE did not reach held reply"
+                        os.killpg(process.pid, signal.SIGINT)
+            elif master is None and not step.get("no_prompt"):
+                process.stdin.write(b"yes\n")
+            process.stdin.write(b"help\n")
+            process.stdin.flush()
+            read_until(process.stdout.fileno(), output, offset, lambda data: b"Commands: " in data)
         else:
             identifier = identifiers[step["apply"]]
             offset, terminal_offset = len(output), len(terminal)
@@ -601,7 +648,7 @@ def run(name, installed=False, mode="implicit", cert="trusted", policy="check", 
         expected_writes=None, final_state=None, write_namespace=b".", write_interrupt=False,
         write_disconnect=None, subscriptions=None, subscriptions_after=None, final_subscriptions=None,
         preview_rows=None, preview_blocked=False, preview_errors=(), apply_steps=None,
-        apply_tty=True, apply_states=None):
+        apply_tty=True, apply_states=None, delete_targets=None, delete_results=None):
     with Server(mode, cert, version, denied, login_disabled, preauth, ipv6, folders, utf8, enable_reply,
                 messages, header_mode, events, sizes, write_state, write_replies, write_namespace, write_interrupt,
                 write_disconnect, subscriptions, subscriptions_after) as server:
@@ -676,10 +723,10 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert server.commands[-1] == "LOGOUT", server.commands
         if expected == 0:
             assert server.commands.count("CAPABILITY") == (4 if du_cancel or write_interrupt or write_disconnect or header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 3 if mode == "starttls" else 2)
-            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "LSUB", "ENABLE", "EXAMINE", "FETCH", "UID", "STATUS", "CREATE", "RENAME") for c in server.commands)
+            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "LSUB", "ENABLE", "EXAMINE", "FETCH", "UID", "STATUS", "CREATE", "RENAME", "DELETE") for c in server.commands)
         if expected_writes is not None:
             assert server.writes == expected_writes, (name, server.writes, expected_writes, err.decode())
-            assert not set(server.commands).intersection(("FETCH", "UID", "COPY", "DELETE", "EXPUNGE"))
+            assert not set(server.commands).intersection(("FETCH", "UID", "COPY", "EXPUNGE"))
         if final_state is not None:
             assert server.write_state == final_state, (name, server.write_state, final_state)
         if apply_states is not None:
@@ -688,6 +735,13 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert statuses == [(state, old, "->", new) for state, old, new in apply_states], (name, statuses, out, err)
             assert b"Fresh preview required" in out
             assert (b"Type yes: " in tty_output) == apply_tty
+        if delete_targets is not None:
+            target_rows = [line.decode().split("\t") for line in out.splitlines() if line.startswith(b"target\t")]
+            assert [(row[1], row[2]) for row in target_rows] == delete_targets, (name, target_rows)
+        if delete_results is not None:
+            result_rows = [line.decode().split("\t") for line in out.splitlines()
+                           if line.split(b"\t", 1)[0] in (b"removed", b"surviving", b"unknown", b"absent")]
+            assert [(row[0], row[1]) for row in result_rows] == delete_results, (name, result_rows, out, err)
         if preview_rows is not None:
             rows = [line.split("\t") for line in out.decode().splitlines() if "\t->\t" in line]
             assert [(row[0], row[2], row[3]) for row in rows] == [
@@ -715,7 +769,7 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
         if write_interrupt or write_disconnect:
             assert b"outcome unknown" in err and (apply_steps or b"confirmed" not in err), (name, err)
             assert not any(e["command"] == "LOGOUT" and e.get("connection") == 1 for e in server.wire)
-            assert sum(c in ("CREATE", "RENAME") for c in server.commands) == 1, "unknown write replayed"
+            assert sum(c in ("CREATE", "RENAME", "DELETE") for c in server.commands) == 1, "unknown write replayed"
             if write_disconnect == "encoding":
                 assert b"encoding changed" in err
                 assert not any(e["command"] in ("LIST", "LSUB") and e.get("connection") == 2 for e in server.wire)
@@ -725,6 +779,8 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert out.decode("utf-8") == expected_out, (name, out.decode("utf-8"), expected_out)
         for message in expected_err:
             assert message.encode() in err, (name, "missing expected diagnostic")
+        for message in expected_contains:
+            assert message.encode() in out + err, (name, message, out, err)
         if patterns is not None:
             assert server.patterns == patterns, (name, server.patterns, patterns)
         if enable_count is not None:
@@ -1558,4 +1614,215 @@ run("bulk apply partial refusal resumes only with fresh review", installed=True,
                  {"preview": bulk_preview}, {"apply": 1}], commands=b"pwd\nquit\n",
     expected_writes=bulk_writes[:2] + bulk_writes[1:], final_state=bulk_final,
     apply_states=bulk_statuses("completed", "failed", "pending") + bulk_statuses("pending", "completed", "completed")[1:])
+delete_state = {b"Box": (1, 2), b"Survivor": ()}
+for installed in (False, True):
+    run("delete explicit terminal yes " + ("installed" if installed else "source"), installed=installed,
+        write_state=delete_state, apply_steps=[{"delete": b"rmdir Box"}],
+        expected_writes=[("DELETE", b"Box")], final_state={b"Survivor": ()},
+        expected_contains=("Delete target: /Box", "Messages: 2", "WARNING: nonempty folder"),
+        expected_err=("DELETE confirmed",))
+    for answer in (b"no\n", b"\n", b"\x04", "interrupt-prompt"):
+        run("delete terminal cancellation " + repr(answer) + (" installed" if installed else " source"),
+            installed=installed, write_state=delete_state,
+            apply_steps=[{"delete": b"rmdir Box", "answer": answer}],
+            expected_writes=[], final_state=delete_state, expected_contains=("Deletion cancelled",))
+    run("delete pipe cannot approve " + str(installed), installed=installed, write_state=delete_state,
+        apply_steps=[{"delete": b"rmdir Box"}], apply_tty=False,
+        expected_writes=[], final_state=delete_state,
+        expected_contains=("controlling terminal required; command stdin cannot confirm",))
+    run("delete explicit scripted yes " + str(installed), installed=installed, write_state=delete_state,
+        commands=b"rmdir Box --yes\npwd\nquit\n", expected_writes=[("DELETE", b"Box")],
+        final_state={b"Survivor": ()}, expected_err=("DELETE confirmed",))
+for reply in ("NO", "BAD"):
+    run("delete ACL tagged " + reply, write_state=delete_state, write_replies={"DELETE": reply},
+        apply_steps=[{"delete": b"rmdir Box"}], expected_writes=[("DELETE", b"Box")],
+        final_state=delete_state, expected_err=("DELETE rejected",))
+run("delete unknown count warning", write_state=delete_state, sizes={"denied": True},
+    apply_steps=[{"delete": b"rmdir Box", "answer": b"no\n"}], expected_writes=[],
+    final_state=delete_state, expected_contains=("Messages: unknown", "WARNING: message count unknown"))
+run("delete literal wildcard exact raw identity", installed=True,
+    write_state={b"Literal*%?": (3,), b"Literal-other": (4,), b"Literal*%?.Child": (5,)},
+    commands=b"rmdir Literal%2A%25%3F --yes\nquit\n", expected_writes=[],
+    final_state={b"Literal*%?": (3,), b"Literal-other": (4,), b"Literal*%?.Child": (5,)},
+    expected_contains=("Folder has descendants",))
+run("delete literal wildcard never expands unrelated names", installed=True,
+    write_state={b"Literal*%?": (3,), b"Literal-other": (4,), b"Literal-other.Child": (5,)},
+    apply_steps=[{"delete": b"rmdir Literal%2A%25%3F"}],
+    expected_writes=[("DELETE", b"Literal*%?")],
+    final_state={b"Literal-other": (4,), b"Literal-other.Child": (5,)},
+    expected_contains=("Delete target: /Literal%2A%25%3F",))
+run("delete binary mailbox uses synchronized literals", version="IMAP4rev2",
+    write_state={b"line\nbreak": (8,)}, commands=b"rmdir line%0Abreak --yes\nquit\n",
+    expected_writes=[("DELETE", b"line\nbreak")], final_state={})
+run("delete root INBOX and unapproved descendants refused", write_state={b"iNbOx": (1,), b"Parent": (), b"Parent.Child": ()},
+    commands=b"rmdir / --yes\nrmdir iNbOx --yes\nrmdir Parent --yes\nrmdir iNbOx --recursive --yes\nrmdir / --recursive --yes\nrmdir Parent --unknown --yes\nquit\n",
+    expected_writes=[], final_state={b"iNbOx": (1,), b"Parent": (), b"Parent.Child": ()},
+    expected_contains=("Cannot delete root or INBOX", "Folder has descendants", "Use rmdir EXACT-PATH"))
+run("delete scope enumeration denied", write_state=delete_state, sizes={"list_denied": (b"Box*",)},
+    commands=b"rmdir Box --yes\nquit\n", expected_writes=[], final_state=delete_state,
+    expected_err=("Folder operation failed",))
+
+
+def delete_add_child(server):
+    server.write_state[b"Box.New"] = ()
+
+
+def delete_add_message(server):
+    server.write_state[b"Box"] += (3,)
+
+
+def delete_replace(server):
+    server.validity += 1
+
+
+for hook, final, cause in (
+        (delete_add_child, {**delete_state, b"Box.New": ()}, "Folder has descendants"),
+        (delete_add_message, {**delete_state, b"Box": (1, 2, 3)}, "message state changed"),
+        (delete_replace, delete_state, "message state changed")):
+    run("delete rechecks after prompt " + hook.__name__, write_state=delete_state,
+        apply_steps=[{"delete": b"rmdir Box", "after_prompt": hook}],
+        expected_writes=[], final_state=final, expected_contains=(cause,))
+run("delete current folder refreshes navigation before relative create", installed=True,
+    write_state={b"Parent": (), b"Parent.Box": (1,)}, commands=b"cd Parent/Box\nrmdir . --yes\npwd\nmkdir New\nquit\n",
+    expected_writes=[("DELETE", b"Parent.Box"), ("CREATE", b"Parent.New")],
+    final_state={b"Parent": (), b"Parent.New": ()}, expected_contains=("/Parent\n",),
+    expected_err=("Current folder unavailable; returned to /Parent",))
+for disconnect in ("before", "after"):
+    run("delete unknown outcome " + disconnect, write_state=delete_state, write_disconnect=disconnect,
+        commands=b"rmdir Box --yes\npwd\nquit\n", expected_writes=[("DELETE", b"Box")],
+        final_state=delete_state if disconnect == "before" else {b"Survivor": ()},
+        expected_err=("DELETE outcome unknown", "Observed target path", "outcome remains unknown"))
+for installed in (False, True):
+    run("delete flat NIL literal slash and wildcard " + ("installed scripted yes" if installed else "source terminal yes"),
+        installed=installed, write_namespace=None, write_state={b"Flat/*?": (1,), b"Flat/other": (2,)},
+        apply_steps=None if installed else [{"commands": b"cd Flat%2F%2A%3F\n"}, {"delete": b"rmdir ."}],
+        commands=b"cd Flat%2F%2A%3F\nrmdir . --yes\npwd\nfolders\nquit\n" if installed else b"pwd\nfolders\nquit\n",
+        expected_writes=[("DELETE", b"Flat/*?")], final_state={b"Flat/other": (2,)},
+        expected_contains=("Delete target: /Flat%2F%2A%3F", "Messages: 1", "/\nFlat%2Fother\n"),
+        expected_err=("DELETE confirmed", "Current folder unavailable; returned to /"))
+recursive_state = {b"Tree": (1,), b"Tree.A": (2,), b"Tree.A.Deep": (3,), b"Tree.B": (4,), b"Outside": (5,)}
+recursive_order = [b"Tree.A.Deep", b"Tree.A", b"Tree.B", b"Tree"]
+recursive_paths = ["/Tree", "/Tree/A", "/Tree/A/Deep", "/Tree/B"]
+recursive_targets = [("/Tree/A/Deep", "messages: 1"), ("/Tree/A", "messages: 1"),
+                     ("/Tree/B", "messages: 1"), ("/Tree", "messages: 1")]
+recursive_writes = [("DELETE", raw) for raw in recursive_order]
+for installed in (False, True):
+    run("recursive delete fixed deepest-first scope " + str(installed), installed=installed,
+        write_state=recursive_state,
+        apply_steps=None if installed else [{"delete": b"rmdir Tree --recursive"}],
+        commands=b"rmdir Tree --recursive --yes\npwd\nquit\n" if installed else b"pwd\nquit\n",
+        expected_writes=recursive_writes, final_state={b"Outside": (5,)},
+        delete_targets=recursive_targets, delete_results=[("removed", path) for path in recursive_paths])
+run("recursive delete default-negative terminal blank", installed=True, write_state=recursive_state,
+    apply_steps=[{"delete": b"rmdir Tree --recursive", "answer": b"\n"}],
+    expected_writes=[], final_state=recursive_state, delete_targets=recursive_targets,
+    delete_results=[("surviving", path) for path in recursive_paths], expected_contains=("confirmation cancelled",))
+run("recursive delete pipe never confirms", write_state=recursive_state,
+    apply_steps=[{"delete": b"rmdir Tree --recursive"}], apply_tty=False,
+    expected_writes=[], final_state=recursive_state, delete_targets=recursive_targets,
+    delete_results=[("surviving", path) for path in recursive_paths], expected_contains=("controlling terminal required",))
+
+
+def recursive_new_child(server):
+    server.write_state[b"Tree.New"] = ()
+
+
+def recursive_new_between(server, send):
+    assert server.writes == recursive_writes[:1]
+    recursive_new_child(server)
+
+
+run("recursive delete new child after consent scope before first write", write_state=recursive_state,
+    apply_steps=[{"delete": b"rmdir Tree --recursive", "after_prompt": recursive_new_child}],
+    expected_writes=[], final_state={**recursive_state, b"Tree.New": ()}, delete_targets=recursive_targets,
+    delete_results=[("surviving", path) for path in recursive_paths + ["/Tree/New"]],
+    expected_contains=("Recursive scope drift", "outside confirmed scope"))
+run("recursive delete new child between serial writes", installed=True, write_state=recursive_state,
+    events={("LSUB", 2): recursive_new_between}, commands=b"rmdir Tree --recursive --yes\npwd\nquit\n",
+    expected_writes=recursive_writes[:1],
+    final_state={**{raw: value for raw, value in recursive_state.items() if raw != b"Tree.A.Deep"}, b"Tree.New": ()},
+    delete_results=[("surviving", "/Tree"), ("surviving", "/Tree/A"), ("removed", "/Tree/A/Deep"),
+                    ("surviving", "/Tree/B"), ("surviving", "/Tree/New")], expected_contains=("Recursive scope drift",))
+run("recursive delete inaccessible child enumeration blocks all writes", write_state=recursive_state,
+    sizes={"list_denied": (b"Tree.A.%",)}, commands=b"rmdir Tree --recursive --yes\nquit\n",
+    expected_writes=[], final_state=recursive_state, expected_err=("Folder operation failed",))
+run("recursive delete inaccessible child count blocks all writes", installed=True, write_state=recursive_state,
+    sizes={"mailboxes": {raw: {"denied": raw == b"Tree.A.Deep"} for raw in recursive_state}},
+    commands=b"rmdir Tree --recursive --yes\nquit\n", expected_writes=[], final_state=recursive_state,
+    expected_contains=("Recursive target inaccessible",))
+run("recursive delete hidden child marker blocks incomplete scope", write_state={b"Tree": (), b"Tree.A": ()},
+    sizes={"write_flags": {b"Tree.A": (b"\\HasChildren",)}}, commands=b"rmdir Tree --recursive --yes\nquit\n",
+    expected_writes=[], final_state={b"Tree": (), b"Tree.A": ()}, expected_contains=("Recursive child scope is incomplete",))
+run("recursive delete inconsistent subtree listing blocks all writes", write_state=recursive_state,
+    sizes={"probe_rows": {b"Tree*": [(raw, b".", (), False) for raw in recursive_state if raw != b"Tree.A.Deep" and raw != b"Outside"]}},
+    commands=b"rmdir Tree --recursive --yes\nquit\n", expected_writes=[], final_state=recursive_state,
+    expected_contains=("Recursive scope changed during enumeration",))
+run("recursive delete mid-tree refusal preserves exact survivors", installed=True, write_state=recursive_state,
+    write_replies={("DELETE", 2): "NO"}, commands=b"rmdir Tree --recursive --yes\npwd\nquit\n",
+    expected_writes=recursive_writes[:2], final_state={raw: value for raw, value in recursive_state.items() if raw != b"Tree.A.Deep"},
+    delete_results=[("surviving", "/Tree"), ("surviving", "/Tree/A"), ("removed", "/Tree/A/Deep"), ("surviving", "/Tree/B")],
+    expected_contains=("server refusal", "rejected; observed present"))
+for disconnect in ("before", "after", "hold-before", "hold-after"):
+    run("recursive delete ambiguous first reply " + disconnect, write_state=recursive_state,
+        write_disconnect=disconnect,
+        apply_steps=[{"delete": b"rmdir Tree --recursive", "answer": "interrupt-write"}] if disconnect.startswith("hold-") else None,
+        commands=b"pwd\nquit\n" if disconnect.startswith("hold-") else b"rmdir Tree --recursive --yes\npwd\nquit\n",
+        expected_writes=recursive_writes[:1],
+        final_state=recursive_state if disconnect in ("before", "hold-before") else {
+            raw: value for raw, value in recursive_state.items() if raw != b"Tree.A.Deep"},
+        delete_results=[("surviving", "/Tree"), ("surviving", "/Tree/A"), ("unknown", "/Tree/A/Deep"), ("surviving", "/Tree/B")],
+        expected_contains=("unknown outcome; not replayed",), expected_err=("DELETE outcome unknown",))
+run("recursive delete vanished nonselectable ancestors are not replayed", installed=True,
+    write_state={b"Tree": (), b"Tree.A": (), b"Tree.A.Deep": (3,), b"Outside": ()},
+    sizes={"write_flags": {b"Tree": (b"\\Noselect",), b"Tree.A": (b"\\Noselect",)},
+           "auto_containers": (b"Tree", b"Tree.A")},
+    commands=b"cd Tree/A/Deep\nrmdir /Tree --recursive --yes\npwd\nmkdir New\nquit\n",
+    expected_writes=[("DELETE", b"Tree.A.Deep"), ("CREATE", b"New")], final_state={b"Outside": (), b"New": ()},
+    delete_targets=[("/Tree/A/Deep", "messages: 1"), ("/Tree/A", "messages: unknown"), ("/Tree", "messages: unknown")],
+    delete_results=[("absent", "/Tree"), ("absent", "/Tree/A"), ("removed", "/Tree/A/Deep")],
+    expected_contains=("container disappeared; observed not listed", "/\n"),
+    expected_err=("Current folder unavailable; returned to /",))
+run("recursive delete exact literal wildcard subtree excludes wire aliases", installed=True,
+    write_state={b"Root*": (), b"Root*.Child?": (1,), b"Root-other": (), b"Root-other.Child": (2,)},
+    commands=b"rmdir Root%2A --recursive --yes\nquit\n",
+    expected_writes=[("DELETE", b"Root*.Child?"), ("DELETE", b"Root*")],
+    final_state={b"Root-other": (), b"Root-other.Child": (2,)},
+    delete_targets=[("/Root%2A/Child%3F", "messages: 1"), ("/Root%2A", "messages: 0")],
+    delete_results=[("removed", "/Root%2A"), ("removed", "/Root%2A/Child%3F")])
+run("recursive delete flat NIL name remains one exact target", installed=True, write_namespace=None,
+    write_state={b"Flat/*?": (1,), b"Flat/other": (2,)},
+    commands=b"cd Flat%2F%2A%3F\nrmdir . --recursive --yes\npwd\nfolders\nquit\n",
+    expected_writes=[("DELETE", b"Flat/*?")], final_state={b"Flat/other": (2,)},
+    delete_targets=[("/Flat%2F%2A%3F", "messages: 1")], delete_results=[("removed", "/Flat%2F%2A%3F")],
+    expected_contains=("/\nFlat%2Fother\n",), expected_err=("Current folder unavailable; returned to /",))
+
+
+def recursive_message_drift(server):
+    server.write_state[b"Tree.B"] += (9,)
+
+
+def recursive_target_disappears(server):
+    del server.write_state[b"Tree.A.Deep"]
+
+
+def recursive_namespace_child(server):
+    server.write_state[b"Tree.New."] = ()
+    server.sizes["write_flags"] = {b"Tree.New.": (b"\\Noselect",)}
+
+
+run("recursive delete count drift after prompt blocks all writes", write_state=recursive_state,
+    apply_steps=[{"delete": b"rmdir Tree --recursive", "after_prompt": recursive_message_drift}],
+    expected_writes=[], final_state={**recursive_state, b"Tree.B": (4, 9)},
+    delete_results=[("surviving", path) for path in recursive_paths],
+    expected_contains=("Recursive target or message state drift",))
+run("recursive delete selectable target disappearing is drift", installed=True, write_state=recursive_state,
+    apply_steps=[{"delete": b"rmdir Tree --recursive", "after_prompt": recursive_target_disappears}],
+    expected_writes=[], final_state={raw: value for raw, value in recursive_state.items() if raw != b"Tree.A.Deep"},
+    delete_results=[("surviving", "/Tree"), ("surviving", "/Tree/A"), ("absent", "/Tree/A/Deep"), ("surviving", "/Tree/B")],
+    expected_contains=("Recursive scope drift", "pending; observed not listed"))
+run("recursive delete reports unexpected trailing namespace container", installed=True, write_state=recursive_state,
+    apply_steps=[{"delete": b"rmdir Tree --recursive", "after_prompt": recursive_namespace_child}],
+    expected_writes=[], final_state={**recursive_state, b"Tree.New.": ()},
+    delete_results=[("surviving", path) for path in recursive_paths + ["/Tree/New"]],
+    expected_contains=("Recursive scope drift", "outside confirmed scope"))
 print(f"PASS: {len(results)} public shell scenarios; all endpoints joined")

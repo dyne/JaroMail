@@ -23,13 +23,13 @@ def matches(preview, component):
             and len(text) >= len(preview.prefix) + len(preview.suffix))
 
 
-def confirm(identifier, count):
+def confirm(identifier, count, prompt=None):
     # Command stdin is never a confirmation source, even when it is a pipe.
     fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
     with os.fdopen(fd, "rb", buffering=0) as terminal:
         if not os.isatty(terminal.fileno()):
             raise OSError("controlling terminal required")
-        os.write(terminal.fileno(), (f"Apply {identifier}: rename {count} folder subtrees? Type yes: ").encode())
+        os.write(terminal.fileno(), (prompt or f"Apply {identifier}: rename {count} folder subtrees? Type yes: ").encode())
         answer, oversized = bytearray(), False
         while True:
             char = terminal.read(1)

@@ -16,6 +16,7 @@ import headers
 import sizes
 import rename_preview
 import renames
+import deletions
 
 
 def account_record():
@@ -164,12 +165,17 @@ def command_loop(client, seconds, reconnect):
         if words in (["quit"], ["exit"]):
             return 0
         if words == ["help"]:
-            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], mkdir PATH, mv OLD NEW (alias rename; NEW is the complete path), rename-glob SOURCE TEMPLATE (preview), apply ID, help, quit")
+            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], mkdir PATH, mv OLD NEW (alias rename; NEW is the complete path), rename-glob SOURCE TEMPLATE (preview), apply ID, rmdir EXACT-PATH [--recursive] [--yes], help, quit")
         elif words == ["pwd"]:
             print(tree.current.path)
-        elif words[0] in ("folders", "refresh", "ls", "cd", "more", "du", "mkdir", "mv", "rename", "rename-glob", "apply"):
+        elif words[0] in ("folders", "refresh", "ls", "cd", "more", "du", "mkdir", "mv", "rename", "rename-glob", "apply", "rmdir"):
             try:
-                if words[0] == "rename-glob" and len(words) == 3:
+                if words[0] == "rmdir":
+                    try:
+                        deletions.remove(tree, words[1:])
+                    finally:
+                        pager.reset()
+                elif words[0] == "rename-glob" and len(words) == 3:
                     try:
                         rename_session.preview(tree, words[1], words[2])
                     except ValueError as exc:
@@ -238,12 +244,12 @@ def command_loop(client, seconds, reconnect):
                         raise headers.PagingError("Choose a selectable folder")
                 else:
                     print("Invalid folder command; use help", file=sys.stderr)
-            except (headers.PagingError, sizes.SizeError) as exc:
+            except (headers.PagingError, sizes.SizeError, deletions.DeleteError) as exc:
                 print(str(exc), file=sys.stderr)
             except (ValueError, UnicodeError):
                 print("Folder operation failed", file=sys.stderr)
             except (KeyboardInterrupt, headers.LiteralLimit):
-                if words[0] in ("mkdir", "mv", "rename"):
+                if words[0] in ("mkdir", "mv", "rename", "rmdir"):
                     raise
                 # A partial literal leaves imaplib's parser unsynchronized.
                 # Close without LOGOUT, reconnect, and revalidate the raw name

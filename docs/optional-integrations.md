@@ -64,6 +64,34 @@ the current path; a removed current folder falls back to a surviving ancestor.
 Subscription changes are observed and counted; the shell never subscribes or
 unsubscribes folders automatically.
 
+`rmdir EXACT-PATH [--recursive] [--yes]` deletes exact mailboxes, including their
+messages. It shows the absolute path and message count, with warnings for a
+nonempty folder or an unknown count. Root, INBOX (any case), and incomplete
+scope observations are refused. Descendants block single-folder deletion unless
+`--recursive` is explicit. By default, type `yes` on the controlling terminal;
+Enter, refusal, EOF and Ctrl-C cancel. Command stdin never supplies consent.
+Use `--yes` only for intentional scripted deletion. The exact identity,
+children and observed message state are checked again after consent. IMAP has
+no atomic compare-and-delete: delivery or another client can still change a
+mailbox after the last check. A deleted current folder falls back to a
+surviving ancestor. Unknown write outcomes are observed and never replayed
+automatically.
+
+`--recursive` lists the complete observed target set with message counts before
+confirmation, then deletes deepest folders first, serially. An inaccessible
+target or an incomplete child listing blocks the operation. Before each DELETE,
+the shell rechecks the remaining names, identities and message state against the
+confirmed set. New children, changed targets, refusal or an unknown write result
+stop further deletion. A known nonselectable container that disappears after
+its last confirmed child deletion is observed as absent without sending DELETE
+for it. The final report distinguishes removed, surviving, absent and unknown
+paths, including newly observed children outside the confirmed scope. An unknown
+write remains unknown even when its path is no longer listed. Review the report
+before issuing another command; no partial operation resumes automatically.
+LIST observations are limited by server permissions and visibility: ACL-hidden
+folders or concurrent delivery cannot be ruled out. IMAP provides no atomic
+compare-and-delete operation, so changes after the final check remain possible.
+
 `rename-glob SOURCE TEMPLATE` previews wildcard renames without changing the
 server. SOURCE has a literal parent path and exactly one unescaped `*` in its
 final component; it captures zero or more Unicode characters, case-sensitively.
