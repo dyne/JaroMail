@@ -870,6 +870,58 @@ ascending order they are listed in that configuration file..
 .PP
 From there on, pressing \f[B]=\f[R] or \f[B]c\f[R] you can change to
 other folders and your \f[B]unsorted\f[R] mails.
+.SS Browse and archive a remote IMAP account
+The IMAP terminal uses an account you\[cq]ve configured in Jaro Mail.
+From your system shell, run \f[CR]jaro \-a ACCOUNT imap shell\f[R],
+replacing \f[CR]ACCOUNT\f[R] with the account name.
+It uses the account\[cq]s login, credential store, and TLS settings.
+Use \f[CR]cert check\f[R] to verify the server\[cq]s identity.
+The terminal requires Python 3.9 or newer, with \f[CR]sqlite3\f[R]
+support for downloads.
+.PP
+At the \f[CR]imap>\f[R] prompt, type \f[CR]help\f[R] to see the
+available commands.
+Start with \f[CR]folders\f[R], then use \f[CR]cd PATH\f[R] to open a
+folder and \f[CR]pwd\f[R] to check where you are.
+Use slashes between folder names, quote paths containing spaces, and
+copy any percent escapes you see in displayed paths.
+Type \f[CR]cd\f[R] to return to the account root.
+.IP \[bu] 2
+Inspect a folder with \f[CR]ls \-\-messages \-\-limit 20\f[R] and use
+\f[CR]more\f[R] for the next page.
+Use \f[CR]du\f[R] to measure the current mailbox or
+\f[CR]du / \-\-depth 2 \-\-top 10\f[R] to find the largest mailboxes
+within two levels.
+.IP \[bu] 2
+To archive the current mailbox, type
+\f[CR]download . \-\-output mailbox.tar.gz\f[R].
+Add \f[CR]\-\-recursive\f[R] to include descendants.
+Allow space for the raw messages, the archive, and its inventory.
+The output goes in the local directory where you started Jaro Mail.
+.IP \[bu] 2
+If the download stops, keep the hidden
+\f[CR].mailbox.tar.gz.incomplete\f[R] directory.
+Reconnect if needed and repeat the original command with
+\f[CR]\-\-resume\f[R].
+The shell checks staged messages before reusing them.
+.IP \[bu] 2
+From the system shell, use \f[CR]gzip \-t mailbox.tar.gz\f[R] to check
+the compressed file and \f[CR]tar \-tzf mailbox.tar.gz\f[R] to list its
+members.
+For a full check, extract it into a fresh private directory and verify
+the message lengths and SHA\-256 hashes in \f[CR]manifest.jsonl\f[R].
+.IP \[bu] 2
+Use \f[CR]mkdir\f[R] and \f[CR]mv\f[R] to organize folders.
+For bulk renames, inspect a \f[CR]rename\-glob\f[R] preview and confirm
+with \f[CR]apply ID\f[R] in the same session.
+Deleting with \f[CR]rmdir\f[R] is a separate action that removes
+messages from the server.
+Review the targets before approving it.
+.PP
+Type \f[CR]quit\f[R] or press Ctrl\-D to leave.
+See the \f[B]IMAP folder shell\f[R] section of jaro(1) (run
+\f[CR]man jaro\f[R]) for the full command reference, account settings, a
+worked session, and archive verification commands.
 .SS Serve local Maildirs over IMAP
 Run \f[CR]JAROMAILDIR=\[dq]$HOME/Mail\[dq] jaro serve\f[R] as the mail
 owner to expose that root through a local Dovecot 2.4.x instance.

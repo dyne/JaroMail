@@ -511,6 +511,44 @@ they are listed in that configuration file..
 From there on, pressing **=** or **c** you can change to other folders
 and your **unsorted** mails.
 
+### Browse and archive a remote IMAP account
+
+The IMAP terminal uses an account you've configured in Jaro Mail. From your
+system shell, run `jaro -a ACCOUNT imap shell`, replacing `ACCOUNT` with the
+account name. It uses the account's login, credential store, and TLS settings.
+Use `cert check` to verify the server's identity. The terminal requires
+Python 3.9 or newer, with `sqlite3` support for downloads.
+
+At the `imap>` prompt, type `help` to see the available commands. Start with
+`folders`, then use `cd PATH` to open a folder and `pwd` to check where you
+are. Use slashes between folder names, quote paths containing spaces, and
+copy any percent escapes you see in displayed paths. Type `cd` to return
+to the account root.
+
+- Inspect a folder with `ls --messages --limit 20` and use `more` for
+  the next page. Use `du` to measure the current mailbox or
+  `du / --depth 2 --top 10` to find the largest mailboxes within two levels.
+- To archive the current mailbox, type `download . --output mailbox.tar.gz`.
+  Add `--recursive` to include descendants. Allow space for the raw messages,
+  the archive, and its inventory. The output goes in the local directory
+  where you started Jaro Mail.
+- If the download stops, keep the hidden `.mailbox.tar.gz.incomplete`
+  directory. Reconnect if needed and repeat the original command with
+  `--resume`. The shell checks staged messages before reusing them.
+- From the system shell, use `gzip -t mailbox.tar.gz` to check the
+  compressed file and `tar -tzf mailbox.tar.gz` to list its members.
+  For a full check, extract it into a fresh private directory and verify
+  the message lengths and SHA-256 hashes in `manifest.jsonl`.
+- Use `mkdir` and `mv` to organize folders. For bulk renames, inspect a
+  `rename-glob` preview and confirm with `apply ID` in the same session.
+  Deleting with `rmdir` is a separate action that removes messages from
+  the server. Review the targets before approving it.
+
+Type `quit` or press Ctrl-D to leave. See the **IMAP folder shell** section
+of [jaro(1)](jaro.1.md#imap-folder-shell) (run `man jaro`) for the full
+command reference, account settings, a worked session, and archive
+verification commands.
+
 ### Serve local Maildirs over IMAP
 
 Run `JAROMAILDIR="$HOME/Mail" jaro serve` as the mail owner to expose that
