@@ -151,8 +151,10 @@ class FolderTree:
         self.client, self.seconds, self.deadline = client, seconds, deadline
         self.root = Folder(b"", None, (b"\\Noselect",), "")
         self.current = self.root
+        self.latest_status = []
 
-    def children(self, node, refresh=False):
+    def children(self, node, refresh=False, status_sizes=False):
+        self.latest_status = []
         if node.children is not None and not refresh:
             return node.children
         if node is not self.root and node.delimiter is None:
@@ -166,6 +168,23 @@ class FolderTree:
             if any(char in pattern for char in (b"\r", b"\n", b"\0")):
                 self.client.literal = pattern
                 status, data = self.client.list('""', None)
+            elif status_sizes:
+                self.client.untagged_responses.pop("STATUS", None)
+                # Read the completed tagged result directly: _simple_command
+                # turns BAD into an exception indistinguishable from errors
+                # before a synchronized response. Only tagged NO/BAD permits
+                # retrying the ordinary LIST on this same connection.
+                self.client._check_bye()
+                tag = self.client._command("LIST", '""', quoted(pattern), "RETURN (STATUS (SIZE))")
+                status, data = self.client._get_tagged_response(tag)
+                self.client._check_bye()
+                if status in ("NO", "BAD"):
+                    self.client.untagged_responses.pop("LIST", None)
+                    self.client.untagged_responses.pop("STATUS", None)
+                    status, data = self.client.list('""', quoted(pattern))
+                else:
+                    status, data = self.client._untagged_response(status, data, "LIST")
+                    self.latest_status = self.client.untagged_responses.pop("STATUS", [])
             else:
                 status, data = self.client.list('""', quoted(pattern))
         if status != "OK":

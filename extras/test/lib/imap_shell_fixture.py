@@ -50,7 +50,7 @@ for name, host in (("trusted", "localhost"), ("wrong", "wrong.invalid")):
 class Server:
     def __init__(self, mode="implicit", cert="trusted", version="IMAP4rev1", denied=False,
                  login_disabled=False, preauth=False, ipv6=False, folders=None, utf8=False,
-                 enable_reply="confirmed", messages=None, header_mode=None, events=None):
+                 enable_reply="confirmed", messages=None, header_mode=None, events=None, sizes=None):
         self.mode, self.version, self.denied = mode, version, denied
         self.login_disabled, self.preauth = login_disabled, preauth
         self.folders, self.utf8 = folders, utf8
@@ -61,6 +61,9 @@ class Server:
         self.fetch_ranges = []
         self.header_fetches = []
         self.events = events or {}
+        self.sizes = sizes or {}
+        self.current_size = self.sizes
+        self.size_fetches = []
         self.validity = 44
         self.header_bytes = 0
         self.flags = {uid: {"\\Flagged"} for uid, _ in self.messages}
@@ -81,7 +84,7 @@ class Server:
         self.thread = threading.Thread(target=self.serve)
 
     def serve(self):
-        for _ in range(2 if self.header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 1):
+        for _ in range(2 if self.header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") or self.sizes.get("cancel") else 1):
             self.serve_once()
             if self.failure or self.stop.is_set():
                 return
@@ -122,11 +125,25 @@ class Server:
                                       "line": safe.decode("utf-8")})
                     conn.sendall(response)
 
+                def send_status(raw, settings):
+                    reply = settings.get("status")
+                    attributes = b"MESSAGES 0" if reply is None else f"SIZE {reply}".encode()
+                    identity = settings.get("reply_raw", raw)
+                    if settings.get("literal"):
+                        send(b"* STATUS {" + str(len(identity)).encode() + b"}\r\n" + identity
+                             + b" (" + attributes + b")\r\n")
+                    else:
+                        send(b"* STATUS " + folderlib.quoted(identity) + b" (" + attributes + b")\r\n")
+
                 event = self.events.get((command, self.commands.count(command)))
                 if event:
                     event(self, send)
                 if command == "CAPABILITY":
                     caps = self.version + " UIDPLUS"
+                    if self.sizes.get("capability"):
+                        caps += " STATUS=SIZE"
+                    if self.sizes.get("list_status"):
+                        caps += " LIST-STATUS"
                     if self.header_mode == "encoding" and self.connections == 2:
                         caps = "IMAP4rev2 UIDPLUS"
                     if self.mode == "starttls" and not secure:
@@ -152,11 +169,43 @@ class Server:
                     return
                 elif command == "EXAMINE":
                     assert args and args[0].startswith(b'"'), "EXAMINE mailbox not quoted"
+                    raw, end = folderlib.read_quoted(args[0], 0)
+                    assert end == len(args[0])
+                    if "mailboxes" in self.sizes:
+                        self.current_size = self.sizes["mailboxes"][raw]
+                        self.messages = list(self.current_size.get("messages", []))
+                    if "raw" in self.sizes:
+                        assert args[0] == folderlib.quoted(self.sizes["raw"])
+                    if self.current_size.get("denied"):
+                        send(tag + b" NO inaccessible\r\n")
+                        continue
                     if self.header_mode == "encoding":
                         assert self.connections == 1, "cached raw name reused after encoding changed"
                     uidnext = max((uid for uid, _ in self.messages), default=0) + 1
                     send(f"* {len(self.messages)} EXISTS\r\n* OK [UIDVALIDITY {self.validity}] generation\r\n* OK [UIDNEXT {uidnext}] next\r\n".encode()
                          + tag + b" OK [READ-ONLY] examined\r\n")
+                elif command == "STATUS":
+                    raw, end = folderlib.read_quoted(args[0], 0)
+                    assert args[0][end:] == b" (SIZE)"
+                    settings = self.sizes.get("mailboxes", {}).get(raw, self.sizes)
+                    if "mailboxes" not in self.sizes:
+                        assert raw == self.sizes.get("raw", b"Inbox")
+                    if self.sizes.get("cancel") and self.connections == 1 and self.commands.count("STATUS") == 2:
+                        send(b'* STATUS "unfinished" (SIZE ')
+                        self.literal_started.set()
+                        assert conn.recv(1) == b"", "command sent on interrupted size response"
+                        return
+                    if self.sizes.get("scan_failure") and self.commands.count("STATUS") == 2:
+                        send(b"* BYE scan aborted\r\n" if self.sizes["scan_failure"] == "abort"
+                             else b'* STATUS "unfinished" (SIZE ')
+                        assert conn.recv(1) == b"", "command sent after abnormal size response"
+                        return
+                    reply = settings.get("status")
+                    if reply == "denied":
+                        send(tag + b" NO inaccessible\r\n")
+                    else:
+                        send_status(raw, settings)
+                        send(tag + b" OK status\r\n")
                 elif command in ("FETCH", "UID"):
                     operands = args[0]
                     if command == "UID":
@@ -176,9 +225,21 @@ class Server:
                             send(f"* {index} FETCH (UID {self.messages[index - 1][0]})\r\n".encode())
                         send(tag + b" OK inventory\r\n")
                         continue
-                    assert attrs == b"(UID RFC822.SIZE INTERNALDATE BODY.PEEK[HEADER.FIELDS (DATE FROM SUBJECT)]<0.8192>)"
                     requested = list(map(int, sequence.split(b",")))
                     assert len(requested) <= 10 and len(requested) == len(set(requested))
+                    if attrs == b"(UID RFC822.SIZE)":
+                        self.size_fetches.append(requested)
+                        if self.current_size.get("fetch_denied"):
+                            send(tag + b" NO size unavailable\r\n")
+                            continue
+                        for index, (uid, _) in enumerate(self.messages, 1):
+                            if uid in requested:
+                                size = self.current_size.get("values", {}).get(uid, uid * 1024)
+                                if size is not None:
+                                    send(f"* {index} FETCH (UID {uid} RFC822.SIZE {size})\r\n".encode())
+                        send(tag + b" OK measured\r\n")
+                        continue
+                    assert attrs == b"(UID RFC822.SIZE INTERNALDATE BODY.PEEK[HEADER.FIELDS (DATE FROM SUBJECT)]<0.8192>)"
                     self.header_fetches.append(requested)
                     indices = [index for index, (uid, _) in enumerate(self.messages, 1) if uid in requested]
                     start = indices[0] if indices else 0
@@ -229,6 +290,7 @@ class Server:
                     assert self.folders is not None, "unexpected LIST"
                     assert args[0].startswith(b'"" '), "LIST reference must be empty"
                     pattern = args[0][3:]
+                    status_return = False
                     if pattern.startswith(b"{"):
                         length = int(pattern[1:-1])
                         send(b"+ send literal\r\n")
@@ -241,9 +303,26 @@ class Server:
                                           "line": bytes(literal).decode("utf-8")})
                     else:
                         pattern, end = folderlib.read_quoted(pattern, 0)
-                        assert end == len(args[0]) - 3
+                        remainder = args[0][3:][end:]
+                        assert remainder in (b"", b" RETURN (STATUS (SIZE))")
+                        status_return = bool(remainder)
+                        if status_return:
+                            assert self.sizes.get("list_status") or self.version == "IMAP4rev2"
                     assert pattern in self.folders, "unexpected LIST pattern " + repr(pattern)
                     self.patterns.append(pattern)
+                    if pattern in self.sizes.get("list_denied", ()):
+                        send(tag + b" NO subtree inaccessible\r\n")
+                        continue
+                    if status_return and self.sizes.get("reject_extended"):
+                        # Data from a rejected extended command must not leak
+                        # into the ordinary LIST or its per-folder fallback.
+                        send(b'* LIST () NIL "Rejected"\r\n* STATUS "A" (SIZE 999999999)\r\n')
+                        send(tag + b" " + self.sizes["reject_extended"].encode() + b" unsupported return option\r\n")
+                        continue
+                    if status_return and self.sizes.get("extended_abort"):
+                        send(b"* BYE extended LIST aborted\r\n")
+                        assert conn.recv(1) == b"", "ordinary LIST retried after abort"
+                        return
                     values = self.folders[pattern]
                     if callable(values):
                         values = values(self.patterns.count(pattern))
@@ -255,6 +334,10 @@ class Server:
                             send(header + b"{" + str(len(raw)).encode() + b"}\r\n" + raw + extension + b"\r\n")
                         else:
                             send(header + folderlib.quoted(raw) + extension + b"\r\n")
+                        if status_return and not {flag.upper() for flag in flags}.intersection((b"\\NOSELECT", b"\\NONEXISTENT")):
+                            settings = self.sizes.get("mailboxes", {}).get(raw, self.sizes)
+                            if raw not in self.sizes.get("omit", ()) and settings.get("status") != "denied":
+                                send_status(raw, settings)
                     send(tag + b" OK listed\r\n")
                 else:
                     raise AssertionError("unexpected wire command " + command)
@@ -330,9 +413,11 @@ def run(name, installed=False, mode="implicit", cert="trusted", policy="check", 
         interpreter=None, debug=False, login_disabled=False, preauth=False, ipv6=False,
         prompt=False, terminal=False, folders=None, utf8=False, expected_out=None, patterns=None,
         expected_err=(), enable_reply="confirmed", enable_count=None, messages=None, header_mode=None,
-        expected_uids=None, expected_contains=(), expected_subjects=None, events=None, max_inventory=None):
+        expected_uids=None, expected_contains=(), expected_subjects=None, events=None, max_inventory=None,
+        sizes=None, size_uids=None, status_count=None, du_rows=None, du_total=None, list_status_count=None,
+        du_labels=(), du_cancel=False):
     with Server(mode, cert, version, denied, login_disabled, preauth, ipv6, folders, utf8, enable_reply,
-                messages, header_mode, events) as server:
+                messages, header_mode, events, sizes) as server:
         account = work / "mail/Accounts/shell-fixture"
         account.write_text(f'''name fixture
 email fixture@example.org
@@ -354,6 +439,12 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
         master, slave = pty.openpty() if terminal else (None, subprocess.PIPE)
         try:
             with client_process(argv, env, slave) as process:
+                if du_cancel:
+                    process.stdin.write(commands)
+                    process.stdin.flush()
+                    assert server.literal_started.wait(5), "size scan did not reach held response"
+                    os.killpg(process.pid, signal.SIGINT)
+                    commands = b"pwd\ndu A\nquit\n"
                 if header_mode in ("cancel", "encoding"):
                     process.stdin.write(b"cd Caf\xc3\xa9\nls --messages\n" if header_mode == "encoding"
                                         else b"cd Inbox\nls --messages\n")
@@ -383,11 +474,11 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert json.loads(audit.with_suffix('.json').read_text()) == {"secretExposed": False}
         assert not (Path(env["HOME"]) / ".python_history").exists()
         if expected == 0 or interrupt:
-            assert server.commands.count("LOGIN") == (2 if header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 1), server.commands
+            assert server.commands.count("LOGIN") == (2 if du_cancel or header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 1), server.commands
             assert server.commands[-1] == "LOGOUT", server.commands
         if expected == 0:
-            assert server.commands.count("CAPABILITY") == (4 if header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 3 if mode == "starttls" else 2)
-            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "ENABLE", "EXAMINE", "FETCH", "UID") for c in server.commands)
+            assert server.commands.count("CAPABILITY") == (4 if du_cancel or header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 3 if mode == "starttls" else 2)
+            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "ENABLE", "EXAMINE", "FETCH", "UID", "STATUS") for c in server.commands)
         if expected_out is not None:
             assert out.decode("utf-8") == expected_out, (name, out.decode("utf-8"), expected_out)
         for message in expected_err:
@@ -397,6 +488,38 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
         if enable_count is not None:
             assert server.commands.count("ENABLE") == enable_count
         assert "SELECT" not in server.commands and "STORE" not in server.commands
+        if size_uids is not None:
+            assert [uid for batch in server.size_fetches for uid in batch] == size_uids
+            assert not server.header_fetches, "du requested body/header attributes"
+            if not size_uids:
+                assert not server.fetch_ranges, "server size fast path issued FETCH"
+        if status_count is not None:
+            assert server.commands.count("STATUS") == status_count, (name, server.commands.count("STATUS"), status_count, err.decode())
+        if list_status_count is not None:
+            assert sum(item["direction"] == "client" and "RETURN (STATUS (SIZE))" in item["line"] for item in server.wire) == list_status_count
+        if du_rows is not None:
+            table = [line.decode().split("\t") for line in out.splitlines() if line.startswith(b"/") and len(line.split(b"\t")) == 7]
+            assert [(row[0], row[1], int(row[2])) for row in table] == du_rows, (name, table)
+            assert not server.header_fetches, "recursive du requested message headers"
+            assert b"shared/labeled copies may count twice" in out
+            assert b"du: scanned" in err or not any(row[1] != "-" for row in table)
+            for label in du_labels:
+                assert label.encode() in out, (name, label, out)
+            if du_total is not None:
+                assert f"TOTAL\t{du_total} mailbox bytes".encode() in out, (name, out)
+        if du_cancel:
+            assert b"Scan interrupted; incomplete results retained" in out
+            assert b"Size operation cancelled; connection renewed" in err
+            assert b"/\n/A\t10 bytes\tserver-reported\n" in out
+            assert server.connections == 2
+        if sizes and sizes.get("scan_failure"):
+            assert b"Scan failed; incomplete results retained" in out
+            assert b"du: scanned 1 folders; incomplete" in err and b"finished" not in err
+            assert server.commands.count("LOGIN") == 1 and "LOGOUT" not in server.commands
+        if sizes and sizes.get("extended_abort"):
+            assert b"Scan failed; incomplete results retained" in out
+            assert b"du: scanned 0 folders; incomplete" in err and b"finished" not in err
+            assert server.commands.count("LIST") == 1 and "LOGOUT" not in server.commands
         if expected_uids is not None:
             rows = [line.split(b"\t") for line in out.splitlines() if line[:1].isdigit()]
             assert [int(row[0]) for row in rows] == expected_uids, (name, rows)
@@ -418,7 +541,7 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             if header_mode in ("rejected", "malformed"):
                 assert server.connections == 1 and server.commands.count("FETCH") == 2
                 assert b"/Inbox\n" in out
-        if expected and not denied and not interrupt:
+        if expected and not denied and not interrupt and not (sizes and (sizes.get("scan_failure") or sizes.get("extended_abort"))):
             assert "LOGIN" not in server.commands, server.commands
         if mode == "starttls":
             assert all(x["tls"] for x in server.wire if x["command"] == "LOGIN")
@@ -426,7 +549,8 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert b"NOT verified" in err
         if mode == "plain":
             assert b"plaintext" in err
-        results.append({"name": name, "exit": process.returncode, "wire": server.wire})
+        results.append({"name": name, "exit": process.returncode, "wire": server.wire,
+                        "stdout": out.decode("utf-8"), "stderr": err.decode("utf-8")})
         target = Path(os.environ.get("JARO_TEST_LOG_DIR", work)) / "imap-shell-wire.json"
         target.write_text(json.dumps(results, indent=2) + "\n")
     print("PASS: IMAP shell " + name)
@@ -640,4 +764,202 @@ run("repeated probe churn is bounded and leaves shell usable", folders=header_fo
     events={("FETCH", count): lambda s, send: expunge(s, send, 1) for count in (1, 2, 3)},
     commands=b"cd Inbox\nls --messages --limit 2\npwd\nmore\nquit\n", expected_uids=[],
     expected_contains=("/Inbox",), expected_err=("Mailbox changed repeatedly", "Run ls"), max_inventory=3)
+size_messages = [(uid, normal_header) for uid in (1, 70, 4294967290)]
+size_values = {1: 1024, 70: 2048, 4294967290: 5 * 1024 ** 3}
+size_sum = sum(size_values.values())
+for total in (size_sum, size_sum + 98765, 9223372036854775807, 0):
+    run("server-reported size " + str(total), installed=True, folders=header_folders,
+        messages=size_messages if total else [], sizes={"capability": True, "status": total},
+        commands=b"du Inbox\npwd\nquit\n", size_uids=[], status_count=1,
+        expected_out=f"/Inbox\t{total} bytes\tserver-reported\n/\n")
+for exact in (False, True):
+    run("measured wide size " + str(exact), installed=exact, folders=header_folders,
+        messages=size_messages, sizes={"capability": exact, "status": size_sum + 99, "values": size_values},
+        commands=b"cd Inbox\ndu" + (b" --exact" if exact else b"") + b"\npwd\nquit\n",
+        size_uids=[1, 70, 4294967290], status_count=0,
+        expected_out=f"/Inbox\t{size_sum} bytes\tmeasured for UID inventory; complete; 3/3 messages\n/Inbox\n")
+for reply in (None, "denied"):
+    run("missing STATUS falls back " + str(reply), folders=header_folders, messages=size_messages,
+        sizes={"capability": True, "status": reply, "values": size_values},
+        commands=b"du Inbox\nquit\n", size_uids=[1, 70, 4294967290], status_count=1,
+        expected_out=f"/Inbox\t{size_sum} bytes\tmeasured for UID inventory; complete; 3/3 messages\n")
+run("wrong STATUS identity falls back", folders=header_folders, messages=size_messages,
+    sizes={"capability": True, "status": 99999, "reply_raw": b"Other", "values": size_values},
+    commands=b"du Inbox\nquit\n", size_uids=[1, 70, 4294967290], status_count=1,
+    expected_out=f"/Inbox\t{size_sum} bytes\tmeasured for UID inventory; complete; 3/3 messages\n")
+run("empty measured folder", folders=header_folders,
+    commands=b"du Inbox --exact\nquit\n", size_uids=[],
+    expected_out="/Inbox\t0 bytes\tmeasured for UID inventory; complete; 0/0 messages\n")
+run("inaccessible is not empty", folders=header_folders, sizes={"capability": True, "status": "denied", "denied": True},
+    commands=b"du Inbox\npwd\nquit\n", size_uids=[], status_count=1, expected_out="/\n",
+    expected_err=("Folder inaccessible or size inventory unavailable",))
+run("unavailable message size is partial", folders=header_folders, messages=size_messages,
+    sizes={"values": {1: 1024, 70: None, 4294967290: 5 * 1024 ** 3}},
+    commands=b"du Inbox\nquit\n", size_uids=[1, 70, 4294967290],
+    expected_out=f"/Inbox\t{size_sum - 2048} bytes\tmeasured for UID inventory; partial; 2/3 messages\n")
+run("denied metadata is partial", folders=header_folders, messages=size_messages,
+    sizes={"fetch_denied": True}, commands=b"du Inbox\npwd\nquit\n", size_uids=[1, 70, 4294967290],
+    expected_out="/Inbox\t0 bytes\tmeasured for UID inventory; partial; 0/3 messages\n/\n")
+run("expunged captured UID is partial", folders=header_folders, messages=list(size_messages),
+    sizes={"values": size_values}, events={("UID", 1): lambda s, send: expunge(s, send, 2)},
+    commands=b"du Inbox --exact\nquit\n", size_uids=[1, 70, 4294967290],
+    expected_out=f"/Inbox\t{size_sum - 2048} bytes\tmeasured for UID inventory; partial; 2/3 messages\n")
+run("arrival after capture excluded", folders=header_folders, messages=list(size_messages),
+    sizes={"values": size_values}, events={("UID", 1): lambda s, send: arrival(s, send, 4294967293)},
+    commands=b"du Inbox --exact\nquit\n", size_uids=[1, 70, 4294967290],
+    expected_out=f"/Inbox\t{size_sum} bytes\tmeasured for UID inventory; complete; 3/3 messages\n")
+run("inventory retry keeps upper UID", folders=header_folders, messages=list(size_messages),
+    sizes={"values": size_values}, events={("FETCH", 1): probe_change},
+    commands=b"du Inbox --exact\nquit\n", size_uids=[70, 4294967290],
+    expected_out=f"/Inbox\t{size_sum - 1024} bytes\tmeasured for UID inventory; complete; 2/2 messages\n")
+run("arrival during inventory excluded", folders=header_folders, messages=list(size_messages),
+    sizes={"values": size_values}, events={("FETCH", 1): lambda s, send: arrival(s, send, 4294967293)},
+    commands=b"du Inbox --exact\nquit\n", size_uids=[1, 70, 4294967290],
+    expected_out=f"/Inbox\t{size_sum} bytes\tmeasured for UID inventory; complete; 3/3 messages\n")
+for raw, display, literal in ((b'A*%" mailbox', "A%2A%25%22%20mailbox", False),
+                              (b"Caf&AOk-", "Café", True)):
+    run("exact STATUS mailbox identity " + display, folders={b"%": [mailbox(raw)]},
+        sizes={"capability": True, "status": size_sum, "raw": raw, "literal": literal},
+        commands=f"du {display}\nquit\n".encode(), size_uids=[], status_count=1,
+        expected_out=f"/{display}\t{size_sum} bytes\tserver-reported\n")
+    run("exact measured mailbox identity " + display, folders={b"%": [mailbox(raw)]},
+        messages=size_messages, sizes={"raw": raw, "values": size_values},
+        commands=f"du --exact {display}\nquit\n".encode(), size_uids=[1, 70, 4294967290], status_count=0,
+        expected_out=f"/{display}\t{size_sum} bytes\tmeasured for UID inventory; complete; 3/3 messages\n")
+run("bounded complete size inventory", folders=header_folders, messages=list(many),
+    commands=b"du Inbox --exact\nquit\n", size_uids=[uid for uid, _ in many],
+    expected_out=f"/Inbox\t{sum(uid * 1024 for uid, _ in many)} bytes\tmeasured for UID inventory; complete; 501/501 messages\n")
+run("du syntax and containers", folders={b"%": [mailbox(b"Parent", b"/", (b"\\Noselect",))]},
+    commands=b"du\ndu Parent\ndu Inbox --recursive\ndu --exact --exact\ndu a b\npwd\nquit\n",
+    size_uids=[], expected_out="/\n", expected_err=("Choose a selectable folder", "Invalid du options"))
+run("rev2 core STATUS SIZE without extension", installed=True, version="IMAP4rev2",
+    folders=header_folders, messages=size_messages, sizes={"status": size_sum},
+    commands=b"du Inbox\nquit\n", size_uids=[], status_count=1,
+    expected_out=f"/Inbox\t{size_sum} bytes\tserver-reported\n")
+run("dual server remains rev1 after UTF8 enable", version="IMAP4rev1 IMAP4rev2", utf8=True,
+    folders=header_folders, messages=size_messages, sizes={"status": size_sum + 99, "values": size_values},
+    commands=b"du Inbox\nquit\n", size_uids=[1, 70, 4294967290], status_count=0,
+    expected_out=f"/Inbox\t{size_sum} bytes\tmeasured for UID inventory; complete; 3/3 messages\n")
+for literal in (False, True):
+    run("canonical INBOX STATUS identity " + str(literal), folders=header_folders,
+        sizes={"capability": True, "status": size_sum, "reply_raw": b"INBOX", "literal": literal},
+        commands=b"du Inbox\nquit\n", size_uids=[], status_count=1,
+        expected_out=f"/Inbox\t{size_sum} bytes\tserver-reported\n")
+run("ordinary STATUS mailbox names remain case sensitive", folders={b"%": [mailbox(b"Archive")]},
+    messages=size_messages, sizes={"capability": True, "raw": b"Archive", "reply_raw": b"ARCHIVE",
+                                   "status": size_sum + 99, "values": size_values},
+    commands=b"du Archive\nquit\n", size_uids=[1, 70, 4294967290], status_count=1,
+    expected_out=f"/Archive\t{size_sum} bytes\tmeasured for UID inventory; complete; 3/3 messages\n")
+for exact in (False, True):
+    run("du preserves header paging " + str(exact), installed=exact, folders=header_folders,
+        messages=size_messages, sizes={"capability": True, "status": size_sum, "values": size_values},
+        commands=b"cd Inbox\nls --messages --limit 1\ndu" + (b" --exact" if exact else b"") + b"\nmore\nquit\n",
+        expected_uids=[4294967290, 70], status_count=0 if exact else 1)
+tree_folders = {
+    b"%": [mailbox(b"A", b"/"), mailbox(b"B", b"/"), mailbox(b"C", b"/", (b"\\Noselect",)),
+            mailbox(b"Empty"), mailbox(b"Inbox"), mailbox(b"INBOX"), mailbox(b"A/Spy", b"/")],
+    b"A/%": [mailbox(b"A/Big", b"/", literal=True)], b"A/Big/%": [],
+    b"B/%": [], b"C/%": [mailbox(b"C/Leaf", b"/")], b"C/Leaf/%": [],
+}
+tree_totals = {b"A": 10, b"A/Big": 1000, b"B": 900, b"C/Leaf": 40, b"Empty": 0,
+               b"Inbox": 5, b"INBOX": 5, b"A/Spy": 999999}
+tree_boxes = {raw: {"status": total, "messages": [(1, normal_header)] if total else [], "values": {1: total}}
+              for raw, total in tree_totals.items()}
+tree_expected = [("/", "-", 1955), ("/A", "10", 1010), ("/A/Big", "1000", 1000),
+                 ("/B", "900", 900), ("/C", "-", 40), ("/C/Leaf", "40", 40),
+                 ("/Empty", "0", 0), ("/INBOX", "5", 5)]
+for version, combined in (("IMAP4rev1", False), ("IMAP4rev1", True), ("IMAP4rev2", True)):
+    run("recursive independent totals " + version + str(combined), installed=combined,
+        version=version, folders=tree_folders,
+        sizes={"capability": version == "IMAP4rev1", "list_status": combined and version == "IMAP4rev1", "mailboxes": tree_boxes},
+        commands=b"du --recursive\nquit\n", du_rows=tree_expected, du_total=1955,
+        size_uids=[], status_count=0 if combined else 6, list_status_count=6 if combined else 0,
+        du_labels=("6/6 known folders complete",))
+run("recursive metadata totals", installed=True, folders=tree_folders,
+    sizes={"capability": True, "list_status": True, "mailboxes": tree_boxes},
+    commands=b"du --exact --recursive\nquit\n", du_rows=tree_expected, du_total=1955,
+    size_uids=[1, 1, 1, 1, 1], status_count=0, list_status_count=0,
+    du_labels=("5/5 measured messages (6 metadata folders)",))
+run("rank by direct bytes not subtree", folders=tree_folders,
+    sizes={"capability": True, "list_status": True, "mailboxes": tree_boxes},
+    commands=b"du --top 4\nquit\n", du_rows=[tree_expected[i] for i in (2, 3, 5, 1)], du_total=1955,
+    size_uids=[], status_count=0, list_status_count=6)
+run("depth one limits discovery", folders=tree_folders,
+    sizes={"capability": True, "list_status": True, "mailboxes": tree_boxes},
+    commands=b"du --depth 1\nquit\n", du_rows=[("/", "-", 915), ("/A", "10", 10), ("/B", "900", 900),
+                                                ("/C", "-", 0), ("/Empty", "0", 0), ("/INBOX", "5", 5)],
+    du_total=915, patterns=[b"%"], size_uids=[], status_count=0, list_status_count=1,
+    du_labels=("depth 1", "4/4 known folders complete"))
+run("depth zero root has zero extent", folders={}, commands=b"du --depth 0\nquit\n",
+    du_rows=[("/", "-", 0)], du_total=0, patterns=[], size_uids=[], status_count=0,
+    du_labels=("0/0 known folders complete", "depth 0"))
+run("depth zero selectable folder", folders=tree_folders,
+    sizes={"capability": True, "list_status": True, "mailboxes": tree_boxes},
+    commands=b"du A --depth 0\nquit\n", du_rows=[("/A", "10", 10)], du_total=10,
+    patterns=[b"%"], size_uids=[], status_count=1, list_status_count=0)
+run("LIST STATUS omission recovered separately", folders=tree_folders,
+    sizes={"capability": True, "list_status": True, "mailboxes": tree_boxes, "omit": (b"A",)},
+    commands=b"du --recursive\nquit\n", du_rows=tree_expected, du_total=1955,
+    size_uids=[], status_count=1, list_status_count=6)
+mixed_boxes = dict(tree_boxes)
+mixed_boxes[b"A"] = {"status": None, "messages": [(1, normal_header), (2, normal_header)], "values": {1: 10, 2: None}}
+run("mixed sources and partial message coverage", folders=tree_folders,
+    sizes={"capability": True, "list_status": True, "mailboxes": mixed_boxes},
+    commands=b"du --recursive\nquit\n", du_rows=tree_expected, du_total=1955,
+    size_uids=[1, 2], status_count=1, list_status_count=6,
+    du_labels=("measured+server-reported", "5/6 known folders complete", "1/2 measured messages (1 metadata folders)", "partial; 1/2 messages"))
+denied_boxes = dict(tree_boxes)
+denied_boxes[b"A"] = {"status": "denied", "denied": True}
+denied_expected = list(tree_expected)
+denied_expected[0], denied_expected[1] = ("/", "-", 1945), ("/A", "unknown", 1000)
+run("inaccessible folder retains accessible descendants", folders=tree_folders,
+    sizes={"capability": True, "list_status": True, "mailboxes": denied_boxes},
+    commands=b"du --recursive\nquit\n", du_rows=denied_expected, du_total=1945,
+    size_uids=[], status_count=1, list_status_count=6, du_labels=("server-reported+unknown", "5/6 known folders complete"))
+subtree_expected = [row for row in tree_expected if row[0] != "/C/Leaf"]
+subtree_expected[0], subtree_expected[4] = ("/", "-", 1915), ("/C", "-", 0)
+run("denied subtree has unknown extent", folders=tree_folders,
+    sizes={"capability": True, "list_status": True, "mailboxes": tree_boxes, "list_denied": (b"C/%",)},
+    commands=b"du --recursive\nquit\n", du_rows=subtree_expected, du_total=1915,
+    size_uids=[], status_count=0, list_status_count=5, du_labels=("partial; 5/5 known folders complete; descendants unknown",),
+    expected_err=("descendants unavailable for /C",))
+run("dual rev1 tree requires LIST STATUS advertisement", version="IMAP4rev1 IMAP4rev2", utf8=True,
+    folders=tree_folders, sizes={"capability": True, "mailboxes": tree_boxes},
+    commands=b"du --recursive\nquit\n", du_rows=tree_expected, du_total=1955,
+    size_uids=[], status_count=6, list_status_count=0)
+cancel_names = [b"A"] + [f"B{number:03d}".encode() for number in range(100)]
+run("actual Ctrl-C retains partial ranking and renews transport", installed=True,
+    folders={b"%": [mailbox(raw) for raw in cancel_names]},
+    sizes={"capability": True, "cancel": True, "mailboxes": {raw: {"status": 10} for raw in cancel_names}},
+    commands=b"du --top 2\n", du_cancel=True, du_rows=[("/A", "10", 10), ("/B000", "unknown", 0)],
+    du_total=10, size_uids=[], status_count=3, du_labels=("partial; 1/101 known folders complete",))
+run("recursive syntax validation", folders={}, commands=b"du --depth -1\ndu --depth\ndu --top 0\ndu --top nope\ndu --recursive --recursive\ndu --depth 1 --depth 2\npwd\nquit\n",
+    expected_out="/\n", expected_err=("Invalid du options",), size_uids=[], status_count=0, patterns=[])
+for rejection in ("NO", "BAD"):
+    run("advertised extended LIST rejected " + rejection, installed=rejection == "BAD", folders=tree_folders,
+        sizes={"capability": True, "list_status": True, "reject_extended": rejection, "mailboxes": tree_boxes},
+        commands=b"du --recursive\nquit\n", du_rows=tree_expected, du_total=1955,
+        size_uids=[], status_count=6, list_status_count=6)
+wide_names = [f"Box{number:04d}".encode() for number in range(512)] + [b"box0000", b"Inbox"]
+wide_boxes = {raw: {"status": index + 1} for index, raw in enumerate(wide_names)}
+wide_boxes[b"Inbox"] = {"status": 999999, "reply_raw": b"INBOX", "literal": True}
+run("wide STATUS index preserves ordinary case and INBOX alias", installed=True,
+    folders={b"%": [mailbox(raw) for raw in wide_names]},
+    sizes={"capability": True, "list_status": True, "mailboxes": wide_boxes},
+    commands=b"du --depth 1 --top 3\nquit\n", du_rows=[("/Inbox", "999999", 999999), ("/box0000", "513", 513), ("/Box0511", "512", 512)],
+    du_total=sum(range(1, 513)) + 513 + 999999, size_uids=[], status_count=0, list_status_count=1,
+    du_labels=("514/514 known folders complete",))
+for failure, exit_code in (("timeout", 124), ("abort", 1)):
+    run("abnormal size scan preserves partial and closes " + failure,
+        folders={b"%": [mailbox(b"A"), mailbox(b"B")]},
+        sizes={"capability": True, "scan_failure": failure, "mailboxes": {b"A": {"status": 10}, b"B": {"status": 20}}},
+        commands=b"du --recursive\nquit\n", expected=exit_code,
+        du_rows=[("/", "-", 10), ("/A", "10", 10), ("/B", "unknown", 0)], du_total=10,
+        size_uids=[], status_count=2, list_status_count=0,
+        du_labels=("partial; 1/2 known folders complete",))
+run("aborted extended LIST never retries ordinary LIST", folders={b"%": []},
+    sizes={"capability": True, "list_status": True, "extended_abort": True},
+    commands=b"du --recursive\nquit\n", expected=1, du_rows=[("/", "-", 0)],
+    du_total=0, size_uids=[], status_count=0, list_status_count=1,
+    du_labels=("partial; 0/0 known folders complete; descendants unknown",))
 print(f"PASS: {len(results)} public shell scenarios; all endpoints joined")
