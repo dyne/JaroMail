@@ -83,19 +83,20 @@ class WriteUnknown(Exception):
     pass
 
 
-def write_mailboxes(client, command, operands):
-    """Send one command, with synchronized literals at any operand position.
+def requires_literal(raw):
+    return any(char in raw for char in (b"\r", b"\n", b"\0"))
 
-    imaplib's public methods only support a literal as the final operand.
-    Read the tagged result directly so synchronized BAD remains recoverable.
-    No exception from a possibly sent command is retried here.
+
+def mailbox_command(client, command, operands, prefix=()):
+    """Send a command with synchronized mailbox-name literals.
+
+    Sending the markers ourselves keeps imaplib's UTF8 APPEND framing out
+    of mailbox arguments and supports multiple literal operands.
     """
-    pieces = []
+    pieces = list(prefix)
     literals = []
     for raw in operands:
-        if b"\0" in raw:
-            raise ValueError("NUL is not a mailbox character")
-        if b"\r" in raw or b"\n" in raw:
+        if requires_literal(raw):
             pieces.append(b"{" + str(len(raw)).encode() + b"}")
             literals.append((b" ".join(pieces), raw))
             pieces = []
@@ -114,13 +115,24 @@ def write_mailboxes(client, command, operands):
                 break
             suffix = literals[index + 1][0] if index + 1 < len(literals) else tail
             client.send(raw + (b" " + suffix if suffix else b"") + b"\r\n")
-        status, _ = client._get_tagged_response(tag)
+        status, data = client._get_tagged_response(tag)
         client._check_bye()
     except BaseException:
         # An unfinished literal may consume a later LOGOUT as mailbox bytes.
         # Close before unwinding; only a completed tagged result is reusable.
         with contextlib.suppress(OSError):
             client.shutdown()
+        raise
+    return status, data
+
+
+def write_mailboxes(client, command, operands):
+    if any(b"\0" in raw for raw in operands):
+        raise ValueError("NUL is not a mailbox character")
+    try:
+        status, _ = mailbox_command(client, command, operands)
+    except BaseException:
+        # A possibly sent write must never be retried here.
         raise WriteUnknown("tagged completion unavailable") from None
     if status != "OK":
         raise WriteRejected(command + " rejected")
@@ -238,9 +250,9 @@ class FolderTree:
             prefix = node.raw if node.raw.endswith(node.delimiter) else node.raw + node.delimiter
         pattern = prefix + b"%"
         with self.deadline(self.seconds):
-            if any(char in pattern for char in (b"\r", b"\n", b"\0")):
-                self.client.literal = pattern
-                status, data = self.client.list('""', None)
+            if requires_literal(pattern):
+                status, data = mailbox_command(self.client, "LIST", (pattern,), (b'""',))
+                status, data = self.client._untagged_response(status, data, "LIST")
             elif status_sizes:
                 self.client.untagged_responses.pop("STATUS", None)
                 # Read the completed tagged result directly: _simple_command
@@ -384,21 +396,10 @@ class FolderTree:
         return self.mutate("RENAME", source, parent, raw, delimiter) == "confirmed"
 
     def name_query(self, command, pattern, subscribed=False):
-        options = ('(SUBSCRIBED)', '""') if subscribed else ('""',)
-        try:
-            with self.deadline(self.seconds):
-                if any(char in pattern for char in (b"\r", b"\n", b"\0")):
-                    self.client.literal = pattern
-                    tag = self.client._command(command, *options)
-                else:
-                    tag = self.client._command(command, *options, quoted(pattern))
-                status, data = self.client._get_tagged_response(tag)
-                self.client._check_bye()
-                status, data = self.client._untagged_response(status, data, command)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                self.client.shutdown()
-            raise
+        options = (b'(SUBSCRIBED)', b'""') if subscribed else (b'""',)
+        with self.deadline(self.seconds):
+            status, data = mailbox_command(self.client, command, (pattern,), options)
+            status, data = self.client._untagged_response(status, data, command)
         if status != "OK":
             raise ValueError(command + " unavailable")
         return parse_list(data)

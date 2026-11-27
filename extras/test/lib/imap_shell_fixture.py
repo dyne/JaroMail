@@ -934,6 +934,11 @@ control_folders = {b"%": [mailbox(b"line\nbreak", b"/", (b"\\Noselect",), True)]
 run("literal LIST pattern", folders=control_folders,
     commands=b'cd line%0Abreak\nls\npwd\nquit\n', expected_out='Leaf\n/line%0Abreak\n',
     patterns=[b"%", b"line\nbreak/%"])
+run("IMAP4rev2 mailbox literals in LIST and EXAMINE", installed=True, version="IMAP4rev2",
+    folders=control_folders, commands=b'cd line%0Abreak\nfolders\ncd Leaf\nls --messages\npwd\nquit\n',
+    patterns=[b"%", b"line\nbreak/%"], messages=[(7, b"Subject: Literal mailbox\r\n\r\n")],
+    expected_uids=[7], expected_subjects={7: "Literal mailbox"},
+    expected_contains=("Leaf\n", "/line%0Abreak/Leaf\n"))
 escaped = {b"%": [mailbox(b"Shared/", b"/", (b"\\Noselect",)), mailbox(b"Bob's?[]"),
                    mailbox(b"control&AJs-", literal=True)],
            b"Shared/%": [mailbox(b"Shared/Leaf", b"/"), mailbox(b"SharedOther/Leaf", b"/")]}
