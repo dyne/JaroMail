@@ -181,6 +181,8 @@ class Server:
                     event(self, send)
                 if command == "CAPABILITY":
                     caps = self.version + " UIDPLUS"
+                    if self.sizes.get("unselect"):
+                        caps += " UNSELECT"
                     if self.sizes.get("capability"):
                         caps += " STATUS=SIZE"
                     if self.sizes.get("list_status"):
@@ -314,6 +316,12 @@ class Server:
                     validity = self.current_size.get("validity", self.validity)
                     send(f"* {len(self.messages)} EXISTS\r\n* OK [UIDVALIDITY {validity}] generation\r\n* OK [UIDNEXT {uidnext}] next\r\n".encode()
                          + tag + b" OK [READ-ONLY] examined\r\n")
+                elif command == "UNSELECT":
+                    assert self.selected is not None
+                    reply = self.sizes.get("unselect", "OK")
+                    if reply == "OK":
+                        self.selected = None
+                    send(tag + b" " + reply.encode() + b" unselect\r\n")
                 elif command == "STATUS":
                     raw, end = folderlib.read_quoted(args[0], 0)
                     assert args[0][end:] == b" (SIZE)"
@@ -382,7 +390,8 @@ class Server:
                         continue
                     for index in indices:
                         uid, raw = self.messages[index - 1]
-                        literal = raw[:8192]
+                        header, separator, _ = raw.partition(b"\r\n\r\n")
+                        literal = (header + separator)[:8192]
                         metadata = (f'* {index} FETCH (UID {uid} RFC822.SIZE {uid * 1024} '
                                     'INTERNALDATE "02-Jan-2020 03:04:05 +0000" '
                                     'BODY[HEADER.FIELDS (DATE FROM SUBJECT)]<0> ').encode()
@@ -549,11 +558,11 @@ pinentry.chmod(0o700)
 
 
 @contextlib.contextmanager
-def client_process(argv, env, stdin, control_tty=None):
+def client_process(argv, env, stdin, control_tty=None, *, cwd=None, stdout=subprocess.PIPE):
     def acquire_terminal():
         os.setsid()
         fcntl.ioctl(control_tty, termios.TIOCSCTTY, 0)
-    process = subprocess.Popen(argv, env=env, stdin=stdin, stdout=subprocess.PIPE,
+    process = subprocess.Popen(argv, env=env, stdin=stdin, stdout=stdout, cwd=cwd,
                                stderr=subprocess.PIPE, start_new_session=control_tty is None,
                                preexec_fn=acquire_terminal if control_tty is not None else None,
                                pass_fds=(control_tty,) if control_tty is not None else ())
@@ -644,7 +653,7 @@ def apply_dialogue(process, master, server, steps):
 
 
 def run(name, installed=False, mode="implicit", cert="trusted", policy="check", ca=True,
-        version="IMAP4rev1", denied=False, expected=0, commands=b"help\nhelp\nquit\n", interrupt=False,
+        version="IMAP4rev1", denied=False, expected=0, batch_failure=False, commands=b"help\nhelp\nquit\n", interrupt=False,
         interpreter=None, debug=False, login_disabled=False, preauth=False, ipv6=False,
         prompt=False, terminal=False, folders=None, utf8=False, expected_out=None, patterns=None,
         expected_err=(), enable_reply="confirmed", enable_count=None, messages=None, header_mode=None,
@@ -717,7 +726,8 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             if master is not None:
                 os.close(master)
                 os.close(tty_slave)
-        assert process.returncode == expected, (name, process.returncode, server.wire, err[-300:].decode(errors="replace"))
+        exit_status = 1 if batch_failure or preview_blocked else expected
+        assert process.returncode == exit_status, (name, process.returncode, server.wire, err[-300:].decode(errors="replace"))
         assert b"private-marker-password" not in out + err, "secret in diagnostics"
         assert b"fixture user" not in out + err, "login identifier in diagnostics"
         assert b"shell-fixture" not in out + err, "account identifier in diagnostics"
@@ -729,7 +739,7 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert server.commands[-1] == "LOGOUT", server.commands
         if expected == 0:
             assert server.commands.count("CAPABILITY") == (4 if du_cancel or write_interrupt or write_disconnect or header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 3 if mode == "starttls" else 2)
-            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "LSUB", "ENABLE", "EXAMINE", "FETCH", "UID", "STATUS", "CREATE", "RENAME", "DELETE") for c in server.commands)
+            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "LSUB", "ENABLE", "EXAMINE", "UNSELECT", "FETCH", "UID", "STATUS", "CREATE", "RENAME", "DELETE") for c in server.commands)
         if expected_writes is not None:
             assert server.writes == expected_writes, (name, server.writes, expected_writes, err.decode())
             assert not set(server.commands).intersection(("FETCH", "UID", "COPY", "EXPUNGE"))
@@ -881,7 +891,7 @@ if ipv6_available:
     run("bracketed IPv6 plaintext", mode="plain", ipv6=True)
 run("EOF", commands=b"help\n")
 sentinel = work / "never-execute"
-run("quoted and unevaluated input", commands=f'"help"\nhelp "$(touch {sentinel})"\n"unterminated\nquit\n'.encode())
+run("quoted and unevaluated input", batch_failure=True, commands=f'"help"\nhelp "$(touch {sentinel})"\n"unterminated\nquit\n'.encode())
 assert not sentinel.exists(), "command substitution executed"
 run("Ctrl-C", interrupt=True, commands=None, expected=130)
 run("missing interpreter", interpreter="/nonexistent/jaro-python", expected=1)
@@ -905,7 +915,7 @@ mixed = {
                              mailbox(b"AX/Spy", b"/")],
 }
 root_listing = '%2E\n%2E%2E\nA%2A%25 [container]\nArchive\nCafé\nProjects [container]\nWork%20projects\namp&ersand\nflat%2Fslash\nline%0Abreak\nquote%22name\n'
-run("mixed shallow folders", folders=mixed,
+run("mixed shallow folders", batch_failure=True, folders=mixed,
     commands=b'ls\ncd Projects\npwd\nls --folders\nls --messages\ncd Leaf\npwd\nls --messages\ncd /Archive\nfolders\ncd folder%2Fwith%2Fslash\npwd\ncd /A%2A%25\nls\nrefresh\nls\ncd /flat%2Fslash\nls\npwd\ncd /%2E\npwd\ncd /%2E%2E\npwd\ncd /\nls\nquit\n',
     expected_out=root_listing + '/Projects\n%2E\n%2E%2E\nLeaf\n/Projects/Leaf\nLeaf\nfolder%2Fwith%2Fslash\n/Archive/folder%2Fwith%2Fslash\nLeaf\nNewLeaf\nNewLeaf\n/flat%2Fslash\n/%2E\n/%2E%2E\n' + root_listing,
     expected_err=("Choose a selectable folder",),
@@ -927,7 +937,7 @@ run("literal LIST pattern", folders=control_folders,
 escaped = {b"%": [mailbox(b"Shared/", b"/", (b"\\Noselect",)), mailbox(b"Bob's?[]"),
                    mailbox(b"control&AJs-", literal=True)],
            b"Shared/%": [mailbox(b"Shared/Leaf", b"/"), mailbox(b"SharedOther/Leaf", b"/")]}
-run("namespace prefix and escaped components", folders=escaped,
+run("namespace prefix and escaped components", batch_failure=True, folders=escaped,
     commands=b"ls\ncd Bob%27s%3F%5B%5D\npwd\ncd /control%C2%9B\npwd\ncd /Shared\nls\ncd Leaf\npwd\ncd /not-found\npwd\ncd /bad%escape\npwd\nquit\n",
     expected_out="Bob%27s%3F%5B%5D\nShared [container]\ncontrol%C2%9B\n/Bob%27s%3F%5B%5D\n/control%C2%9B\nLeaf\n/Shared/Leaf\n/Shared/Leaf\n/Shared/Leaf\n",
     patterns=[b"%", b"Shared/%"])
@@ -948,7 +958,7 @@ run("dual confirmed UTF8 enable", version="IMAP4rev1 IMAP4rev2", utf8=True,
     patterns=[b"%", "旅行/%".encode(), "旅行/%".encode()], enable_count=1)
 missing = {b"%": [mailbox(b"Missing", b"/", (b"\\NonExistent", b"\\HasChildren"))],
            b"Missing/%": [mailbox(b"Missing/Leaf", b"/")]}
-run("NonExistent parent retains children", folders=missing,
+run("NonExistent parent retains children", batch_failure=True, folders=missing,
     commands=b'folders\ncd Missing\nls --messages\nls\ncd Leaf\npwd\nquit\n',
     expected_out='Missing [container]\nLeaf\n/Missing/Leaf\n',
     expected_err=("Choose a selectable folder",), patterns=[b"%", b"Missing/%"])
@@ -970,7 +980,7 @@ for installed in (False, True):
 run("headers alongside folders", folders=header_folders, messages=messages[:1],
     commands=b"cd Inbox\nls\nquit\n", expected_uids=[messages[0][0]])
 for mode in ("cancel", "oversized", "inventory-oversized"):
-    run("header recovery " + mode, folders=header_folders, messages=messages[:1], header_mode=mode,
+    run("header recovery " + mode, batch_failure=True, folders=header_folders, messages=messages[:1], header_mode=mode,
         commands=b"cd Inbox\nls --messages\npwd\nls --messages\nquit\n",
         expected_err=("connection renewed",), expected_uids=[messages[0][0]])
 adjacent = [(100003, b"Subject: first UID 999 RFC822.SIZE 1\r\n\r\n"),
@@ -982,10 +992,10 @@ run("NIL and empty header fields", folders=header_folders, messages=adjacent, he
     commands=b"cd Inbox\nls --messages\nquit\n", expected_uids=[200006, 100003],
     expected_subjects={100003: "[missing]", 200006: "[missing]"}, expected_contains=("[INTERNALDATE]",))
 for mode in ("rejected", "malformed"):
-    run("synchronized header failure " + mode, folders=header_folders, messages=messages[:1], header_mode=mode,
+    run("synchronized header failure " + mode, batch_failure=True, folders=header_folders, messages=messages[:1], header_mode=mode,
         commands=b"cd Inbox\nls --messages\npwd\nls --messages\nquit\n",
         expected_uids=[messages[0][0]], expected_err=("Folder operation failed",))
-run("reconnect mailbox encoding drift", folders={b"%": [mailbox(b"Caf&AOk-")]}, messages=messages[:1],
+run("reconnect mailbox encoding drift", batch_failure=True, folders={b"%": [mailbox(b"Caf&AOk-")]}, messages=messages[:1],
     header_mode="encoding", expected_out="/\n", expected_uids=[],
     expected_err=("Mailbox encoding changed", "Choose a selectable folder"))
 
@@ -999,14 +1009,14 @@ many = [(index * 100003, normal_header) for index in range(1, 502)]
 run("limit 500 bounded window", installed=True, folders=header_folders, messages=many,
     commands=b"cd Inbox\nls --limit 500 --messages\nquit\n",
     expected_uids=[uid for uid, _ in reversed(many[-500:])], max_inventory=50)
-run("empty folder paging", folders=header_folders, messages=[],
+run("empty folder paging", batch_failure=True, folders=header_folders, messages=[],
     commands=b"cd Inbox\nmore\nls --messages\nmore\nquit\n", expected_uids=[],
     expected_err=("Run ls",), expected_contains=("No more messages",), max_inventory=0)
-run("limits and command syntax", folders=header_folders, messages=sparse,
+run("limits and command syntax", batch_failure=True, folders=header_folders, messages=sparse,
     commands=b"cd Inbox\nls --limit 0\nls --limit 501\nls --limit -1\nls --limit +1\nls --limit x\nls --limit 1.5\nls --limit\nls --limit 2 --limit 3\nls --messages --folders\nmore junk\nmore\nquit\n",
     expected_uids=[], expected_err=("--limit must be an integer from 1 to 500", "Invalid ls options", "Run ls"),
     max_inventory=0)
-run("container and root do not fetch pages", folders={b"%": [mailbox(b"Parent", b"/", (b"\\Noselect",))], b"Parent/%": []},
+run("container and root do not fetch pages", batch_failure=True, folders={b"%": [mailbox(b"Parent", b"/", (b"\\Noselect",))], b"Parent/%": []},
     commands=b"ls --limit 2\nmore\ncd Parent\nls --messages --limit 2\nmore\nquit\n",
     expected_uids=[], expected_err=("Choose a selectable folder",), max_inventory=0)
 
@@ -1060,14 +1070,14 @@ def replace_mailbox(server, send):
     server.validity += 1
 
 
-run("UIDVALIDITY replacement discards cursor", folders=header_folders, messages=list(sparse),
+run("UIDVALIDITY replacement discards cursor", batch_failure=True, folders=header_folders, messages=list(sparse),
     events={("EXAMINE", 2): replace_mailbox},
     commands=b"cd Inbox\nls --messages --limit 2\nmore\nmore\nquit\n",
     expected_uids=[4294967290, 4294967280], expected_err=("UIDVALIDITY changed", "run ls to refresh", "Run ls"), max_inventory=1)
-run("refresh resets paging", folders=header_folders, messages=list(sparse),
+run("refresh resets paging", batch_failure=True, folders=header_folders, messages=list(sparse),
     commands=b"cd Inbox\nls --messages --limit 2\nrefresh\nmore\nquit\n",
     expected_uids=[4294967290, 4294967280], expected_err=("Run ls",), max_inventory=1)
-run("repeated probe churn is bounded and leaves shell usable", folders=header_folders, messages=list(sparse),
+run("repeated probe churn is bounded and leaves shell usable", batch_failure=True, folders=header_folders, messages=list(sparse),
     events={("FETCH", count): lambda s, send: expunge(s, send, 1) for count in (1, 2, 3)},
     commands=b"cd Inbox\nls --messages --limit 2\npwd\nmore\nquit\n", expected_uids=[],
     expected_contains=("/Inbox",), expected_err=("Mailbox changed repeatedly", "Run ls"), max_inventory=3)
@@ -1097,17 +1107,17 @@ run("wrong STATUS identity falls back", folders=header_folders, messages=size_me
 run("empty measured folder", folders=header_folders,
     commands=b"du Inbox --exact\nquit\n", size_uids=[],
     expected_out="/Inbox\t0 bytes\tmeasured for UID inventory; complete; 0/0 messages\n")
-run("inaccessible is not empty", folders=header_folders, sizes={"capability": True, "status": "denied", "denied": True},
+run("inaccessible is not empty", batch_failure=True, folders=header_folders, sizes={"capability": True, "status": "denied", "denied": True},
     commands=b"du Inbox\npwd\nquit\n", size_uids=[], status_count=1, expected_out="/\n",
     expected_err=("Folder inaccessible or size inventory unavailable",))
-run("unavailable message size is partial", folders=header_folders, messages=size_messages,
+run("unavailable message size is partial", batch_failure=True, folders=header_folders, messages=size_messages,
     sizes={"values": {1: 1024, 70: None, 4294967290: 5 * 1024 ** 3}},
     commands=b"du Inbox\nquit\n", size_uids=[1, 70, 4294967290],
     expected_out=f"/Inbox\t{size_sum - 2048} bytes\tmeasured for UID inventory; partial; 2/3 messages\n")
-run("denied metadata is partial", folders=header_folders, messages=size_messages,
+run("denied metadata is partial", batch_failure=True, folders=header_folders, messages=size_messages,
     sizes={"fetch_denied": True}, commands=b"du Inbox\npwd\nquit\n", size_uids=[1, 70, 4294967290],
     expected_out="/Inbox\t0 bytes\tmeasured for UID inventory; partial; 0/3 messages\n/\n")
-run("expunged captured UID is partial", folders=header_folders, messages=list(size_messages),
+run("expunged captured UID is partial", batch_failure=True, folders=header_folders, messages=list(size_messages),
     sizes={"values": size_values}, events={("UID", 1): lambda s, send: expunge(s, send, 2)},
     commands=b"du Inbox --exact\nquit\n", size_uids=[1, 70, 4294967290],
     expected_out=f"/Inbox\t{size_sum - 2048} bytes\tmeasured for UID inventory; partial; 2/3 messages\n")
@@ -1136,7 +1146,7 @@ for raw, display, literal in ((b'A*%" mailbox', "A%2A%25%22%20mailbox", False),
 run("bounded complete size inventory", folders=header_folders, messages=list(many),
     commands=b"du Inbox --exact\nquit\n", size_uids=[uid for uid, _ in many],
     expected_out=f"/Inbox\t{sum(uid * 1024 for uid, _ in many)} bytes\tmeasured for UID inventory; complete; 501/501 messages\n")
-run("du syntax and containers", folders={b"%": [mailbox(b"Parent", b"/", (b"\\Noselect",))]},
+run("du syntax and containers", batch_failure=True, folders={b"%": [mailbox(b"Parent", b"/", (b"\\Noselect",))]},
     commands=b"du\ndu Parent\ndu Inbox --recursive\ndu --exact --exact\ndu a b\npwd\nquit\n",
     size_uids=[], expected_out="/\n", expected_err=("Choose a selectable folder", "Invalid du options"))
 run("rev2 core STATUS SIZE without extension", installed=True, version="IMAP4rev2",
@@ -1210,7 +1220,7 @@ run("LIST STATUS omission recovered separately", folders=tree_folders,
     size_uids=[], status_count=1, list_status_count=6)
 mixed_boxes = dict(tree_boxes)
 mixed_boxes[b"A"] = {"status": None, "messages": [(1, normal_header), (2, normal_header)], "values": {1: 10, 2: None}}
-run("mixed sources and partial message coverage", folders=tree_folders,
+run("mixed sources and partial message coverage", batch_failure=True, folders=tree_folders,
     sizes={"capability": True, "list_status": True, "mailboxes": mixed_boxes},
     commands=b"du --recursive\nquit\n", du_rows=tree_expected, du_total=1955,
     size_uids=[1, 2], status_count=1, list_status_count=6,
@@ -1219,13 +1229,13 @@ denied_boxes = dict(tree_boxes)
 denied_boxes[b"A"] = {"status": "denied", "denied": True}
 denied_expected = list(tree_expected)
 denied_expected[0], denied_expected[1] = ("/", "-", 1945), ("/A", "unknown", 1000)
-run("inaccessible folder retains accessible descendants", folders=tree_folders,
+run("inaccessible folder retains accessible descendants", batch_failure=True, folders=tree_folders,
     sizes={"capability": True, "list_status": True, "mailboxes": denied_boxes},
     commands=b"du --recursive\nquit\n", du_rows=denied_expected, du_total=1945,
     size_uids=[], status_count=1, list_status_count=6, du_labels=("server-reported+unknown", "5/6 known folders complete"))
 subtree_expected = [row for row in tree_expected if row[0] != "/C/Leaf"]
 subtree_expected[0], subtree_expected[4] = ("/", "-", 1915), ("/C", "-", 0)
-run("denied subtree has unknown extent", folders=tree_folders,
+run("denied subtree has unknown extent", batch_failure=True, folders=tree_folders,
     sizes={"capability": True, "list_status": True, "mailboxes": tree_boxes, "list_denied": (b"C/%",)},
     commands=b"du --recursive\nquit\n", du_rows=subtree_expected, du_total=1915,
     size_uids=[], status_count=0, list_status_count=5, du_labels=("partial; 5/5 known folders complete; descendants unknown",),
@@ -1235,12 +1245,12 @@ run("dual rev1 tree requires LIST STATUS advertisement", version="IMAP4rev1 IMAP
     commands=b"du --recursive\nquit\n", du_rows=tree_expected, du_total=1955,
     size_uids=[], status_count=6, list_status_count=0)
 cancel_names = [b"A"] + [f"B{number:03d}".encode() for number in range(100)]
-run("actual Ctrl-C retains partial ranking and renews transport", installed=True,
+run("actual Ctrl-C retains partial ranking and renews transport", batch_failure=True, installed=True,
     folders={b"%": [mailbox(raw) for raw in cancel_names]},
     sizes={"capability": True, "cancel": True, "mailboxes": {raw: {"status": 10} for raw in cancel_names}},
     commands=b"du --top 2\n", du_cancel=True, du_rows=[("/A", "10", 10), ("/B000", "unknown", 0)],
     du_total=10, size_uids=[], status_count=3, du_labels=("partial; 1/101 known folders complete",))
-run("recursive syntax validation", folders={}, commands=b"du --depth -1\ndu --depth\ndu --top 0\ndu --top nope\ndu --recursive --recursive\ndu --depth 1 --depth 2\npwd\nquit\n",
+run("recursive syntax validation", batch_failure=True, folders={}, commands=b"du --depth -1\ndu --depth\ndu --top 0\ndu --top nope\ndu --recursive --recursive\ndu --depth 1 --depth 2\npwd\nquit\n",
     expected_out="/\n", expected_err=("Invalid du options",), size_uids=[], status_count=0, patterns=[])
 for rejection in ("NO", "BAD"):
     run("advertised extended LIST rejected " + rejection, installed=rejection == "BAD", folders=tree_folders,
@@ -1283,11 +1293,11 @@ run("rename alias uses complete exact target", installed=True, write_state=write
     expected_writes=[("RENAME", b"Work projects", b"Archive.Other")],
     final_state={**{raw: value for raw, value in write_initial.items() if not raw.startswith(b"Work projects")},
                  b"Archive.Other": (2, 3), b"Archive.Other.Child": (4,), b"Archive.Other.Child.Deep": (5,)})
-run("invalid writes never mutate", write_state=write_initial,
+run("invalid writes never mutate", batch_failure=True, write_state=write_initial,
     commands=b'mkdir /\nmkdir Archive/Exists\nmkdir Missing/Child\nmkdir Archive/a%2Eb\nmv / New\nmv Inbox New\nmv "Work projects" Inbox\nmv "Work projects" Archive/Exists\nmv "Work projects" Missing/New\nmv "Work projects" "Work projects/Child/New"\nmkdir Archive/%00\npwd\nquit\n',
     expected_writes=[], final_state=write_initial, expected_out="/\n", expected_err=("Folder operation failed",))
 for rejected in ("NO", "BAD"):
-    run("synchronized " + rejected + " writes leave session usable", write_state=write_initial,
+    run("synchronized " + rejected + " writes leave session usable", batch_failure=True, write_state=write_initial,
         write_replies={"CREATE": rejected, "RENAME": rejected},
         commands=b'mkdir Archive/New\nmv "Work projects" Archive/New\npwd\nfolders\nquit\n',
         expected_writes=[("CREATE", b"Archive.New"), ("RENAME", b"Work projects", b"Archive.New")],
@@ -1306,7 +1316,7 @@ run("both RENAME operands use binary safe literals", version="IMAP4rev2",
     commands=b'rename old%0Aname Archive/new%0Dname\nmkdir Archive/line%0Abreak\nquit\n',
     expected_writes=[("RENAME", b"old\nname", b"Archive.new\rname"), ("CREATE", b"Archive.line\nbreak")],
     final_state={b"Archive": (), b"Archive.new\rname": (9,), b"Archive.new\rname.Child": (10,), b"Archive.line\nbreak": ()})
-run("ambiguous root namespace refuses CREATE", folders=mixed,
+run("ambiguous root namespace refuses CREATE", batch_failure=True, folders=mixed,
     commands=b'mkdir New\nquit\n', expected_writes=[], expected_err=("Folder operation failed",))
 for namespace in (b".", None):
     run("first folder discovers empty root " + repr(namespace), write_state={}, write_namespace=namespace,
@@ -1320,12 +1330,12 @@ def remove_cached_parent(server, send):
     del server.write_state[b"Parent.Child"]
 
 
-run("relative writes revalidate deleted cwd and ancestors", write_state={b"Parent": (), b"Parent.Child": (), b"Survivor": ()},
+run("relative writes revalidate deleted cwd and ancestors", batch_failure=True, write_state={b"Parent": (), b"Parent.Child": (), b"Survivor": ()},
     events={("LIST", 3): remove_cached_parent},
     commands=b'cd Parent/Child\nmkdir new\nmkdir ./second\nmkdir ../sibling\nmkdir ../../Survivor/new\nquit\n',
     expected_writes=[("CREATE", b"Survivor.new")], final_state={b"Survivor": (), b"Survivor.new": ()},
     expected_err=("Folder operation failed",))
-run("cancel before mailbox literal continuation closes transport", version="IMAP4rev2", write_state={b"Archive": ()},
+run("cancel before mailbox literal continuation closes transport", batch_failure=True, version="IMAP4rev2", write_state={b"Archive": ()},
     commands=b'mkdir Archive/new%0Aname\n', write_interrupt=True,
     expected_writes=[], final_state={b"Archive": ()}, expected_err=("outcome unknown", "Observed new path: not listed"))
 navigation_state = {b"Old": (1,), b"Old.Child": (2,), b"Old.Child.Deep": (3,), b"Archive": ()}
@@ -1356,27 +1366,27 @@ def collide_before_rename(server, send):
     server.write_state[b"Archive.New"] = (99,)
 
 
-run("external target collision stays rejected and refreshes navigation", write_state=navigation_state,
+run("external target collision stays rejected and refreshes navigation", batch_failure=True, write_state=navigation_state,
     events={("RENAME", 1): collide_before_rename}, write_replies={"RENAME": "NO"},
     commands=b'cd Old\nrename /Old /Archive/New\npwd\ncd /Archive\nfolders\nquit\n',
     expected_writes=[("RENAME", b"Old", b"Archive.New")], final_state={**navigation_state, b"Archive.New": (99,)},
     expected_out="/Old\nNew\n", expected_err=("RENAME rejected",))
 for loss in ("before", "after"):
-    run("missing RENAME completion " + loss + " remote commit", write_state=navigation_state, write_disconnect=loss,
+    run("missing RENAME completion " + loss + " remote commit", batch_failure=True, write_state=navigation_state, write_disconnect=loss,
         commands=b'cd Old/Child\nrename /Old /Archive/New\npwd\nfolders\nquit\n',
         expected_writes=[("RENAME", b"Old", b"Archive.New")],
         final_state=navigation_state if loss == "before" else navigation_final,
         expected_out="/Old/Child\nDeep\n" if loss == "before" else "/\nArchive\n",
         expected_err=("RENAME outcome unknown", "Observed old path: " + ("present" if loss == "before" else "not listed"),
                       "Observed new path: " + ("not listed" if loss == "before" else "present")))
-run("missing CREATE completion remains unknown after observed commit", write_state={b"Archive": ()}, write_disconnect="after",
+run("missing CREATE completion remains unknown after observed commit", batch_failure=True, write_state={b"Archive": ()}, write_disconnect="after",
     commands=b'mkdir Archive/New\ncd Archive\nfolders\nquit\n', expected_writes=[("CREATE", b"Archive.New")],
     final_state={b"Archive": (), b"Archive.New": ()}, expected_out="New\n",
     expected_err=("CREATE outcome unknown", "Observed new path: present; outcome remains unknown"))
-run("unknown write does not probe cached names after encoding change", write_state={b"Archive": ()}, write_disconnect="encoding",
+run("unknown write does not probe cached names after encoding change", batch_failure=True, write_state={b"Archive": ()}, write_disconnect="encoding",
     commands='mkdir Café\npwd\nquit\n'.encode(), expected_writes=[("CREATE", b"Caf&AOk-")],
     final_state={b"Archive": (), b"Caf&AOk-": ()}, expected_out="/\n", expected_err=("outcome unknown", "encoding changed"))
-run("unknown probes filter wildcard name aliases exactly", write_state={b"A*%": (), b"AX": (), b"Archive": ()},
+run("unknown probes filter wildcard name aliases exactly", batch_failure=True, write_state={b"A*%": (), b"AX": (), b"Archive": ()},
     sizes={"probe_rows": {b"Archive.New": [mailbox(b"Archive.New", b".", (b"\\NonExistent",))]}},
     write_disconnect="before", commands=b'rename A%2A%25 Archive/New\nquit\n',
     expected_writes=[("RENAME", b"A*%", b"Archive.New")], final_state={b"A*%": (), b"AX": (), b"Archive": ()},
@@ -1539,40 +1549,40 @@ run("bulk apply confirmed serial mapping on controlling PTY", installed=True, wr
     expected_writes=bulk_writes, final_state=bulk_final,
     apply_states=bulk_statuses("completed", "completed", "completed"))
 for answer in (b"no\n", "interrupt-prompt"):
-    run("bulk apply confirmation cancelled " + str(answer), write_state=bulk_state,
+    run("bulk apply confirmation cancelled " + str(answer), batch_failure=True, write_state=bulk_state,
         apply_steps=[{"preview": bulk_preview}, {"apply": 0, "answer": answer}, {"apply": 0, "reject": True}],
         commands=b"pwd\nquit\n", expected_writes=[], final_state=bulk_state,
         apply_states=bulk_statuses("pending", "pending", "pending"))
-run("bulk apply pipe cannot supply controlling-terminal confirmation", write_state=bulk_state,
+run("bulk apply pipe cannot supply controlling-terminal confirmation", batch_failure=True, write_state=bulk_state,
     apply_steps=[{"preview": bulk_preview}, {"apply": 0}], apply_tty=False, commands=b"pwd\nquit\n",
     expected_writes=[], final_state=bulk_state, apply_states=bulk_statuses("pending", "pending", "pending"))
-run("bulk apply replaced and consumed IDs never replay", write_state={b"Old-A": (1,)},
+run("bulk apply replaced and consumed IDs never replay", batch_failure=True, write_state={b"Old-A": (1,)},
     apply_steps=[{"preview": bulk_preview}, {"preview": b"rename-glob 'Old-*' 'Later-{1}'"},
                  {"apply": 0, "reject": True}, {"apply": 1, "reject": True},
                  {"preview": b"rename-glob 'Old-*' 'Latest-{1}'"}, {"apply": 2}, {"apply": 2, "reject": True}],
     commands=b"pwd\nquit\n", expected_writes=[("RENAME", b"Old-A", b"Latest-A")],
     final_state={b"Latest-A": (1,)}, apply_states=[("completed", "/Old-A", "/Latest-A")])
-run("bulk apply blocked preview is never actionable", write_state={b"Old-A": (1,)},
+run("bulk apply blocked preview is never actionable", batch_failure=True, write_state={b"Old-A": (1,)},
     apply_steps=[{"preview": b"rename-glob 'Old-*' 'Old-{1}'"}, {"apply": 0}], apply_tty=False,
     commands=b"pwd\nquit\n", expected_writes=[], final_state={b"Old-A": (1,)},
     apply_states=[("pending", "/Old-A", "/Old-A")])
 for changed in ({b"Old-D": (4,)}, {b"New-B": (9,)}, {b"Old-B.Child": (8,)}):
-    run("bulk apply drift after confirmation prompt " + repr(next(iter(changed))), write_state=bulk_state,
+    run("bulk apply drift after confirmation prompt " + repr(next(iter(changed))), batch_failure=True, write_state=bulk_state,
         apply_steps=[{"preview": bulk_preview}, {"apply": 0, "after_prompt": lambda server, changed=changed: server.write_state.update(changed)}],
         commands=b"pwd\nquit\n", expected_writes=[], final_state={**bulk_state, **changed},
         apply_states=bulk_statuses("pending", "pending", "pending"))
-run("bulk apply stops at refusal two of three", write_state=bulk_state, write_replies={("RENAME", 2): "NO"},
+run("bulk apply stops at refusal two of three", batch_failure=True, write_state=bulk_state, write_replies={("RENAME", 2): "NO"},
     apply_steps=[{"preview": bulk_preview}, {"apply": 0}, {"apply": 0, "reject": True}], commands=b"pwd\nquit\n",
     expected_writes=bulk_writes[:2], final_state={b"New-A": (1,), b"Old-B": (2,), b"Old-C": (3,)},
     apply_states=bulk_statuses("completed", "failed", "pending"))
 for changed in ({b"Old-D": (4,)}, {b"New-B": (9,)}, {b"Old-B.Child": (8,)}):
-    run("bulk apply rechecks between operations " + repr(next(iter(changed))), write_state=bulk_state,
+    run("bulk apply rechecks between operations " + repr(next(iter(changed))), batch_failure=True, write_state=bulk_state,
         events={("LSUB", 5): lambda server, send, changed=changed: server.write_state.update(changed)},
         apply_steps=[{"preview": bulk_preview}, {"apply": 0}], commands=b"pwd\nquit\n",
         expected_writes=bulk_writes[:1], final_state={b"New-A": (1,), b"Old-B": (2,), b"Old-C": (3,), **changed},
         apply_states=bulk_statuses("completed", "pending", "pending"))
 for loss in ("before", "after", "hold-after"):
-    run("bulk apply unknown result not replayed " + loss, write_state=bulk_state, write_disconnect=loss,
+    run("bulk apply unknown result not replayed " + loss, batch_failure=True, write_state=bulk_state, write_disconnect=loss,
         apply_steps=[{"preview": bulk_preview}, {"apply": 0, "answer": "interrupt-write" if loss == "hold-after" else b"yes\n"},
                      {"apply": 0, "reject": True}], commands=b"pwd\nquit\n", expected_writes=bulk_writes[:1],
         final_state=bulk_state if loss == "before" else {b"New-A": (1,), b"Old-B": (2,), b"Old-C": (3,)},
@@ -1600,27 +1610,37 @@ run("bulk apply tracks completed targets matching original wildcard", write_stat
     expected_writes=[("RENAME", b"Box-a", b"Box-aa"), ("RENAME", b"Box-b", b"Box-ab")],
     final_state={b"Box-aa": (1,), b"Box-ab": (2,)},
     apply_states=[("completed", "/Box-a", "/Box-aa"), ("completed", "/Box-b", "/Box-ab")])
-run("bulk apply cancelled long terminal line cannot confirm a later ID", write_state=bulk_state,
+run("bulk apply cancelled long terminal line cannot confirm a later ID", batch_failure=True, write_state=bulk_state,
     apply_steps=[{"preview": bulk_preview}, {"apply": 0, "answer": b"n" * 16 + b"yes\n"},
                  {"preview": bulk_preview}, {"apply": 1, "answer": b"no\n"}], commands=b"pwd\nquit\n",
     expected_writes=[], final_state=bulk_state,
     apply_states=bulk_statuses("pending", "pending", "pending") * 2)
 for command in (b"rename-glob 'Old-*'\n", b"rename-glob 'Old' 'New-{1}'\n"):
-    run("bulk apply invalid new preview invalidates old ID " + command.decode().strip(), write_state=bulk_state,
+    run("bulk apply invalid new preview invalidates old ID " + command.decode().strip(), batch_failure=True, write_state=bulk_state,
         apply_steps=[{"preview": bulk_preview}, {"commands": command}, {"apply": 0, "reject": True}],
         commands=b"pwd\nquit\n", expected_writes=[], final_state=bulk_state)
 for command in (b"rename-glob 'unterminated\n", b"apply 'unterminated\n"):
-    run("bulk apply malformed authorization command consumes old ID " + command.decode().strip(), write_state=bulk_state,
+    run("bulk apply malformed authorization command consumes old ID " + command.decode().strip(), batch_failure=True, write_state=bulk_state,
         apply_steps=[{"preview": bulk_preview}, {"commands": command}, {"apply": 0, "reject": True}],
         commands=b"pwd\nquit\n", expected_writes=[], final_state=bulk_state,
         expected_err=("Invalid quoted command",))
-run("bulk apply partial refusal resumes only with fresh review", installed=True, write_state=bulk_state,
+run("bulk apply partial refusal resumes only with fresh review", batch_failure=True, installed=True, write_state=bulk_state,
     write_replies={("RENAME", 2): "NO"},
     apply_steps=[{"preview": bulk_preview}, {"apply": 0}, {"hook": lambda server: server.write_replies.clear()},
                  {"preview": bulk_preview}, {"apply": 1}], commands=b"pwd\nquit\n",
     expected_writes=bulk_writes[:2] + bulk_writes[1:], final_state=bulk_final,
     apply_states=bulk_statuses("completed", "failed", "pending") + bulk_statuses("pending", "completed", "completed")[1:])
 delete_state = {b"Box": (1, 2), b"Survivor": ()}
+for reply in ("OK", "NO", "BAD"):
+    run("release selected mailbox before deletion " + reply, installed=True, batch_failure=reply != "OK",
+        write_state=delete_state, sizes={"unselect": reply}, commands=b"rmdir Box --yes\nquit\n",
+        expected_writes=[("DELETE", b"Box")] if reply == "OK" else [],
+        final_state={b"Survivor": ()} if reply == "OK" else delete_state,
+        expected_err=("DELETE confirmed" if reply == "OK" else "deletion refused",))
+    ordered = [r["command"] for r in results[-1]["wire"] if r["direction"] == "client"]
+    assert ordered[ordered.index("UNSELECT") - 1] == "EXAMINE"
+    if reply == "OK":
+        assert ordered[ordered.index("DELETE") - 1] == "UNSELECT"
 for installed in (False, True):
     run("delete explicit terminal yes " + ("installed" if installed else "source"), installed=installed,
         write_state=delete_state, apply_steps=[{"delete": b"rmdir Box"}],
@@ -1628,11 +1648,11 @@ for installed in (False, True):
         expected_contains=("Delete target: /Box", "Messages: 2", "WARNING: nonempty folder"),
         expected_err=("DELETE confirmed",))
     for answer in (b"no\n", b"\n", b"\x04", "interrupt-prompt"):
-        run("delete terminal cancellation " + repr(answer) + (" installed" if installed else " source"),
+        run("delete terminal cancellation " + repr(answer) + (" installed" if installed else " source"), batch_failure=True,
             installed=installed, write_state=delete_state,
             apply_steps=[{"delete": b"rmdir Box", "answer": answer}],
             expected_writes=[], final_state=delete_state, expected_contains=("Deletion cancelled",))
-    run("delete pipe cannot approve " + str(installed), installed=installed, write_state=delete_state,
+    run("delete pipe cannot approve " + str(installed), batch_failure=True, installed=installed, write_state=delete_state,
         apply_steps=[{"delete": b"rmdir Box"}], apply_tty=False,
         expected_writes=[], final_state=delete_state,
         expected_contains=("controlling terminal required; command stdin cannot confirm",))
@@ -1640,13 +1660,13 @@ for installed in (False, True):
         commands=b"rmdir Box --yes\npwd\nquit\n", expected_writes=[("DELETE", b"Box")],
         final_state={b"Survivor": ()}, expected_err=("DELETE confirmed",))
 for reply in ("NO", "BAD"):
-    run("delete ACL tagged " + reply, write_state=delete_state, write_replies={"DELETE": reply},
+    run("delete ACL tagged " + reply, batch_failure=True, write_state=delete_state, write_replies={"DELETE": reply},
         apply_steps=[{"delete": b"rmdir Box"}], expected_writes=[("DELETE", b"Box")],
         final_state=delete_state, expected_err=("DELETE rejected",))
-run("delete unknown count warning", write_state=delete_state, sizes={"denied": True},
+run("delete unknown count warning", batch_failure=True, write_state=delete_state, sizes={"denied": True},
     apply_steps=[{"delete": b"rmdir Box", "answer": b"no\n"}], expected_writes=[],
     final_state=delete_state, expected_contains=("Messages: unknown", "WARNING: message count unknown"))
-run("delete literal wildcard exact raw identity", installed=True,
+run("delete literal wildcard exact raw identity", batch_failure=True, installed=True,
     write_state={b"Literal*%?": (3,), b"Literal-other": (4,), b"Literal*%?.Child": (5,)},
     commands=b"rmdir Literal%2A%25%3F --yes\nquit\n", expected_writes=[],
     final_state={b"Literal*%?": (3,), b"Literal-other": (4,), b"Literal*%?.Child": (5,)},
@@ -1660,11 +1680,11 @@ run("delete literal wildcard never expands unrelated names", installed=True,
 run("delete binary mailbox uses synchronized literals", version="IMAP4rev2",
     write_state={b"line\nbreak": (8,)}, commands=b"rmdir line%0Abreak --yes\nquit\n",
     expected_writes=[("DELETE", b"line\nbreak")], final_state={})
-run("delete root INBOX and unapproved descendants refused", write_state={b"iNbOx": (1,), b"Parent": (), b"Parent.Child": ()},
+run("delete root INBOX and unapproved descendants refused", batch_failure=True, write_state={b"iNbOx": (1,), b"Parent": (), b"Parent.Child": ()},
     commands=b"rmdir / --yes\nrmdir iNbOx --yes\nrmdir Parent --yes\nrmdir iNbOx --recursive --yes\nrmdir / --recursive --yes\nrmdir Parent --unknown --yes\nquit\n",
     expected_writes=[], final_state={b"iNbOx": (1,), b"Parent": (), b"Parent.Child": ()},
     expected_contains=("Cannot delete root or INBOX", "Folder has descendants", "Use rmdir EXACT-PATH"))
-run("delete scope enumeration denied", write_state=delete_state, sizes={"list_denied": (b"Box*",)},
+run("delete scope enumeration denied", batch_failure=True, write_state=delete_state, sizes={"list_denied": (b"Box*",)},
     commands=b"rmdir Box --yes\nquit\n", expected_writes=[], final_state=delete_state,
     expected_err=("Folder operation failed",))
 
@@ -1685,7 +1705,7 @@ for hook, final, cause in (
         (delete_add_child, {**delete_state, b"Box.New": ()}, "Folder has descendants"),
         (delete_add_message, {**delete_state, b"Box": (1, 2, 3)}, "message state changed"),
         (delete_replace, delete_state, "message state changed")):
-    run("delete rechecks after prompt " + hook.__name__, write_state=delete_state,
+    run("delete rechecks after prompt " + hook.__name__, batch_failure=True, write_state=delete_state,
         apply_steps=[{"delete": b"rmdir Box", "after_prompt": hook}],
         expected_writes=[], final_state=final, expected_contains=(cause,))
 run("delete current folder refreshes navigation before relative create", installed=True,
@@ -1694,7 +1714,7 @@ run("delete current folder refreshes navigation before relative create", install
     final_state={b"Parent": (), b"Parent.New": ()}, expected_contains=("/Parent\n",),
     expected_err=("Current folder unavailable; returned to /Parent",))
 for disconnect in ("before", "after"):
-    run("delete unknown outcome " + disconnect, write_state=delete_state, write_disconnect=disconnect,
+    run("delete unknown outcome " + disconnect, batch_failure=True, write_state=delete_state, write_disconnect=disconnect,
         commands=b"rmdir Box --yes\npwd\nquit\n", expected_writes=[("DELETE", b"Box")],
         final_state=delete_state if disconnect == "before" else {b"Survivor": ()},
         expected_err=("DELETE outcome unknown", "Observed target path", "outcome remains unknown"))
@@ -1719,11 +1739,11 @@ for installed in (False, True):
         commands=b"rmdir Tree --recursive --yes\npwd\nquit\n" if installed else b"pwd\nquit\n",
         expected_writes=recursive_writes, final_state={b"Outside": (5,)},
         delete_targets=recursive_targets, delete_results=[("removed", path) for path in recursive_paths])
-run("recursive delete default-negative terminal blank", installed=True, write_state=recursive_state,
+run("recursive delete default-negative terminal blank", batch_failure=True, installed=True, write_state=recursive_state,
     apply_steps=[{"delete": b"rmdir Tree --recursive", "answer": b"\n"}],
     expected_writes=[], final_state=recursive_state, delete_targets=recursive_targets,
     delete_results=[("surviving", path) for path in recursive_paths], expected_contains=("confirmation cancelled",))
-run("recursive delete pipe never confirms", write_state=recursive_state,
+run("recursive delete pipe never confirms", batch_failure=True, write_state=recursive_state,
     apply_steps=[{"delete": b"rmdir Tree --recursive"}], apply_tty=False,
     expected_writes=[], final_state=recursive_state, delete_targets=recursive_targets,
     delete_results=[("surviving", path) for path in recursive_paths], expected_contains=("controlling terminal required",))
@@ -1738,38 +1758,38 @@ def recursive_new_between(server, send):
     recursive_new_child(server)
 
 
-run("recursive delete new child after consent scope before first write", write_state=recursive_state,
+run("recursive delete new child after consent scope before first write", batch_failure=True, write_state=recursive_state,
     apply_steps=[{"delete": b"rmdir Tree --recursive", "after_prompt": recursive_new_child}],
     expected_writes=[], final_state={**recursive_state, b"Tree.New": ()}, delete_targets=recursive_targets,
     delete_results=[("surviving", path) for path in recursive_paths + ["/Tree/New"]],
     expected_contains=("Recursive scope drift", "outside confirmed scope"))
-run("recursive delete new child between serial writes", installed=True, write_state=recursive_state,
+run("recursive delete new child between serial writes", batch_failure=True, installed=True, write_state=recursive_state,
     events={("LSUB", 2): recursive_new_between}, commands=b"rmdir Tree --recursive --yes\npwd\nquit\n",
     expected_writes=recursive_writes[:1],
     final_state={**{raw: value for raw, value in recursive_state.items() if raw != b"Tree.A.Deep"}, b"Tree.New": ()},
     delete_results=[("surviving", "/Tree"), ("surviving", "/Tree/A"), ("removed", "/Tree/A/Deep"),
                     ("surviving", "/Tree/B"), ("surviving", "/Tree/New")], expected_contains=("Recursive scope drift",))
-run("recursive delete inaccessible child enumeration blocks all writes", write_state=recursive_state,
+run("recursive delete inaccessible child enumeration blocks all writes", batch_failure=True, write_state=recursive_state,
     sizes={"list_denied": (b"Tree.A.%",)}, commands=b"rmdir Tree --recursive --yes\nquit\n",
     expected_writes=[], final_state=recursive_state, expected_err=("Folder operation failed",))
-run("recursive delete inaccessible child count blocks all writes", installed=True, write_state=recursive_state,
+run("recursive delete inaccessible child count blocks all writes", batch_failure=True, installed=True, write_state=recursive_state,
     sizes={"mailboxes": {raw: {"denied": raw == b"Tree.A.Deep"} for raw in recursive_state}},
     commands=b"rmdir Tree --recursive --yes\nquit\n", expected_writes=[], final_state=recursive_state,
     expected_contains=("Recursive target inaccessible",))
-run("recursive delete hidden child marker blocks incomplete scope", write_state={b"Tree": (), b"Tree.A": ()},
+run("recursive delete hidden child marker blocks incomplete scope", batch_failure=True, write_state={b"Tree": (), b"Tree.A": ()},
     sizes={"write_flags": {b"Tree.A": (b"\\HasChildren",)}}, commands=b"rmdir Tree --recursive --yes\nquit\n",
     expected_writes=[], final_state={b"Tree": (), b"Tree.A": ()}, expected_contains=("Recursive child scope is incomplete",))
-run("recursive delete inconsistent subtree listing blocks all writes", write_state=recursive_state,
+run("recursive delete inconsistent subtree listing blocks all writes", batch_failure=True, write_state=recursive_state,
     sizes={"probe_rows": {b"Tree*": [(raw, b".", (), False) for raw in recursive_state if raw != b"Tree.A.Deep" and raw != b"Outside"]}},
     commands=b"rmdir Tree --recursive --yes\nquit\n", expected_writes=[], final_state=recursive_state,
     expected_contains=("Recursive scope changed during enumeration",))
-run("recursive delete mid-tree refusal preserves exact survivors", installed=True, write_state=recursive_state,
+run("recursive delete mid-tree refusal preserves exact survivors", batch_failure=True, installed=True, write_state=recursive_state,
     write_replies={("DELETE", 2): "NO"}, commands=b"rmdir Tree --recursive --yes\npwd\nquit\n",
     expected_writes=recursive_writes[:2], final_state={raw: value for raw, value in recursive_state.items() if raw != b"Tree.A.Deep"},
     delete_results=[("surviving", "/Tree"), ("surviving", "/Tree/A"), ("removed", "/Tree/A/Deep"), ("surviving", "/Tree/B")],
     expected_contains=("server refusal", "rejected; observed present"))
 for disconnect in ("before", "after", "hold-before", "hold-after"):
-    run("recursive delete ambiguous first reply " + disconnect, write_state=recursive_state,
+    run("recursive delete ambiguous first reply " + disconnect, batch_failure=True, write_state=recursive_state,
         write_disconnect=disconnect,
         apply_steps=[{"delete": b"rmdir Tree --recursive", "answer": "interrupt-write"}] if disconnect.startswith("hold-") else None,
         commands=b"pwd\nquit\n" if disconnect.startswith("hold-") else b"rmdir Tree --recursive --yes\npwd\nquit\n",
@@ -1816,17 +1836,17 @@ def recursive_namespace_child(server):
     server.sizes["write_flags"] = {b"Tree.New.": (b"\\Noselect",)}
 
 
-run("recursive delete count drift after prompt blocks all writes", write_state=recursive_state,
+run("recursive delete count drift after prompt blocks all writes", batch_failure=True, write_state=recursive_state,
     apply_steps=[{"delete": b"rmdir Tree --recursive", "after_prompt": recursive_message_drift}],
     expected_writes=[], final_state={**recursive_state, b"Tree.B": (4, 9)},
     delete_results=[("surviving", path) for path in recursive_paths],
     expected_contains=("Recursive target or message state drift",))
-run("recursive delete selectable target disappearing is drift", installed=True, write_state=recursive_state,
+run("recursive delete selectable target disappearing is drift", batch_failure=True, installed=True, write_state=recursive_state,
     apply_steps=[{"delete": b"rmdir Tree --recursive", "after_prompt": recursive_target_disappears}],
     expected_writes=[], final_state={raw: value for raw, value in recursive_state.items() if raw != b"Tree.A.Deep"},
     delete_results=[("surviving", "/Tree"), ("surviving", "/Tree/A"), ("absent", "/Tree/A/Deep"), ("surviving", "/Tree/B")],
     expected_contains=("Recursive scope drift", "pending; observed not listed"))
-run("recursive delete reports unexpected trailing namespace container", installed=True, write_state=recursive_state,
+run("recursive delete reports unexpected trailing namespace container", batch_failure=True, installed=True, write_state=recursive_state,
     apply_steps=[{"delete": b"rmdir Tree --recursive", "after_prompt": recursive_namespace_child}],
     expected_writes=[], final_state={**recursive_state, b"Tree.New.": ()},
     delete_results=[("surviving", path) for path in recursive_paths + ["/Tree/New"]],
@@ -1834,4 +1854,4 @@ run("recursive delete reports unexpected trailing namespace container", installe
 print(f"PASS: {len(results)} public shell scenarios; all endpoints joined")
 
 from imap_download_cases import exercise
-exercise(Server, client_process, repo, prefix, work)
+exercise(Server, client_process, repo, prefix, work, apply_dialogue)

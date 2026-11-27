@@ -121,6 +121,139 @@ The `Credentials:` startup line gives its path. `JARO_SERVE_USER` defaults to
 password. Read the current file for each new server session. See the manual's
 local IMAP section for credential lifetime and client behavior.
 
+### IMAP folder shell
+
+Start `jaro -a ACCOUNT imap shell` from the directory where you want the
+archive. Choose the account in `$JAROMAILDIR/Accounts/`. The shell uses its
+usual login and keyring. Set `proto imap`, `imap HOST`, `imap_port 993`,
+`transport implicit` and `cert check` for verified implicit TLS. For STARTTLS
+use the provider's port (usually 143) and `transport starttls`. Set
+`certfile /path/to/ca.pem` for a private CA. Set the certificate policy
+explicitly. Legacy `cert ignore` disables identity checks and `transport plain`
+sends unencrypted credentials. Python 3.9+ is required, with sqlite3 for
+downloads. `JARO_IMAP_TIMEOUT` sets the network deadline in seconds (1–300,
+default 30).
+
+At the prompt, `help` lists commands and `quit` or Ctrl-D exits. The examples
+use a disposable account with a dot hierarchy, three messages in
+`Projects.Café team`, and a folder named `Projects.List-Dev`. Start at
+the logical root. A slash separates components for every server delimiter.
+A flat folder has no children. Copy the displayed percent escapes for literal
+slashes, wildcards and other special characters. A space can be written as
+`%20` or included inside quotes. `[container]` marks a navigable folder that
+cannot hold messages.
+
+```text
+folders
+cd /Projects
+folders
+cd 'Café team'
+pwd
+ls --messages --limit 2
+more
+du /Projects --depth 1 --top 3
+```
+
+`ls` shows children and a page of headers. `ls --folders` lists only children.
+The page holds 50 messages by default (1–500). Highest UID appears first.
+The displayed Date header can be older or newer than its neighbors. A missing
+or invalid date falls back to INTERNALDATE. `more` continues the same
+inventory boundary. Run `ls` again for new arrivals or after a UIDVALIDITY
+change. `refresh` rereads children and resets paging.
+
+`du` uses server-reported message bytes where available. Its fallback and
+`--exact` read size metadata. `--top` ranks direct mailbox bytes. The subtree
+column sums descendants within the requested depth. Partial totals give lower
+bounds. Shared copies can count twice. Account quota, filesystem use and
+compressed archive size have different accounting.
+
+From the IMAP prompt, write a new archive on a filesystem supporting hard
+links. Allow space for raw message bytes plus the compressed tar, inventory
+and tar headers. For incompressible mail, budget roughly twice the message
+bytes plus overhead and extra headroom for many small messages. Add
+`--recursive` to include descendants.
+
+```text
+download '/Projects/Café team' --output cafe-team.tar.gz
+```
+
+After an interruption keep `.cafe-team.tar.gz.incomplete` next to the intended
+output. Reconnect to the same account and repeat the same selection and path.
+
+```text
+download '/Projects/Café team' --output cafe-team.tar.gz --resume
+```
+
+Resume verifies completed messages locally and restarts any partial message.
+Missing captured UIDs or a replaced mailbox require a new filename and a
+fresh inventory. Publication verifies the archive and preserves an existing
+output. In your system shell, extract your verified copy into a fresh private
+directory and compare each original with the manifest.
+
+```sh
+umask 077
+gzip -t cafe-team.tar.gz &&
+tar -tzf cafe-team.tar.gz &&
+mkdir verified-copy &&
+tar -xzf cafe-team.tar.gz -C verified-copy &&
+(cd verified-copy && python3 - <<'PY'
+import hashlib, json
+with open("manifest.jsonl", encoding="utf-8") as manifest:
+    for line in manifest:
+        record = json.loads(line)
+        if record["type"] == "message":
+            digest, size = hashlib.sha256(), 0
+            with open(record["path"], "rb") as message:
+                for block in iter(lambda: message.read(131072), b""):
+                    size += len(block)
+                    digest.update(block)
+            if (size, digest.hexdigest()) != (record["size"], record["sha256"]):
+                raise SystemExit("Verification failed for " + record["path"])
+print("All listed messages verified")
+PY
+)
+```
+
+The versioned JSON Lines manifest maps generated `.eml` members to original
+folder names, UIDs, dates, flags, sizes and SHA-256 digests. After verifying
+the copy, the following IMAP commands reorganize the disposable account.
+`mv` (alias `rename`) takes a complete destination whose parent already
+exists. Each source's descendants move with it.
+
+```text
+mkdir /Projects/Lists
+mv '/Projects/Café team' '/Projects/Café archive'
+rename-glob '/Projects/List-*' '/Projects/Lists/{1}'
+```
+
+Read every old and new path in the preview. To accept this mapping, replace
+`ID` with the printed ID in `apply ID` in the same session, then type `yes`
+on the controlling terminal. A refusal, drift or unknown reply stops the
+serial renames. Inspect completed, failed, unknown and pending pairs before
+a fresh preview.
+
+For deletion practice, create a new empty folder in the disposable account.
+Issue the second command only after the first succeeds and you intend to
+remove that exact folder.
+
+```text
+mkdir /Projects/Practice
+rmdir /Projects/Practice
+```
+
+Check the target and message count, then type `yes` on the controlling
+terminal. Enter cancels. Deletion includes messages. Descendants require
+`--recursive`, which lists the target set before confirmation. Scripted
+deletion requires deliberate `--yes` when no controlling terminal is
+available. Downloading never initiates deletion. Inspect surviving and
+unknown paths before another write.
+
+Piped input omits the prompt. Header rows retain tab-separated fields when
+redirected. Progress and diagnostics go to stderr. Batch commands continue
+after a recoverable failure. Exit 1 at EOF or `quit` records any failed,
+cancelled or partial command, even when a later command succeeds. A fatal
+network timeout exits 124 and a session interrupted by Ctrl-C exits 130.
+
 ### Message snapshots
 
 `snapshot create DEST` copy regular Maildir `new`/`cur` messages and filename

@@ -81,12 +81,13 @@ class Session:
         self.saved = identifier, preview
         preview.show()
         print("Preview ID: " + identifier, flush=True)
+        return not preview.blocked
 
     def apply(self, tree, identifier):
         saved, self.saved = self.saved, None
         if saved is None or identifier != saved[0]:
             print("Apply rejected: stale or unknown preview ID; create a fresh preview", flush=True)
-            return
+            return False
         preview = saved[1]
         states = ["pending"] * len(preview.mappings)
         reason = "finished"
@@ -94,31 +95,31 @@ class Session:
         try:
             if preview.blocked or not states:
                 reason = "preview is blocked or empty"
-                return
+                return False
             try:
                 accepted = confirm(identifier, len(states))
             except OSError:
                 reason = "controlling terminal required; command stdin cannot confirm"
-                return
+                return False
             except KeyboardInterrupt:
                 reason = "confirmation cancelled"
-                return
+                return False
             if not accepted:
                 reason = "confirmation cancelled"
-                return
+                return False
             if tree.client.utf8_enabled != preview.utf8:
                 reason = "mailbox encoding changed"
-                return
+                return False
             try:
                 refreshed = build(tree, preview.source_pattern, preview.template)
                 if (refreshed.blocked or identity(refreshed.source_parent) != identity(preview.source_parent)
                         or [mapping_key(pair) for pair in refreshed.mappings] !=
                            [mapping_key(pair) for pair in preview.mappings]):
                     reason = "preview drift; create a fresh preview"
-                    return
+                    return False
             except ValueError:
                 reason = "preview drift; create a fresh preview"
-                return
+                return False
             membership = {(pair.source.raw, pair.source.delimiter) for pair in preview.mappings}
             for index, pair in enumerate(preview.mappings):
                 def outcome(value):
@@ -148,3 +149,4 @@ class Session:
             for pair, state in zip(preview.mappings, states):
                 print(state + "\t" + pair.source.path + "\t->\t" + pair.target_path)
             print("Fresh preview required before another apply", flush=True)
+        return reason == "finished"

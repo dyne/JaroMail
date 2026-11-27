@@ -29,7 +29,7 @@ def snapshot(stage):
     return {p.name: (p.stat().st_mtime_ns, digest(p.read_bytes())) for p in stage.iterdir()}
 
 
-def exercise(base_server, client_process, repo, prefix, work):
+def exercise(base_server, client_process, repo, prefix, work, apply_dialogue):
     small = (b"Message-ID: <duplicate>\r\nMIME-Version: 1.0\r\nContent-Type: application/octet-stream\r\n"
              b"Content-Transfer-Encoding: binary\r\n\r\n\x00\xff\x1b\r\n")
     large = small + bytes(range(256)) * 3072
@@ -427,3 +427,5 @@ else:
         subprocess.run(["gzip", "-t", exports / "sync.tar.gz"], check=True)
         assert checkpoint(stage)[0][2] == "complete"
     print(f"PASS: {len(records)} public download attempts; fixture and subprocesses joined")
+    from imap_manual_cases import exercise_manual
+    exercise_manual(Server, client_process, apply_dialogue, prefix, work, transfers)

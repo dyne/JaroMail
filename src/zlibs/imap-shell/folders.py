@@ -369,7 +369,7 @@ class FolderTree:
 
     def mkdir(self, path):
         parent, raw, delimiter = self.destination(path)
-        self.mutate("CREATE", None, parent, raw, delimiter)
+        return self.mutate("CREATE", None, parent, raw, delimiter) == "confirmed"
 
     def rename(self, old, new):
         source = self.resolve_write(old)
@@ -381,7 +381,7 @@ class FolderTree:
             if (ancestor.raw, ancestor.delimiter) == (source.raw, source.delimiter):
                 raise ValueError("destination is inside source")
             ancestor = ancestor.parent
-        self.mutate("RENAME", source, parent, raw, delimiter)
+        return self.mutate("RENAME", source, parent, raw, delimiter) == "confirmed"
 
     def name_query(self, command, pattern, subscribed=False):
         options = ('(SUBSCRIBED)', '""') if subscribed else ('""',)

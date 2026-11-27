@@ -145,6 +145,172 @@ generated password.
 Read the current file for each new server session.
 See the manual\[cq]s local IMAP section for credential lifetime and
 client behavior.
+.SS IMAP folder shell
+Start \f[CR]jaro \-a ACCOUNT imap shell\f[R] from the directory where
+you want the archive.
+Choose the account in \f[CR]$JAROMAILDIR/Accounts/\f[R].
+The shell uses its usual login and keyring.
+Set \f[CR]proto imap\f[R], \f[CR]imap HOST\f[R],
+\f[CR]imap_port 993\f[R], \f[CR]transport implicit\f[R] and
+\f[CR]cert check\f[R] for verified implicit TLS.
+For STARTTLS use the provider\[cq]s port (usually 143) and
+\f[CR]transport starttls\f[R].
+Set \f[CR]certfile /path/to/ca.pem\f[R] for a private CA.
+Set the certificate policy explicitly.
+Legacy \f[CR]cert ignore\f[R] disables identity checks and
+\f[CR]transport plain\f[R] sends unencrypted credentials.
+Python 3.9+ is required, with sqlite3 for downloads.
+\f[CR]JARO_IMAP_TIMEOUT\f[R] sets the network deadline in seconds
+(1\[en]300, default 30).
+.PP
+At the prompt, \f[CR]help\f[R] lists commands and \f[CR]quit\f[R] or
+Ctrl\-D exits.
+The examples use a disposable account with a dot hierarchy, three
+messages in \f[CR]Projects.Café team\f[R], and a folder named
+\f[CR]Projects.List\-Dev\f[R].
+Start at the logical root.
+A slash separates components for every server delimiter.
+A flat folder has no children.
+Copy the displayed percent escapes for literal slashes, wildcards and
+other special characters.
+A space can be written as \f[CR]%20\f[R] or included inside quotes.
+\f[CR][container]\f[R] marks a navigable folder that cannot hold
+messages.
+.IP
+.EX
+folders
+cd /Projects
+folders
+cd \[aq]Café team\[aq]
+pwd
+ls \-\-messages \-\-limit 2
+more
+du /Projects \-\-depth 1 \-\-top 3
+.EE
+.PP
+\f[CR]ls\f[R] shows children and a page of headers.
+\f[CR]ls \-\-folders\f[R] lists only children.
+The page holds 50 messages by default (1\[en]500).
+Highest UID appears first.
+The displayed Date header can be older or newer than its neighbors.
+A missing or invalid date falls back to INTERNALDATE.
+\f[CR]more\f[R] continues the same inventory boundary.
+Run \f[CR]ls\f[R] again for new arrivals or after a UIDVALIDITY change.
+\f[CR]refresh\f[R] rereads children and resets paging.
+.PP
+\f[CR]du\f[R] uses server\-reported message bytes where available.
+Its fallback and \f[CR]\-\-exact\f[R] read size metadata.
+\f[CR]\-\-top\f[R] ranks direct mailbox bytes.
+The subtree column sums descendants within the requested depth.
+Partial totals give lower bounds.
+Shared copies can count twice.
+Account quota, filesystem use and compressed archive size have different
+accounting.
+.PP
+From the IMAP prompt, write a new archive on a filesystem supporting
+hard links.
+Allow space for raw message bytes plus the compressed tar, inventory and
+tar headers.
+For incompressible mail, budget roughly twice the message bytes plus
+overhead and extra headroom for many small messages.
+Add \f[CR]\-\-recursive\f[R] to include descendants.
+.IP
+.EX
+download \[aq]/Projects/Café team\[aq] \-\-output cafe\-team.tar.gz
+.EE
+.PP
+After an interruption keep \f[CR].cafe\-team.tar.gz.incomplete\f[R] next
+to the intended output.
+Reconnect to the same account and repeat the same selection and path.
+.IP
+.EX
+download \[aq]/Projects/Café team\[aq] \-\-output cafe\-team.tar.gz \-\-resume
+.EE
+.PP
+Resume verifies completed messages locally and restarts any partial
+message.
+Missing captured UIDs or a replaced mailbox require a new filename and a
+fresh inventory.
+Publication verifies the archive and preserves an existing output.
+In your system shell, extract your verified copy into a fresh private
+directory and compare each original with the manifest.
+.IP
+.EX
+umask 077
+gzip \-t cafe\-team.tar.gz &&
+tar \-tzf cafe\-team.tar.gz &&
+mkdir verified\-copy &&
+tar \-xzf cafe\-team.tar.gz \-C verified\-copy &&
+(cd verified\-copy && python3 \- <<\[aq]PY\[aq]
+import hashlib, json
+with open(\[dq]manifest.jsonl\[dq], encoding=\[dq]utf\-8\[dq]) as manifest:
+    for line in manifest:
+        record = json.loads(line)
+        if record[\[dq]type\[dq]] == \[dq]message\[dq]:
+            digest, size = hashlib.sha256(), 0
+            with open(record[\[dq]path\[dq]], \[dq]rb\[dq]) as message:
+                for block in iter(lambda: message.read(131072), b\[dq]\[dq]):
+                    size += len(block)
+                    digest.update(block)
+            if (size, digest.hexdigest()) != (record[\[dq]size\[dq]], record[\[dq]sha256\[dq]]):
+                raise SystemExit(\[dq]Verification failed for \[dq] + record[\[dq]path\[dq]])
+print(\[dq]All listed messages verified\[dq])
+PY
+)
+.EE
+.PP
+The versioned JSON Lines manifest maps generated \f[CR].eml\f[R] members
+to original folder names, UIDs, dates, flags, sizes and SHA\-256
+digests.
+After verifying the copy, the following IMAP commands reorganize the
+disposable account.
+\f[CR]mv\f[R] (alias \f[CR]rename\f[R]) takes a complete destination
+whose parent already exists.
+Each source\[cq]s descendants move with it.
+.IP
+.EX
+mkdir /Projects/Lists
+mv \[aq]/Projects/Café team\[aq] \[aq]/Projects/Café archive\[aq]
+rename\-glob \[aq]/Projects/List\-*\[aq] \[aq]/Projects/Lists/{1}\[aq]
+.EE
+.PP
+Read every old and new path in the preview.
+To accept this mapping, replace \f[CR]ID\f[R] with the printed ID in
+\f[CR]apply ID\f[R] in the same session, then type \f[CR]yes\f[R] on the
+controlling terminal.
+A refusal, drift or unknown reply stops the serial renames.
+Inspect completed, failed, unknown and pending pairs before a fresh
+preview.
+.PP
+For deletion practice, create a new empty folder in the disposable
+account.
+Issue the second command only after the first succeeds and you intend to
+remove that exact folder.
+.IP
+.EX
+mkdir /Projects/Practice
+rmdir /Projects/Practice
+.EE
+.PP
+Check the target and message count, then type \f[CR]yes\f[R] on the
+controlling terminal.
+Enter cancels.
+Deletion includes messages.
+Descendants require \f[CR]\-\-recursive\f[R], which lists the target set
+before confirmation.
+Scripted deletion requires deliberate \f[CR]\-\-yes\f[R] when no
+controlling terminal is available.
+Downloading never initiates deletion.
+Inspect surviving and unknown paths before another write.
+.PP
+Piped input omits the prompt.
+Header rows retain tab\-separated fields when redirected.
+Progress and diagnostics go to stderr.
+Batch commands continue after a recoverable failure.
+Exit 1 at EOF or \f[CR]quit\f[R] records any failed, cancelled or
+partial command, even when a later command succeeds.
+A fatal network timeout exits 124 and a session interrupted by Ctrl\-C
+exits 130.
 .SS Message snapshots
 \f[CR]snapshot create DEST\f[R] copy regular Maildir
 \f[CR]new\f[R]/\f[CR]cur\f[R] messages and filename flags from

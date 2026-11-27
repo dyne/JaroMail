@@ -17,6 +17,7 @@ import sizes
 import rename_preview
 import renames
 import deletions
+import display
 
 
 def account_record():
@@ -142,7 +143,9 @@ def command_loop(client, seconds, reconnect, account_identity):
     batch_status = 0
     while True:
         try:
-            line = input("imap> " if interactive else "")
+            if interactive:
+                print("imap> ", end="", file=sys.stderr, flush=True)
+            line = input()
         except EOFError:
             return batch_status
         first = None
@@ -159,7 +162,7 @@ def command_loop(client, seconds, reconnect, account_identity):
         except ValueError:
             if first in ("rename-glob", "apply"):
                 rename_session.saved = None
-            if first == "download" and not interactive:
+            if not interactive:
                 batch_status = 1
             print("Invalid quoted command", file=sys.stderr)
             continue
@@ -167,8 +170,9 @@ def command_loop(client, seconds, reconnect, account_identity):
             continue
         if words in (["quit"], ["exit"]):
             return batch_status
+        succeeded = True
         if words == ["help"]:
-            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], mkdir PATH, mv OLD NEW (alias rename; NEW is the complete path), rename-glob SOURCE TEMPLATE (preview), apply ID, rmdir EXACT-PATH [--recursive] [--yes], download FOLDER --output PATH.tar.gz [--recursive] [--resume], help, quit")
+            display.help_text()
         elif words[0] == "download":
             try:
                 import download
@@ -207,27 +211,28 @@ def command_loop(client, seconds, reconnect, account_identity):
             try:
                 if words[0] == "rmdir":
                     try:
-                        deletions.remove(tree, words[1:])
+                        succeeded = deletions.remove(tree, words[1:])
                     finally:
                         pager.reset()
                 elif words[0] == "rename-glob" and len(words) == 3:
                     try:
-                        rename_session.preview(tree, words[1], words[2])
+                        succeeded = rename_session.preview(tree, words[1], words[2])
                     except ValueError as exc:
+                        succeeded = False
                         print("Rename preview blocked: " + str(exc), file=sys.stderr)
                 elif words[0] == "apply":
                     try:
-                        rename_session.apply(tree, words[1] if len(words) == 2 else "")
+                        succeeded = rename_session.apply(tree, words[1] if len(words) == 2 else "")
                     finally:
                         pager.reset()
                 elif words[0] == "mkdir" and len(words) == 2:
                     try:
-                        tree.mkdir(words[1])
+                        succeeded = tree.mkdir(words[1])
                     finally:
                         pager.reset()
                 elif words[0] in ("mv", "rename") and len(words) == 3:
                     try:
-                        tree.rename(words[1], words[2])
+                        succeeded = tree.rename(words[1], words[2])
                     finally:
                         pager.reset()
                 elif words[0] == "du":
@@ -240,9 +245,9 @@ def command_loop(client, seconds, reconnect, account_identity):
                     finally:
                         tree.current = previous
                     if recursive:
-                        sizes.show_tree(tree, folder, exact, depth, top)
+                        succeeded = sizes.show_tree(tree, folder, exact, depth, top)
                     else:
-                        sizes.show(tree.client, folder, seconds, deadline, exact)
+                        succeeded = sizes.show(tree.client, folder, seconds, deadline, exact)
                 elif words[0] == "cd" and len(words) <= 2:
                     tree.cd(words[1] if len(words) == 2 else "/")
                     pager.reset()
@@ -278,12 +283,16 @@ def command_loop(client, seconds, reconnect, account_identity):
                     elif mode == "--messages":
                         raise headers.PagingError("Choose a selectable folder")
                 else:
+                    succeeded = False
                     print("Invalid folder command; use help", file=sys.stderr)
             except (headers.PagingError, sizes.SizeError, deletions.DeleteError) as exc:
+                succeeded = False
                 print(str(exc), file=sys.stderr)
             except (ValueError, UnicodeError):
-                print("Folder operation failed", file=sys.stderr)
+                succeeded = False
+                print("Folder operation failed; check the path and permissions, then use refresh", file=sys.stderr)
             except (KeyboardInterrupt, headers.LiteralLimit):
+                succeeded = False
                 if words[0] in ("mkdir", "mv", "rename", "rmdir"):
                     raise
                 # A partial literal leaves imaplib's parser unsynchronized.
@@ -305,7 +314,10 @@ def command_loop(client, seconds, reconnect, account_identity):
                 operation = "Rename preview" if words[0] == "rename-glob" else "Size" if words[0] == "du" else "Header"
                 print(operation + " operation cancelled; connection renewed", file=sys.stderr)
         else:
+            succeeded = False
             print("Unknown command; use help", file=sys.stderr)
+        if not interactive and not succeeded:
+            batch_status = 1
 
 
 def main():

@@ -14,6 +14,8 @@ This file lists integrations that are *not* part of the core CLI workflow (`init
 `jaro -a ACCOUNT imap shell` opens one persistent connection using the normal
 account configuration and credential lookup. It requires Python 3.9 or newer with its
 standard library; `JARO_IMAP_PYTHON` selects the interpreter (default `python3`).
+See `man jaro` for a worked session that pages and ranks a dot hierarchy,
+verifies a resumable archive, then reorganizes a disposable account.
 The installed helper is private data, invoked by that interpreter. Other IMAP
 commands do not require Python. `help`, `quit`, Ctrl-D and Ctrl-C control the
 session. Commands accept shell-style quoting without evaluating shell code.
@@ -23,7 +25,8 @@ explicit plaintext or disabled verification produces a warning.
 
 `folders` and `ls --folders` list the current folder's immediate children.
 `ls` also shows a read-only header page in a selectable folder; `ls --messages`
-shows only headers. Pages default to the 50 newest messages by UID.
+shows only headers. Pages default to the 50 newest messages by UID. The displayed Date header
+can differ from UID order. An invalid or missing Date falls back to INTERNALDATE.
 `ls --limit N` chooses 1–500 messages per page; combine it with `--messages`
 to omit children. `more` continues with older messages using the same limit.
 Paging excludes arrivals after its initial upper UID. If the mailbox generation
@@ -184,6 +187,9 @@ the format version and mailbox encoding. Folder records include empty mailboxes
 and containers, display paths, exact name and delimiter bytes in hexadecimal,
 UIDVALIDITY, upper UID and captured count. Message records map a generated
 `.eml` path to a folder ID, UID, INTERNALDATE, flags, byte length and SHA-256.
+
+The installed release check records transfer counts, memory, staging space and
+independent Dovecot extraction. [IMAP terminal measurements](imap-terminal-benchmarks.md)
 
 ### `src/stats` and `stats` command
 

@@ -444,7 +444,7 @@ EOF
             { (( ${#folders} == 0 )) || print -rl -- "${folders[@]}"; } | save_replay $subcommand
             ;;
         *)
-            error "imap needs a subcommand: getsize or listfolders"
+            error "imap needs a subcommand: shell, listfolders, getsize or console"
             exitcode=1
             ;;
     esac

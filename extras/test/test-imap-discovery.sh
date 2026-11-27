@@ -160,6 +160,32 @@ PY
 [[ ! -e NEVER ]]
 print -- 'PASS: CLI LIST and real fetchmail parser preserve 13 exact folder boundaries'
 
+# The optional shell interpreter must never be entered by legacy commands.
+legacy_installed() {
+  JAROMAILDIR="$mail_root" JARO_IMAP_PYTHON=/missing/optional-python "$prefix_root/bin/jaro" "$@"
+}
+legacy_installed -q imap listfolders > "$IMAP_TEST_STATE/installed-list"
+cmp "$IMAP_TEST_STATE/installed-list" "$IMAP_TEST_STATE/expected.out"
+cat > "$test_bin/mutt" <<'EOF'
+#!/bin/sh
+[ "$1" = -v ] || printf '%s\n' "$@" > "$IMAP_TEST_STATE/peek-args"
+EOF
+chmod +x "$test_bin/mutt"
+for legacy_entry in jaro_source legacy_installed; do
+  { header; printf '%s\r\n' 'B00002 OK selected' '* 1 FETCH (RFC822.SIZE 12345)' \
+    'B00003 OK fetched' 'B00004 OK logout'; } > "$IMAP_TEST_STATE/response"
+  JARO_IMAP_PYTHON=/missing/optional-python "$legacy_entry" imap getsize INBOX > "$IMAP_TEST_STATE/size" 2>&1
+  grep -Fq '12345 bytes' "$IMAP_TEST_STATE/size"
+  grep -Fq 'SELECT "INBOX"' "$IMAP_TEST_STATE/query"
+  grep -Fq 'FETCH 1:* (RFC822.SIZE)' "$IMAP_TEST_STATE/query"
+  { header; printf '%s\r\n' 'B00002 OK logout'; } > "$IMAP_TEST_STATE/response"
+  JARO_IMAP_PYTHON=/missing/optional-python "$legacy_entry" -q imap console > "$IMAP_TEST_STATE/console"
+  cmp "$IMAP_TEST_STATE/console" "$IMAP_TEST_STATE/response"
+  JARO_IMAP_PYTHON=/missing/optional-python "$legacy_entry" -q peek INBOX
+  grep -Fxq 'imaps://fixture@localhost:993/INBOX' "$IMAP_TEST_STATE/peek-args"
+done
+print -- 'PASS: legacy source and installed LIST, size, console and peek without shell Python'
+
 reset_calls
 assert_status 1 jaro_source -q -a missing imap listfolders > "$IMAP_TEST_STATE/missing.out" 2> "$IMAP_TEST_STATE/missing.err"
 [[ ! -s "$IMAP_TEST_STATE/missing.out" ]]

@@ -183,6 +183,7 @@ def show(client, folder, seconds, deadline, exact=False):
     result = measure(client, folder, seconds, deadline, exact)
     label = "server-reported" if result.source == "server-reported" else f"measured for UID inventory; {result.coverage}"
     print(f"{folder.path}\t{result.total} bytes\t{label}")
+    return result.complete
 
 
 def options(words):
@@ -285,8 +286,9 @@ def show_tree(tree, folder, exact=False, depth=None, top=None):
     finally:
         # Every discovered but unscanned row remains unknown. A partial LIST
         # retains extent=False, so undiscovered descendants cannot look empty.
-        print_tree(rows, identity(folder), depth, top, interrupted, not completed)
+        complete = print_tree(rows, identity(folder), depth, top, interrupted, not completed)
         print(f"du: scanned {scanned} folders; {'finished' if completed else 'incomplete'}", file=sys.stderr, flush=True)
+    return complete
 
 
 def print_tree(rows, root, depth, top, interrupted, incomplete):
@@ -344,3 +346,5 @@ def print_tree(rows, root, depth, top, interrupted, incomplete):
     total, source, coverage = aggregate_labels(root)
     scope = "all descendants" if depth is None else f"depth {depth}"
     print(f"TOTAL\t{total} mailbox bytes\t{source}\t{coverage}\t{scope}")
+    _, known, folders, _, _, _, _, extent = aggregates[root]
+    return known == folders and extent

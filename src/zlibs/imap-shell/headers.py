@@ -8,6 +8,7 @@ import re
 import unicodedata
 
 from folders import quoted
+import display
 
 HEADER_OCTETS = 8192
 PAGE_SIZE = 50
@@ -277,8 +278,6 @@ class Pager:
             self.cursor = {"raw": folder.raw, "validity": validity, "upper": upper,
                            "before": min(inventory) if inventory else 0, "limit": limit}
         if rows:
-            print("UID\tSIZE\tDATE\tFROM\tSUBJECT")
-            for _, line in sorted(rows, reverse=True):
-                print(line)
+            display.header_page(sorted(rows, reverse=True))
         elif more:
             print("No more messages")
