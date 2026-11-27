@@ -21,11 +21,17 @@ session. Commands accept shell-style quoting without evaluating shell code.
 The account's transport, certificate policy and CA file apply to this connection;
 explicit plaintext or disabled verification produces a warning.
 
-`folders`, `ls` and `ls --folders` list the current folder's immediate children.
+`folders` and `ls --folders` list the current folder's immediate children.
+`ls` also shows a read-only header page in a selectable folder; `ls --messages`
+shows only headers. Pages default to the 50 newest messages by UID.
+`ls --limit N` chooses 1–500 messages per page; combine it with `--messages`
+to omit children. `more` continues with older messages using the same limit.
+Paging excludes arrivals after its initial upper UID. If the mailbox generation
+changes or repeated mailbox changes invalidate the cursor, run `ls` to restart.
+Navigation, `refresh` and connection recovery also reset the cursor.
 `pwd` prints its logical path; `cd PATH` navigates and `cd` returns to `/`.
 `refresh` replaces the current child listing without walking descendants.
-Nonselectable folders are marked `[container]` and remain navigable. Header
-browsing through `ls --messages` is currently unavailable.
+Nonselectable folders are marked `[container]` and remain navigable.
 
 Display paths use `/` between logical components independently of server
 hierarchy delimiters. Percent escapes represent UTF-8 bytes for literal slash,
