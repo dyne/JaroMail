@@ -331,6 +331,20 @@ class FolderTree:
         component = canonical_component(leaf)
         if component in children:
             raise ValueError("destination exists")
+        delimiter = self.destination_delimiter(parent, children)
+        text = unquote_to_bytes(component).decode("utf-8")
+        if "\0" in text:
+            raise ValueError("NUL is not a mailbox character")
+        raw = mailbox_bytes(text, self.client.utf8_enabled)
+        if not raw or b"\0" in raw or (delimiter is not None and delimiter in raw):
+            raise ValueError("invalid folder component")
+        prefix = b"" if parent is self.root else parent.raw if parent.raw.endswith(delimiter) else parent.raw + delimiter
+        raw = prefix + raw
+        if raw.upper() == b"INBOX":
+            raise ValueError("special INBOX destination")
+        return parent, raw, delimiter
+
+    def destination_delimiter(self, parent, children):
         if parent is self.root:
             delimiters = {child.delimiter for child in children.values()}
             if not delimiters:
@@ -351,17 +365,7 @@ class FolderTree:
             delimiter = parent.delimiter
             if delimiter is None:
                 raise ValueError("flat namespace has no children")
-        text = unquote_to_bytes(component).decode("utf-8")
-        if "\0" in text:
-            raise ValueError("NUL is not a mailbox character")
-        raw = mailbox_bytes(text, self.client.utf8_enabled)
-        if not raw or b"\0" in raw or (delimiter is not None and delimiter in raw):
-            raise ValueError("invalid folder component")
-        prefix = b"" if parent is self.root else parent.raw if parent.raw.endswith(delimiter) else parent.raw + delimiter
-        raw = prefix + raw
-        if raw.upper() == b"INBOX":
-            raise ValueError("special INBOX destination")
-        return parent, raw, delimiter
+        return delimiter
 
     def mkdir(self, path):
         parent, raw, delimiter = self.destination(path)
@@ -439,7 +443,7 @@ class FolderTree:
                     return True
                 path = path.rpartition("/")[0] or "/"
 
-    def mutate(self, command, source, parent, raw, delimiter):
+    def mutate(self, command, source, parent, raw, delimiter, preflight=None, on_outcome=None):
         current_path = self.current.path
         expected = (self.current.raw, self.current.delimiter)
         prefix_length = 0 if parent is self.root else len(parent.raw)
@@ -458,6 +462,10 @@ class FolderTree:
             before = self.subscriptions(roots)
         except ValueError:
             before = None
+        # Bulk callers can fence exact saved identities after the optional
+        # subscription observations and immediately before sending a write.
+        if preflight is not None:
+            preflight()
         outcome = "confirmed"
         try:
             with self.deadline(self.seconds):
@@ -466,6 +474,8 @@ class FolderTree:
             outcome = "rejected"
         except WriteUnknown:
             outcome = "unknown"
+            if on_outcome is not None:
+                on_outcome(outcome)
             old_encoding = self.client.utf8_enabled
             print(command + " outcome unknown: tagged completion missing; not replayed", file=sys.stderr)
             if self.reconnect is None:
@@ -475,7 +485,7 @@ class FolderTree:
                 self.root = Folder(b"", None, (b"\\Noselect",), "")
                 self.current = self.root
                 print("Mailbox encoding changed; observations unavailable; returned to /", file=sys.stderr)
-                return
+                return outcome
             for label, (name, delim) in zip(("old", "new") if source else ("new",), roots):
                 try:
                     state = "present" if self.probe(name, delim) else "not listed"
@@ -483,6 +493,8 @@ class FolderTree:
                     state = "unavailable"
                 print("Observed " + label + " path: " + state + "; outcome remains unknown", file=sys.stderr)
         if outcome != "unknown":
+            if on_outcome is not None:
+                on_outcome(outcome)
             print(command + " " + outcome, file=sys.stderr)
         if outcome == "confirmed" and source is not None:
             if current_path == source.path or current_path.startswith(source.path + "/"):
@@ -508,6 +520,7 @@ class FolderTree:
             print("Observed subscriptions: +" + str(len(after - before)) + " -" + str(len(before - after)), file=sys.stderr)
         if outcome == "rejected":
             raise WriteRejected(command + " rejected")
+        return outcome
 
     def show(self, refresh=False):
         for child in self.children(self.current, refresh).values():

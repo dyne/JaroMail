@@ -64,6 +64,41 @@ the current path; a removed current folder falls back to a surviving ancestor.
 Subscription changes are observed and counted; the shell never subscribes or
 unsubscribes folders automatically.
 
+`rename-glob SOURCE TEMPLATE` previews wildcard renames without changing the
+server. SOURCE has a literal parent path and exactly one unescaped `*` in its
+final component; it captures zero or more Unicode characters, case-sensitively.
+For example, `rename-glob 'List-*' 'Lists/{1}'` maps `/List-Dev` to `/Lists/Dev`
+when `/Lists` already exists. `{1}` substitutes the capture as literal text
+within each template component, so captured slashes, percent signs, dots and
+template characters cannot introduce another path or substitution. Ordinary
+display escapes still apply. Use `\*` or `%2A` for a literal star and `\\` or
+`%5C` for a literal backslash. Quote both operands to keep spaces together;
+for this command backslash escapes survive quote removal, including inside
+single quotes. In double quotes or outside quotes, a backslash also keeps the
+next character in the same argument. There is no shell expansion.
+
+Every matched old/new path is printed in sorted order, with its entire subtree
+scope and match count. Output streams all mappings in piped and terminal use;
+redirect it to a file for a large review. Existing destinations (including
+excluded folders and descendant collisions), protected paths, duplicate or
+overlapping subtrees, cycles and rename dependency chains block the preview.
+Moves between different server hierarchy delimiters are also blocked because
+their descendant rename behavior has not been established.
+A preview uses fresh LIST observations, which may be limited by server access.
+No preview changes folders or messages.
+
+Each preview prints a session-local ID. `apply ID` displays its count and asks
+for `yes` on the controlling terminal; command stdin cannot confirm, including
+when commands arrive through a pipe. The saved mapping contains absolute raw
+mailbox identities, so `cd` cannot retarget it. A new preview replaces the ID;
+every apply attempt consumes it, including refusal or cancellation.
+
+After confirmation, apply refreshes the matching set, source subtrees and
+destinations, then rechecks each original pair immediately before its serial
+RENAME. It stops on drift, a refusal or an unknown result and reports every pair
+as completed, failed, unknown or pending. No write is replayed. Inspect the report
+and create a fresh preview before continuing a partial run.
+
 A tagged success is reported as confirmed and a tagged refusal as rejected.
 If a connection is lost or a write is interrupted before completion, its outcome
 is unknown. The shell closes that connection, reconnects, and observes the exact

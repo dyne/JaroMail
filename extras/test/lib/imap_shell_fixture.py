@@ -1,23 +1,27 @@
 """Exercise the public source/installed shell with disposable loopback accounts."""
 import json
 import contextlib
+import fcntl
 import os
 from pathlib import Path
 import signal
 import runpy
 import pty
 import re
+import selectors
 import socket
 import ssl
 import subprocess
 import sys
 import threading
+import termios
 import time
 
 repo, work, prefix = map(Path, sys.argv[1:])
 sys.path.insert(0, str(repo / "src/zlibs/imap-shell"))
 sys.dont_write_bytecode = True
 import folders as folderlib
+import rename_preview as previewlib
 helper = runpy.run_path(str(repo / "src/zlibs/imap-shell/session.py"))
 assert helper["server_host"]("[::1]") == "::1"
 assert helper["server_host"]("localhost") == "localhost"
@@ -28,6 +32,30 @@ try:
 except OSError:
     ipv6_available = False
 print(f"PASS: bracketed IPv6 normalization; loopback IPv6 available={ipv6_available}")
+
+# Validate the indexed lookup against the straightforward pairwise definition,
+# including flat names, trailing namespace delimiters and duplicate roots.
+index_roots = dict(enumerate(((b"A", b"/"), (b"A/B", None), (b"A.", b"."),
+                              (b"A.B", b"."), (b"AX", b"."), (b"X/", b"/"),
+                              (b"X/Y", b"/"), (b"Y", None), (b"Y", b"."))))
+index_queries = list(index_roots.values()) + [(b"X/Z", b"/"), (b"Y.Z", b"."), (b"AX/N", None)]
+subtree_index = previewlib.Subtrees(index_roots.items())
+
+
+def subtree_contains(root, delimiter, value):
+    return value == root or (delimiter is not None and value.startswith(
+        root if root.endswith(delimiter) else root + delimiter))
+
+
+index_checks = 0
+for raw, delimiter in index_queries:
+    for excluded in [None, *index_roots]:
+        expected = any(owner != excluded and (subtree_contains(root, sep, raw)
+                       or subtree_contains(raw, delimiter, root))
+                       for owner, (root, sep) in index_roots.items())
+        assert subtree_index.related(raw, delimiter, exclude=excluded) == expected
+        index_checks += 1
+print(f"PASS: {index_checks} indexed subtree overlap/dependency checks")
 tls = work / "shell-tls"
 tls.mkdir()
 
@@ -215,7 +243,7 @@ class Server:
                     self.writes.append((command, *operands))
                     if self.write_disconnect == "before":
                         return
-                    reply = self.write_replies.get(command, "OK")
+                    reply = self.write_replies.get((command, len(self.writes)), self.write_replies.get(command, "OK"))
                     if reply != "OK":
                         send(tag + b" " + reply.encode() + b" [NOPERM] private-marker-password denied\r\n")
                         continue
@@ -225,18 +253,23 @@ class Server:
                     else:
                         old, new = operands
                         assert old in self.write_state and new not in self.write_state
-                        boundary = old if old.endswith(b".") else old + b"."
+                        separator = self.write_namespace
+                        boundary = old if separator is not None and old.endswith(separator) else old + (separator or b"")
                         moving = {raw: value for raw, value in self.write_state.items()
-                                  if raw == old or raw.startswith(boundary)}
+                                  if raw == old or (separator is not None and raw.startswith(boundary))}
                         for raw in moving:
                             del self.write_state[raw]
-                        self.write_state.update({new + (b"." if raw != old and old.endswith(b".") else b"") + raw[len(old):]: value
+                        self.write_state.update({new + (separator if raw != old and old.endswith(separator) else b"") + raw[len(old):]: value
                                                  for raw, value in moving.items()})
                     if self.subscriptions_after is not None:
                         self.subscriptions = set(self.subscriptions_after)
                     if self.write_disconnect in ("after", "encoding"):
                         if self.write_disconnect == "encoding":
                             self.version = "IMAP4rev2"
+                        return
+                    if self.write_disconnect == "hold-after":
+                        self.literal_started.set()
+                        assert conn.recv(1) == b"", "command sent before interrupted write reconciled"
                         return
                     send(tag + b" OK mailbox changed\r\n")
                 elif command == "EXAMINE":
@@ -486,9 +519,14 @@ pinentry.chmod(0o700)
 
 
 @contextlib.contextmanager
-def client_process(argv, env, stdin):
+def client_process(argv, env, stdin, control_tty=None):
+    def acquire_terminal():
+        os.setsid()
+        fcntl.ioctl(control_tty, termios.TIOCSCTTY, 0)
     process = subprocess.Popen(argv, env=env, stdin=stdin, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, start_new_session=True)
+                               stderr=subprocess.PIPE, start_new_session=control_tty is None,
+                               preexec_fn=acquire_terminal if control_tty is not None else None,
+                               pass_fds=(control_tty,) if control_tty is not None else ())
     try:
         yield process
     finally:
@@ -501,6 +539,57 @@ def client_process(argv, env, stdin):
                 process.wait(timeout=2)
 
 
+def apply_dialogue(process, master, server, steps):
+    output, terminal, identifiers = bytearray(), bytearray(), []
+
+    def read_until(fd, target, offset, predicate):
+        limit = time.monotonic() + 10
+        with selectors.DefaultSelector() as selector:
+            selector.register(fd, selectors.EVENT_READ)
+            while not predicate(bytes(target[offset:])):
+                remaining = limit - time.monotonic()
+                assert remaining > 0 and selector.select(remaining), "apply dialogue deadline"
+                data = os.read(fd, 4096)
+                assert data, "apply dialogue closed early"
+                target.extend(data)
+
+    for step in steps:
+        if "preview" in step:
+            offset = len(output)
+            process.stdin.write(step["preview"] + b"\n")
+            process.stdin.flush()
+            read_until(process.stdout.fileno(), output, offset,
+                       lambda data: re.search(br"Preview ID: ([0-9a-f]+-[0-9]+)\n", data))
+            identifiers.append(re.search(br"Preview ID: ([0-9a-f]+-[0-9]+)\n", output[offset:])[1])
+        elif "commands" in step:
+            process.stdin.write(step["commands"])
+            process.stdin.flush()
+        elif "hook" in step:
+            step["hook"](server)
+        else:
+            identifier = identifiers[step["apply"]]
+            offset, terminal_offset = len(output), len(terminal)
+            process.stdin.write(b"apply " + identifier + b"\n")
+            if master is None:
+                process.stdin.write(b"yes\n")
+            process.stdin.flush()
+            if not step.get("reject") and not step.get("no_prompt") and master is not None:
+                read_until(master, terminal, terminal_offset, lambda data: b"Type yes: " in data)
+                assert b"rename " in terminal[terminal_offset:]
+                if "after_prompt" in step:
+                    step["after_prompt"](server)
+                if step.get("answer") == "interrupt-prompt":
+                    os.killpg(process.pid, signal.SIGINT)
+                else:
+                    os.write(master, step.get("answer", b"yes\n") if step.get("answer") != "interrupt-write" else b"yes\n")
+                    if step.get("answer") == "interrupt-write":
+                        assert server.literal_started.wait(5), "write did not commit before interruption"
+                        os.killpg(process.pid, signal.SIGINT)
+            marker = b"create a fresh preview\n" if step.get("reject") else b"Fresh preview required before another apply\n"
+            read_until(process.stdout.fileno(), output, offset, lambda data: marker in data)
+    return bytes(output), bytes(terminal)
+
+
 def run(name, installed=False, mode="implicit", cert="trusted", policy="check", ca=True,
         version="IMAP4rev1", denied=False, expected=0, commands=b"help\nhelp\nquit\n", interrupt=False,
         interpreter=None, debug=False, login_disabled=False, preauth=False, ipv6=False,
@@ -510,7 +599,9 @@ def run(name, installed=False, mode="implicit", cert="trusted", policy="check", 
         sizes=None, size_uids=None, status_count=None, du_rows=None, du_total=None, list_status_count=None,
         du_labels=(), du_cancel=False, write_state=None, write_replies=None,
         expected_writes=None, final_state=None, write_namespace=b".", write_interrupt=False,
-        write_disconnect=None, subscriptions=None, subscriptions_after=None, final_subscriptions=None):
+        write_disconnect=None, subscriptions=None, subscriptions_after=None, final_subscriptions=None,
+        preview_rows=None, preview_blocked=False, preview_errors=(), apply_steps=None,
+        apply_tty=True, apply_states=None):
     with Server(mode, cert, version, denied, login_disabled, preauth, ipv6, folders, utf8, enable_reply,
                 messages, header_mode, events, sizes, write_state, write_replies, write_namespace, write_interrupt,
                 write_disconnect, subscriptions, subscriptions_after) as server:
@@ -532,9 +623,13 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
         env["JARO_IMAP_PYTHON"] = interpreter or str(audit)
         entry = prefix / "bin/jaro" if installed else repo / "src/jaro"
         argv = [str(entry), "-D" if debug else "-q", "-a", "shell-fixture", "imap", "shell"]
-        master, slave = pty.openpty() if terminal else (None, subprocess.PIPE)
+        master, tty_slave = pty.openpty() if terminal or (apply_steps and apply_tty) else (None, None)
+        slave = tty_slave if terminal else subprocess.PIPE
+        captured, tty_output = b"", b""
         try:
-            with client_process(argv, env, slave) as process:
+            with client_process(argv, env, slave, tty_slave if apply_steps and apply_tty else None) as process:
+                if apply_steps:
+                    captured, tty_output = apply_dialogue(process, master, server, apply_steps)
                 if write_interrupt:
                     process.stdin.write(commands)
                     process.stdin.flush()
@@ -564,10 +659,11 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
                 if terminal:
                     os.write(master, b"help\n\x04")
                 out, err = process.communicate(None if terminal else commands, timeout=20)
+                out = captured + out
         finally:
-            if terminal:
+            if master is not None:
                 os.close(master)
-                os.close(slave)
+                os.close(tty_slave)
         assert process.returncode == expected, (name, process.returncode, server.wire, err[-300:].decode(errors="replace"))
         assert b"private-marker-password" not in out + err, "secret in diagnostics"
         assert b"fixture user" not in out + err, "login identifier in diagnostics"
@@ -586,6 +682,27 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert not set(server.commands).intersection(("FETCH", "UID", "COPY", "DELETE", "EXPUNGE"))
         if final_state is not None:
             assert server.write_state == final_state, (name, server.write_state, final_state)
+        if apply_states is not None:
+            statuses = [tuple(line.decode().split("\t")) for line in out.splitlines()
+                        if line.split(b"\t", 1)[0] in (b"completed", b"failed", b"unknown", b"pending")]
+            assert statuses == [(state, old, "->", new) for state, old, new in apply_states], (name, statuses, out, err)
+            assert b"Fresh preview required" in out
+            assert (b"Type yes: " in tty_output) == apply_tty
+        if preview_rows is not None:
+            rows = [line.split("\t") for line in out.decode().splitlines() if "\t->\t" in line]
+            assert [(row[0], row[2], row[3]) for row in rows] == [
+                (old, new, f"subtree: {count} listed mailboxes" if count is not None else "subtree: scope unavailable")
+                for old, new, count in preview_rows
+            ], (name, rows, preview_rows, err.decode())
+            assert not set(server.commands).difference(("CAPABILITY", "LOGIN", "LOGOUT", "ENABLE", "LIST")), server.commands
+            assert not server.writes and not server.header_fetches and not server.size_fetches
+            assert (b"Apply blocked" in out or b"Rename preview blocked:" in err) == preview_blocked, (name, out, err)
+            if not preview_blocked:
+                assert f"Rename preview: {len(preview_rows)} matches".encode() in out
+                assert b"Preview only; no changes made" in out
+            for cause in preview_errors:
+                assert cause.encode() in out + err, (name, cause, out, err)
+            assert b"\x1b" not in out and b"\xc2\x9b" not in out
         if final_subscriptions is not None:
             assert server.subscriptions == set(final_subscriptions), (name, server.subscriptions)
             assert "SUBSCRIBE" not in server.commands and "UNSUBSCRIBE" not in server.commands
@@ -596,7 +713,7 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert server.interrupted_write_closed.wait(5), "literal connection did not close cleanly"
             assert server.connections == 2 and server.commands.count("CREATE") == 1
         if write_interrupt or write_disconnect:
-            assert b"outcome unknown" in err and b"confirmed" not in err, (name, err)
+            assert b"outcome unknown" in err and (apply_steps or b"confirmed" not in err), (name, err)
             assert not any(e["command"] == "LOGOUT" and e.get("connection") == 1 for e in server.wire)
             assert sum(c in ("CREATE", "RENAME") for c in server.commands) == 1, "unknown write replayed"
             if write_disconnect == "encoding":
@@ -674,11 +791,11 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert b"NOT verified" in err
         if mode == "plain":
             assert b"plaintext" in err
-        results.append({"name": name, "exit": process.returncode, "wire": server.wire,
+        results.append({"name": name, "exit": process.returncode, "wire": server.wire, "installed": installed,
                         "mailbox_state": None if server.write_state is None else
                         {raw.hex(): list(value) for raw, value in server.write_state.items()},
                         "subscriptions": sorted(raw.hex() for raw in server.subscriptions),
-                        "stdout": out.decode("utf-8"), "stderr": err.decode("utf-8")})
+                        "stdout": out.decode("utf-8"), "stderr": err.decode("utf-8"), "terminal": tty_output.decode("utf-8")})
         target = Path(os.environ.get("JARO_TEST_LOG_DIR", work)) / "imap-shell-wire.json"
         target.write_text(json.dumps(results, indent=2) + "\n")
     print("PASS: IMAP shell " + name)
@@ -1211,4 +1328,234 @@ run("rev2 subscribed LIST tracks trailing-delimiter namespace descendants", vers
     expected_writes=[("RENAME", b"Namespace.", b"Archive.Moved")],
     final_state={b"Archive": (), b"Archive.Moved": (), b"Archive.Moved.Child": (1,), b"Archive.Moved.Unsubscribed": (2,)},
     expected_out="/Archive/Moved/Child\nChild\nUnsubscribed\n", expected_err=("Observed subscriptions: +2 -2",))
+preview_initial = {b"Lists": (), b"List-Z": (1,), b"List-A": (2,), b"List-A.Child": (3,), b"list-lower": (4,)}
+for installed in (False, True):
+    run("sorted read-only rename preview " + str(installed), installed=installed, write_state=preview_initial,
+        commands=b"rename-glob 'List-*' 'Lists/{1}'\npwd\nquit\n", final_state=preview_initial,
+        patterns=[b"%", b"Lists.%", b"*"],
+        preview_rows=[("/List-A", "/Lists/A", 2), ("/List-Z", "/Lists/Z", 1)])
+run("rename preview zero matches", write_state=preview_initial,
+    commands=b"rename-glob 'LIST-*' 'Lists/{1}'\nquit\n", final_state=preview_initial, preview_rows=[])
+run("rename preview empty capture is allowed in a component", write_state={b"Old-": ()},
+    commands=b"rename-glob 'Old-*' 'New-{1}'\nquit\n", final_state={b"Old-": ()},
+    preview_rows=[("/Old-", "/New-", 1)])
+run("rename preview empty destination capture blocks", write_state={b"Old-": (), b"Archive": ()},
+    commands=b"rename-glob 'Old-*' 'Archive/{1}'\nquit\n", final_state={b"Old-": (), b"Archive": ()},
+    preview_rows=[("/Old-", "[invalid destination]", 1)], preview_blocked=True,
+    preview_errors=("empty destination component",))
+for version in ("IMAP4rev1", "IMAP4rev2"):
+    unicode_state = {folderlib.mailbox_bytes(text, version == "IMAP4rev2"): ()
+                     for text in ("É-Café", "é-excluded", "Archive")}
+    run("rename preview Unicode case and raw encoding " + version, installed=True, version=version,
+        write_state=unicode_state, commands="rename-glob 'É-*' 'Archive/{1}'\nquit\n".encode(),
+        final_state=unicode_state, preview_rows=[("/É-Café", "/Archive/Café", 1)])
+for source in (r"'Old-\**'", r'"Old-\**"', r"Old-\**"):
+    state = {b"Old-*One": (), b"Old-excluded": ()}
+    run("rename preview tokenizer preserves escaped star " + source, write_state=state,
+        commands=("rename-glob " + source + " 'New-{1}'\nquit\n").encode(), final_state=state,
+        preview_rows=[("/Old-%2AOne", "/New-One", 1)])
+run("rename preview percent escaped star stays literal", write_state={b"Old-*One": ()},
+    commands=b"rename-glob 'Old-%2A*' 'New-{1}'\nquit\n", final_state={b"Old-*One": ()},
+    preview_rows=[("/Old-%2AOne", "/New-One", 1)])
+literal_capture = "a/b%\\{1}?[]'\""
+literal_state = {("Old-" + literal_capture).encode(): ()}
+literal_display = folderlib.display_component(literal_capture)
+run("rename preview captured metacharacters remain literal", installed=True, write_namespace=None,
+    write_state=literal_state, commands=b"rename-glob 'Old-*' 'New-{1}-{1}'\nquit\n",
+    final_state=literal_state,
+    preview_rows=[("/Old-" + literal_display, "/New-" + literal_display + "-" + literal_display, 1)])
+for capture in (".", ".."):
+    state = {("Old-" + capture).encode(): ()}
+    run("rename preview captured dot is a literal component " + capture, write_namespace=None, write_state=state,
+        commands=b"rename-glob 'Old-*' '{1}'\nquit\n", final_state=state,
+        preview_rows=[("/Old-" + capture, "/" + folderlib.display_component(capture), 1)])
+run("rename preview escaped template and percent are literal", write_namespace=None, write_state={b"Old-%x": ()},
+    commands=b"rename-glob 'Old-\\%*' 'New-\\{1\\}-\\%{1}'\nquit\n", final_state={b"Old-%x": ()},
+    preview_rows=[("/Old-%25x", "/New-{1}-%25x", 1)])
+parent_state = {b"Parent*": (), b"Parent*.Old-a": (), b"ParentX": (), b"ParentX.Old-excluded": (), b"Archive": ()}
+run("rename preview literal wildcard parent filters wire aliases", write_state=parent_state,
+    commands=b"rename-glob 'Parent\\*/Old-*' 'Archive/{1}'\nquit\n", final_state=parent_state,
+    preview_rows=[("/Parent%2A/Old-a", "/Archive/a", 1)])
+run("rename preview escaped command whitespace stays literal", write_state={b"Old folder-a": ()},
+    commands=b"rename-glob Old\\ folder-* New\\ folder-{1}\nquit\n", final_state={b"Old folder-a": ()},
+    preview_rows=[("/Old%20folder-a", "/New%20folder-a", 1)])
+relative_preview = {b"Parent": (), b"Parent.Old-a": (), b"Parent.Archive": ()}
+run("rename preview relative paths preserve navigation", installed=True, write_state=relative_preview,
+    commands=b"cd Parent\nrename-glob 'Old-*' 'Archive/{1}'\npwd\nquit\n", final_state=relative_preview,
+    preview_rows=[("/Parent/Old-a", "/Parent/Archive/a", 1)])
+
+
+def add_preview_match(server, send):
+    server.write_state[b"Old-b"] = (2,)
+
+
+run("rename preview refreshes cached membership", write_state={b"Old-a": (1,)},
+    events={("LIST", 2): add_preview_match}, commands=b"folders\nrename-glob 'Old-*' 'New-{1}'\nquit\n",
+    final_state={b"Old-a": (1,), b"Old-b": (2,)},
+    preview_rows=[("/Old-a", "/New-a", 1), ("/Old-b", "/New-b", 1)])
+run("rename preview refuses deleted cached cwd", write_state={b"Parent": (), b"Parent.Child": ()},
+    events={("LIST", 3): remove_cached_parent},
+    commands=b"cd Parent/Child\nrename-glob '*' 'New-{1}'\npwd\nquit\n", final_state={},
+    preview_rows=[], preview_blocked=True, preview_errors=("folder does not exist",))
+for source, template, absolute in (("/Old-*", "/New-{1}", True),
+                                   ("Old-*", "/New-{1}", False),
+                                   ("/Old-*", "New-{1}", False)):
+    run("rename preview deleted cwd absolute fence " + source + template, installed=absolute,
+        write_state={b"Parent": (), b"Parent.Child": (), b"Old-a": ()},
+        events={("LIST", 3): remove_cached_parent},
+        commands=f"cd Parent/Child\nrename-glob '{source}' '{template}'\npwd\nquit\n".encode(),
+        final_state={b"Old-a": ()}, preview_rows=[("/Old-a", "/New-a", 1)] if absolute else [],
+        preview_blocked=not absolute, preview_errors=() if absolute else ("folder does not exist",))
+for source, template, cause in (("Old", "New-{1}", "exactly one unescaped *"),
+                                ("Old-**", "New-{1}", "exactly one unescaped *"),
+                                ("P*/Old-*", "New-{1}", "parent must be literal"),
+                                ("Old-*", "Archive//{1}", "empty path component"),
+                                ("Old-%xx*", "New-{1}", "invalid display escape")):
+    run("rename preview rejects grammar " + source + template, write_state={b"Old-a": ()},
+        commands=f"rename-glob '{source}' '{template}'\nquit\n".encode(), final_state={b"Old-a": ()},
+        preview_rows=[] if source != "Old-*" else [("/Old-a", "[invalid destination]", 1)],
+        preview_blocked=True, preview_errors=(cause,))
+for state, template, rows, cause in (
+        ({b"Old-a": (), b"New-a": ()}, "New-{1}", [("/Old-a", "/New-a", 1)], "destination exists"),
+        ({b"Old-a": (), b"Old-a.Child": (), b"New-a.Child": ()}, "New-{1}",
+         [("/Old-a", "/New-a", 2)], "destination subtree collides"),
+        ({b"Old-a": (), b"Old-b": ()}, "New", [("/Old-a", "/New", 1), ("/Old-b", "/New", 1)], "duplicate destinations"),
+        ({b"Old-a": (), b"Old-aa": ()}, "Old-a{1}", [("/Old-a", "/Old-aa", 1), ("/Old-aa", "/Old-aaa", 1)], "dependency chain or cycle"),
+        ({b"Old-a": ()}, "Old-{1}", [("/Old-a", "/Old-a", 1)], "inside source or unchanged"),
+        ({b"Old-a": ()}, "Old-a/New-{1}", [("/Old-a", "/Old-a/New-a", 1)], "inside source or unchanged"),
+        ({b"Old-a": ()}, "Missing/{1}", [("/Old-a", "/Missing/a", 1)], "folder does not exist"),
+        ({b"Old-a": ()}, "INBOX", [("/Old-a", "/INBOX", 1)], "special INBOX destination")):
+    run("rename preview blocks " + cause, write_state=state, installed=cause == "dependency chain or cycle",
+        commands=f"rename-glob 'Old-*' '{template}'\nquit\n".encode(), final_state=state,
+        preview_rows=rows, preview_blocked=True, preview_errors=(cause,))
+run("rename preview protects INBOX source", write_state={b"Inbox": ()},
+    commands=b"rename-glob 'In*' 'New-{1}'\nquit\n", final_state={b"Inbox": ()},
+    preview_rows=[("/Inbox", "/New-box", 1)], preview_blocked=True, preview_errors=("cannot rename root or INBOX",))
+trailing_preview = {b"Old-a.": (), b"Old-a.Child": (), b"New-a.Child": ()}
+run("rename preview indexes trailing-delimiter subtree collision", write_state=trailing_preview,
+    commands=b"rename-glob 'Old-*' 'New-{1}'\nquit\n", final_state=trailing_preview,
+    preview_rows=[("/Old-a", "/New-a", 2)], preview_blocked=True,
+    preview_errors=("destination subtree collides",))
+ambiguous = [mailbox(b"Old-a", b"."), mailbox(b"Old-a.", b".")]
+run("rename preview blocks ambiguous path identity", folders={b"%": ambiguous},
+    commands=b"rename-glob 'Old-*' 'New-{1}'\nquit\n", preview_rows=[], preview_blocked=True,
+    preview_errors=("ambiguous folder identity",))
+overlapping = [mailbox(b"Old-A", b"."), mailbox(b"Old-A.Child", None), mailbox(b"Target", b".")]
+run("rename preview blocks overlapping raw subtrees", folders={b"%": overlapping, b"Target.%": [], b"*": overlapping},
+    commands=b"rename-glob 'Old-*' 'Target/{1}'\nquit\n",
+    preview_rows=[("/Old-A", "/Target/A", 1), ("/Old-A.Child", "/Target/A.Child", 1)],
+    preview_blocked=True, preview_errors=("overlapping source subtrees",))
+cross_namespace = [mailbox(b"Old-a", b"/"), mailbox(b"Target", b".")]
+run("rename preview blocks cross-delimiter subtree projection",
+    folders={b"%": cross_namespace, b"Target.%": [],
+             b"*": cross_namespace + [mailbox(b"Old-a/Child", b"/")]},
+    commands=b"rename-glob 'Old-*' 'Target/{1}'\nquit\n", preview_rows=[("/Old-a", "/Target/a", 2)],
+    preview_blocked=True, preview_errors=("namespace delimiters differ",))
+run("rename preview incomplete inventory blocks apply", write_state={b"Old-a": ()}, sizes={"list_denied": (b"*",)},
+    commands=b"rename-glob 'Old-*' 'New-{1}'\nquit\n", final_state={b"Old-a": ()},
+    preview_rows=[("/Old-a", "/New-a", None)], preview_blocked=True, preview_errors=("LIST unavailable",))
+run("rename preview controls remain escaped and read-only", version="IMAP4rev2", write_state={b"Old-\n\x1b": ()},
+    commands=b"rename-glob 'Old-*' 'New-{1}'\nquit\n", final_state={b"Old-\n\x1b": ()},
+    preview_rows=[("/Old-%0A%1B", "/New-%0A%1B", 1)])
+wide_preview_state = {f"Old-{index:03}".encode(): () for index in range(130)}
+run("rename preview prints every mapping without truncation", installed=True, write_state=wide_preview_state,
+    commands=b"rename-glob 'Old-*' 'New-{1}'\nquit\n", final_state=wide_preview_state,
+    patterns=[b"%", b"*"],
+    preview_rows=[(f"/Old-{index:03}", f"/New-{index:03}", 1) for index in range(130)])
+bulk_state = {b"Old-A": (1,), b"Old-B": (2,), b"Old-C": (3,)}
+bulk_preview = b"rename-glob 'Old-*' 'New-{1}'"
+bulk_writes = [("RENAME", b"Old-" + letter, b"New-" + letter) for letter in (b"A", b"B", b"C")]
+bulk_final = {b"New-A": (1,), b"New-B": (2,), b"New-C": (3,)}
+
+
+def bulk_statuses(*states):
+    return [(state, "/Old-" + letter, "/New-" + letter) for state, letter in zip(states, "ABC")]
+
+
+run("bulk apply confirmed serial mapping on controlling PTY", installed=True, write_state=bulk_state,
+    apply_steps=[{"preview": bulk_preview}, {"apply": 0}], commands=b"pwd\nquit\n",
+    expected_writes=bulk_writes, final_state=bulk_final,
+    apply_states=bulk_statuses("completed", "completed", "completed"))
+for answer in (b"no\n", "interrupt-prompt"):
+    run("bulk apply confirmation cancelled " + str(answer), write_state=bulk_state,
+        apply_steps=[{"preview": bulk_preview}, {"apply": 0, "answer": answer}, {"apply": 0, "reject": True}],
+        commands=b"pwd\nquit\n", expected_writes=[], final_state=bulk_state,
+        apply_states=bulk_statuses("pending", "pending", "pending"))
+run("bulk apply pipe cannot supply controlling-terminal confirmation", write_state=bulk_state,
+    apply_steps=[{"preview": bulk_preview}, {"apply": 0}], apply_tty=False, commands=b"pwd\nquit\n",
+    expected_writes=[], final_state=bulk_state, apply_states=bulk_statuses("pending", "pending", "pending"))
+run("bulk apply replaced and consumed IDs never replay", write_state={b"Old-A": (1,)},
+    apply_steps=[{"preview": bulk_preview}, {"preview": b"rename-glob 'Old-*' 'Later-{1}'"},
+                 {"apply": 0, "reject": True}, {"apply": 1, "reject": True},
+                 {"preview": b"rename-glob 'Old-*' 'Latest-{1}'"}, {"apply": 2}, {"apply": 2, "reject": True}],
+    commands=b"pwd\nquit\n", expected_writes=[("RENAME", b"Old-A", b"Latest-A")],
+    final_state={b"Latest-A": (1,)}, apply_states=[("completed", "/Old-A", "/Latest-A")])
+run("bulk apply blocked preview is never actionable", write_state={b"Old-A": (1,)},
+    apply_steps=[{"preview": b"rename-glob 'Old-*' 'Old-{1}'"}, {"apply": 0}], apply_tty=False,
+    commands=b"pwd\nquit\n", expected_writes=[], final_state={b"Old-A": (1,)},
+    apply_states=[("pending", "/Old-A", "/Old-A")])
+for changed in ({b"Old-D": (4,)}, {b"New-B": (9,)}, {b"Old-B.Child": (8,)}):
+    run("bulk apply drift after confirmation prompt " + repr(next(iter(changed))), write_state=bulk_state,
+        apply_steps=[{"preview": bulk_preview}, {"apply": 0, "after_prompt": lambda server, changed=changed: server.write_state.update(changed)}],
+        commands=b"pwd\nquit\n", expected_writes=[], final_state={**bulk_state, **changed},
+        apply_states=bulk_statuses("pending", "pending", "pending"))
+run("bulk apply stops at refusal two of three", write_state=bulk_state, write_replies={("RENAME", 2): "NO"},
+    apply_steps=[{"preview": bulk_preview}, {"apply": 0}, {"apply": 0, "reject": True}], commands=b"pwd\nquit\n",
+    expected_writes=bulk_writes[:2], final_state={b"New-A": (1,), b"Old-B": (2,), b"Old-C": (3,)},
+    apply_states=bulk_statuses("completed", "failed", "pending"))
+for changed in ({b"Old-D": (4,)}, {b"New-B": (9,)}, {b"Old-B.Child": (8,)}):
+    run("bulk apply rechecks between operations " + repr(next(iter(changed))), write_state=bulk_state,
+        events={("LSUB", 5): lambda server, send, changed=changed: server.write_state.update(changed)},
+        apply_steps=[{"preview": bulk_preview}, {"apply": 0}], commands=b"pwd\nquit\n",
+        expected_writes=bulk_writes[:1], final_state={b"New-A": (1,), b"Old-B": (2,), b"Old-C": (3,), **changed},
+        apply_states=bulk_statuses("completed", "pending", "pending"))
+for loss in ("before", "after", "hold-after"):
+    run("bulk apply unknown result not replayed " + loss, write_state=bulk_state, write_disconnect=loss,
+        apply_steps=[{"preview": bulk_preview}, {"apply": 0, "answer": "interrupt-write" if loss == "hold-after" else b"yes\n"},
+                     {"apply": 0, "reject": True}], commands=b"pwd\nquit\n", expected_writes=bulk_writes[:1],
+        final_state=bulk_state if loss == "before" else {b"New-A": (1,), b"Old-B": (2,), b"Old-C": (3,)},
+        apply_states=bulk_statuses("unknown", "pending", "pending"))
+relative_apply = {b"Parent": (), b"Parent.Archive": (), b"Parent.Old-A": (1,), b"Other": (), b"Other.Old-A": (9,)}
+run("bulk apply cd cannot retarget saved raw identities", installed=True, write_state=relative_apply,
+    apply_steps=[{"commands": b"cd Parent\n"}, {"preview": b"rename-glob 'Old-*' 'Archive/{1}'"},
+                 {"commands": b"cd /Other\n"}, {"apply": 0}], commands=b"pwd\nquit\n",
+    expected_writes=[("RENAME", b"Parent.Old-A", b"Parent.Archive.A")],
+    final_state={**{raw: value for raw, value in relative_apply.items() if raw != b"Parent.Old-A"}, b"Parent.Archive.A": (1,)},
+    apply_states=[("completed", "/Parent/Old-A", "/Parent/Archive/A")])
+capture = "旅行/a%\\{1}"
+old_raw, new_raw = ("Old-" + capture).encode(), ("New-" + capture).encode()
+run("bulk apply literal Unicode separator and template capture", installed=True, version="IMAP4rev2", write_namespace=None,
+    write_state={old_raw: (7,)}, apply_steps=[{"preview": bulk_preview}, {"apply": 0}], commands=b"pwd\nquit\n",
+    expected_writes=[("RENAME", old_raw, new_raw)], final_state={new_raw: (7,)},
+    apply_states=[("completed", "/Old-" + folderlib.display_component(capture), "/New-" + folderlib.display_component(capture))])
+run("bulk apply cwd template markers stay literal", write_state={b"Parent{1}": (), b"Parent{1}.Old-x": (1,)},
+    apply_steps=[{"commands": b"cd Parent{1}\n"}, {"preview": bulk_preview}, {"commands": b"cd /\n"}, {"apply": 0}],
+    commands=b"pwd\nquit\n", expected_writes=[("RENAME", b"Parent{1}.Old-x", b"Parent{1}.New-x")],
+    final_state={b"Parent{1}": (), b"Parent{1}.New-x": (1,)},
+    apply_states=[("completed", "/Parent{1}/Old-x", "/Parent{1}/New-x")])
+run("bulk apply tracks completed targets matching original wildcard", write_state={b"Box-a": (1,), b"Box-b": (2,)},
+    apply_steps=[{"preview": b"rename-glob 'Box-*' 'Box-a{1}'"}, {"apply": 0}], commands=b"pwd\nquit\n",
+    expected_writes=[("RENAME", b"Box-a", b"Box-aa"), ("RENAME", b"Box-b", b"Box-ab")],
+    final_state={b"Box-aa": (1,), b"Box-ab": (2,)},
+    apply_states=[("completed", "/Box-a", "/Box-aa"), ("completed", "/Box-b", "/Box-ab")])
+run("bulk apply cancelled long terminal line cannot confirm a later ID", write_state=bulk_state,
+    apply_steps=[{"preview": bulk_preview}, {"apply": 0, "answer": b"n" * 16 + b"yes\n"},
+                 {"preview": bulk_preview}, {"apply": 1, "answer": b"no\n"}], commands=b"pwd\nquit\n",
+    expected_writes=[], final_state=bulk_state,
+    apply_states=bulk_statuses("pending", "pending", "pending") * 2)
+for command in (b"rename-glob 'Old-*'\n", b"rename-glob 'Old' 'New-{1}'\n"):
+    run("bulk apply invalid new preview invalidates old ID " + command.decode().strip(), write_state=bulk_state,
+        apply_steps=[{"preview": bulk_preview}, {"commands": command}, {"apply": 0, "reject": True}],
+        commands=b"pwd\nquit\n", expected_writes=[], final_state=bulk_state)
+for command in (b"rename-glob 'unterminated\n", b"apply 'unterminated\n"):
+    run("bulk apply malformed authorization command consumes old ID " + command.decode().strip(), write_state=bulk_state,
+        apply_steps=[{"preview": bulk_preview}, {"commands": command}, {"apply": 0, "reject": True}],
+        commands=b"pwd\nquit\n", expected_writes=[], final_state=bulk_state,
+        expected_err=("Invalid quoted command",))
+run("bulk apply partial refusal resumes only with fresh review", installed=True, write_state=bulk_state,
+    write_replies={("RENAME", 2): "NO"},
+    apply_steps=[{"preview": bulk_preview}, {"apply": 0}, {"hook": lambda server: server.write_replies.clear()},
+                 {"preview": bulk_preview}, {"apply": 1}], commands=b"pwd\nquit\n",
+    expected_writes=bulk_writes[:2] + bulk_writes[1:], final_state=bulk_final,
+    apply_states=bulk_statuses("completed", "failed", "pending") + bulk_statuses("pending", "completed", "completed")[1:])
 print(f"PASS: {len(results)} public shell scenarios; all endpoints joined")
