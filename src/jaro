@@ -208,6 +208,10 @@ a pipe | in front indicate they take an email body from stdin
  outbox archive ID
           finish local sent copy after externally verifying delivery; no SMTP
 
+ imap shell
+          browse remote folders, page headers, measure sizes and download archives
+          type help at the imap> prompt or see man jaro for a worked session
+
  peek     interactive connection to an [account]'s imap folder
           (takes folder names as argument, default is INBOX)
 

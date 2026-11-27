@@ -60,11 +60,27 @@ def snapshot(tree, path):
     return source, (count, generation)
 
 
+def release_selection(tree):
+    # Dovecot disconnects a session whose selected mailbox has been deleted.
+    # UNSELECT releases EXAMINE without expunging messages.
+    client = tree.client
+    rev2 = "IMAP4REV2" in client.capabilities and "IMAP4REV1" not in client.capabilities
+    if client.state == "SELECTED" and (rev2 or "UNSELECT" in client.capabilities):
+        try:
+            with tree.deadline(tree.seconds):
+                status, _ = client.unselect()
+        except imaplib.IMAP4.abort:
+            raise
+        except imaplib.IMAP4.error:
+            status = "BAD"
+        if status != "OK":
+            raise DeleteError("Cannot release the selected mailbox; deletion refused")
+
+
 def remove(tree, words):
     path, yes, recursive = options(words)
     if recursive:
-        remove_recursive(tree, path, yes)
-        return
+        return remove_recursive(tree, path, yes)
     # Resolve the user's input once; every later observation uses this absolute
     # display path and must retain the exact original raw mailbox identity.
     source = tree.resolve_write(path)
@@ -79,22 +95,23 @@ def remove(tree, words):
     try:
         if not yes and not confirm(None, 1, "Delete " + source.path + "? [no] Type yes: "):
             print("Deletion cancelled", flush=True)
-            return
+            return False
     except OSError:
         print("Deletion cancelled: controlling terminal required; command stdin cannot confirm", flush=True)
-        return
+        return False
     except KeyboardInterrupt:
         print("Deletion cancelled", flush=True)
-        return
+        return False
 
     def recheck():
         refreshed, current_metadata = snapshot(tree, source.path)
         if (identity(refreshed) != identity(source) or identity(refreshed.parent) != identity(source.parent)
                 or current_metadata != metadata):
             raise DeleteError("Delete target or message state changed; retry rmdir")
+        release_selection(tree)
 
     parent = tree.root if source.parent.parent is None else source.parent
-    tree.mutate("DELETE", None, parent, source.raw, source.delimiter, preflight=recheck)
+    return tree.mutate("DELETE", None, parent, source.raw, source.delimiter, preflight=recheck) == "confirmed"
 
 
 @dataclass
@@ -241,13 +258,13 @@ def remove_recursive(tree, path, yes):
             if not yes and not confirm(None, len(ordered),
                     f"Delete {source.path} recursively ({len(ordered)} listed folders)? [no] Type yes: "):
                 reason = "confirmation cancelled"
-                return
+                return False
         except OSError:
             reason = "controlling terminal required; command stdin cannot confirm"
-            return
+            return False
         except KeyboardInterrupt:
             reason = "confirmation cancelled"
-            return
+            return False
         for raw in ordered:
             if states[raw] != "pending":
                 continue
@@ -257,6 +274,7 @@ def remove_recursive(tree, path, yes):
                 recheck()
                 if states[raw] != "pending":
                     raise ContainerGone()
+                release_selection(tree)
 
             def outcome(value):
                 states[raw] = value
@@ -287,3 +305,4 @@ def remove_recursive(tree, path, yes):
         current_path = tree.current.path
         if tree.restore_navigation(current_path, (tree.current.raw, tree.current.delimiter)):
             print("Current folder unavailable; returned to " + tree.current.path, flush=True)
+    return reason == "finished"
