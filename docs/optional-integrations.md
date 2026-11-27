@@ -135,6 +135,56 @@ not establish which client made a change. A name that is not listed may be
 hidden by server permissions; it is not proof of absence. The write is never replayed
 automatically; inspect the refreshed state before deciding whether to retry.
 
+#### Download and verify a folder
+
+In the IMAP shell, run `download 'Projects/2025' --output projects-2025.tar.gz`.
+Add `--recursive` to include descendants. The shell freezes the folder list
+and captures each mailbox's UID generation and upper bound separately.
+Messages retain their exact server bytes and Seen flags. Allow working space
+for the raw messages, the compressed tar, and the checkpoint and manifest.
+Choose an existing output directory on a filesystem that supports hard links.
+Use a path with ordinary directory components and a new archive filename.
+
+After an interruption, repeat the original command with `--resume`. Keep
+the private sibling directory (in this example, `.projects-2025.tar.gz.incomplete`).
+Completed messages are checked locally. A partial message restarts at its first
+byte. Compression can retry using the same staged messages. If a captured UID
+disappears or its mailbox generation changes, choose a new output filename for
+a fresh inventory. A verified archive is published atomically at the requested
+path and owned staging files are cleaned up.
+
+From the system shell, inspect and verify the result in a new private directory:
+
+```sh
+umask 077
+gzip -t projects-2025.tar.gz
+tar -tzf projects-2025.tar.gz
+mkdir verified-copy
+tar -xzf projects-2025.tar.gz -C verified-copy
+(cd verified-copy && python3 - <<'PY'
+import hashlib, json
+with open('manifest.jsonl', encoding='utf-8') as manifest:
+    for line in manifest:
+        entry = json.loads(line)
+        if entry['type'] == 'message':
+            digest, size = hashlib.sha256(), 0
+            with open(entry['path'], 'rb') as source:
+                for block in iter(lambda: source.read(131072), b''):
+                    digest.update(block)
+                    size += len(block)
+            if (digest.hexdigest(), size) != (entry['sha256'], entry['size']):
+                raise SystemExit('Verification failed for ' + entry['path'])
+print('All listed messages verified')
+PY
+)
+```
+
+`manifest.jsonl` contains one JSON object per line. Its export record identifies
+the format version and mailbox encoding. Folder records include empty mailboxes
+and containers, display paths, exact name and delimiter bytes in hexadecimal,
+UIDVALIDITY, upper UID and captured count. Message records map a generated
+`.eml` path to a folder ID, UID, INTERNALDATE, flags, byte length and SHA-256.
+
 ### `src/stats` and `stats` command
 
 - Installed by default: **yes**

@@ -296,6 +296,7 @@ class Server:
                     else:
                         raw, end = folderlib.read_quoted(args[0], 0)
                         assert end == len(args[0])
+                    self.selected = raw
                     if self.write_state is not None:
                         assert raw in self.write_state
                         self.messages = [(uid, b"") for uid in self.write_state[raw]]
@@ -310,7 +311,8 @@ class Server:
                     if self.header_mode == "encoding":
                         assert self.connections == 1, "cached raw name reused after encoding changed"
                     uidnext = max((uid for uid, _ in self.messages), default=0) + 1
-                    send(f"* {len(self.messages)} EXISTS\r\n* OK [UIDVALIDITY {self.validity}] generation\r\n* OK [UIDNEXT {uidnext}] next\r\n".encode()
+                    validity = self.current_size.get("validity", self.validity)
+                    send(f"* {len(self.messages)} EXISTS\r\n* OK [UIDVALIDITY {validity}] generation\r\n* OK [UIDNEXT {uidnext}] next\r\n".encode()
                          + tag + b" OK [READ-ONLY] examined\r\n")
                 elif command == "STATUS":
                     raw, end = folderlib.read_quoted(args[0], 0)
@@ -355,6 +357,10 @@ class Server:
                         continue
                     requested = list(map(int, sequence.split(b",")))
                     assert len(requested) <= 10 and len(requested) == len(set(requested))
+                    if b"BODY.PEEK[]" in attrs:
+                        if not self.export_body(requested, attrs, send, conn, tag):
+                            return
+                        continue
                     if attrs == b"(UID RFC822.SIZE)":
                         self.size_fetches.append(requested)
                         if self.current_size.get("fetch_denied"):
@@ -1826,3 +1832,6 @@ run("recursive delete reports unexpected trailing namespace container", installe
     delete_results=[("surviving", path) for path in recursive_paths + ["/Tree/New"]],
     expected_contains=("Recursive scope drift", "outside confirmed scope"))
 print(f"PASS: {len(results)} public shell scenarios; all endpoints joined")
+
+from imap_download_cases import exercise
+exercise(Server, client_process, repo, prefix, work)
