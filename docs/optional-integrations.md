@@ -56,6 +56,22 @@ percent, wildcard, quote, backslash, whitespace and control characters; literal
 the logical tree. Unicode appears directly; the session retains the server's
 original mailbox bytes, delimiter and flags and negotiates UTF-8 when supported.
 
+`mkdir PATH` creates an exact mailbox. `mv OLD NEW` (also `rename`) renames a
+whole subtree with one server RENAME; `NEW` is the complete destination path,
+and its parent must exist. Root, INBOX moves, descendant cycles and existing
+destinations are rejected. Successful writes refresh folder views and remap
+the current path; a removed current folder falls back to a surviving ancestor.
+Subscription changes are observed and counted; the shell never subscribes or
+unsubscribes folders automatically.
+
+A tagged success is reported as confirmed and a tagged refusal as rejected.
+If a connection is lost or a write is interrupted before completion, its outcome
+is unknown. The shell closes that connection, reconnects, and observes the exact
+old/new names where the mailbox encoding still matches. These observations do
+not establish which client made a change. A name that is not listed may be
+hidden by server permissions; it is not proof of absence. The write is never replayed
+automatically; inspect the refreshed state before deciding whether to retry.
+
 ### `src/stats` and `stats` command
 
 - Installed by default: **yes**

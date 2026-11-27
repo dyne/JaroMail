@@ -6,6 +6,7 @@ from pathlib import Path
 import signal
 import runpy
 import pty
+import re
 import socket
 import ssl
 import subprocess
@@ -50,7 +51,9 @@ for name, host in (("trusted", "localhost"), ("wrong", "wrong.invalid")):
 class Server:
     def __init__(self, mode="implicit", cert="trusted", version="IMAP4rev1", denied=False,
                  login_disabled=False, preauth=False, ipv6=False, folders=None, utf8=False,
-                 enable_reply="confirmed", messages=None, header_mode=None, events=None, sizes=None):
+                 enable_reply="confirmed", messages=None, header_mode=None, events=None, sizes=None,
+                 write_state=None, write_replies=None, write_namespace=b".", write_interrupt=False,
+                 write_disconnect=None, subscriptions=None, subscriptions_after=None):
         self.mode, self.version, self.denied = mode, version, denied
         self.login_disabled, self.preauth = login_disabled, preauth
         self.folders, self.utf8 = folders, utf8
@@ -62,6 +65,14 @@ class Server:
         self.header_fetches = []
         self.events = events or {}
         self.sizes = sizes or {}
+        self.write_state = None if write_state is None else dict(write_state)
+        self.write_replies = write_replies or {}
+        self.write_namespace, self.write_interrupt = write_namespace, write_interrupt
+        self.write_disconnect = write_disconnect
+        self.subscriptions = set(subscriptions or ())
+        self.subscriptions_after = subscriptions_after
+        self.interrupted_write_closed = threading.Event()
+        self.writes = []
         self.current_size = self.sizes
         self.size_fetches = []
         self.validity = 44
@@ -84,7 +95,7 @@ class Server:
         self.thread = threading.Thread(target=self.serve)
 
     def serve(self):
-        for _ in range(2 if self.header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") or self.sizes.get("cancel") else 1):
+        for _ in range(2 if self.header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") or self.sizes.get("cancel") or self.write_interrupt or self.write_disconnect else 1):
             self.serve_once()
             if self.failure or self.stop.is_set():
                 return
@@ -117,11 +128,13 @@ class Server:
                 self.commands.append(command)
                 safe_line = tag + b" LOGIN <credentials redacted>\r\n" if command == "LOGIN" else bytes(line)
                 self.wire.append({"direction": "client", "command": command, "tls": secure,
+                                  "connection": self.connections,
                                   "line": safe_line.decode("utf-8")})
 
                 def send(response):
                     safe = response.replace(b"private-marker-password", b"<redacted>")
                     self.wire.append({"direction": "server", "command": command, "tls": secure,
+                                      "connection": self.connections,
                                       "line": safe.decode("utf-8")})
                     conn.sendall(response)
 
@@ -167,6 +180,65 @@ class Server:
                 elif command == "LOGOUT":
                     send(b"* BYE goodbye\r\n" + tag + b" OK logout\r\n")
                     return
+                elif command in ("CREATE", "RENAME"):
+                    assert self.write_state is not None, "unexpected mailbox write"
+                    remaining = args[0]
+                    operands = []
+                    for _ in range(1 if command == "CREATE" else 2):
+                        if remaining.startswith(b'"'):
+                            raw, end = folderlib.read_quoted(remaining, 0)
+                            remaining = remaining[end:]
+                        else:
+                            assert remaining.startswith(b"{") and remaining.endswith(b"}")
+                            length = int(remaining[1:-1])
+                            if self.write_interrupt:
+                                self.literal_started.set()
+                                trailing = conn.recv(8192)
+                                assert trailing == b"", "bytes sent after interrupted literal marker: " + repr(trailing)
+                                self.interrupted_write_closed.set()
+                                return
+                            send(b"+ mailbox literal\r\n")
+                            raw = bytearray()
+                            while len(raw) < length:
+                                raw.extend(conn.recv(length - len(raw)))
+                            raw = bytes(raw)
+                            remaining = bytearray()
+                            while not remaining.endswith(b"\r\n"):
+                                remaining.extend(conn.recv(1))
+                            self.wire.append({"direction": "client", "command": "WRITE_LITERAL", "tls": secure,
+                                              "line": (raw + remaining).decode("utf-8")})
+                            remaining = bytes(remaining[:-2])
+                        operands.append(raw)
+                        if remaining.startswith(b" "):
+                            remaining = remaining[1:]
+                    assert not remaining, "extra write operands"
+                    self.writes.append((command, *operands))
+                    if self.write_disconnect == "before":
+                        return
+                    reply = self.write_replies.get(command, "OK")
+                    if reply != "OK":
+                        send(tag + b" " + reply.encode() + b" [NOPERM] private-marker-password denied\r\n")
+                        continue
+                    if command == "CREATE":
+                        assert operands[0] not in self.write_state
+                        self.write_state[operands[0]] = ()
+                    else:
+                        old, new = operands
+                        assert old in self.write_state and new not in self.write_state
+                        boundary = old if old.endswith(b".") else old + b"."
+                        moving = {raw: value for raw, value in self.write_state.items()
+                                  if raw == old or raw.startswith(boundary)}
+                        for raw in moving:
+                            del self.write_state[raw]
+                        self.write_state.update({new + (b"." if raw != old and old.endswith(b".") else b"") + raw[len(old):]: value
+                                                 for raw, value in moving.items()})
+                    if self.subscriptions_after is not None:
+                        self.subscriptions = set(self.subscriptions_after)
+                    if self.write_disconnect in ("after", "encoding"):
+                        if self.write_disconnect == "encoding":
+                            self.version = "IMAP4rev2"
+                        return
+                    send(tag + b" OK mailbox changed\r\n")
                 elif command == "EXAMINE":
                     assert args and args[0].startswith(b'"'), "EXAMINE mailbox not quoted"
                     raw, end = folderlib.read_quoted(args[0], 0)
@@ -286,8 +358,14 @@ class Server:
                         send(b"* ENABLED\r\n" + tag + b" OK no extensions enabled\r\n")
                     else:
                         send(tag + b" NO enable refused\r\n")
-                elif command == "LIST":
-                    assert self.folders is not None, "unexpected LIST"
+                elif command in ("LIST", "LSUB"):
+                    if command == "LSUB" and self.version == "IMAP4rev2":
+                        send(tag + b" BAD legacy LSUB unavailable\r\n")
+                        continue
+                    assert self.folders is not None or self.write_state is not None, "unexpected LIST"
+                    subscribed = command == "LIST" and args[0].startswith(b"(SUBSCRIBED) ")
+                    if subscribed:
+                        args[0] = args[0][len(b"(SUBSCRIBED) "):]
                     assert args[0].startswith(b'"" '), "LIST reference must be empty"
                     pattern = args[0][3:]
                     status_return = False
@@ -308,8 +386,9 @@ class Server:
                         status_return = bool(remainder)
                         if status_return:
                             assert self.sizes.get("list_status") or self.version == "IMAP4rev2"
-                    assert pattern in self.folders, "unexpected LIST pattern " + repr(pattern)
-                    self.patterns.append(pattern)
+                    assert self.write_state is not None or pattern in self.folders, "unexpected LIST pattern " + repr(pattern)
+                    if command == "LIST":
+                        self.patterns.append(pattern)
                     if pattern in self.sizes.get("list_denied", ()):
                         send(tag + b" NO subtree inaccessible\r\n")
                         continue
@@ -323,11 +402,25 @@ class Server:
                         send(b"* BYE extended LIST aborted\r\n")
                         assert conn.recv(1) == b"", "ordinary LIST retried after abort"
                         return
-                    values = self.folders[pattern]
+                    if self.write_state is not None:
+                        expression = re.escape(pattern).replace(rb"\*", b".*").replace(b"%", b".*" if self.write_namespace is None else b"[^" + re.escape(self.write_namespace) + b"]*")
+                        names = self.subscriptions if command == "LSUB" or subscribed else self.write_state
+                        if subscribed and self.sizes.get("inject_unsubscribed"):
+                            names = self.subscriptions | self.write_state.keys()
+                        values = [(b"", self.write_namespace, (), False)] if pattern == b"" else [
+                            (raw, self.write_namespace, (b"\\Subscribed",) if subscribed and raw in self.subscriptions else (),
+                             b"\n" in raw or b"\r" in raw)
+                            for raw in names if re.fullmatch(expression, raw, re.DOTALL)
+                            or (self.write_namespace is not None and raw.endswith(self.write_namespace)
+                                and re.fullmatch(expression, raw[:-len(self.write_namespace)], re.DOTALL))]
+                    else:
+                        values = self.folders[pattern]
+                    if command == "LIST" and pattern in self.sizes.get("probe_rows", {}):
+                        values = self.sizes["probe_rows"][pattern]
                     if callable(values):
                         values = values(self.patterns.count(pattern))
                     for raw, delimiter, flags, literal in values:
-                        header = b"* LIST (" + b" ".join(flags) + b") "
+                        header = b"* " + command.encode() + b" (" + b" ".join(flags) + b") "
                         header += b"NIL " if delimiter is None else folderlib.quoted(delimiter) + b" "
                         extension = b' (CHILDINFO ("SUBSCRIBED"))' if raw.startswith(b"Archive") else b""
                         if literal:
@@ -415,9 +508,12 @@ def run(name, installed=False, mode="implicit", cert="trusted", policy="check", 
         expected_err=(), enable_reply="confirmed", enable_count=None, messages=None, header_mode=None,
         expected_uids=None, expected_contains=(), expected_subjects=None, events=None, max_inventory=None,
         sizes=None, size_uids=None, status_count=None, du_rows=None, du_total=None, list_status_count=None,
-        du_labels=(), du_cancel=False):
+        du_labels=(), du_cancel=False, write_state=None, write_replies=None,
+        expected_writes=None, final_state=None, write_namespace=b".", write_interrupt=False,
+        write_disconnect=None, subscriptions=None, subscriptions_after=None, final_subscriptions=None):
     with Server(mode, cert, version, denied, login_disabled, preauth, ipv6, folders, utf8, enable_reply,
-                messages, header_mode, events, sizes) as server:
+                messages, header_mode, events, sizes, write_state, write_replies, write_namespace, write_interrupt,
+                write_disconnect, subscriptions, subscriptions_after) as server:
         account = work / "mail/Accounts/shell-fixture"
         account.write_text(f'''name fixture
 email fixture@example.org
@@ -439,6 +535,12 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
         master, slave = pty.openpty() if terminal else (None, subprocess.PIPE)
         try:
             with client_process(argv, env, slave) as process:
+                if write_interrupt:
+                    process.stdin.write(commands)
+                    process.stdin.flush()
+                    assert server.literal_started.wait(5), "mailbox literal marker did not arrive"
+                    os.killpg(process.pid, signal.SIGINT)
+                    commands = b"pwd\nquit\n"
                 if du_cancel:
                     process.stdin.write(commands)
                     process.stdin.flush()
@@ -474,11 +576,34 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             assert json.loads(audit.with_suffix('.json').read_text()) == {"secretExposed": False}
         assert not (Path(env["HOME"]) / ".python_history").exists()
         if expected == 0 or interrupt:
-            assert server.commands.count("LOGIN") == (2 if du_cancel or header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 1), server.commands
+            assert server.commands.count("LOGIN") == (2 if du_cancel or write_interrupt or write_disconnect or header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 1), server.commands
             assert server.commands[-1] == "LOGOUT", server.commands
         if expected == 0:
-            assert server.commands.count("CAPABILITY") == (4 if du_cancel or header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 3 if mode == "starttls" else 2)
-            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "ENABLE", "EXAMINE", "FETCH", "UID", "STATUS") for c in server.commands)
+            assert server.commands.count("CAPABILITY") == (4 if du_cancel or write_interrupt or write_disconnect or header_mode in ("cancel", "oversized", "inventory-oversized", "encoding") else 3 if mode == "starttls" else 2)
+            assert not any(c not in ("CAPABILITY", "STARTTLS", "LOGIN", "LOGOUT", "LIST", "LSUB", "ENABLE", "EXAMINE", "FETCH", "UID", "STATUS", "CREATE", "RENAME") for c in server.commands)
+        if expected_writes is not None:
+            assert server.writes == expected_writes, (name, server.writes, expected_writes, err.decode())
+            assert not set(server.commands).intersection(("FETCH", "UID", "COPY", "DELETE", "EXPUNGE"))
+        if final_state is not None:
+            assert server.write_state == final_state, (name, server.write_state, final_state)
+        if final_subscriptions is not None:
+            assert server.subscriptions == set(final_subscriptions), (name, server.subscriptions)
+            assert "SUBSCRIBE" not in server.commands and "UNSUBSCRIBE" not in server.commands
+            if version == "IMAP4rev2":
+                assert "LSUB" not in server.commands, "rev2-only subscription discovery used LSUB"
+                assert any("LIST (SUBSCRIBED)" in e["line"] for e in server.wire if e["direction"] == "client")
+        if write_interrupt:
+            assert server.interrupted_write_closed.wait(5), "literal connection did not close cleanly"
+            assert server.connections == 2 and server.commands.count("CREATE") == 1
+        if write_interrupt or write_disconnect:
+            assert b"outcome unknown" in err and b"confirmed" not in err, (name, err)
+            assert not any(e["command"] == "LOGOUT" and e.get("connection") == 1 for e in server.wire)
+            assert sum(c in ("CREATE", "RENAME") for c in server.commands) == 1, "unknown write replayed"
+            if write_disconnect == "encoding":
+                assert b"encoding changed" in err
+                assert not any(e["command"] in ("LIST", "LSUB") and e.get("connection") == 2 for e in server.wire)
+        if write_state == {}:
+            assert server.patterns[:2] == [b"%", b""], "empty root delimiter was not discovered"
         if expected_out is not None:
             assert out.decode("utf-8") == expected_out, (name, out.decode("utf-8"), expected_out)
         for message in expected_err:
@@ -541,7 +666,7 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
             if header_mode in ("rejected", "malformed"):
                 assert server.connections == 1 and server.commands.count("FETCH") == 2
                 assert b"/Inbox\n" in out
-        if expected and not denied and not interrupt and not (sizes and (sizes.get("scan_failure") or sizes.get("extended_abort"))):
+        if expected and not denied and not interrupt and not write_interrupt and not (sizes and (sizes.get("scan_failure") or sizes.get("extended_abort"))):
             assert "LOGIN" not in server.commands, server.commands
         if mode == "starttls":
             assert all(x["tls"] for x in server.wire if x["command"] == "LOGIN")
@@ -550,6 +675,9 @@ certfile {tls / 'ca.pem' if ca else tls / 'wrong.pem'}
         if mode == "plain":
             assert b"plaintext" in err
         results.append({"name": name, "exit": process.returncode, "wire": server.wire,
+                        "mailbox_state": None if server.write_state is None else
+                        {raw.hex(): list(value) for raw, value in server.write_state.items()},
+                        "subscriptions": sorted(raw.hex() for raw in server.subscriptions),
                         "stdout": out.decode("utf-8"), "stderr": err.decode("utf-8")})
         target = Path(os.environ.get("JARO_TEST_LOG_DIR", work)) / "imap-shell-wire.json"
         target.write_text(json.dumps(results, indent=2) + "\n")
@@ -962,4 +1090,125 @@ run("aborted extended LIST never retries ordinary LIST", folders={b"%": []},
     commands=b"du --recursive\nquit\n", expected=1, du_rows=[("/", "-", 0)],
     du_total=0, size_uids=[], status_count=0, list_status_count=1,
     du_labels=("partial; 0/0 known folders complete; descendants unknown",))
+write_initial = {b"Inbox": (1,), b"Work projects": (2, 3), b"Work projects.Child": (4,),
+                 b"Work projects.Child.Deep": (5,), b"Archive": (), b"Archive.Exists": (6,)}
+write_final = {b"Inbox": (1,), b"Archive": (), b"Archive.Exists": (6,), b"New folder": (),
+               b"Archive.New child": (), b"Archive.Moved tree": (2, 3),
+               b"Archive.Moved tree.Child": (4,), b"Archive.Moved tree.Child.Deep": (5,)}
+run("CREATE and single RENAME preserve dotted subtree", write_state=write_initial,
+    commands=b'mkdir "New folder"\nmkdir Archive/New%20child\nmv "Work projects" Archive/Moved%20tree\nquit\n',
+    expected_writes=[("CREATE", b"New folder"), ("CREATE", b"Archive.New child"),
+                     ("RENAME", b"Work projects", b"Archive.Moved tree")], final_state=write_final)
+run("rename alias uses complete exact target", installed=True, write_state=write_initial,
+    commands=b'rename "Work projects" Archive/Other\nquit\n',
+    expected_writes=[("RENAME", b"Work projects", b"Archive.Other")],
+    final_state={**{raw: value for raw, value in write_initial.items() if not raw.startswith(b"Work projects")},
+                 b"Archive.Other": (2, 3), b"Archive.Other.Child": (4,), b"Archive.Other.Child.Deep": (5,)})
+run("invalid writes never mutate", write_state=write_initial,
+    commands=b'mkdir /\nmkdir Archive/Exists\nmkdir Missing/Child\nmkdir Archive/a%2Eb\nmv / New\nmv Inbox New\nmv "Work projects" Inbox\nmv "Work projects" Archive/Exists\nmv "Work projects" Missing/New\nmv "Work projects" "Work projects/Child/New"\nmkdir Archive/%00\npwd\nquit\n',
+    expected_writes=[], final_state=write_initial, expected_out="/\n", expected_err=("Folder operation failed",))
+for rejected in ("NO", "BAD"):
+    run("synchronized " + rejected + " writes leave session usable", write_state=write_initial,
+        write_replies={"CREATE": rejected, "RENAME": rejected},
+        commands=b'mkdir Archive/New\nmv "Work projects" Archive/New\npwd\nfolders\nquit\n',
+        expected_writes=[("CREATE", b"Archive.New"), ("RENAME", b"Work projects", b"Archive.New")],
+        final_state=write_initial, expected_err=("Folder operation failed",),
+        expected_out="/\nArchive\nInbox\nWork%20projects\n")
+for version, utf8, encoded in (("IMAP4rev1", False, b"Caf&AOk-"),
+                               ("IMAP4rev2", False, "Café".encode()),
+                               ("IMAP4rev1", True, "Café".encode())):
+    run("write negotiated mailbox encoding " + version + str(utf8), version=version, utf8=utf8,
+        write_state={b"Archive": ()}, commands='mkdir Café\nrename Café Archive/Étage\nquit\n'.encode(),
+        expected_writes=[("CREATE", encoded), ("RENAME", encoded,
+                         b"Archive." + (b"&AMk-tage" if not utf8 and version == "IMAP4rev1" else "Étage".encode()))],
+        final_state={b"Archive": (), b"Archive." + (b"&AMk-tage" if not utf8 and version == "IMAP4rev1" else "Étage".encode()): ()})
+run("both RENAME operands use binary safe literals", version="IMAP4rev2",
+    write_state={b"old\nname": (9,), b"old\nname.Child": (10,), b"Archive": ()},
+    commands=b'rename old%0Aname Archive/new%0Dname\nmkdir Archive/line%0Abreak\nquit\n',
+    expected_writes=[("RENAME", b"old\nname", b"Archive.new\rname"), ("CREATE", b"Archive.line\nbreak")],
+    final_state={b"Archive": (), b"Archive.new\rname": (9,), b"Archive.new\rname.Child": (10,), b"Archive.line\nbreak": ()})
+run("ambiguous root namespace refuses CREATE", folders=mixed,
+    commands=b'mkdir New\nquit\n', expected_writes=[], expected_err=("Folder operation failed",))
+for namespace in (b".", None):
+    run("first folder discovers empty root " + repr(namespace), write_state={}, write_namespace=namespace,
+        commands=b'mkdir "First folder"\nquit\n', expected_writes=[("CREATE", b"First folder")],
+        final_state={b"First folder": ()})
+
+
+def remove_cached_parent(server, send):
+    assert b"Parent.Child" in server.write_state
+    del server.write_state[b"Parent"]
+    del server.write_state[b"Parent.Child"]
+
+
+run("relative writes revalidate deleted cwd and ancestors", write_state={b"Parent": (), b"Parent.Child": (), b"Survivor": ()},
+    events={("LIST", 3): remove_cached_parent},
+    commands=b'cd Parent/Child\nmkdir new\nmkdir ./second\nmkdir ../sibling\nmkdir ../../Survivor/new\nquit\n',
+    expected_writes=[("CREATE", b"Survivor.new")], final_state={b"Survivor": (), b"Survivor.new": ()},
+    expected_err=("Folder operation failed",))
+run("cancel before mailbox literal continuation closes transport", version="IMAP4rev2", write_state={b"Archive": ()},
+    commands=b'mkdir Archive/new%0Aname\n', write_interrupt=True,
+    expected_writes=[], final_state={b"Archive": ()}, expected_err=("outcome unknown", "Observed new path: not listed"))
+navigation_state = {b"Old": (1,), b"Old.Child": (2,), b"Old.Child.Deep": (3,), b"Archive": ()}
+navigation_final = {b"Archive": (), b"Archive.New": (1,), b"Archive.New.Child": (2,), b"Archive.New.Child.Deep": (3,)}
+run("confirmed rename remaps cwd descendants and refreshes parents", write_state=navigation_state,
+    commands=b'cd Old/Child\nfolders\nrename /Old /Archive/New\npwd\nfolders\ncd /\nfolders\nquit\n',
+    expected_writes=[("RENAME", b"Old", b"Archive.New")], final_state=navigation_final,
+    expected_out="Deep\n/Archive/New/Child\nDeep\nArchive\n", expected_err=("RENAME confirmed", "Observed subscriptions: +0 -0"),
+    subscriptions=(b"Old", b"Old.Child"), final_subscriptions=(b"Old", b"Old.Child"))
+run("observed subscription remap is reported without subscription writes", installed=True, write_state=navigation_state,
+    commands=b'rename Old Archive/New\nquit\n', expected_writes=[("RENAME", b"Old", b"Archive.New")],
+    subscriptions=(b"Old", b"Old.Child"), subscriptions_after=(b"Archive.New", b"Archive.New.Child"),
+    final_subscriptions=(b"Archive.New", b"Archive.New.Child"), final_state=navigation_final,
+    expected_err=("Observed subscriptions: +2 -2",))
+
+
+def remove_current_on_create(server, send):
+    del server.write_state[b"Archive.Current"]
+
+
+run("confirmed create falls back from externally deleted cwd", write_state={b"Archive": (), b"Archive.Current": ()},
+    events={("CREATE", 1): remove_current_on_create}, commands=b'cd Archive/Current\nmkdir /Archive/New\npwd\nfolders\nquit\n',
+    expected_writes=[("CREATE", b"Archive.New")], final_state={b"Archive": (), b"Archive.New": ()},
+    expected_out="/Archive\nNew\n", expected_err=("CREATE confirmed", "Current folder unavailable; returned to /Archive"))
+
+
+def collide_before_rename(server, send):
+    server.write_state[b"Archive.New"] = (99,)
+
+
+run("external target collision stays rejected and refreshes navigation", write_state=navigation_state,
+    events={("RENAME", 1): collide_before_rename}, write_replies={"RENAME": "NO"},
+    commands=b'cd Old\nrename /Old /Archive/New\npwd\ncd /Archive\nfolders\nquit\n',
+    expected_writes=[("RENAME", b"Old", b"Archive.New")], final_state={**navigation_state, b"Archive.New": (99,)},
+    expected_out="/Old\nNew\n", expected_err=("RENAME rejected",))
+for loss in ("before", "after"):
+    run("missing RENAME completion " + loss + " remote commit", write_state=navigation_state, write_disconnect=loss,
+        commands=b'cd Old/Child\nrename /Old /Archive/New\npwd\nfolders\nquit\n',
+        expected_writes=[("RENAME", b"Old", b"Archive.New")],
+        final_state=navigation_state if loss == "before" else navigation_final,
+        expected_out="/Old/Child\nDeep\n" if loss == "before" else "/\nArchive\n",
+        expected_err=("RENAME outcome unknown", "Observed old path: " + ("present" if loss == "before" else "not listed"),
+                      "Observed new path: " + ("not listed" if loss == "before" else "present")))
+run("missing CREATE completion remains unknown after observed commit", write_state={b"Archive": ()}, write_disconnect="after",
+    commands=b'mkdir Archive/New\ncd Archive\nfolders\nquit\n', expected_writes=[("CREATE", b"Archive.New")],
+    final_state={b"Archive": (), b"Archive.New": ()}, expected_out="New\n",
+    expected_err=("CREATE outcome unknown", "Observed new path: present; outcome remains unknown"))
+run("unknown write does not probe cached names after encoding change", write_state={b"Archive": ()}, write_disconnect="encoding",
+    commands='mkdir Café\npwd\nquit\n'.encode(), expected_writes=[("CREATE", b"Caf&AOk-")],
+    final_state={b"Archive": (), b"Caf&AOk-": ()}, expected_out="/\n", expected_err=("outcome unknown", "encoding changed"))
+run("unknown probes filter wildcard name aliases exactly", write_state={b"A*%": (), b"AX": (), b"Archive": ()},
+    sizes={"probe_rows": {b"Archive.New": [mailbox(b"Archive.New", b".", (b"\\NonExistent",))]}},
+    write_disconnect="before", commands=b'rename A%2A%25 Archive/New\nquit\n',
+    expected_writes=[("RENAME", b"A*%", b"Archive.New")], final_state={b"A*%": (), b"AX": (), b"Archive": ()},
+    expected_err=("Observed old path: present", "Observed new path: not listed"))
+run("rev2 subscribed LIST tracks trailing-delimiter namespace descendants", version="IMAP4rev2",
+    write_state={b"Namespace.": (), b"Namespace.Child": (1,), b"Namespace.Unsubscribed": (2,), b"Archive": ()},
+    sizes={"inject_unsubscribed": True}, subscriptions=(b"Namespace.", b"Namespace.Child"),
+    subscriptions_after=(b"Archive.Moved", b"Archive.Moved.Child"),
+    final_subscriptions=(b"Archive.Moved", b"Archive.Moved.Child"),
+    commands=b'cd Namespace/Child\nrename /Namespace /Archive/Moved\npwd\ncd ..\nfolders\nquit\n',
+    expected_writes=[("RENAME", b"Namespace.", b"Archive.Moved")],
+    final_state={b"Archive": (), b"Archive.Moved": (), b"Archive.Moved.Child": (1,), b"Archive.Moved.Unsubscribed": (2,)},
+    expected_out="/Archive/Moved/Child\nChild\nUnsubscribed\n", expected_err=("Observed subscriptions: +2 -2",))
 print(f"PASS: {len(results)} public shell scenarios; all endpoints joined")

@@ -126,7 +126,7 @@ def connect(config):
 
 
 def command_loop(client, seconds, reconnect):
-    tree = FolderTree(client, seconds, deadline)
+    tree = FolderTree(client, seconds, deadline, reconnect)
     pager = headers.Pager()
     interactive = sys.stdin.isatty()
     if interactive:
@@ -150,12 +150,22 @@ def command_loop(client, seconds, reconnect):
         if words in (["quit"], ["exit"]):
             return 0
         if words == ["help"]:
-            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], help, quit")
+            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], mkdir PATH, mv OLD NEW (alias rename; NEW is the complete path), help, quit")
         elif words == ["pwd"]:
             print(tree.current.path)
-        elif words[0] in ("folders", "refresh", "ls", "cd", "more", "du"):
+        elif words[0] in ("folders", "refresh", "ls", "cd", "more", "du", "mkdir", "mv", "rename"):
             try:
-                if words[0] == "du":
+                if words[0] == "mkdir" and len(words) == 2:
+                    try:
+                        tree.mkdir(words[1])
+                    finally:
+                        pager.reset()
+                elif words[0] in ("mv", "rename") and len(words) == 3:
+                    try:
+                        tree.rename(words[1], words[2])
+                    finally:
+                        pager.reset()
+                elif words[0] == "du":
                     path, exact, recursive, depth, top = sizes.options(words[1:])
                     previous = tree.current
                     try:
@@ -209,6 +219,8 @@ def command_loop(client, seconds, reconnect):
             except (ValueError, UnicodeError):
                 print("Folder operation failed", file=sys.stderr)
             except (KeyboardInterrupt, headers.LiteralLimit):
+                if words[0] in ("mkdir", "mv", "rename"):
+                    raise
                 # A partial literal leaves imaplib's parser unsynchronized.
                 # Close without LOGOUT, reconnect, and revalidate the raw name
                 # before another command can use this connection.
@@ -218,7 +230,7 @@ def command_loop(client, seconds, reconnect):
                 pager.reset()
                 renewed = reconnect()
                 if renewed.utf8_enabled != old_encoding:
-                    tree = FolderTree(renewed, seconds, deadline)
+                    tree = FolderTree(renewed, seconds, deadline, reconnect)
                     print("Mailbox encoding changed; returned to /; rediscover folders", file=sys.stderr)
                 else:
                     tree.client = renewed
