@@ -359,9 +359,52 @@ B0000$c LOGOUT"
     print $bytes_total
 }
 
+_imap_shell() (
+    # Account globals may have inherited export attributes from the caller.
+    typeset +x password login email name account imap imap_port host port transport cert certfile
+    # Byte counts describe UTF-8/configuration bytes, not locale characters.
+    local LC_ALL=C REPLY style field interpreter="${JARO_IMAP_PYTHON:-python3}"
+    local deadline="${JARO_IMAP_TIMEOUT:-30}"
+    local helper="$WORKDIR/zlibs/imap-shell/session.py"
+    command -v "$interpreter" >/dev/null 2>&1 || {
+        error 'imap shell requires Python 3 (JARO_IMAP_PYTHON)'; return 1
+    }
+    "$interpreter" -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1 || {
+        error 'imap shell requires Python 3.9 or newer'; return 1
+    }
+    [[ -r "$helper" ]] || { error 'IMAP shell helper is missing'; return 1; }
+    [[ "$deadline" == <-> ]] && (( deadline >= 1 && deadline <= 300 )) || {
+        error 'JARO_IMAP_TIMEOUT must be an integer from 1 to 300 seconds'; return 1
+    }
+    # Account/keyring diagnostics contain identifiers. Keep their existing UI
+    # prompts, but expose only generic failures from this optional session.
+    read_account "$account" >/dev/null 2>&1 || {
+        error 'Cannot load IMAP account'; return 1
+    }
+    check_imap >/dev/null 2>&1 || { error 'An IMAP account is required'; return 1; }
+    _imap_transport || return 1
+    style="$REPLY"
+    host="$imap"
+    [[ -n "$password" ]] || ask_password >/dev/null 2>&1 || {
+        error 'Cannot acquire IMAP credentials'; return 1
+    }
+    # Descriptor 3 is a private inherited pipe; terminal input remains stdin.
+    # Never serialize account data into argv, environment or a temporary file.
+    "$interpreter" "$helper" 3< <(
+        for field in "$imap" "$imap_port" "$style" "${cert:-ignore}" "$certfile" "$login" "$password" "$deadline"; do
+            printf '%s:' "${#field}"
+            print -rn -- "$field"
+        done
+    )
+)
+
 cmd_imap() {
     imapcmd="${option_params[(w)1]}"
     case $imapcmd in
+        shell)
+            _imap_shell
+            exitcode=$?
+            ;;
         console)
             read_account $account >&2 || { exitcode=$?; return $exitcode; }
             check_imap || { exitcode=1; return 1; }
