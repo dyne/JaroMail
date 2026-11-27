@@ -7,7 +7,7 @@ import contextlib
 import re
 import unicodedata
 
-from folders import quoted
+from folders import mailbox_command, quoted, requires_literal
 import display
 
 HEADER_OCTETS = 8192
@@ -77,14 +77,16 @@ def row(metadata, literal):
 
 
 def examine(client, raw):
-    # imaplib emits EXAMINE for readonly=True. Raw names must stay byte exact.
-    if any(char in raw for char in (b"\r", b"\n", b"\0")):
-        client.literal = raw
-        mailbox = None
+    if requires_literal(raw):
+        # Mirror select(readonly=True) so later FETCH uses this selection.
+        client.untagged_responses = {}
+        client.is_readonly = True
+        status, _ = mailbox_command(client, "EXAMINE", (raw,))
+        client.state = "SELECTED" if status == "OK" else "AUTH"
+        data = client.untagged_responses.get("EXISTS", [None])
     else:
-        mailbox = quoted(raw)
-    status, data = client.select(mailbox, readonly=True)
-    if status != "OK" or not data or not data[0].isdigit():
+        status, data = client.select(quoted(raw), readonly=True)
+    if status != "OK" or not data or not isinstance(data[0], bytes) or not data[0].isdigit():
         raise ValueError("EXAMINE failed")
     return int(data[0])
 
