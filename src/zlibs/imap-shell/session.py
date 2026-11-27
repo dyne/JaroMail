@@ -13,6 +13,7 @@ import sys
 sys.dont_write_bytecode = True
 from folders import FolderTree
 import headers
+import sizes
 
 
 def account_record():
@@ -149,12 +150,25 @@ def command_loop(client, seconds, reconnect):
         if words in (["quit"], ["exit"]):
             return 0
         if words == ["help"]:
-            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, help, quit")
+            print("Commands: folders, pwd, cd [PATH], refresh, ls [--folders|--messages] [--limit N], more, du [PATH] [--exact] [--recursive] [--depth N] [--top N], help, quit")
         elif words == ["pwd"]:
             print(tree.current.path)
-        elif words[0] in ("folders", "refresh", "ls", "cd", "more"):
+        elif words[0] in ("folders", "refresh", "ls", "cd", "more", "du"):
             try:
-                if words[0] == "cd" and len(words) <= 2:
+                if words[0] == "du":
+                    path, exact, recursive, depth, top = sizes.options(words[1:])
+                    previous = tree.current
+                    try:
+                        if path is not None:
+                            tree.cd(path)
+                        folder = tree.current
+                    finally:
+                        tree.current = previous
+                    if recursive:
+                        sizes.show_tree(tree, folder, exact, depth, top)
+                    else:
+                        sizes.show(tree.client, folder, seconds, deadline, exact)
+                elif words[0] == "cd" and len(words) <= 2:
                     tree.cd(words[1] if len(words) == 2 else "/")
                     pager.reset()
                 elif words in (["folders"], ["refresh"]):
@@ -190,7 +204,7 @@ def command_loop(client, seconds, reconnect):
                         raise headers.PagingError("Choose a selectable folder")
                 else:
                     print("Invalid folder command; use help", file=sys.stderr)
-            except headers.PagingError as exc:
+            except (headers.PagingError, sizes.SizeError) as exc:
                 print(str(exc), file=sys.stderr)
             except (ValueError, UnicodeError):
                 print("Folder operation failed", file=sys.stderr)
@@ -211,7 +225,8 @@ def command_loop(client, seconds, reconnect):
                 if tree.current.selectable:
                     with deadline(seconds):
                         headers.examine(tree.client, tree.current.raw)
-                print("Header operation cancelled; connection renewed", file=sys.stderr)
+                operation = "Size" if words[0] == "du" else "Header"
+                print(operation + " operation cancelled; connection renewed", file=sys.stderr)
         else:
             print("Unknown command; use help", file=sys.stderr)
 

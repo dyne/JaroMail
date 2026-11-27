@@ -33,6 +33,21 @@ Navigation, `refresh` and connection recovery also reset the cursor.
 `refresh` replaces the current child listing without walking descendants.
 Nonselectable folders are marked `[container]` and remain navigable.
 
+`du [PATH]` reports a labeled server mailbox size when supported. `du --exact`
+measures only RFC822.SIZE metadata over a captured UID inventory; missing UIDs
+produce partial coverage. These logical mailbox bytes differ from compressed
+archive size and account quota. Server totals may exceed the measured sum.
+`du --recursive` walks descendants, including those beneath containers.
+`--depth N` includes at most N child levels (0 includes only the starting folder),
+and `--top N` ranks selectable folders by direct bytes; either option implies
+recursive mode. For example, `du / --depth 2 --top 10` shows the largest direct
+mailboxes within two levels. The table separates direct and subtree bytes;
+partial subtree totals are lower bounds. Shared/labeled copies may count twice.
+Folder completeness and measured-message coverage have separate denominators.
+Progress goes to stderr. Ctrl-C retains incomplete results and renews the
+connection before accepting another command. Ordinary `du` preserves header
+paging and the current path; recovery resets the pager.
+
 Display paths use `/` between logical components independently of server
 hierarchy delimiters. Percent escapes represent UTF-8 bytes for literal slash,
 percent, wildcard, quote, backslash, whitespace and control characters; literal
